@@ -3,22 +3,43 @@
 import json
 import logging
 import os
+import re
 from datetime import datetime
 
 logger = logging.getLogger("reqdesign")
+
+# 安全文件名白名单：只允许字母、数字、中文、下划线、连字符、点
+_SAFE_NAME_RE = re.compile(r'^[\w一-鿿\-\.]+$')
+
+
+def _sanitize_filename(name: str) -> str:
+    """清理文件名，防止路径穿越"""
+    # 移除路径分隔符
+    name = name.replace("/", "_").replace("\\", "_")
+    # 移除 ..
+    name = name.replace("..", "_")
+    # 如果不匹配白名单，强制清理
+    if not _SAFE_NAME_RE.match(name):
+        name = re.sub(r'[^\w一-鿿\-\.]', '_', name)
+    return name
 
 
 class OutputManager:
     """输出管理器：负责将各阶段结果写入文件"""
 
     def __init__(self, output_dir: str):
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
-        logger.info(f"输出目录: {output_dir}")
+        self.output_dir = os.path.abspath(output_dir)
+        os.makedirs(self.output_dir, exist_ok=True)
+        logger.info(f"输出目录: {self.output_dir}")
 
     def _write_file(self, filename: str, content: str):
         """写入文本文件"""
-        path = os.path.join(self.output_dir, filename)
+        safe_name = _sanitize_filename(filename)
+        path = os.path.join(self.output_dir, safe_name)
+        # 二次校验：确保路径在输出目录内
+        if not os.path.abspath(path).startswith(self.output_dir):
+            logger.error(f"路径穿越拒绝: {filename}")
+            raise ValueError(f"不安全的文件名: {filename}")
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -29,7 +50,11 @@ class OutputManager:
 
     def _write_json(self, filename: str, data: dict):
         """写入JSON文件"""
-        path = os.path.join(self.output_dir, filename)
+        safe_name = _sanitize_filename(filename)
+        path = os.path.join(self.output_dir, safe_name)
+        if not os.path.abspath(path).startswith(self.output_dir):
+            logger.error(f"路径穿越拒绝: {filename}")
+            raise ValueError(f"不安全的文件名: {filename}")
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
