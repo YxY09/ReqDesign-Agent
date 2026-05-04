@@ -15,7 +15,7 @@ class LLMConfig:
     api_key: str = ""
     base_url: str = ""
     temperature: float = 0.3
-    max_tokens: int = 4096
+    max_tokens: int = 8192
 
 
 @dataclass

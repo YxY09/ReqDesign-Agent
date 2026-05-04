@@ -7,7 +7,7 @@ llm:
   api_key: ""  # 留空则从环境变量读取
   base_url: ""  # 自定义API地址，留空使用默认
   temperature: 0.3
-  max_tokens: 4096
+  max_tokens: 8192
 
 retry:
   max_retries: 3

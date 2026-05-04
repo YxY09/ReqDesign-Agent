@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import Optional
 
 from agent.config import AgentConfig
@@ -108,7 +109,6 @@ class LLMClient:
         text = raw.strip()
 
         # 尝试从markdown代码块中提取
-        import re
         code_block = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
         if code_block:
             return code_block.group(1).strip()
@@ -126,7 +126,58 @@ class LLMClient:
                     if depth == 0:
                         return text[start:i+1]
 
+            # JSON被截断，尝试补全
+            logger.warning("JSON可能被截断，尝试补全")
+            return self._try_complete_json(text[start:])
+
         return text
+
+    def _try_complete_json(self, text: str) -> str:
+        """尝试补全被截断的JSON"""
+        # 跟踪未闭合的结构
+        stack = []
+        in_string = False
+        escape_next = False
+
+        for i, ch in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == "\\" and in_string:
+                escape_next = True
+                continue
+            if ch == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                stack.append("}")
+            elif ch == "[":
+                stack.append("]")
+            elif ch in ("}", "]"):
+                if stack and stack[-1] == ch:
+                    stack.pop()
+
+        # 如果在字符串中间截断，先关闭字符串
+        result = text
+        if in_string:
+            result += '"'
+
+        # 移除可能的尾部不完整内容（如截断的key或value）
+        # 如果最后是引号后面跟着不完整内容，尝试清理
+        result = re.sub(r'",\s*"[^"]*$', '",', result)
+        result = re.sub(r'":\s*"[^"]*$', '": null', result)
+        result = re.sub(r'":\s*$', '": null', result)
+
+        # 添加缺失的闭合括号
+        for closer in reversed(stack):
+            if closer == "}":
+                result += "}"
+            elif closer == "]":
+                result += "]"
+
+        return result
 
     def _parse_json_robust(self, text: str) -> dict:
         """健壮的JSON解析，处理常见格式问题"""
@@ -137,7 +188,6 @@ class LLMClient:
             pass
 
         # 尝试修复常见问题
-        import re
         fixed = text
 
         # 移除行尾注释
@@ -159,6 +209,13 @@ class LLMClient:
                 return json.loads(fixed[:last_brace+1])
             except json.JSONDecodeError:
                 pass
+
+        # 尝试补全截断的JSON
+        completed = self._try_complete_json(fixed)
+        try:
+            return json.loads(completed)
+        except json.JSONDecodeError:
+            pass
 
         raise json.JSONDecodeError(f"无法解析JSON，文本前200字符: {text[:200]}", text, 0)
 

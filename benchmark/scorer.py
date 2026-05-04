@@ -9,6 +9,60 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger("reqdesign")
 
+# 中英文实体名称映射表，用于模糊匹配
+ENTITY_NAME_MAP = {
+    # 通用
+    "用户": ["User", "Account", "Member"],
+    "管理员": ["Admin", "Administrator", "Manager"],
+    "学生": ["Student"],
+    "教师": ["Teacher", "Instructor", "Professor"],
+    "图书": ["Book"],
+    "订单": ["Order"],
+    "商品": ["Product", "Goods", "Item"],
+    "课程": ["Course"],
+    "成绩": ["Grade", "Score"],
+    "选课记录": ["Enrollment", "CourseSelection", "Selection"],
+    "员工": ["Employee", "Staff", "Worker"],
+    "会议室": ["MeetingRoom", "Room"],
+    "预约记录": ["Reservation", "Booking", "Appointment"],
+    "设备": ["Equipment", "Device", "Facility"],
+    "顾客": ["Customer", "Client"],
+    "商家": ["Merchant", "Seller", "Shop"],
+    "平台管理员": ["PlatformAdmin", "Admin"],
+    "购物车": ["Cart", "ShoppingCart"],
+    "支付": ["Payment", "Pay"],
+    "退款": ["Refund"],
+    "医院": ["Hospital"],
+    "挂号": ["Registration"],
+    "医生": ["Doctor"],
+    "病人": ["Patient"],
+    "预约": ["Appointment", "Reservation"],
+    "科室": ["Department"],
+    "排班": ["Schedule", "Duty"],
+}
+
+
+def _fuzzy_match_entity(entity_name: str, target: str) -> bool:
+    """模糊匹配实体名称，支持中英文映射"""
+    # 直接匹配
+    if entity_name in target:
+        return True
+
+    # 查找英文映射
+    en_names = ENTITY_NAME_MAP.get(entity_name, [])
+    for en_name in en_names:
+        if en_name in target:
+            return True
+
+    # 反向查找：target是中文，entity_name是英文
+    for cn, en_list in ENTITY_NAME_MAP.items():
+        if cn in entity_name:
+            for en_name in en_list:
+                if en_name in target:
+                    return True
+
+    return False
+
 
 def score_requirement_coverage(result: dict, gold: dict) -> float:
     """
@@ -46,7 +100,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     result_entities = [e.get("name", "") for e in result.get("entities", [])]
     for entity in expected_entities:
         total_points += 1
-        if any(entity in res_ent for res_ent in result_entities):
+        if any(_fuzzy_match_entity(entity, res_ent) for res_ent in result_entities):
             covered_points += 1
 
     # 检查约束覆盖
@@ -126,7 +180,7 @@ def score_entity_accuracy(result: dict, gold: dict) -> float:
 
     correct = 0
     for entity in expected_entities:
-        if any(entity in res_ent for res_ent in result_entities):
+        if any(_fuzzy_match_entity(entity, res_ent) for res_ent in result_entities):
             correct += 1
 
     score = (correct / len(expected_entities)) * 100
@@ -191,7 +245,7 @@ def score_consistency(result: dict, diagrams: dict) -> float:
     class_diagram = diagrams.get("class_diagram", "")
 
     for entity in entities:
-        if entity and entity not in class_diagram:
+        if entity and not _fuzzy_match_entity(entity, class_diagram):
             score -= 10
             logger.warning(f"一致性问题: 实体 '{entity}' 未在类图中出现")
 
