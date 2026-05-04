@@ -54,10 +54,11 @@ class TestCaseGenerator:
         if "|" not in test_cases_md:
             warnings.append("测试用例缺少Markdown表格格式")
 
-        # 检查测试用例类型覆盖
-        has_normal = "TC-N-" in test_cases_md or "正常" in test_cases_md
-        has_exception = "TC-E-" in test_cases_md or "异常" in test_cases_md
-        has_boundary = "TC-B-" in test_cases_md or "边界" in test_cases_md
+        # 检查测试用例类型覆盖（多种命名模式）
+        tc_lower = test_cases_md.lower()
+        has_normal = any(kw in tc_lower for kw in ["tc-n-", "正常", "normal", "happy path"])
+        has_exception = any(kw in tc_lower for kw in ["tc-e-", "异常", "exception", "error", "失败"])
+        has_boundary = any(kw in tc_lower for kw in ["tc-b-", "边界", "boundary", "极限", "临界"])
 
         if not has_normal:
             warnings.append("缺少正常场景测试用例")
@@ -66,11 +67,11 @@ class TestCaseGenerator:
         if not has_boundary:
             warnings.append("缺少边界场景测试用例")
 
-        # 检查功能覆盖
+        # 检查功能覆盖（大小写不敏感）
         functions = requirement_json.get("functions", [])
         for func in functions:
             func_name = func.get("name", "")
-            if func_name and func_name not in test_cases_md:
+            if func_name and func_name.lower() not in tc_lower:
                 warnings.append(f"功能 '{func_name}' 未被测试用例覆盖")
 
         if warnings:
@@ -82,16 +83,19 @@ class TestCaseGenerator:
 
     def count_test_cases(self, test_cases_md: str) -> dict:
         """统计测试用例数量"""
-        # 匹配表格行中的编号
-        normal = len(re.findall(r"TC-N-\d+", test_cases_md))
-        exception = len(re.findall(r"TC-E-\d+", test_cases_md))
-        boundary = len(re.findall(r"TC-B-\d+", test_cases_md))
+        normal = len(re.findall(r"TC-N-\d+", test_cases_md, re.IGNORECASE))
+        exception = len(re.findall(r"TC-E-\d+", test_cases_md, re.IGNORECASE))
+        boundary = len(re.findall(r"TC-B-\d+", test_cases_md, re.IGNORECASE))
+
+        # 如果标准格式未匹配，尝试统计表格行数
+        total_rows = len(re.findall(r"\|.*\|", test_cases_md)) - 1  # 减去表头
+        total = max(normal + exception + boundary, total_rows)
 
         counts = {
             "正常场景": normal,
             "异常场景": exception,
             "边界场景": boundary,
-            "总计": normal + exception + boundary,
+            "总计": total,
         }
         logger.info(f"测试用例统计: {counts}")
         return counts
