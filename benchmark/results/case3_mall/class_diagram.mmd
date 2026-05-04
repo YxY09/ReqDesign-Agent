@@ -1,0 +1,107 @@
+classDiagram
+    class User {
+        -int id
+        -String username
+        -String passwordHash
+        -String phoneNumber
+        -String role
+        +register()
+        +login()
+        +updateProfile()
+    }
+
+    class Product {
+        -int id
+        -String name
+        -String description
+        -double price
+        -int stockQuantity
+        +getDetails()
+        +deductStock(int quantity)
+        +restoreStock(int quantity)
+    }
+
+    class ShoppingCart {
+        -int id
+        -int userId
+        -List~CartItem~ items
+        +addItem(Product product, int quantity)
+        +updateItemQuantity(int productId, int quantity)
+        +removeItem(int productId)
+        +clear()
+    }
+
+    class CartItem {
+        -int quantity
+        +Product product
+    }
+
+    class Order {
+        -int id
+        -int userId
+        -List~OrderItem~ orderItems
+        -double totalAmount
+        -String status
+        -Date createTime
+        -int paymentId
+        +create()
+        +cancel()
+        +updateStatus(String newStatus)
+        +calculateTotal()
+    }
+
+    class OrderItem {
+        -int quantity
+        -double price
+        +Product product
+    }
+
+    class Payment {
+        -int id
+        -int orderId
+        -double amount
+        -String paymentMethod
+        -String transactionId
+        -String status
+        +initiate()
+        +handleCallback(Map callbackData)
+        +queryStatus()
+    }
+
+    class Refund {
+        -int id
+        -int orderId
+        -double refundAmount
+        -String reason
+        -String status
+        -Date applyTime
+        +apply(int orderId, String reason)
+        +approve()
+        +reject()
+        +executeRefund()
+    }
+
+    class InventoryService {
+        <<interface>>
+        +checkAndDeductStock(int productId, int quantity)
+        +restoreStock(int productId, int quantity)
+    }
+
+    class PaymentService {
+        <<interface>>
+        +createPayment(Order order)
+        +processPaymentCallback(Map callbackData)
+        +refund(int paymentId, double amount)
+    }
+
+    User "1" --> "1" ShoppingCart : has
+    ShoppingCart "1" --> "*" CartItem : contains
+    CartItem "*" --> "1" Product : references
+    User "1" --> "*" Order : places
+    Order "1" --> "*" OrderItem : contains
+    OrderItem "*" --> "1" Product : references
+    Order "1" --> "1" Payment : has
+    Order "1" --> "*" Refund : may have
+    Refund "*" --> "1" Payment : references
+    Order ..> InventoryService : depends on
+    Order ..> PaymentService : depends on

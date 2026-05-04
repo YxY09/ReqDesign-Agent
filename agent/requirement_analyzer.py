@@ -28,27 +28,33 @@ class RequirementAnalyzer:
         with open(prompt_path, "r", encoding="utf-8") as f:
             return f.read()
 
-    def analyze(self, requirement_text: str) -> dict:
-        """分析需求文本，返回结构化JSON"""
+    def analyze(self, requirement_text: str, max_retries: int = 3) -> dict:
+        """分析需求文本，返回结构化JSON，JSON解析失败时自动重试"""
         logger.info("开始需求分析...")
         logger.debug(f"输入文本长度: {len(requirement_text)} 字符")
 
         prompt = self.prompt_template.replace("{requirement_text}", requirement_text)
-
         system_msg = "你是一个资深的软件需求分析师，擅长从自然语言需求中提取结构化信息。只输出JSON格式的结果。"
 
-        try:
-            result = self.llm.generate_json(prompt, system=system_msg)
-            logger.info(f"需求分析完成，提取到: {len(result.get('actors', []))} 个角色, "
-                        f"{len(result.get('functions', []))} 个功能, "
-                        f"{len(result.get('entities', []))} 个实体")
-            return result
-        except json.JSONDecodeError as e:
-            logger.error(f"LLM返回的JSON格式无效: {e}")
-            raise ValueError(f"需求分析结果解析失败: {e}")
-        except Exception as e:
-            logger.error(f"需求分析失败: {e}")
-            raise
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = self.llm.generate_json(prompt, system=system_msg)
+                logger.info(f"需求分析完成，提取到: {len(result.get('actors', []))} 个角色, "
+                            f"{len(result.get('functions', []))} 个功能, "
+                            f"{len(result.get('entities', []))} 个实体")
+                return result
+            except json.JSONDecodeError as e:
+                last_error = e
+                logger.warning(f"第 {attempt} 次JSON解析失败: {e}")
+                if attempt < max_retries:
+                    logger.info("重试需求分析...")
+            except Exception as e:
+                logger.error(f"需求分析失败: {e}")
+                raise
+
+        logger.error(f"需求分析JSON解析连续 {max_retries} 次失败")
+        raise ValueError(f"需求分析结果解析失败: {last_error}")
 
     def validate_result(self, result: dict) -> list[str]:
         """验证分析结果的完整性，返回缺失字段列表"""

@@ -100,21 +100,67 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
 
         raw = self.chat(messages)
-        # 尝试从响应中提取JSON
-        text = raw.strip()
-        # 去掉markdown代码块标记
-        if text.startswith("```"):
-            lines = text.split("\n")
-            # 找到第一个和最后一个```之间的内容
-            start = 1
-            end = len(lines)
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip().startswith("```"):
-                    end = i
-                    break
-            text = "\n".join(lines[start:end])
+        text = self._extract_json_text(raw)
+        return self._parse_json_robust(text)
 
-        return json.loads(text)
+    def _extract_json_text(self, raw: str) -> str:
+        """从LLM响应中提取JSON文本"""
+        text = raw.strip()
+
+        # 尝试从markdown代码块中提取
+        import re
+        code_block = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
+        if code_block:
+            return code_block.group(1).strip()
+
+        # 尝试找到JSON对象的开始和结束
+        start = text.find("{")
+        if start >= 0:
+            # 从后往前找匹配的}
+            depth = 0
+            for i in range(start, len(text)):
+                if text[i] == "{":
+                    depth += 1
+                elif text[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return text[start:i+1]
+
+        return text
+
+    def _parse_json_robust(self, text: str) -> dict:
+        """健壮的JSON解析，处理常见格式问题"""
+        # 尝试直接解析
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        # 尝试修复常见问题
+        import re
+        fixed = text
+
+        # 移除行尾注释
+        fixed = re.sub(r"//.*$", "", fixed, flags=re.MULTILINE)
+
+        # 移除尾部逗号 (,] 或 ,})
+        fixed = re.sub(r",\s*([\]}])", r"\1", fixed)
+
+        # 尝试解析修复后的文本
+        try:
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+
+        # 最后尝试：截取到最后一个有效的}之前
+        last_brace = fixed.rfind("}")
+        if last_brace > 0:
+            try:
+                return json.loads(fixed[:last_brace+1])
+            except json.JSONDecodeError:
+                pass
+
+        raise json.JSONDecodeError(f"无法解析JSON，文本前200字符: {text[:200]}", text, 0)
 
     def generate_text(self, prompt: str, system: str = "") -> str:
         """发送请求并返回纯文本响应"""

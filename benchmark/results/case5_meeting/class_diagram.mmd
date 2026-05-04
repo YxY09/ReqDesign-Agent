@@ -1,0 +1,135 @@
+classDiagram
+    class MeetingRoom {
+        -int id
+        -String name
+        -int capacity
+        -List~Equipment~ equipmentList
+        -List~TimeSlot~ availableTimeSlots
+        +getAvailableSlots(Date date) List~TimeSlot~
+        +isAvailable(Date startTime, Date endTime) boolean
+        +updateEquipment(Equipment equipment) void
+    }
+
+    class Reservation {
+        -int id
+        -int roomId
+        -int userId
+        -Date startTime
+        -Date endTime
+        -String status
+        -Date createTime
+        +create() void
+        +cancel() void
+        +approve() void
+        +reject() void
+    }
+
+    class User {
+        -int id
+        -String name
+        -int departmentId
+        -String role
+        -String email
+        +getReservations() List~Reservation~
+        +getDepartmentReservations() List~Reservation~
+        +manageRoom() void
+    }
+
+    class Approval {
+        -int id
+        -int reservationId
+        -int approverId
+        -String status
+        -String comment
+        -Date createTime
+        +process(String action, String comment) void
+    }
+
+    class Equipment {
+        -int id
+        -String name
+        -String type
+    }
+
+    class Department {
+        -int id
+        -String name
+    }
+
+    class ReservationService {
+        +applyForReservation(ReservationRequest request) Reservation
+        +cancelReservation(int reservationId, int userId) void
+        +checkConflict(int roomId, Date start, Date end) boolean
+    }
+
+    class ApprovalService {
+        +submitForApproval(int reservationId) void
+        +approve(int reservationId, int approverId) void
+        +reject(int reservationId, int approverId, String reason) void
+    }
+
+    class MeetingRoomService {
+        +getRoomDetails(int roomId) MeetingRoom
+        +isRoomAvailable(int roomId, Date startTime, Date endTime) boolean
+    }
+
+    class UserService {
+        +getUserById(int userId) User
+        +validateUserPermission(int userId, String requiredRole) boolean
+    }
+
+    class MeetingRoomDAO {
+        +save(MeetingRoom room) void
+        +findById(int id) MeetingRoom
+        +findAll() List~MeetingRoom~
+        +delete(int id) void
+    }
+
+    class ReservationDAO {
+        +save(Reservation reservation) void
+        +findById(int id) Reservation
+        +findByRoomId(int roomId) List~Reservation~
+        +findByUserId(int userId) List~Reservation~
+        +updateStatus(int id, String status) void
+    }
+
+    class UserDAO {
+        +save(User user) void
+        +findById(int id) User
+        +findByDepartmentId(int departmentId) List~User~
+    }
+
+    class ApprovalDAO {
+        +save(Approval approval) void
+        +findById(int id) Approval
+        +findByReservationId(int reservationId) Approval
+        +updateStatus(int id, String status) void
+    }
+
+    MeetingRoom "1" *-- "*" Equipment : 包含
+    User "*" --> "1" Department : 属于
+    Reservation --> MeetingRoom : 预约
+    Reservation --> User : 发起人
+    Approval --> Reservation : 审批
+    Approval --> User : 审批人
+
+    ReservationService ..> MeetingRoom : 依赖
+    ReservationService ..> Reservation : 依赖
+    ReservationService ..> MeetingRoomDAO : 依赖
+    ReservationService ..> ReservationDAO : 依赖
+
+    ApprovalService ..> Approval : 依赖
+    ApprovalService ..> Reservation : 依赖
+    ApprovalService ..> ApprovalDAO : 依赖
+    ApprovalService ..> ReservationDAO : 依赖
+
+    MeetingRoomService ..> MeetingRoom : 依赖
+    MeetingRoomService ..> MeetingRoomDAO : 依赖
+
+    UserService ..> User : 依赖
+    UserService ..> UserDAO : 依赖
+
+    MeetingRoomDAO ..> MeetingRoom : 依赖
+    ReservationDAO ..> Reservation : 依赖
+    UserDAO ..> User : 依赖
+    ApprovalDAO ..> Approval : 依赖

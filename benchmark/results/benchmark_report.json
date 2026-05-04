@@ -1,0 +1,70 @@
+{
+  "run_time": "2026-05-04 15:28:51",
+  "total_cases": 5,
+  "results": [
+    {
+      "case_name": "case1_library",
+      "status": "success",
+      "scores": {
+        "requirement_coverage": 63.2,
+        "diagram_syntax": 100.0,
+        "entity_accuracy": 0.0,
+        "process_completeness": 100.0,
+        "consistency": 85.0,
+        "overall": 63.8
+      },
+      "passed": false
+    },
+    {
+      "case_name": "case2_course",
+      "status": "error",
+      "error": "需求分析结果解析失败: Expecting value: line 87 column 21 (char 1830)",
+      "scores": {}
+    },
+    {
+      "case_name": "case3_mall",
+      "status": "success",
+      "scores": {
+        "requirement_coverage": 58.3,
+        "diagram_syntax": 100.0,
+        "entity_accuracy": 0.0,
+        "process_completeness": 100.0,
+        "consistency": 85.0,
+        "overall": 61.8
+      },
+      "passed": false
+    },
+    {
+      "case_name": "case4_hospital",
+      "status": "error",
+      "error": "需求分析结果解析失败: Unterminated string starting at: line 36 column 22 (char 746)",
+      "scores": {}
+    },
+    {
+      "case_name": "case5_meeting",
+      "status": "success",
+      "scores": {
+        "requirement_coverage": 60.0,
+        "diagram_syntax": 100.0,
+        "entity_accuracy": 0.0,
+        "process_completeness": 100.0,
+        "consistency": 85.0,
+        "overall": 62.5
+      },
+      "passed": false
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 3,
+    "error": 2,
+    "avg_scores": {
+      "requirement_coverage": 60.5,
+      "diagram_syntax": 100.0,
+      "entity_accuracy": 0.0,
+      "process_completeness": 100.0,
+      "consistency": 85.0,
+      "overall": 62.7
+    }
+  }
+}

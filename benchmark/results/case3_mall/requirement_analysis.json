@@ -1,0 +1,161 @@
+{
+  "project_name": "在线商城订单系统",
+  "project_overview": "一个支持用户浏览商品、下单支付、订单管理和退款的电商平台订单管理系统。",
+  "actors": [
+    {
+      "name": "顾客",
+      "description": "注册登录、浏览商品、加入购物车、下单支付、取消订单、申请退款"
+    },
+    {
+      "name": "商家",
+      "description": "管理商品信息、处理订单、确认发货、处理退款申请"
+    },
+    {
+      "name": "平台管理员",
+      "description": "管理用户、查看平台数据、处理纠纷"
+    }
+  ],
+  "functions": [
+    {
+      "id": "F001",
+      "name": "用户注册与登录",
+      "description": "顾客和商家通过手机号或邮箱注册登录",
+      "related_actors": [
+        "顾客",
+        "商家"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F002",
+      "name": "商品浏览",
+      "description": "顾客可以按分类、关键词浏览商品，查看商品详情",
+      "related_actors": [
+        "顾客"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F003",
+      "name": "购物车管理",
+      "description": "顾客可以将商品加入购物车、修改数量、删除商品",
+      "related_actors": [
+        "顾客"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F004",
+      "name": "下单支付",
+      "description": "顾客可以从购物车下单，选择支付方式完成支付",
+      "related_actors": [
+        "顾客"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F005",
+      "name": "订单管理",
+      "description": "顾客可以查看订单状态，商家可以确认订单、发货",
+      "related_actors": [
+        "顾客",
+        "商家"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F006",
+      "name": "订单取消",
+      "description": "顾客可以在商家发货前取消订单",
+      "related_actors": [
+        "顾客"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F007",
+      "name": "退款申请",
+      "description": "顾客可以在收货后7天内申请退款",
+      "related_actors": [
+        "顾客"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F008",
+      "name": "退款处理",
+      "description": "商家审核退款申请，同意后自动退款",
+      "related_actors": [
+        "商家"
+      ],
+      "priority": "中"
+    }
+  ],
+  "entities": [],
+  "constraints": [
+    {
+      "id": "C001",
+      "description": "订单超时未支付（30分钟）自动取消",
+      "related_functions": [
+        "下单支付"
+      ]
+    },
+    {
+      "id": "C002",
+      "description": "库存不足时不允许下单",
+      "related_functions": [
+        "下单支付"
+      ]
+    },
+    {
+      "id": "C003",
+      "description": "已发货的订单不能取消，只能申请退款",
+      "related_functions": [
+        "订单取消",
+        "退款申请"
+      ]
+    },
+    {
+      "id": "C004",
+      "description": "退款金额原路返回到支付账户",
+      "related_functions": [
+        "退款处理"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "id": "E001",
+      "description": "支付失败时，订单状态变为'支付失败'，用户可以重新支付",
+      "trigger": "支付失败",
+      "handling": "订单状态变为'支付失败'，用户可以重新支付"
+    },
+    {
+      "id": "E002",
+      "description": "库存不足下单失败时，提示'库存不足'",
+      "trigger": "库存不足下单失败",
+      "handling": "提示'库存不足'"
+    },
+    {
+      "id": "E003",
+      "description": "退款申请超过7天期限时，提示'已超过退款期限'",
+      "trigger": "退款申请超过7天期限",
+      "handling": "提示'已超过退款期限'"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "可靠性",
+      "description": "支付过程需要保证数据一致性"
+    },
+    {
+      "category": "性能",
+      "description": "订单查询响应时间不超过2秒"
+    },
+    {
+      "category": "性能",
+      "description": "系统支持至少1000个并发用户"
+    }
+  ],
+  "business_processes": []
+}

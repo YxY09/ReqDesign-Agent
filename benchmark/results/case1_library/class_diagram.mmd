@@ -1,0 +1,57 @@
+classDiagram
+    class User {
+        -int id
+        -String username
+        -String password
+        -String role
+        -int maxBorrowLimit
+        +register()
+        +login()
+        +getProfile()
+    }
+    class Book {
+        -int id
+        -String title
+        -String author
+        -String isbn
+        -String status
+        +add()
+        +update()
+        +delete()
+        +search()
+    }
+    class BorrowRecord {
+        -int id
+        -int userId
+        -int bookId
+        -Date borrowDate
+        -Date dueDate
+        -Date returnDate
+        -String status
+        +create()
+        +updateReturn()
+        +checkOverdue()
+    }
+    class UserService {
+        +registerUser(UserDTO)
+        +authenticateUser(String username, String password)
+    }
+    class BookService {
+        +addBook(BookDTO)
+        +updateBook(BookDTO)
+        +deleteBook(Long id)
+        +searchBooks(String keyword)
+    }
+    class BorrowService {
+        +borrowBook(Long userId, Long bookId)
+        +returnBook(Long recordId)
+        +getUserBorrowRecords(Long userId)
+        +getAllBorrowRecords()
+    }
+    User "1" --> "*" BorrowRecord
+    Book "1" --> "*" BorrowRecord
+    BorrowService ..> UserService
+    BorrowService ..> BookService
+    BorrowService ..> BorrowRecord
+    UserService ..> User
+    BookService ..> Book
