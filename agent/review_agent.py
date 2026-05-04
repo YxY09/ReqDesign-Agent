@@ -147,9 +147,10 @@ class ReviewAgent:
         requirement_json: dict,
         design_text: str,
         diagrams: dict,
+        max_repair_rounds: int = 2,
     ) -> tuple[dict, dict]:
         """
-        审查并自动修复
+        审查并自动修复，支持多轮修复验证
 
         Returns:
             (review_result, repaired_diagrams)
@@ -160,13 +161,41 @@ class ReviewAgent:
         # 对语法有问题的图进行修复
         repaired = dict(diagrams)
         syntax_checks = review_result.get("syntax_check", [])
-        for check in syntax_checks:
-            if not check["valid"]:
+
+        diagrams_to_fix = [c for c in syntax_checks if not c["valid"]]
+        if not diagrams_to_fix:
+            return review_result, repaired
+
+        for round_num in range(1, max_repair_rounds + 1):
+            logger.info(f"修复轮次 {round_num}/{max_repair_rounds}")
+            still_broken = []
+
+            for check in diagrams_to_fix:
                 name = check["diagram"]
                 if name in repaired:
                     repaired[name] = self.repair_diagram(
                         name, repaired[name], check["message"]
                     )
+                    # 重新验证修复结果
+                    is_valid, msg = self.mermaid_validator.validate(repaired[name], name)
+                    if not is_valid:
+                        still_broken.append({"diagram": name, "valid": False, "message": msg})
+                        logger.warning(f"修复轮次 {round_num}: {name} 仍有语法问题: {msg}")
+                    else:
+                        logger.info(f"修复轮次 {round_num}: {name} 修复成功")
+
+            if not still_broken:
+                logger.info(f"所有图修复完成，共 {round_num} 轮")
+                break
+            diagrams_to_fix = still_broken
+
+        # 更新审查结果中的语法检查
+        final_syntax = self.validate_mermaid_syntax(repaired)
+        review_result["syntax_check"] = final_syntax
+        if all(r["valid"] for r in final_syntax):
+            logger.info("修复后所有图语法校验通过")
+        else:
+            logger.warning("修复后仍有图语法校验未通过")
 
         return review_result, repaired
 
