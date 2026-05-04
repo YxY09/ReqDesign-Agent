@@ -1,5 +1,6 @@
 """设计规划智能体：基于需求JSON生成系统设计说明"""
 
+import json
 import logging
 import os
 
@@ -30,7 +31,6 @@ class DesignPlanner:
         """根据需求JSON生成系统设计说明（Markdown格式）"""
         logger.info("开始生成系统设计...")
 
-        import json
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
         prompt = self.prompt_template.replace("{requirement_json}", req_str)
 
@@ -62,11 +62,12 @@ class DesignPlanner:
             if func_id and func_id not in design_text and func_name not in design_text:
                 warnings.append(f"功能 {func_id}({func_name}) 未在设计中体现")
 
-        # 检查实体覆盖
+        # 检查实体覆盖（大小写不敏感）
         entities = requirement_json.get("entities", [])
+        design_lower = design_text.lower()
         for entity in entities:
             entity_name = entity.get("name", "")
-            if entity_name and entity_name not in design_text:
+            if entity_name and entity_name.lower() not in design_lower:
                 warnings.append(f"实体 '{entity_name}' 未在设计中体现")
 
         if warnings:
