@@ -80,16 +80,16 @@ class MermaidValidator:
 
     def _check_brackets(self, content: str) -> tuple[bool, str]:
         """检查括号匹配"""
+        # 预计算注释区间和字符串区间，避免逐字符重复查找
+        comment_ranges = self._find_comment_ranges(content)
+        pairs = {"(": ")", "[": "]", "{": "}"}
         stack = []
-        pairs = {"(": ")", "[": "]", "{": "}", '"': '"'}
         in_string = False
         string_char = None
 
         for i, char in enumerate(content):
-            # 跳过注释行
-            line_start = content.rfind("\n", 0, i) + 1
-            line = content[line_start:content.find("\n", i) if "\n" in content[i:] else len(content)]
-            if line.strip().startswith("%%"):
+            # 跳过注释区间
+            if any(start <= i <= end for start, end in comment_ranges):
                 continue
 
             if char in ('"', "'") and not in_string:
@@ -113,6 +113,14 @@ class MermaidValidator:
             return False, f"未闭合的括号 '{open_char}' 在位置 {pos}"
 
         return True, ""
+
+    @staticmethod
+    def _find_comment_ranges(content: str) -> list[tuple[int, int]]:
+        """找出所有Mermaid注释区间（行首%% 和 行内%%）"""
+        ranges = []
+        for match in re.finditer(r'%%.*', content):
+            ranges.append((match.start(), match.end()))
+        return ranges
 
     def _validate_with_cli(self, content: str) -> tuple[bool, str]:
         """使用mermaid-cli校验"""

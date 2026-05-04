@@ -106,6 +106,27 @@ class TestIntegrationWorkflow:
         valid, msg = validator.validate(MOCK_STATE_DIAGRAM, "state_diagram")
         assert valid, f"状态图校验失败: {msg}"
 
+    def test_mermaid_validator_inline_comment(self):
+        """测试Mermaid行内注释处理"""
+        validator = MermaidValidator()
+        diagram_with_comment = """flowchart TD
+    A([开始]) --> B[输入] %% 这是注释
+    B --> C[处理]
+    C --> D([结束])
+"""
+        valid, msg = validator.validate(diagram_with_comment, "activity_diagram")
+        assert valid, f"带注释的流程图校验失败: {msg}"
+
+    def test_mermaid_validator_comment_ranges(self):
+        """测试注释区间检测"""
+        content = "line1\n%% comment\nline3 %% inline\nline4"
+        ranges = MermaidValidator._find_comment_ranges(content)
+        assert len(ranges) == 2
+        # 行首注释
+        assert content[ranges[0][0]:ranges[0][1]] == "%% comment"
+        # 行内注释
+        assert content[ranges[1][0]:ranges[1][1]] == "%% inline"
+
     def test_output_manager(self, tmp_path):
         """测试输出管理"""
         manager = OutputManager(str(tmp_path))
