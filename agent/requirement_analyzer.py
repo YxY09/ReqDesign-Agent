@@ -33,7 +33,9 @@ class RequirementAnalyzer:
         logger.info("开始需求分析...")
         logger.debug(f"输入文本长度: {len(requirement_text)} 字符")
 
-        prompt = self.prompt_template.replace("{requirement_text}", requirement_text)
+        # 防止输入文本中包含模板占位符导致替换异常
+        safe_text = requirement_text.replace("{requirement_text}", "")
+        prompt = self.prompt_template.replace("{requirement_text}", safe_text)
         system_msg = "你是一个资深的软件需求分析师，擅长从自然语言需求中提取结构化信息。只输出JSON格式的结果。"
 
         last_error = None

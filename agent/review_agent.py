@@ -94,7 +94,10 @@ class ReviewAgent:
             llm_review["syntax_check"] = syntax_results
             # 降低整体分数
             if "overall_score" in llm_review:
-                llm_review["overall_score"] = max(0, llm_review["overall_score"] - 20)
+                try:
+                    llm_review["overall_score"] = max(0, float(llm_review["overall_score"]) - 20)
+                except (TypeError, ValueError):
+                    llm_review["overall_score"] = 0
             llm_review["overall_pass"] = False
 
         logger.info(f"审查完成，总分: {llm_review.get('overall_score', 0)}，通过: {llm_review.get('overall_pass', False)}")
@@ -124,10 +127,8 @@ class ReviewAgent:
 
         def do_repair():
             raw = self.llm.generate_text(prompt, system=system_msg)
-            # 提取Mermaid代码
             from agent.diagram_generator import DiagramGenerator
-            gen = DiagramGenerator.__new__(DiagramGenerator)
-            return gen._extract_mermaid(raw, diagram_name)
+            return DiagramGenerator._extract_mermaid(raw, diagram_name)
 
         try:
             repaired = self.retry_manager.retry(do_repair)

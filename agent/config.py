@@ -48,6 +48,9 @@ class AgentConfig:
             raise FileNotFoundError(f"配置文件不存在: {path}")
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
+        if not data:
+            logger.warning(f"配置文件为空: {path}，使用默认配置")
+            return cls()
         config = cls()
         if "llm" in data:
             for k, v in data["llm"].items():

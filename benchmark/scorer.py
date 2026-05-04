@@ -304,16 +304,12 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     score = 0
 
     # 检查是否有开始和结束节点
-    has_start = any(kw in activity for kw in ["[开始]", "([开始])", "[*]", "([开始"])
-    # 也识别以([开头的起始节点（如 ([患者发起预约])）
-    if not has_start:
-        has_start = bool(re.search(r"\(\[.{2,10}\]\)", activity[:200]))
+    start_keywords = ["[开始]", "([开始])", "[*]", "([开始", "开始"]
+    end_keywords = ["[结束]", "([结束])", "[*]", "([结束", "结束"]
+    has_start = any(kw in activity[:300] for kw in start_keywords)
+    has_end = any(kw in activity[-300:] for kw in end_keywords)
     if has_start:
         score += 25
-
-    has_end = any(kw in activity for kw in ["[结束]", "([结束])", "[*]", "([结束"])
-    if not has_end:
-        has_end = bool(re.search(r"\(\[.{2,10}\]\)", activity[-200:]))
     if has_end:
         score += 25
 
@@ -324,7 +320,12 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     # 检查是否覆盖预期流程
     expected_processes = gold.get("expected_processes", [])
     if expected_processes:
-        covered = sum(1 for p in expected_processes if any(kw in activity for kw in p.split("流程")))
+        def _process_covered(proc_name: str, text: str) -> bool:
+            keywords = [kw for kw in proc_name.split("流程") if kw.strip()]
+            if not keywords:
+                return proc_name in text
+            return any(kw in text for kw in keywords)
+        covered = sum(1 for p in expected_processes if _process_covered(p, activity))
         score += (covered / len(expected_processes)) * 25
     else:
         score += 25
