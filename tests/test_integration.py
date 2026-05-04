@@ -94,6 +94,44 @@ class TestIntegrationWorkflow:
         assert "计算器" in text
         assert len(text) > 0
 
+    def test_input_loader_file_size_guard(self, tmp_path):
+        """测试文件大小限制"""
+        big_file = tmp_path / "big.md"
+        big_file.write_text("x" * (512 * 1024 + 1))
+        loader = InputLoader()
+        with pytest.raises(ValueError, match="文件过大"):
+            loader.load(str(big_file))
+
+    def test_input_loader_encoding_fallback(self, tmp_path):
+        """测试编码容错"""
+        gbk_file = tmp_path / "gbk.md"
+        gbk_file.write_bytes("# 需求\n中文内容".encode("gbk"))
+        loader = InputLoader()
+        text = loader.load(str(gbk_file))
+        assert "中文内容" in text
+
+    def test_input_loader_split_sections_code_fence(self):
+        """测试代码围栏内的#号不被当作标题"""
+        loader = InputLoader()
+        text = """# 标题一
+内容1
+
+```python
+# 这是注释，不是标题
+def foo():
+    pass
+```
+
+# 标题二
+内容2
+"""
+        sections = loader.split_sections(text)
+        assert len(sections) == 2
+        assert sections[0]["title"] == "标题一"
+        assert sections[1]["title"] == "标题二"
+        # 代码围栏内容应保留在段落中
+        assert "```python" in sections[0]["content"]
+
     def test_mermaid_validator(self):
         """测试Mermaid语法校验"""
         validator = MermaidValidator()

@@ -11,6 +11,7 @@ class InputLoader:
     """读取并清洗需求文档"""
 
     SUPPORTED_EXTENSIONS = {".md", ".txt", ".json"}
+    MAX_FILE_SIZE = 512 * 1024  # 512KB
 
     def __init__(self):
         pass
@@ -20,14 +21,17 @@ class InputLoader:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"输入文件不存在: {file_path}")
 
+        file_size = os.path.getsize(file_path)
+        if file_size > self.MAX_FILE_SIZE:
+            raise ValueError(f"文件过大: {file_size} bytes，上限 {self.MAX_FILE_SIZE} bytes")
+
         ext = os.path.splitext(file_path)[1].lower()
         if ext not in self.SUPPORTED_EXTENSIONS:
             raise ValueError(f"不支持的文件格式: {ext}，支持: {self.SUPPORTED_EXTENSIONS}")
 
         logger.info(f"读取需求文档: {file_path}")
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            raw_content = f.read()
+        raw_content = self._read_file(file_path)
 
         if not raw_content.strip():
             raise ValueError("输入文件为空")
@@ -36,6 +40,19 @@ class InputLoader:
             return self._load_json(raw_content)
         else:
             return self._load_text(raw_content)
+
+    @staticmethod
+    def _read_file(file_path: str) -> str:
+        """读取文件，自动尝试多种编码"""
+        for encoding in ("utf-8", "gbk", "latin-1"):
+            try:
+                with open(file_path, "r", encoding=encoding) as f:
+                    return f.read()
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        # 最终兜底：替换无法解码的字符
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
 
     def _load_json(self, content: str) -> str:
         """从JSON中提取需求文本"""
@@ -80,13 +97,21 @@ class InputLoader:
         return result
 
     def split_sections(self, text: str) -> list[dict]:
-        """将需求文档按标题分段"""
+        """将需求文档按标题分段（忽略代码块内的#行）"""
         sections = []
         current_title = ""
         current_content = []
+        in_code_fence = False
 
         for line in text.split("\n"):
-            if line.startswith("#"):
+            stripped = line.strip()
+            # 跟踪代码围栏状态
+            if stripped.startswith("```"):
+                in_code_fence = not in_code_fence
+                current_content.append(line)
+                continue
+
+            if not in_code_fence and line.startswith("#"):
                 # 保存上一个段落
                 if current_content or current_title:
                     content = "\n".join(current_content).strip()
