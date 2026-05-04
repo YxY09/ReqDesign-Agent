@@ -17,6 +17,7 @@ from agent.mermaid_validator import MermaidValidator
 from agent.test_case_generator import TestCaseGenerator
 from agent.review_agent import ReviewAgent
 from agent.output_manager import OutputManager
+from agent.diagram_generator import DiagramGenerator
 
 SAMPLE_REQUIREMENT = """# 简单计算器系统
 ## 用户角色
@@ -131,6 +132,28 @@ def foo():
         assert sections[1]["title"] == "标题二"
         # 代码围栏内容应保留在段落中
         assert "```python" in sections[0]["content"]
+
+    def test_diagram_generator_extract_mermaid(self):
+        """测试Mermaid代码提取"""
+        gen = DiagramGenerator.__new__(DiagramGenerator)
+
+        # 从代码块中提取
+        raw = '这是类图：\n```mermaid\nclassDiagram\n    class Foo\n```\n结束'
+        assert gen._extract_mermaid(raw, "classDiagram").startswith("classDiagram")
+
+        # 多个代码块时优先选含Mermaid关键字的
+        raw = '说明：\n```python\nprint("hi")\n```\n类图：\n```mermaid\nclassDiagram\n    class Bar\n```'
+        result = gen._extract_mermaid(raw, "classDiagram")
+        assert "classDiagram" in result
+        assert "print" not in result
+
+        # 直接Mermaid代码（无代码块）
+        raw = "flowchart TD\n    A --> B"
+        assert gen._extract_mermaid(raw, "flowchart") == raw
+
+        # graph关键字
+        raw = "graph TD\n    A --> B"
+        assert gen._extract_mermaid(raw, "flowchart") == raw
 
     def test_mermaid_validator(self):
         """测试Mermaid语法校验"""

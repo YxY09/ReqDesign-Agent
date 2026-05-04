@@ -42,24 +42,33 @@ class DiagramGenerator:
     def _extract_mermaid(self, raw_response: str, diagram_type: str) -> str:
         """从LLM响应中提取Mermaid代码"""
         text = raw_response.strip()
+        mermaid_keywords = ("classDiagram", "flowchart", "graph", "stateDiagram-v2", "stateDiagram")
 
         # 尝试从markdown代码块中提取
-        pattern = r"```(?:mermaid)?\s*\n(.*?)```"
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+        # 只匹配 ```mermaid 或 ``` 后直接换行（不匹配 ```python 等）
+        pattern = r"```mermaid\n(.*?)(?:\n```|\Z)"
+        matches = re.findall(pattern, text, re.DOTALL)
+        if not matches:
+            pattern = r"```\n(.*?)(?:\n```|\Z)"
+            matches = re.findall(pattern, text, re.DOTALL)
+        if matches:
+            for block in matches:
+                stripped = block.strip()
+                if any(stripped.startswith(kw) for kw in mermaid_keywords):
+                    return stripped
+            return matches[0].strip()
 
         # 如果没有代码块，检查是否直接是Mermaid代码
-        if text.startswith("classDiagram") or text.startswith("flowchart") or text.startswith("stateDiagram"):
+        if any(text.startswith(kw) for kw in mermaid_keywords):
             return text
 
         # 尝试找到Mermaid关键字开头的内容
-        for keyword in ("classDiagram", "flowchart", "stateDiagram"):
+        for keyword in mermaid_keywords:
             idx = text.find(keyword)
             if idx >= 0:
                 return text[idx:].strip()
 
-        logger.warning(f"无法从响应中提取Mermaid代码，返回原始响应")
+        logger.warning("无法从响应中提取Mermaid代码，返回原始响应")
         return text
 
     def generate_class_diagram(self, requirement_json: dict, design_text: str) -> str:
