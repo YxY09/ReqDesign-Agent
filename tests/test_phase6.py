@@ -50,7 +50,7 @@ class TestRetryManager:
 
         try:
             rm.retry(fail)
-        except:
+        except Exception:
             pass
 
         assert rm.has_failures()

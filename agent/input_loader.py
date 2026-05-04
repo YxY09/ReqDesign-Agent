@@ -12,6 +12,7 @@ class InputLoader:
 
     SUPPORTED_EXTENSIONS = {".md", ".txt", ".json"}
     MAX_FILE_SIZE = 512 * 1024  # 512KB
+    MAX_CHARS = 100_000  # 最大字符数（防止零宽字符攻击）
 
     def __init__(self):
         pass
@@ -35,6 +36,9 @@ class InputLoader:
 
         if not raw_content.strip():
             raise ValueError("输入文件为空")
+
+        if len(raw_content) > self.MAX_CHARS:
+            raise ValueError(f"文件内容过长: {len(raw_content)} 字符，上限 {self.MAX_CHARS} 字符")
 
         if ext == ".json":
             return self._load_json(raw_content)

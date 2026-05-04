@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from typing import Optional
 
 from agent.llm_client import LLMClient
@@ -33,8 +34,9 @@ class RequirementAnalyzer:
         logger.info("开始需求分析...")
         logger.debug(f"输入文本长度: {len(requirement_text)} 字符")
 
-        # 防止输入文本中包含模板占位符导致替换异常
+        # 防止输入文本中包含模板占位符或prompt注入指令
         safe_text = requirement_text.replace("{requirement_text}", "")
+        safe_text = re.sub(r'\{[a-z_]+\}', '', safe_text)  # 移除所有模板变量
         prompt = self.prompt_template.replace("{requirement_text}", safe_text)
         system_msg = "你是一个资深的软件需求分析师，擅长从自然语言需求中提取结构化信息。只输出JSON格式的结果。"
 

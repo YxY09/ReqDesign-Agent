@@ -17,7 +17,8 @@ from agent.mermaid_validator import MermaidValidator
 from agent.test_case_generator import TestCaseGenerator
 from agent.review_agent import ReviewAgent
 from agent.output_manager import OutputManager
-from agent.diagram_generator import DiagramGenerator
+from agent.output_manager import _sanitize_filename
+from agent.config import AgentConfig
 
 SAMPLE_REQUIREMENT = """# 简单计算器系统
 ## 用户角色
@@ -327,6 +328,60 @@ def foo():
         assert _fuzzy_match_function("注册", result_funcs, result_text)
         # 不匹配
         assert not _fuzzy_match_function("成绩录入", result_funcs, result_text)
+
+    def test_input_loader_empty_file(self, tmp_path):
+        """测试空文件处理"""
+        empty_file = tmp_path / "empty.md"
+        empty_file.write_text("")
+        loader = InputLoader()
+        with pytest.raises(ValueError, match="为空"):
+            loader.load(str(empty_file))
+
+    def test_input_loader_unsupported_extension(self, tmp_path):
+        """测试不支持的文件扩展名"""
+        bad_file = tmp_path / "test.xyz"
+        bad_file.write_text("content")
+        loader = InputLoader()
+        with pytest.raises(ValueError, match="不支持"):
+            loader.load(str(bad_file))
+
+    def test_sanitize_filename_path_traversal(self):
+        """测试文件名路径穿越防护"""
+        assert _sanitize_filename("../../etc/passwd") == "____etc_passwd"
+        assert _sanitize_filename("../../../root") == "______root"
+        assert _sanitize_filename("test/../../../etc/passwd") == "test_______etc_passwd"
+        assert _sanitize_filename("normal_file.md") == "normal_file.md"
+
+    def test_config_empty_yaml(self, tmp_path):
+        """测试空YAML配置文件"""
+        empty_yaml = tmp_path / "empty.yaml"
+        empty_yaml.write_text("")
+        config = AgentConfig.load_from_yaml(str(empty_yaml))
+        assert config.llm.provider == "openai"  # 默认值
+
+    def test_requirement_analyzer_normalize_result(self):
+        """测试需求分析结果类型规范化"""
+        mock_llm = MagicMock()
+        analyzer = RequirementAnalyzer(mock_llm)
+        # LLM返回字符串而非数组
+        result = {"actors": "none", "functions": "用户登录", "entities": []}
+        normalized = analyzer._normalize_result(result)
+        assert normalized["actors"] == []
+        assert normalized["functions"] == ["用户登录"]
+        assert normalized["entities"] == []
+
+    def test_scorer_constraint_matching(self):
+        """测试约束匹配"""
+        from benchmark.scorer import _match_constraint_or_exception
+
+        # 直接匹配
+        assert _match_constraint_or_exception("库存不足不能下单", "库存不足时不允许下单")
+        # 数字量词匹配
+        assert _match_constraint_or_exception("30分钟未支付取消", "订单超时未支付（30分钟）自动取消")
+        # 关键词多数匹配
+        assert _match_constraint_or_exception("课程人数限制", "每门课程有最大选课人数限制")
+        # 不匹配
+        assert not _match_constraint_or_exception("完全无关的约束", "库存不足不能下单")
 
 
 if __name__ == "__main__":
