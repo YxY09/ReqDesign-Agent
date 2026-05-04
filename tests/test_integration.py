@@ -229,6 +229,23 @@ class TestIntegrationWorkflow:
         # 不匹配
         assert not _fuzzy_match_entity("图书", "课程")
 
+    def test_scorer_function_matching(self):
+        """测试评分器功能模糊匹配"""
+        from benchmark.scorer import _fuzzy_match_function
+
+        result_funcs = ["用户注册与登录", "图书搜索", "图书借阅"]
+        result_text = " ".join(result_funcs)
+
+        # 直接匹配
+        assert _fuzzy_match_function("图书搜索", result_funcs, result_text)
+        # 关键词匹配："用户登录" 在 "用户注册与登录" 中
+        assert _fuzzy_match_function("用户登录", result_funcs, result_text)
+        # 同义词匹配
+        assert _fuzzy_match_function("登录", result_funcs, result_text)
+        assert _fuzzy_match_function("注册", result_funcs, result_text)
+        # 不匹配
+        assert not _fuzzy_match_function("成绩录入", result_funcs, result_text)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

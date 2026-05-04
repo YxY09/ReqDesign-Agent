@@ -69,6 +69,94 @@ def _fuzzy_match_entity(entity_name: str, target: str) -> bool:
     return False
 
 
+def _edit_distance(s1: str, s2: str) -> int:
+    """计算两个字符串的编辑距离"""
+    if len(s1) < len(s2):
+        return _edit_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = prev[j + 1] + 1
+            deletions = curr[j] + 1
+            substitutions = prev[j] + (c1 != c2)
+            curr.append(min(insertions, deletions, substitutions))
+        prev = curr
+    return prev[-1]
+
+
+# 功能名称同义词映射
+FUNCTION_SYNONYMS = {
+    "用户注册": ["注册", "用户注册与登录", "注册与登录"],
+    "用户登录": ["登录", "用户注册与登录", "注册与登录", "登录系统"],
+    "图书搜索": ["搜索图书", "图书查询", "查询图书", "检索"],
+    "图书借阅": ["借阅图书", "借书", "借阅"],
+    "图书归还": ["归还图书", "还书", "归还"],
+    "借阅管理": ["借阅记录管理", "图书借阅管理"],
+    "图书管理": ["图书信息管理", "图书维护"],
+    "选课": ["课程选择", "选择课程"],
+    "退课": ["退选", "取消选课"],
+    "课程发布": ["发布课程", "创建课程"],
+    "课程审核": ["审核课程"],
+    "成绩录入": ["录入成绩", "成绩管理"],
+    "课表查看": ["查看课表", "课表查询"],
+    "订单管理": ["查看订单", "订单查看"],
+    "订单取消": ["取消订单"],
+    "退款申请": ["申请退款"],
+    "退款处理": ["处理退款", "退款审核"],
+    "购物车管理": ["管理购物车"],
+    "下单支付": ["下单", "支付", "下单与支付"],
+    "商品浏览": ["浏览商品", "查看商品"],
+    "用户注册与登录": ["注册", "登录", "用户注册", "用户登录"],
+    "预约申请": ["提交预约", "发起预约"],
+    "预约审批": ["审批预约", "审核预约"],
+    "取消预约": ["预约取消"],
+    "预约查看": ["查看预约", "预约查询"],
+    "会议室管理": ["管理会议室"],
+    "设备管理": ["管理设备"],
+}
+
+
+def _fuzzy_match_function(func_name: str, result_functions: list[str], result_text: str) -> bool:
+    """模糊匹配功能名称"""
+    # 1. 直接子串匹配
+    if func_name in result_text:
+        return True
+
+    # 2. 关键词拆分匹配
+    keywords = [kw for kw in re.split(r'[与和及、]', func_name) if len(kw) > 1]
+    if len(keywords) >= 2 and all(kw in result_text for kw in keywords):
+        return True
+
+    # 3. 同义词匹配
+    synonyms = FUNCTION_SYNONYMS.get(func_name, [])
+    for syn in synonyms:
+        if syn in result_text:
+            return True
+        # 也检查同义词是否在结果函数名中
+        for rf in result_functions:
+            if syn in rf or rf in syn:
+                return True
+
+    # 4. 对每个结果函数名做同义词反向匹配
+    for rf in result_functions:
+        rf_synonyms = FUNCTION_SYNONYMS.get(rf, [])
+        if func_name in rf_synonyms:
+            return True
+
+    # 5. 编辑距离匹配（允许少量字符差异）
+    for rf in result_functions:
+        if abs(len(func_name) - len(rf)) <= 2:
+            dist = _edit_distance(func_name, rf)
+            threshold = max(1, len(func_name) // 4)
+            if dist <= threshold:
+                return True
+
+    return False
+
+
 def score_requirement_coverage(result: dict, gold: dict) -> float:
     """
     计算需求覆盖率
@@ -97,14 +185,8 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     result_text = " ".join(result_functions)
     for func in expected_functions:
         total_points += 1
-        if func in result_text:
+        if _fuzzy_match_function(func, result_functions, result_text):
             covered_points += 1
-        else:
-            # 关键词匹配：将功能名拆分为关键词，检查是否全部出现
-            # 例如 "用户登录" → ["用户", "登录"]，在 "用户注册与登录" 中都能找到
-            keywords = [kw for kw in re.split(r'[与和及、]', func) if len(kw) > 1]
-            if len(keywords) >= 2 and all(kw in result_text for kw in keywords):
-                covered_points += 1
 
     # 检查实体覆盖
     expected_entities = gold.get("expected_entities", [])
