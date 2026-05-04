@@ -1,0 +1,38 @@
+"""日志配置模块"""
+
+import os
+import logging
+from datetime import datetime
+
+
+def setup_logger(
+    name: str = "reqdesign",
+    level: str = "INFO",
+    log_dir: str = "logs/",
+) -> logging.Logger:
+    """创建统一日志器，同时输出到控制台和文件"""
+    logger = logging.getLogger(name)
+    if logger.handlers:
+        return logger
+
+    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+
+    formatter = logging.Formatter(
+        "[%(asctime)s] %(levelname)s %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # 控制台输出
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    # 文件输出
+    os.makedirs(log_dir, exist_ok=True)
+    date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"reqdesign_{date_str}.log")
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
