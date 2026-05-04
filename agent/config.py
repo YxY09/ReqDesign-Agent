@@ -68,6 +68,9 @@ class AgentConfig:
             for k, v in data["logging"].items():
                 if hasattr(config.logging, k):
                     setattr(config.logging, k, v)
+        errors = config.validate()
+        if errors:
+            logger.warning(f"配置验证警告: {errors}")
         logger.info(f"配置加载完成: provider={config.llm.provider}, model={config.llm.model}")
         return config
 

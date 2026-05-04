@@ -5,6 +5,22 @@ import logging
 from datetime import datetime
 
 
+MAX_LOG_FILES = 20
+
+
+def _cleanup_old_logs(log_dir: str, max_files: int):
+    """清理旧日志文件，保留最近的max_files个"""
+    try:
+        files = sorted(
+            [f for f in os.listdir(log_dir) if f.startswith("reqdesign_") and f.endswith(".log")],
+        )
+        while len(files) > max_files:
+            oldest = files.pop(0)
+            os.remove(os.path.join(log_dir, oldest))
+    except OSError:
+        pass
+
+
 def setup_logger(
     name: str = "reqdesign",
     level: str = "INFO",
@@ -29,6 +45,7 @@ def setup_logger(
 
     # 文件输出
     os.makedirs(log_dir, exist_ok=True)
+    _cleanup_old_logs(log_dir, MAX_LOG_FILES)
     date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = os.path.join(log_dir, f"reqdesign_{date_str}.log")
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
