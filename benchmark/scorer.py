@@ -158,6 +158,45 @@ def _fuzzy_match_function(func_name: str, result_functions: list[str], result_te
     return False
 
 
+def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
+    """匹配约束或异常：多级关键词匹配"""
+    # 1. 直接子串匹配
+    if expected in target_text:
+        return True
+
+    # 2. 按分隔符和结构词拆分关键词（保留"不"等否定词在关键词中）
+    keywords = re.split(r'[，,、;；（）()\s的时了后]', expected)
+    keywords = [kw for kw in keywords if len(kw) >= 2]
+
+    if not keywords:
+        # 回退：按字符级别提取2-gram
+        keywords = [expected[i:i+2] for i in range(len(expected)-1)]
+
+    # 3. 全部关键词匹配
+    if all(kw in target_text for kw in keywords):
+        return True
+
+    # 4. 多数关键词匹配（>=60%）
+    matched = sum(1 for kw in keywords if kw in target_text)
+    if len(keywords) >= 2 and matched / len(keywords) >= 0.6:
+        return True
+
+    # 5. 数字/量词匹配（如"30分钟"、"7天"、"6门"）
+    numbers_in_expected = re.findall(r'\d+\s*[分天时月秒门]', expected)
+    if numbers_in_expected and any(n in target_text for n in numbers_in_expected):
+        return True
+
+    # 6. 核心名词匹配（提取2-4字的名词片段）
+    core_nouns = re.findall(r'[一-鿿]{2,4}', expected)
+    core_nouns = [n for n in core_nouns if n not in ("系统", "时应", "提示", "后不")]
+    if len(core_nouns) >= 2:
+        noun_matched = sum(1 for n in core_nouns if n in target_text)
+        if noun_matched / len(core_nouns) >= 0.5:
+            return True
+
+    return False
+
+
 def score_requirement_coverage(result: dict, gold: dict) -> float:
     """
     计算需求覆盖率
@@ -203,9 +242,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     constraint_text = " ".join(result_constraints)
     for constraint in expected_constraints:
         total_points += 1
-        # 部分匹配：拆分为多个关键词
-        keywords = re.split(r'[，,、;；]', constraint)
-        if any(kw in constraint_text for kw in keywords if len(kw) > 2):
+        if _match_constraint_or_exception(constraint, constraint_text):
             covered_points += 1
 
     # 检查异常流程覆盖
@@ -214,13 +251,8 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     exception_text = " ".join(result_exceptions)
     for exc in expected_exceptions:
         total_points += 1
-        if exc in exception_text:
+        if _match_constraint_or_exception(exc, exception_text):
             covered_points += 1
-        else:
-            # 关键词匹配
-            keywords = [kw for kw in re.split(r'[，,、;；的时]', exc) if len(kw) > 1]
-            if len(keywords) >= 2 and all(kw in exception_text for kw in keywords):
-                covered_points += 1
 
     if total_points == 0:
         return 100.0

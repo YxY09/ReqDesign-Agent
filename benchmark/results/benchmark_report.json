@@ -1,70 +1,84 @@
 {
-  "run_time": "2026-05-04 15:28:51",
+  "run_time": "2026-05-04 23:07:50",
   "total_cases": 5,
   "results": [
     {
       "case_name": "case1_library",
       "status": "success",
       "scores": {
-        "requirement_coverage": 63.2,
+        "requirement_coverage": 84.2,
         "diagram_syntax": 100.0,
-        "entity_accuracy": 0.0,
+        "entity_accuracy": 100.0,
         "process_completeness": 100.0,
-        "consistency": 85.0,
-        "overall": 63.8
+        "consistency": 100.0,
+        "overall": 93.7
       },
-      "passed": false
+      "passed": true
     },
     {
       "case_name": "case2_course",
-      "status": "error",
-      "error": "需求分析结果解析失败: Expecting value: line 87 column 21 (char 1830)",
-      "scores": {}
+      "status": "success",
+      "scores": {
+        "requirement_coverage": 81.8,
+        "diagram_syntax": 100.0,
+        "entity_accuracy": 100.0,
+        "process_completeness": 100.0,
+        "consistency": 100.0,
+        "overall": 92.7
+      },
+      "passed": true
     },
     {
       "case_name": "case3_mall",
       "status": "success",
       "scores": {
-        "requirement_coverage": 58.3,
+        "requirement_coverage": 79.2,
         "diagram_syntax": 100.0,
-        "entity_accuracy": 0.0,
-        "process_completeness": 100.0,
-        "consistency": 85.0,
-        "overall": 61.8
+        "entity_accuracy": 83.3,
+        "process_completeness": 83.3,
+        "consistency": 100.0,
+        "overall": 86.7
       },
-      "passed": false
+      "passed": true
     },
     {
       "case_name": "case4_hospital",
-      "status": "error",
-      "error": "需求分析结果解析失败: Unterminated string starting at: line 36 column 22 (char 746)",
-      "scores": {}
+      "status": "success",
+      "scores": {
+        "requirement_coverage": 91.7,
+        "diagram_syntax": 100.0,
+        "entity_accuracy": 100.0,
+        "process_completeness": 100.0,
+        "consistency": 95.0,
+        "overall": 96.2
+      },
+      "passed": true
     },
     {
       "case_name": "case5_meeting",
       "status": "success",
       "scores": {
-        "requirement_coverage": 60.0,
+        "requirement_coverage": 80.0,
         "diagram_syntax": 100.0,
-        "entity_accuracy": 0.0,
-        "process_completeness": 100.0,
-        "consistency": 85.0,
-        "overall": 62.5
+        "entity_accuracy": 100.0,
+        "process_completeness": 91.7,
+        "consistency": 95.0,
+        "overall": 90.7
       },
-      "passed": false
+      "passed": true
     }
   ],
   "summary": {
-    "passed": 0,
-    "failed": 3,
-    "error": 2,
+    "passed": 5,
+    "failed": 0,
+    "error": 0,
     "avg_scores": {
-      "requirement_coverage": 60.5,
+      "requirement_coverage": 83.4,
       "diagram_syntax": 100.0,
-      "entity_accuracy": 0.0,
-      "process_completeness": 100.0,
-      "consistency": 85.0,
-      "overall": 62.7
+      "entity_accuracy": 96.7,
+      "process_completeness": 95.0,
+      "consistency": 98.0,
+      "overall": 92.0
     }
   }
 }
