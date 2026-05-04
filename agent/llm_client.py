@@ -64,6 +64,8 @@ class LLMClient:
                     temperature=temp,
                     max_tokens=self.max_tokens,
                 )
+                if not resp.choices:
+                    raise ValueError("LLM返回空响应（可能被内容过滤器拦截）")
                 result = resp.choices[0].message.content
             elif self.provider == "anthropic":
                 # Anthropic需要将system消息分离
@@ -83,6 +85,8 @@ class LLMClient:
                 if system_msg:
                     kwargs["system"] = system_msg
                 resp = self._client.messages.create(**kwargs)
+                if not resp.content:
+                    raise ValueError("LLM返回空响应（可能被内容过滤器拦截）")
                 result = resp.content[0].text
             else:
                 raise ValueError(f"不支持的provider: {self.provider}")
@@ -190,8 +194,8 @@ class LLMClient:
         # 尝试修复常见问题
         fixed = text
 
-        # 移除行尾注释
-        fixed = re.sub(r"//.*$", "", fixed, flags=re.MULTILINE)
+        # 移除行首注释（不处理行内的//，避免误伤URL等合法内容）
+        fixed = re.sub(r"^\s*//.*$", "", fixed, flags=re.MULTILINE)
 
         # 移除尾部逗号 (,] 或 ,})
         fixed = re.sub(r",\s*([\]}])", r"\1", fixed)

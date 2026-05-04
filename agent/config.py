@@ -12,7 +12,7 @@ logger = logging.getLogger("reqdesign")
 class LLMConfig:
     provider: str = "openai"
     model: str = "gpt-4o"
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)  # 不在repr中暴露密钥
     base_url: str = ""
     temperature: float = 0.3
     max_tokens: int = 8192
@@ -89,13 +89,17 @@ class AgentConfig:
         if self.llm.api_key:
             return self.llm.api_key
         env_map = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_AUTH_TOKEN",
-            "deepseek": "DEEPSEEK_API_KEY",
-            "qwen": "QWEN_API_KEY",
+            "openai": ("OPENAI_API_KEY",),
+            "anthropic": ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"),
+            "deepseek": ("DEEPSEEK_API_KEY",),
+            "qwen": ("QWEN_API_KEY",),
         }
-        env_name = env_map.get(self.llm.provider, "OPENAI_API_KEY")
-        return os.environ.get(env_name, "")
+        env_names = env_map.get(self.llm.provider, ("OPENAI_API_KEY",))
+        for name in env_names:
+            key = os.environ.get(name, "")
+            if key:
+                return key
+        return ""
 
     def get_base_url(self) -> str:
         """获取API基础URL，优先使用配置文件，否则从环境变量读取"""

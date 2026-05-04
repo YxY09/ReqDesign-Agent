@@ -13,7 +13,7 @@ def setup_logger(
     """创建统一日志器，同时输出到控制台和文件"""
     logger = logging.getLogger(name)
     if logger.handlers:
-        return logger
+        logger.handlers.clear()
 
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
 

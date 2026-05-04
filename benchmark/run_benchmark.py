@@ -34,6 +34,10 @@ class BenchmarkRunner:
 
     def find_cases(self) -> list[dict]:
         """查找所有测试案例"""
+        if not os.path.isdir(self.cases_dir):
+            raise FileNotFoundError(f"案例目录不存在: {self.cases_dir}")
+        if not os.path.isdir(self.gold_dir):
+            raise FileNotFoundError(f"标注目录不存在: {self.gold_dir}")
         cases = []
         for f in sorted(os.listdir(self.cases_dir)):
             if f.endswith(".md"):

@@ -42,6 +42,7 @@ class RequirementAnalyzer:
         for attempt in range(1, max_retries + 1):
             try:
                 result = self.llm.generate_json(prompt, system=system_msg)
+                result = self._normalize_result(result)
                 logger.info(f"需求分析完成，提取到: {len(result.get('actors', []))} 个角色, "
                             f"{len(result.get('functions', []))} 个功能, "
                             f"{len(result.get('entities', []))} 个实体")
@@ -57,6 +58,20 @@ class RequirementAnalyzer:
 
         logger.error(f"需求分析JSON解析连续 {max_retries} 次失败")
         raise ValueError(f"需求分析结果解析失败: {last_error}")
+
+    @staticmethod
+    def _normalize_result(result: dict) -> dict:
+        """确保列表字段确实是列表（LLM有时返回字符串而非数组）"""
+        list_fields = ["actors", "functions", "entities", "constraints",
+                       "exceptions", "non_functional_requirements", "business_processes"]
+        for field in list_fields:
+            val = result.get(field)
+            if val is not None and not isinstance(val, list):
+                if isinstance(val, str):
+                    result[field] = [] if val.lower() in ("", "none", "null", "无") else [val]
+                else:
+                    result[field] = [val]
+        return result
 
     def validate_result(self, result: dict) -> list[str]:
         """验证分析结果的完整性，返回缺失字段列表"""
