@@ -99,6 +99,12 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
         total_points += 1
         if func in result_text:
             covered_points += 1
+        else:
+            # 关键词匹配：将功能名拆分为关键词，检查是否全部出现
+            # 例如 "用户登录" → ["用户", "登录"]，在 "用户注册与登录" 中都能找到
+            keywords = [kw for kw in re.split(r'[与和及、]', func) if len(kw) > 1]
+            if len(keywords) >= 2 and all(kw in result_text for kw in keywords):
+                covered_points += 1
 
     # 检查实体覆盖
     expected_entities = gold.get("expected_entities", [])
@@ -114,8 +120,8 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     constraint_text = " ".join(result_constraints)
     for constraint in expected_constraints:
         total_points += 1
-        # 部分匹配
-        keywords = constraint.split("，")
+        # 部分匹配：拆分为多个关键词
+        keywords = re.split(r'[，,、;；]', constraint)
         if any(kw in constraint_text for kw in keywords if len(kw) > 2):
             covered_points += 1
 
@@ -127,6 +133,11 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
         total_points += 1
         if exc in exception_text:
             covered_points += 1
+        else:
+            # 关键词匹配
+            keywords = [kw for kw in re.split(r'[，,、;；的时]', exc) if len(kw) > 1]
+            if len(keywords) >= 2 and all(kw in exception_text for kw in keywords):
+                covered_points += 1
 
     if total_points == 0:
         return 100.0
