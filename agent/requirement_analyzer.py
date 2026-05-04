@@ -1,0 +1,74 @@
+"""需求分析智能体：将自然语言需求转为结构化JSON"""
+
+import json
+import logging
+import os
+from typing import Optional
+
+from agent.llm_client import LLMClient
+
+logger = logging.getLogger("reqdesign")
+
+PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
+
+
+class RequirementAnalyzer:
+    """需求分析Agent：抽取角色、功能、实体、约束、异常、非功能需求"""
+
+    def __init__(self, llm_client: LLMClient):
+        self.llm = llm_client
+        self.prompt_template = self._load_prompt()
+
+    def _load_prompt(self) -> str:
+        """加载Prompt模板"""
+        prompt_path = os.path.join(PROMPT_DIR, "requirement_analysis.md")
+        if not os.path.exists(prompt_path):
+            logger.warning(f"Prompt模板不存在: {prompt_path}，使用默认模板")
+            return "请从以下需求文档中抽取结构化的需求要素，以JSON格式输出：\n\n{requirement_text}"
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def analyze(self, requirement_text: str) -> dict:
+        """分析需求文本，返回结构化JSON"""
+        logger.info("开始需求分析...")
+        logger.debug(f"输入文本长度: {len(requirement_text)} 字符")
+
+        prompt = self.prompt_template.replace("{requirement_text}", requirement_text)
+
+        system_msg = "你是一个资深的软件需求分析师，擅长从自然语言需求中提取结构化信息。只输出JSON格式的结果。"
+
+        try:
+            result = self.llm.generate_json(prompt, system=system_msg)
+            logger.info(f"需求分析完成，提取到: {len(result.get('actors', []))} 个角色, "
+                        f"{len(result.get('functions', []))} 个功能, "
+                        f"{len(result.get('entities', []))} 个实体")
+            return result
+        except json.JSONDecodeError as e:
+            logger.error(f"LLM返回的JSON格式无效: {e}")
+            raise ValueError(f"需求分析结果解析失败: {e}")
+        except Exception as e:
+            logger.error(f"需求分析失败: {e}")
+            raise
+
+    def validate_result(self, result: dict) -> list[str]:
+        """验证分析结果的完整性，返回缺失字段列表"""
+        required_fields = ["actors", "functions", "entities"]
+        optional_fields = ["constraints", "exceptions", "non_functional_requirements", "business_processes"]
+
+        warnings = []
+        for field in required_fields:
+            if field not in result:
+                warnings.append(f"缺少必需字段: {field}")
+            elif not result[field]:
+                warnings.append(f"必需字段为空: {field}")
+
+        for field in optional_fields:
+            if field not in result:
+                warnings.append(f"缺少可选字段: {field}")
+
+        if warnings:
+            logger.warning(f"需求分析结果验证: {warnings}")
+        else:
+            logger.info("需求分析结果验证通过")
+
+        return warnings

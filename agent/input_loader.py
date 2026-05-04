@@ -1,0 +1,113 @@
+"""输入处理模块：读取、清洗、分段需求文档"""
+
+import os
+import json
+import logging
+
+logger = logging.getLogger("reqdesign")
+
+
+class InputLoader:
+    """读取并清洗需求文档"""
+
+    SUPPORTED_EXTENSIONS = {".md", ".txt", ".json"}
+
+    def __init__(self):
+        pass
+
+    def load(self, file_path: str) -> str:
+        """读取需求文档，返回清洗后的文本"""
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"输入文件不存在: {file_path}")
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext not in self.SUPPORTED_EXTENSIONS:
+            raise ValueError(f"不支持的文件格式: {ext}，支持: {self.SUPPORTED_EXTENSIONS}")
+
+        logger.info(f"读取需求文档: {file_path}")
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            raw_content = f.read()
+
+        if not raw_content.strip():
+            raise ValueError("输入文件为空")
+
+        if ext == ".json":
+            return self._load_json(raw_content)
+        else:
+            return self._load_text(raw_content)
+
+    def _load_json(self, content: str) -> str:
+        """从JSON中提取需求文本"""
+        try:
+            data = json.loads(content)
+            if isinstance(data, str):
+                return self.clean(data)
+            if isinstance(data, dict):
+                # 尝试常见的字段名
+                for key in ("requirements", "content", "description", "text"):
+                    if key in data:
+                        return self.clean(str(data[key]))
+                # 如果没有匹配字段，将整个JSON转为文本
+                return self.clean(json.dumps(data, ensure_ascii=False, indent=2))
+            return self.clean(str(data))
+        except json.JSONDecodeError:
+            return self.clean(content)
+
+    def _load_text(self, content: str) -> str:
+        """读取纯文本/Markdown"""
+        return self.clean(content)
+
+    def clean(self, text: str) -> str:
+        """清洗文本：去除多余空白、标准化换行"""
+        # 去除首尾空白
+        text = text.strip()
+        # 将多个连续空行合并为两个换行
+        lines = text.split("\n")
+        cleaned_lines = []
+        prev_empty = False
+        for line in lines:
+            stripped = line.rstrip()
+            if not stripped:
+                if not prev_empty:
+                    cleaned_lines.append("")
+                prev_empty = True
+            else:
+                cleaned_lines.append(stripped)
+                prev_empty = False
+        result = "\n".join(cleaned_lines).strip()
+        logger.debug(f"文本清洗完成，长度: {len(result)} 字符")
+        return result
+
+    def split_sections(self, text: str) -> list[dict]:
+        """将需求文档按标题分段"""
+        sections = []
+        current_title = ""
+        current_content = []
+
+        for line in text.split("\n"):
+            if line.startswith("#"):
+                # 保存上一个段落
+                if current_content or current_title:
+                    content = "\n".join(current_content).strip()
+                    if content:
+                        sections.append({
+                            "title": current_title,
+                            "content": content,
+                        })
+                current_title = line.lstrip("#").strip()
+                current_content = []
+            else:
+                current_content.append(line)
+
+        # 保存最后一个段落
+        if current_content or current_title:
+            content = "\n".join(current_content).strip()
+            if content:
+                sections.append({
+                    "title": current_title,
+                    "content": content,
+                })
+
+        logger.info(f"文档分段完成，共 {len(sections)} 个段落")
+        return sections
