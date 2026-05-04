@@ -1,7 +1,9 @@
 """测试用例生成智能体：根据需求和设计生成测试用例草案"""
 
+import json
 import logging
 import os
+import re
 
 from agent.llm_client import LLMClient
 
@@ -30,7 +32,6 @@ class TestCaseGenerator:
         """生成测试用例（Markdown格式）"""
         logger.info("开始生成测试用例...")
 
-        import json
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
         prompt = self.prompt_template.replace("{requirement_json}", req_str)
         prompt = prompt.replace("{design_text}", design_text)
@@ -81,7 +82,6 @@ class TestCaseGenerator:
 
     def count_test_cases(self, test_cases_md: str) -> dict:
         """统计测试用例数量"""
-        import re
         # 匹配表格行中的编号
         normal = len(re.findall(r"TC-N-\d+", test_cases_md))
         exception = len(re.findall(r"TC-E-\d+", test_cases_md))

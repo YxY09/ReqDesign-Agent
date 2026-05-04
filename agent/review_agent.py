@@ -69,8 +69,7 @@ class ReviewAgent:
 
         # 2. 调用LLM进行语义审查
         requirement_summary = json.dumps(requirement_json, ensure_ascii=False, indent=2)
-        prompt = self.prompt_template.replace("{requirement_summary}", requirement_summary)
-        prompt = prompt.replace("{requirement_json}", requirement_summary)
+        prompt = self.prompt_template.replace("{requirement_json}", requirement_summary)
         prompt = prompt.replace("{design_text}", design_text)
         prompt = prompt.replace("{class_diagram}", diagrams.get("class_diagram", ""))
         prompt = prompt.replace("{activity_diagram}", diagrams.get("activity_diagram", ""))

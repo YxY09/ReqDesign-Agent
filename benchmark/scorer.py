@@ -1,7 +1,11 @@
 """评分脚本：计算各项评价指标"""
 
+import os
+import sys
 import re
 import logging
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger("reqdesign")
 
@@ -42,7 +46,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     result_entities = [e.get("name", "") for e in result.get("entities", [])]
     for entity in expected_entities:
         total_points += 1
-        if any(entity in re for re in result_entities):
+        if any(entity in res_ent for res_ent in result_entities):
             covered_points += 1
 
     # 检查约束覆盖
@@ -122,7 +126,7 @@ def score_entity_accuracy(result: dict, gold: dict) -> float:
 
     correct = 0
     for entity in expected_entities:
-        if any(entity in re for re in result_entities):
+        if any(entity in res_ent for res_ent in result_entities):
             correct += 1
 
     score = (correct / len(expected_entities)) * 100

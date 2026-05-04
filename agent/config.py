@@ -1,9 +1,11 @@
 """配置管理模块"""
 
 import os
+import logging
 import yaml
 from dataclasses import dataclass, field
-from typing import Optional
+
+logger = logging.getLogger("reqdesign")
 
 
 @dataclass
@@ -63,6 +65,7 @@ class AgentConfig:
             for k, v in data["logging"].items():
                 if hasattr(config.logging, k):
                     setattr(config.logging, k, v)
+        logger.info(f"配置加载完成: provider={config.llm.provider}, model={config.llm.model}")
         return config
 
     def validate(self) -> list[str]:

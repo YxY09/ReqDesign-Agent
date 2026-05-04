@@ -2,7 +2,7 @@
 
 ## 原始需求摘要
 
-{requirement_summary}
+{requirement_json}
 
 ## 当前设计产物
 

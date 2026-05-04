@@ -17,18 +17,26 @@ class OutputManager:
         logger.info(f"输出目录: {output_dir}")
 
     def _write_file(self, filename: str, content: str):
-        """写入文件"""
+        """写入文本文件"""
         path = os.path.join(self.output_dir, filename)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-        logger.debug(f"已写入: {path}")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.debug(f"已写入: {path}")
+        except (OSError, IOError) as e:
+            logger.error(f"写入文件失败 {path}: {e}")
+            raise
 
     def _write_json(self, filename: str, data: dict):
         """写入JSON文件"""
         path = os.path.join(self.output_dir, filename)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        logger.debug(f"已写入: {path}")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.debug(f"已写入: {path}")
+        except (OSError, IOError) as e:
+            logger.error(f"写入JSON文件失败 {path}: {e}")
+            raise
 
     def save_requirement_analysis(self, requirement_json: dict, requirement_text: str = ""):
         """保存需求分析结果"""

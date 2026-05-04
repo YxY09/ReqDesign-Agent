@@ -1,5 +1,6 @@
 """图模型生成智能体：生成Mermaid格式的类图、活动图、状态机图"""
 
+import json
 import logging
 import os
 import re
@@ -33,7 +34,6 @@ class DiagramGenerator:
 
     def _build_prompt(self, template: str, requirement_json: dict, design_text: str) -> str:
         """构建完整Prompt"""
-        import json
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
         prompt = template.replace("{requirement_json}", req_str)
         prompt = prompt.replace("{design_text}", design_text)
