@@ -84,34 +84,54 @@ class WorkflowController:
         self.requirement_analyzer.validate_result(req_json)
         results["requirement_analysis"] = req_json
 
-        # 3. 设计规划
+        # 3. 设计规划（允许降级）
         logger.info("[3/6] 设计规划...")
-        design_text = self.design_planner.generate_design(req_json)
-        self.design_planner.validate_design(design_text, req_json)
+        design_text = ""
+        try:
+            design_text = self.design_planner.generate_design(req_json)
+            self.design_planner.validate_design(design_text, req_json)
+        except Exception as e:
+            logger.error(f"设计规划失败，继续执行: {e}")
         results["system_design"] = design_text
 
-        # 4. 图模型生成
+        # 4. 图模型生成（允许降级）
         logger.info("[4/6] 图模型生成...")
-        diagrams = self.diagram_generator.generate_all(req_json, design_text)
+        diagrams = {}
+        try:
+            diagrams = self.diagram_generator.generate_all(req_json, design_text)
+        except Exception as e:
+            logger.error(f"图模型生成失败，继续执行: {e}")
         results["diagrams"] = diagrams
 
-        # 5. 测试用例生成
+        # 5. 测试用例生成（允许降级）
         logger.info("[5/6] 测试用例生成...")
-        test_cases = self.test_case_generator.generate(req_json, design_text)
-        self.test_case_generator.validate_test_cases(test_cases, req_json)
+        test_cases = ""
+        try:
+            test_cases = self.test_case_generator.generate(req_json, design_text)
+            self.test_case_generator.validate_test_cases(test_cases, req_json)
+        except Exception as e:
+            logger.error(f"测试用例生成失败，继续执行: {e}")
         results["test_cases"] = test_cases
 
-        # 6. 审查与修复
+        # 6. 审查与修复（允许降级）
         logger.info("[6/6] 审查与修复...")
-        review_result, repaired_diagrams = self.review_agent.review_and_repair(
-            req_json, design_text, diagrams
-        )
-        # 使用修复后的图
+        review_result = {}
+        repaired_diagrams = diagrams
+        try:
+            review_result, repaired_diagrams = self.review_agent.review_and_repair(
+                req_json, design_text, diagrams
+            )
+        except Exception as e:
+            logger.error(f"审查修复失败，继续执行: {e}")
         results["diagrams"] = repaired_diagrams
         results["review"] = review_result
 
         # 生成审查报告
-        review_report = self.review_agent.generate_report(review_result)
+        review_report = ""
+        try:
+            review_report = self.review_agent.generate_report(review_result)
+        except Exception as e:
+            logger.error(f"审查报告生成失败: {e}")
         results["review_report"] = review_report
 
         # 保存所有输出
