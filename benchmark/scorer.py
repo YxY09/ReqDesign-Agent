@@ -22,9 +22,9 @@ ENTITY_NAME_MAP = {
     "课程": ["Course"],
     "成绩": ["Grade", "Score"],
     "选课记录": ["Enrollment", "CourseSelection", "Selection"],
-    "员工": ["Employee", "Staff", "Worker"],
+    "员工": ["Employee", "Staff", "Worker", "用户"],
     "会议室": ["MeetingRoom", "Room"],
-    "预约记录": ["Reservation", "Booking", "Appointment"],
+    "预约记录": ["Reservation", "Booking", "Appointment", "预约"],
     "设备": ["Equipment", "Device", "Facility"],
     "顾客": ["Customer", "Client"],
     "商家": ["Merchant", "Seller", "Shop"],
@@ -36,9 +36,14 @@ ENTITY_NAME_MAP = {
     "挂号": ["Registration"],
     "医生": ["Doctor"],
     "病人": ["Patient"],
+    "患者": ["Patient", "病人"],
+    "号源": ["Source", "NumberSource"],
+    "就诊记录": ["VisitRecord", "MedicalRecord"],
     "预约": ["Appointment", "Reservation"],
     "科室": ["Department"],
     "排班": ["Schedule", "Duty"],
+    "借阅记录": ["BorrowRecord", "LendingRecord", "Loan"],
+    "学期": ["Semester", "Term"],
 }
 
 
