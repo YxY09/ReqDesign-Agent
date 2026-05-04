@@ -33,14 +33,14 @@ llm:
   model: gpt-4o         # 模型名称
   api_key: "your-key"   # API密钥
   temperature: 0.3      # 温度参数
-  max_tokens: 4096      # 最大token数
+  max_tokens: 8192      # 最大token数
 ```
 
 或通过环境变量设置API密钥：
 
 ```bash
 export OPENAI_API_KEY="your-key"
-export ANTHROPIC_API_KEY="your-key"
+export ANTHROPIC_AUTH_TOKEN="your-key"
 export DEEPSEEK_API_KEY="your-key"
 export QWEN_API_KEY="your-key"
 ```
