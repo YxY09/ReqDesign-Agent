@@ -211,9 +211,17 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     score = 0
 
     # 检查是否有开始和结束节点
-    if "[开始]" in activity or "([开始])" in activity or "[*]" in activity:
+    has_start = any(kw in activity for kw in ["[开始]", "([开始])", "[*]", "([开始"])
+    # 也识别以([开头的起始节点（如 ([患者发起预约])）
+    if not has_start:
+        has_start = bool(re.search(r"\(\[.{2,10}\]\)", activity[:200]))
+    if has_start:
         score += 25
-    if "[结束]" in activity or "([结束])" in activity or "[*]" in activity:
+
+    has_end = any(kw in activity for kw in ["[结束]", "([结束])", "[*]", "([结束"])
+    if not has_end:
+        has_end = bool(re.search(r"\(\[.{2,10}\]\)", activity[-200:]))
+    if has_end:
         score += 25
 
     # 检查是否有判断节点（菱形）
