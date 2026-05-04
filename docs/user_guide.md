@@ -40,7 +40,7 @@ llm:
 
 ```bash
 export OPENAI_API_KEY="your-key"
-export ANTHROPIC_AUTH_TOKEN="your-key"
+export ANTHROPIC_AUTH_TOKEN="your-key"  # 或 ANTHROPIC_API_KEY
 export DEEPSEEK_API_KEY="your-key"
 export QWEN_API_KEY="your-key"
 ```
