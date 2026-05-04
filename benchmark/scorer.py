@@ -146,13 +146,14 @@ def _fuzzy_match_function(func_name: str, result_functions: list[str], result_te
         if func_name in rf_synonyms:
             return True
 
-    # 5. 编辑距离匹配（允许少量字符差异）
-    for rf in result_functions:
-        if abs(len(func_name) - len(rf)) <= 2:
-            dist = _edit_distance(func_name, rf)
-            threshold = max(1, len(func_name) // 4)
-            if dist <= threshold:
-                return True
+    # 5. 编辑距离匹配（仅对较长字符串，避免短字符串误匹配）
+    if len(func_name) >= 4:
+        for rf in result_functions:
+            if abs(len(func_name) - len(rf)) <= 2:
+                dist = _edit_distance(func_name, rf)
+                threshold = max(1, len(func_name) // 4)
+                if dist <= threshold:
+                    return True
 
     return False
 
