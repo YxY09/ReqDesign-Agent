@@ -2,7 +2,7 @@
   "case_name": "图书管理系统",
   "difficulty": "简单",
   "expected_actors": ["学生", "管理员"],
-  "expected_entities": ["用户", "图书", "借阅记录"],
+  "expected_entities": ["学生", "图书", "借阅记录"],
   "expected_functions": ["用户注册", "用户登录", "图书搜索", "图书借阅", "图书归还", "借阅记录", "图书管理", "借阅管理"],
   "expected_constraints": ["同一时间一本图书只能被一个用户借阅", "每人最多借阅5本", "借阅期限30天"],
   "expected_exceptions": ["图书已被借出", "借阅数量达上限", "逾期未还"],
