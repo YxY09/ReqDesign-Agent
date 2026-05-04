@@ -30,7 +30,7 @@ class LLMClient:
         if self.provider in ("openai", "deepseek", "qwen"):
             from openai import OpenAI
             kwargs = {"api_key": api_key}
-            base_url = self.config.llm.base_url
+            base_url = self.config.get_base_url()
             if base_url:
                 kwargs["base_url"] = base_url
             elif self.provider == "deepseek":
@@ -40,7 +40,11 @@ class LLMClient:
             self._client = OpenAI(**kwargs)
         elif self.provider == "anthropic":
             from anthropic import Anthropic
-            self._client = Anthropic(api_key=api_key)
+            kwargs = {"api_key": api_key}
+            base_url = self.config.get_base_url()
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._client = Anthropic(**kwargs)
         else:
             raise ValueError(f"不支持的LLM provider: {self.provider}")
 

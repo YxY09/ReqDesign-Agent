@@ -87,9 +87,22 @@ class AgentConfig:
             return self.llm.api_key
         env_map = {
             "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
+            "anthropic": "ANTHROPIC_AUTH_TOKEN",
             "deepseek": "DEEPSEEK_API_KEY",
             "qwen": "QWEN_API_KEY",
         }
         env_name = env_map.get(self.llm.provider, "OPENAI_API_KEY")
+        return os.environ.get(env_name, "")
+
+    def get_base_url(self) -> str:
+        """获取API基础URL，优先使用配置文件，否则从环境变量读取"""
+        if self.llm.base_url:
+            return self.llm.base_url
+        env_map = {
+            "openai": "OPENAI_BASE_URL",
+            "anthropic": "ANTHROPIC_BASE_URL",
+            "deepseek": "DEEPSEEK_BASE_URL",
+            "qwen": "QWEN_BASE_URL",
+        }
+        env_name = env_map.get(self.llm.provider, "")
         return os.environ.get(env_name, "")
