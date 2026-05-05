@@ -19,6 +19,7 @@ class LLMClient:
         self.model = config.llm.model
         self.temperature = config.llm.temperature
         self.max_tokens = config.llm.max_tokens
+        self.timeout = config.llm.timeout
         self._client = None
         self._init_client()
 
@@ -74,6 +75,7 @@ class LLMClient:
                     messages=messages,
                     temperature=temp,
                     max_tokens=self.max_tokens,
+                    timeout=self.timeout,
                 )
                 if not resp.choices:
                     raise ValueError("LLM返回空响应（可能被内容过滤器拦截）")
@@ -93,6 +95,7 @@ class LLMClient:
                     "messages": chat_messages,
                     "temperature": temp,
                     "max_tokens": self.max_tokens,
+                    "timeout": self.timeout,
                 }
                 if system_msg:
                     kwargs["system"] = system_msg

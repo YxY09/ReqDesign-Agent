@@ -8,6 +8,7 @@ llm:
   base_url: ""  # 自定义API地址，留空使用默认
   temperature: 0.3
   max_tokens: 8192
+  timeout: 120  # LLM调用超时秒数
 
 retry:
   max_retries: 3

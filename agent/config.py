@@ -17,6 +17,7 @@ class LLMConfig:
     base_url: str = ""
     temperature: float = 0.3
     max_tokens: int = 8192
+    timeout: int = 120  # LLM调用超时秒数
 
 
 @dataclass
