@@ -96,13 +96,20 @@ class TaskOrchestrator:
 
         if not req_json:
             logger.error("需求分析失败，跳过后续阶段")
-            self._save_governance_report(results, output_dir)
+            self._export_governance_report(output_dir, results)
             return results
 
-        # 轻量审查：需求分析后规则检查
+        # 轻量审查：需求分析后规则检查，结果合并到阶段门控
         lightweight_review = self._lightweight_review(req_json)
         if lightweight_review.get("issues"):
             logger.warning(f"[轻量审查] 需求分析问题: {lightweight_review['issues']}")
+            # 将轻量审查问题合并到需求分析阶段的validation
+            for issue in lightweight_review["issues"]:
+                if issue not in record.validation_result.warnings:
+                    record.validation_result.warnings.append(issue)
+            record.validation_result.score = max(
+                0.0, record.validation_result.score - 0.05 * len(lightweight_review["issues"])
+            )
         results["lightweight_review"] = lightweight_review
         self.trace.log("system", "lightweight_review", lightweight_review)
 
@@ -149,6 +156,18 @@ class TaskOrchestrator:
         self.llm.set_stage("review_agent")
         record = self._run_stage("review_agent", self._stage_review)
         review_result = record.output_data if record.status in ("success", "repaired") else {}
+        # 将一致性检查结果合并到审查阶段门控
+        if consistency_result.errors:
+            for err in consistency_result.errors:
+                if err not in record.validation_result.errors:
+                    record.validation_result.errors.append(err)
+            record.validation_result.score = max(
+                0.0, record.validation_result.score - 0.1 * len(consistency_result.errors)
+            )
+        if consistency_result.warnings:
+            for w in consistency_result.warnings:
+                if w not in record.validation_result.warnings:
+                    record.validation_result.warnings.append(w)
         results["review"] = review_result
 
         # 生成审查报告

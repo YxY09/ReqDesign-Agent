@@ -137,31 +137,3 @@ class EvaluationManager:
     def _compute_summary(self, results: list[dict]) -> dict:
         """计算汇总（委托给scorer.compute_run_summary）"""
         return compute_run_summary(results)
-
-    def compare_with_previous(self, current: dict,
-                              previous_path: str) -> dict:
-        """与历史结果对比"""
-        if not os.path.exists(previous_path):
-            return {"comparison": "no_previous_data"}
-
-        with open(previous_path, "r", encoding="utf-8") as f:
-            previous = json.load(f)
-
-        curr_avg = current.get("summary", {}).get("avg_scores", {})
-        prev_avg = previous.get("summary", {}).get("avg_scores", {})
-
-        diff = {}
-        for metric in curr_avg:
-            curr_val = curr_avg.get(metric, 0)
-            prev_val = prev_avg.get(metric, 0)
-            diff[metric] = {
-                "current": curr_val,
-                "previous": prev_val,
-                "change": round(curr_val - prev_val, 1),
-            }
-
-        return {"comparison": diff}
-
-    def get_trend(self) -> list[dict]:
-        """获取评估趋势"""
-        return list(self.history)

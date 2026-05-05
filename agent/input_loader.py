@@ -21,6 +21,8 @@ class InputLoader:
         """读取需求文档，返回清洗后的文本"""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"输入文件不存在: {file_path}")
+        if os.path.isdir(file_path):
+            raise ValueError(f"输入路径是目录而非文件: {file_path}")
 
         file_size = os.path.getsize(file_path)
         if file_size > self.MAX_FILE_SIZE:
