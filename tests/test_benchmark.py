@@ -442,5 +442,89 @@ class TestEditDistanceMatching:
         ) is True
 
 
+class TestMatchConstraintBranches:
+    """测试_match_constraint_or_exception的各个分支"""
+
+    def test_direct_substring_match(self):
+        """直接子串匹配"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("密码", "用户密码不能为空") is True
+
+    def test_keyword_split_match(self):
+        """关键词拆分匹配"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("密码不能为空", "密码验证：不能为空") is True
+
+    def test_2gram_fallback(self):
+        """2-gram回退匹配（短字符串无分隔符）"""
+        from benchmark.scorer import _match_constraint_or_exception
+        # "AB" 只有1个2-gram "AB"
+        assert _match_constraint_or_exception("AB", "xABx") is True
+        assert _match_constraint_or_exception("AB", "xCDx") is False
+
+    def test_partial_keyword_match_70(self):
+        """多数关键词匹配（>=70%）"""
+        from benchmark.scorer import _match_constraint_or_exception
+        # 3个关键词，匹配2个 = 66.7% < 70%
+        assert _match_constraint_or_exception("密码不能为空为空", "密码验证") is False
+        # 3个关键词，匹配3个 = 100% >= 70%
+        assert _match_constraint_or_exception("密码不能为空为空", "密码不能为空为空验证") is True
+
+    def test_number_quantifier_match(self):
+        """数字/量词匹配"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("30分钟内", "响应时间30分钟") is True
+        assert _match_constraint_or_exception("7天", "有效期7天") is True
+        assert _match_constraint_or_exception("6门课程", "选课上限6门") is True
+
+    def test_core_noun_match(self):
+        """核心名词匹配（>=50%）"""
+        from benchmark.scorer import _match_constraint_or_exception
+        # "用户密码" -> core_nouns = ["用户", "密码"]（排除"系统"等）
+        assert _match_constraint_or_exception("用户密码验证", "密码验证通过") is True
+
+    def test_empty_expected(self):
+        """空expected返回False"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("", "target") is False
+
+    def test_number_match_false(self):
+        """数字不匹配"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("30分钟", "响应时间60分钟") is False
+
+
+class TestFuzzyMatchEntityReverse:
+    """测试_fuzzy_match_entity反向查找"""
+
+    def test_reverse_lookup_chinese_in_target(self):
+        """target包含中文名，entity_name是英文"""
+        from benchmark.scorer import _fuzzy_match_entity
+        # target包含"图书"，entity_name是"Book"
+        assert _fuzzy_match_entity("Book", "这是一个图书管理系统") is True
+
+    def test_reverse_lookup_no_match(self):
+        """反向查找不匹配"""
+        from benchmark.scorer import _fuzzy_match_entity
+        assert _fuzzy_match_entity("Book", "用户管理模块") is False
+
+
+class TestDiagramSyntaxNonString:
+    """测试score_diagram_syntax非字符串内容"""
+
+    def test_non_string_content(self):
+        """非字符串内容应跳过"""
+        from benchmark.scorer import score_diagram_syntax
+        result = score_diagram_syntax({"class_diagram": 123, "activity_diagram": "flowchart\nA-->B"})
+        # 123被跳过，flowchart通过
+        assert result == 50.0
+
+    def test_dict_content(self):
+        """dict内容应跳过"""
+        from benchmark.scorer import score_diagram_syntax
+        result = score_diagram_syntax({"class_diagram": {"nested": "dict"}})
+        assert result == 0.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
