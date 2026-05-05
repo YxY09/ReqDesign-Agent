@@ -58,19 +58,19 @@ class AgentConfig:
         if "llm" in safe_raw and "api_key" in safe_raw["llm"]:
             safe_raw["llm"]["api_key"] = "***"
         config = cls(_raw=safe_raw)
-        if "llm" in data:
+        if "llm" in data and isinstance(data["llm"], dict):
             for k, v in data["llm"].items():
                 if hasattr(config.llm, k):
                     setattr(config.llm, k, v)
-        if "retry" in data:
+        if "retry" in data and isinstance(data["retry"], dict):
             for k, v in data["retry"].items():
                 if hasattr(config.retry, k):
                     setattr(config.retry, k, v)
-        if "output" in data:
+        if "output" in data and isinstance(data["output"], dict):
             for k, v in data["output"].items():
                 if hasattr(config.output, k):
                     setattr(config.output, k, v)
-        if "logging" in data:
+        if "logging" in data and isinstance(data["logging"], dict):
             for k, v in data["logging"].items():
                 if hasattr(config.logging, k):
                     setattr(config.logging, k, v)
@@ -92,7 +92,7 @@ class AgentConfig:
             errors.append(f"llm.provider 不支持 '{self.llm.provider}'，可选: {self.VALID_PROVIDERS}")
         if not self.llm.model:
             errors.append("llm.model 不能为空")
-        if self.llm.temperature < 0 or self.llm.temperature > 2:
+        if not (0 <= self.llm.temperature <= 2):
             errors.append("llm.temperature 必须在 0-2 之间")
         if self.llm.max_tokens < 1:
             errors.append("llm.max_tokens 必须 >= 1")

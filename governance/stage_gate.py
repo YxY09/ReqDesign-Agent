@@ -37,7 +37,8 @@ class StageGate:
 
         # 检查是否需要HALT（分数过低且已重试/修复过）
         halt_threshold = self.thresholds.get("min_completeness", 0.8) * 0.4
-        if validation.score < halt_threshold and (retry_count > 0 or repair_count > 0):
+        score = validation.score if validation.score is not None else 0.0
+        if score < halt_threshold and (retry_count > 0 or repair_count > 0):
             logger.warning(
                 f"[Gate:{stage_name}] HALT — 分数过低({validation.score})且已重试"
             )

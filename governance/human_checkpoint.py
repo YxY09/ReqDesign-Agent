@@ -48,8 +48,10 @@ class HumanCheckpoint:
         """
         if not self.is_checkpoint(stage_name):
             decision = HumanDecision(
-                stage=stage_name, action=HumanAction.CONTINUE
+                stage=stage_name, action=HumanAction.CONTINUE,
+                feedback="非检查点，自动继续"
             )
+            self._record(decision)
             return decision
 
         logger.info(f"[Checkpoint:{stage_name}] 需要人工确认")

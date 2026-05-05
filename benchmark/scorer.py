@@ -161,7 +161,7 @@ def _fuzzy_match_function(func_name: str, result_functions: list[str], result_te
             return True
 
     # 5. 编辑距离匹配（仅对较长字符串，避免短字符串误匹配）
-    if len(func_name) >= 4:
+    if len(func_name) >= 6:
         for rf in result_functions:
             if abs(len(func_name) - len(rf)) <= 2:
                 dist = _edit_distance(func_name, rf)
@@ -414,9 +414,10 @@ def score_state_diagram(diagrams: dict, gold: dict) -> float:
 
     # 检查状态数量（至少3个状态才算有意义）
     # 匹配带引号的状态名: state "Order Pending" as OP
-    state_names = re.findall(r'state\s+"([^"]+)"', state)
-    # 匹配不带引号的状态名: state Pending
-    state_names += re.findall(r'state\s+(\S+)', state)
+    quoted_states = set(re.findall(r'state\s+"([^"]+)"', state))
+    # 匹配不带引号的状态名: state Pending（排除已匹配的带引号状态名）
+    unquoted_states = set(re.findall(r'state\s+(?!("))(\S+)', state))
+    state_names = list(quoted_states | unquoted_states)
     # 匹配箭头两端的状态: A --> B
     arrow_states = re.findall(r'(\S+)\s*-->', state)
     arrow_states += re.findall(r'-->\s*(\S+)', state)
@@ -469,17 +470,21 @@ def score_consistency(result: dict, diagrams: dict) -> float:
             score -= 10
             logger.warning(f"一致性问题: 实体 '{entity}' 未在类图中出现")
 
-    # 检查核心实体对应的类是否在活动图中出现
-    class_names = re.findall(r"class\s+(\w+)", class_diagram)
+    # 检查核心实体对应的类是否在活动图和状态图中出现
     activity_diagram = diagrams.get("activity_diagram", "")
+    state_diagram = diagrams.get("state_diagram", "")
 
     # 用需求中的实体名作为核心类（而非盲取前3个）
-    if entities and activity_diagram:
+    if entities:
         core_classes = [e for e in entities if e][:3]
-        for cls in core_classes:
-            # 检查实体名或其英文映射是否在活动图中
-            if not _fuzzy_match_entity(cls, activity_diagram):
-                score -= 5
+        if activity_diagram:
+            for cls in core_classes:
+                if not _fuzzy_match_entity(cls, activity_diagram):
+                    score -= 5
+        if state_diagram:
+            for cls in core_classes:
+                if not _fuzzy_match_entity(cls, state_diagram):
+                    score -= 3
 
     score = max(0, score)
     logger.info(f"一致性: {score:.1f}%")

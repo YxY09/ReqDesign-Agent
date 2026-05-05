@@ -48,7 +48,7 @@ class TaskOrchestrator:
             trace_logger=self.trace,
             interactive=True,
         )
-        self.prompt_registry = PromptRegistry("prompts")
+        self.prompt_registry = PromptRegistry()
         self.consistency = ConsistencyChecker()
 
         # LLM客户端（带追踪包装）
@@ -317,28 +317,7 @@ class TaskOrchestrator:
                             rr.action, rr.success
                         )
                     record.output_data = output
-                    # 修复后重新校验，进入下一轮循环门控
-                    vr2 = self._validate_stage_output(stage_name, output)
-                    record.validation_result = vr2
-                    self.trace.log_validation(
-                        stage_name, vr2.is_valid, vr2.errors,
-                        vr2.warnings, vr2.score
-                    )
-                    # 重新门控
-                    decision2 = self.gate.evaluate(
-                        stage_name, vr2,
-                        retry_count=retry_count,
-                        repair_count=repair_count,
-                        max_retries=max_retries,
-                    )
-                    self.trace.log_gate_decision(stage_name, decision2.value)
-                    if decision2 == GateDecision.PROCEED:
-                        record.status = "repaired"
-                        break
-                    elif decision2 == GateDecision.HALT:
-                        record.status = "failed"
-                        break
-                    # 其他情况（RETRY/REPAIR）继续循环
+                    # 修复后继续外层循环，由外层统一校验+门控
 
                 else:  # HALT
                     record.status = "halted"
@@ -404,7 +383,10 @@ class TaskOrchestrator:
                 score = float(output.get("overall_score", 0))
             except (TypeError, ValueError):
                 score = 0.0
-            score = max(0.0, min(1.0, score / 100))
+            # 检测评分范围：>1则视为0-100制，否则0-1制
+            if score > 1.0:
+                score = score / 100
+            score = max(0.0, min(1.0, score))
             is_valid = score >= 0.3
             return ValidationResult(
                 is_valid=is_valid, score=score,
@@ -464,6 +446,8 @@ class TaskOrchestrator:
     def _lightweight_review(self, req_json: dict) -> dict:
         """需求分析后轻量审查（纯规则，不调用LLM）"""
         issues = []
+        if not isinstance(req_json, dict):
+            return {"pass": False, "issues": ["需求分析结果格式错误（非dict）"]}
         if not req_json:
             return {"pass": False, "issues": ["需求分析结果为空"]}
 

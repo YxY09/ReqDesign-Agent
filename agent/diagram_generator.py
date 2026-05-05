@@ -41,17 +41,17 @@ class DiagramGenerator:
 
         # 尝试从markdown代码块中提取
         # 只匹配 ```mermaid 或 ``` 后直接换行（不匹配 ```python 等）
-        pattern = r"```mermaid\n(.*?)(?:\n```|\Z)"
+        pattern = r"```mermaid\s*\n(.*?)(?:\n```|```|\Z)"
         matches = re.findall(pattern, text, re.DOTALL)
         if not matches:
-            pattern = r"```\n(.*?)(?:\n```|\Z)"
+            pattern = r"```\s*\n(.*?)(?:\n```|```|\Z)"
             matches = re.findall(pattern, text, re.DOTALL)
         if matches:
             for block in matches:
                 stripped = block.strip()
                 if any(stripped.startswith(kw) for kw in mermaid_keywords):
                     return stripped
-            return matches[0].strip()
+            # 没有找到mermaid代码块，继续往下搜索关键词
 
         # 如果没有代码块，检查是否直接是Mermaid代码
         if any(text.startswith(kw) for kw in mermaid_keywords):

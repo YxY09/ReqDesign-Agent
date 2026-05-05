@@ -4,7 +4,7 @@
   "expected_actors": ["学生", "管理员"],
   "expected_entities": ["学生", "图书", "借阅记录"],
   "expected_functions": ["用户注册", "用户登录", "图书搜索", "图书借阅", "图书归还", "借阅记录", "图书管理", "借阅管理"],
-  "expected_constraints": ["同一时间一本图书只能被一个用户借阅", "每个学生最多同时借阅5本图书", "借阅期限为30天超期需要缴纳罚款"],
+  "expected_constraints": ["同一时间一本图书只能被一个用户借阅", "每个学生最多同时借阅5本图书", "借阅期限为30天超期需要缴纳罚款", "管理员不能借阅图书"],
   "expected_exceptions": ["图书已被借出", "借阅数量达上限", "逾期未还"],
   "expected_processes": ["借阅流程", "归还流程"],
   "required_diagrams": ["class_diagram", "activity_diagram", "state_diagram"],

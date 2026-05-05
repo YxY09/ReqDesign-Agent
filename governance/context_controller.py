@@ -58,8 +58,8 @@ class ContextController:
         return snap
 
     def get_full_context(self) -> dict:
-        """获取完整上下文"""
-        return dict(self._context)
+        """获取完整上下文（深拷贝，避免外部修改影响内部状态）"""
+        return copy.deepcopy(self._context)
 
     def get_history(self) -> list[dict]:
         """获取上下文变更历史"""

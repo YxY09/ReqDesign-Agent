@@ -22,11 +22,10 @@ def load_prompt(filename: str, fallback: str = "") -> str:
     Returns:
         Prompt模板文本
     """
-    if filename in _cache:
-        return _cache[filename]
-
     # 防止路径穿越
     safe_name = os.path.basename(filename)
+    if safe_name in _cache:
+        return _cache[safe_name]
     path = os.path.join(PROMPT_DIR, safe_name)
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:

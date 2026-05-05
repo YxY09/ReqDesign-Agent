@@ -35,7 +35,7 @@ class MermaidValidator:
         if not mmd_content or not mmd_content.strip():
             return False, "Mermaid代码为空"
 
-        content = mmd_content.strip()
+        content = mmd_content.strip().lstrip('﻿')
 
         # 基础结构检查
         is_valid, msg = self._check_structure(content, diagram_type)
@@ -74,8 +74,9 @@ class MermaidValidator:
         # flowchart 特殊检查
         if content.startswith("flowchart") or content.startswith("graph"):
             # 检查是否有节点连接关系（--> / --- / ==> / -.-> 等）
-            link_patterns = ("-->", "---", "==>", "-.->", "--")
-            if not any(p in content for p in link_patterns):
+            # 使用正则匹配连接语法，避免节点标签中的"--"误匹配
+            link_re = re.compile(r'(?:-->|---|==>|-\.->|\s--\s)')
+            if not link_re.search(content):
                 return False, "流程图中缺少节点连接关系"
 
         return True, ""
@@ -153,7 +154,10 @@ class MermaidValidator:
             logger.error(f"CLI校验异常: {e}", exc_info=True)
             return False, f"CLI校验异常: {e}"
         finally:
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
     def validate_and_report(self, mmd_content: str, diagram_type: str = "") -> str:
         """校验并返回可读的报告"""

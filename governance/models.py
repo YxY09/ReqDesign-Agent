@@ -57,7 +57,13 @@ class RepairRecord:
 
     @classmethod
     def from_dict(cls, data: dict) -> "RepairRecord":
-        return cls(**data)
+        return cls(
+            attempt=data.get("attempt", 0),
+            error=data.get("error", ""),
+            action=data.get("action", ""),
+            result=data.get("result", ""),
+            success=data.get("success", False),
+        )
 
 
 @dataclass
@@ -76,7 +82,7 @@ class HumanDecision:
     @classmethod
     def from_dict(cls, data: dict) -> "HumanDecision":
         data = data.copy()
-        data["action"] = HumanAction(data["action"])
+        data["action"] = HumanAction(data.get("action", "continue"))
         return cls(**data)
 
 

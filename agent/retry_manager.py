@@ -52,7 +52,7 @@ class RetryManager:
                     logger.info(f"等待 {wait_time} 秒后重试...")
                     time.sleep(wait_time)
 
-        logger.error(f"所有 {self.max_retries} 次尝试均失败")
+        logger.error(f"所有 {max_attempts} 次尝试均失败")
         raise last_error
 
     def get_history(self) -> list[dict]:

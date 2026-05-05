@@ -540,7 +540,7 @@ class TestHumanCheckpoint:
         hc = HumanCheckpoint(checkpoint_stages=["s1"], interactive=False)
         decision = hc.pause("other")
         assert decision.action == HumanAction.CONTINUE
-        assert len(hc.get_decisions()) == 0  # not recorded
+        assert len(hc.get_decisions()) == 1  # auto-continue recorded
 
     def test_empty_checkpoints(self):
         hc = HumanCheckpoint()
