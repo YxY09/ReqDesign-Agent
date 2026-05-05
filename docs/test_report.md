@@ -14,7 +14,7 @@
 
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
-| 配置管理/CLI | test_core.py | 49 | 49 |
+| 配置管理/CLI | test_core.py | 45 | 45 |
 | 输入处理 | test_phase2.py | 13 | 13 |
 | 设计规划 | test_phase3.py | 8 | 8 |
 | Mermaid校验/图生成 | test_phase4.py | 27 | 27 |
@@ -26,7 +26,9 @@
 | **集成测试** | **test_integration.py** | **86** | **86** |
 | **总计** | | **478** | **478** |
 
-### 2.2 治理框架测试详情（test_governance.py）
+### 2.2 治理框架测试详情（test_governance.py，50个测试类，212个用例）
+
+**数据模型与枚举（8类，21用例）**
 
 | 测试类 | 用例数 | 覆盖内容 |
 |--------|--------|----------|
@@ -34,37 +36,87 @@
 | TestRepairRecord | 2 | 修复记录创建、序列化 |
 | TestHumanDecision | 3 | 人工决策创建、序列化 |
 | TestTraceEntry | 2 | 追踪条目创建、序列化 |
-| TestStageRecord | 4 | 阶段记录时长、序列化、to_summary |
+| TestStageRecord | 3 | 阶段记录时长、序列化 |
 | TestGateDecision | 2 | 门控决策枚举 |
 | TestHumanAction | 1 | 人工操作枚举 |
+| TestModelsEdgeCases | 4 | 分数截断、修复记录序列化、所有Action/GateDecision值 |
+
+**配置（4类，13用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
 | TestGovernanceConfig | 4 | 治理配置加载 |
+| TestAgentConfigRaw | 3 | AgentConfig原始配置存储 |
+| TestGovernanceConfigIntegration | 3 | 完整/部分/空配置集成 |
+| TestStageGateIntegration | 2 | HALT阈值从配置读取 |
+
+**核心模块（8类，52用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
 | TestTraceLogger | 12 | 追踪记录、导出、过滤 |
-| TestTracingLLMClient | 6 | LLM客户端追踪包装 |
-| TestToolValidator | 14 | JSON/Mermaid/Markdown校验 |
+| TestTracingLLMClient | 7 | LLM客户端追踪包装 |
+| TestToolValidator | 15 | JSON/Mermaid/Markdown校验 |
 | TestRepairController | 4 | 修复策略、异常处理 |
-| TestStageGate | 4 | 门控决策逻辑 |
-| TestContextController | 5 | 上下文管理、阶段过滤 |
+| TestStageGate | 5 | 门控决策逻辑（PROCEED/RETRY/REPAIR/HALT） |
+| TestContextController | 6 | 上下文管理、阶段过滤、get_for_stage |
 | TestHumanCheckpoint | 4 | 检查点暂停/继续 |
-| TestPromptRegistry | 7 | Prompt注册、版本管理 |
-| TestConsistencyChecker | 15 | 跨产物一致性检查、词边界匹配、字符串项处理、活动图覆盖 |
+| TestPromptRegistry | 8 | Prompt注册、版本管理、扫描 |
+
+**一致性与审查（3类，29用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
+| TestConsistencyChecker | 18 | 跨产物一致性检查、词边界、字符串项、活动图覆盖 |
 | TestLightweightReview | 8 | 需求分析轻量审查 |
-| TestStageRecordSummary | 5 | StageRecord完整/截断序列化 |
-| TestGateRetryRepairLoop | 4 | RETRY/REPAIR循环门控 |
-| TestOrchestratorRunStage | 6 | _run_stage真实重试、修复、warnings合并 |
-| TestHumanCheckpointAllStages | 3 | 全阶段人工检查点 |
-| TestNoWorkflowController | 4 | WorkflowController已移除验证 |
-| TestValidationEdgeCases | 4 | 校验边界场景 |
-| TestRepairRecordHistory | 2 | 修复记录累积、序列化 |
-| TestGovernanceReport | 1 | 治理报告使用to_summary |
-| TestOrchestratorDesignTask | 9 | 完整设计流程、输出文件、追踪导出、失败停止 |
+| TestLightweightReviewFunctionName | 3 | function_name字段接受、缺失检测 |
+
+**编排器（14类，54用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
+| TestOrchestratorImport | 1 | 模块导入 |
+| TestOrchestratorValidation | 20 | 所有阶段输出校验（valid/None/empty/boundary） |
+| TestOrchestratorRunStage | 9 | _run_stage真实重试、修复、warnings合并、REGENERATE |
+| TestOrchestratorContextOnFailure | 1 | 失败时上下文设置 |
+| TestOrchestratorGenerateReportError | 1 | 审查报告生成异常处理 |
+| TestOrchestratorAnalyzeTask | 1 | run_analyze_task完整流程 |
+| TestOrchestratorDesignTask | 9 | run_design_task完整6阶段流程 |
+| TestOrchestratorExportGovernanceReport | 1 | 治理报告导出 |
 | TestTryRepair | 3 | _try_repair dict/text路径、长输出截断 |
 | TestHaltPath | 2 | HALT状态确认、修复仍失败后HALT |
-| TestRegenerateContextUpdate | 1 | REGENERATE后上下文更新（design_planner） |
-| TestGovernanceReportMixedStatuses | 1 | 混合状态计数（success/repaired/failed/halted） |
-| TestFinallyBlockErrors | 2 | finally块中追踪/报告导出异常不阻塞 |
-| TestConsistencyErrorsInReview | 2 | 一致性检查错误/警告合并到审查阶段 |
+| TestRegenerateContextUpdate | 1 | REGENERATE后上下文更新 |
+| TestGovernanceReportMixedStatuses | 1 | 混合状态计数 |
+| TestFinallyBlockErrors | 2 | finally块异常不阻塞 |
+| TestConsistencyErrorsInReview | 2 | 一致性错误合并到审查门控 |
+
+**序列化与兼容（4类，14用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
+| TestStageRecordSummary | 5 | StageRecord完整/截断序列化、from_dict兼容 |
+| TestGateRetryRepairLoop | 4 | RETRY/REPAIR循环门控 |
+| TestRepairRecordHistory | 2 | 修复记录累积、序列化 |
+| TestGovernanceReport | 1 | 治理报告使用to_summary |
+
+**检查点与集成（6类，16用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
+| TestHumanCheckpointAllStages | 3 | 全阶段人工检查点 |
+| TestHumanCheckpointAbortModify | 2 | abort/modify路径 |
 | TestMaxRetriesToRepair | 1 | 重试耗尽后进入REPAIR |
-| TestLightweightReviewFunctionName | 3 | function_name字段接受、缺失检测 |
+| TestNoWorkflowController | 4 | WorkflowController已移除验证 |
+| TestValidationEdgeCases | 4 | 校验边界场景 |
+| TestRepairControllerEdgeCases | 3 | max_rounds=0/-1边界 |
+
+**追踪与注册集成（3类，5用例）**
+
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
+| TestTraceIntegration | 2 | 追踪集成验证 |
+| TestPromptRegistryIntegration | 2 | Prompt注册集成验证 |
+| TestContextControllerIntegration | 2 | 上下文控制器集成验证 |
 
 ### 2.3 测试类型分布
 
