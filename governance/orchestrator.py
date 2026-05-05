@@ -88,9 +88,15 @@ class TaskOrchestrator:
             return self._run_design_stages(input_path, output_dir, results)
         finally:
             # 无论成功/失败/用户终止，都导出追踪和治理报告
-            if self.gov.trace_enabled:
-                self.trace.export_json(f"{output_dir}/trace.json")
-            self._export_governance_report(output_dir, results)
+            try:
+                if self.gov.trace_enabled:
+                    self.trace.export_json(f"{output_dir}/trace.json")
+            except Exception as e:
+                logger.error(f"追踪导出失败: {e}", exc_info=True)
+            try:
+                self._export_governance_report(output_dir, results)
+            except Exception as e:
+                logger.error(f"治理报告导出失败: {e}", exc_info=True)
 
     def _run_design_stages(self, input_path: str, output_dir: str, results: dict) -> dict:
         """执行设计任务的各个阶段"""
@@ -248,9 +254,15 @@ class TaskOrchestrator:
             logger.info("=== [Governed] 需求分析任务完成 ===")
             return analyze_results
         finally:
-            if self.gov.trace_enabled:
-                self.trace.export_json(f"{output_dir}/trace.json")
-            self._export_governance_report(output_dir, analyze_results)
+            try:
+                if self.gov.trace_enabled:
+                    self.trace.export_json(f"{output_dir}/trace.json")
+            except Exception as e:
+                logger.error(f"追踪导出失败: {e}", exc_info=True)
+            try:
+                self._export_governance_report(output_dir, analyze_results)
+            except Exception as e:
+                logger.error(f"治理报告导出失败: {e}", exc_info=True)
 
     def _run_stage(self, stage_name: str, stage_fn,
                    *args) -> StageRecord:
@@ -339,6 +351,8 @@ class TaskOrchestrator:
                     record.status = "halted"
                     break
 
+            except _RegenerateSignal:
+                raise  # 不要捕获重新生成信号，让它传播到外层
             except Exception as e:
                 logger.error(f"阶段 {stage_name} 异常: {e}", exc_info=True)
                 record.status = "failed"
