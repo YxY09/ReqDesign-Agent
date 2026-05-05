@@ -188,6 +188,9 @@ def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
         # 回退：按字符级别提取2-gram
         keywords = [expected[i:i+2] for i in range(len(expected)-1)]
 
+    if not keywords:
+        return False
+
     # 3. 全部关键词匹配
     if all(kw in target_text for kw in keywords):
         return True
@@ -224,6 +227,9 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     Returns:
         0-100的得分
     """
+    if not result or not gold:
+        return 0.0
+
     total_points = 0
     covered_points = 0
 
@@ -289,6 +295,9 @@ def score_diagram_syntax(diagrams: dict) -> float:
     Returns:
         0-100的得分
     """
+    if not diagrams:
+        return 0.0
+
     from agent.mermaid_validator import MermaidValidator
     validator = MermaidValidator()
 
@@ -298,6 +307,9 @@ def score_diagram_syntax(diagrams: dict) -> float:
 
     passed = 0
     for name, content in diagrams.items():
+        if not content or not isinstance(content, str):
+            logger.warning(f"图语法校验跳过 [{name}]: 内容为空或非字符串")
+            continue
         is_valid, msg = validator.validate(content, name)
         if is_valid:
             passed += 1
@@ -320,6 +332,9 @@ def score_entity_accuracy(result: dict, gold: dict) -> float:
     Returns:
         0-100的得分
     """
+    if not result or not gold:
+        return 0.0
+
     expected_entities = gold.get("expected_entities", [])
     result_entities = [e.get("name", "") for e in (result.get("entities") or [])]
 
@@ -415,8 +430,8 @@ def score_state_diagram(diagrams: dict, gold: dict) -> float:
     # 检查状态数量（至少3个状态才算有意义）
     # 匹配带引号的状态名: state "Order Pending" as OP
     quoted_states = set(re.findall(r'state\s+"([^"]+)"', state))
-    # 匹配不带引号的状态名: state Pending（排除已匹配的带引号状态名）
-    unquoted_states = set(re.findall(r'state\s+(?!("))(\S+)', state))
+    # 匹配不带引号的状态名: state Pending（排除带引号的）
+    unquoted_states = set(re.findall(r'state\s+(?!"[\s])(\S+)', state))
     state_names = list(quoted_states | unquoted_states)
     # 匹配箭头两端的状态: A --> B
     arrow_states = re.findall(r'(\S+)\s*-->', state)
@@ -459,6 +474,11 @@ def score_consistency(result: dict, diagrams: dict) -> float:
     Returns:
         0-100的得分
     """
+    if not result:
+        return 0.0
+    if not diagrams:
+        diagrams = {}
+
     score = 100.0
 
     # 检查实体名是否在类图中出现
@@ -527,7 +547,7 @@ def compute_run_summary(results: list[dict]) -> dict:
         "entity_accuracy", "process_completeness",
         "state_diagram", "consistency", "overall"
     ]:
-        values = [r.get("scores", {}).get(metric, 0) for r in success]
+        values = [(r.get("scores") or {}).get(metric, 0) for r in success]
         avg_scores[metric] = round(
             sum(values) / len(values), 1
         ) if values else 0

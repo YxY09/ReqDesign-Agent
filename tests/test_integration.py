@@ -653,5 +653,97 @@ class TestNoneInputGuards:
         assert any("为空" in w for w in warnings)
 
 
+class TestPromptLoaderEdgeCases:
+    """测试prompt_loader边界情况"""
+
+    def test_empty_filename_returns_fallback(self):
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        result = load_prompt("", fallback="default")
+        assert result == "default"
+
+    def test_dot_filename_returns_fallback(self):
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        result = load_prompt(".", fallback="default")
+        assert result == "default"
+
+    def test_dotdot_filename_returns_fallback(self):
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        result = load_prompt("..", fallback="default")
+        assert result == "default"
+
+    def test_nonexistent_file_returns_fallback(self):
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        result = load_prompt("nonexistent_template.md", fallback="default")
+        assert result == "default"
+
+
+class TestScorerEdgeCases:
+    """测试scorer边界情况"""
+
+    def test_score_diagram_syntax_none(self):
+        from benchmark.scorer import score_diagram_syntax
+        assert score_diagram_syntax(None) == 0.0
+
+    def test_score_diagram_syntax_empty(self):
+        from benchmark.scorer import score_diagram_syntax
+        assert score_diagram_syntax({}) == 0.0
+
+    def test_score_diagram_syntax_none_value(self):
+        from benchmark.scorer import score_diagram_syntax
+        result = score_diagram_syntax({"class_diagram": None})
+        assert result == 0.0
+
+    def test_score_requirement_coverage_none_result(self):
+        from benchmark.scorer import score_requirement_coverage
+        assert score_requirement_coverage(None, {"expected_actors": ["用户"]}) == 0.0
+
+    def test_score_requirement_coverage_none_gold(self):
+        from benchmark.scorer import score_requirement_coverage
+        assert score_requirement_coverage({"actors": []}, None) == 0.0
+
+    def test_score_entity_accuracy_none_inputs(self):
+        from benchmark.scorer import score_entity_accuracy
+        assert score_entity_accuracy(None, {}) == 0.0
+        assert score_entity_accuracy({}, None) == 0.0
+
+    def test_score_consistency_none_result(self):
+        from benchmark.scorer import score_consistency
+        assert score_consistency(None, {}) == 0.0
+
+    def test_match_constraint_single_char_vacuous_truth(self):
+        """单字符约束不应因all([])而返回True"""
+        from benchmark.scorer import _match_constraint_or_exception
+        # "X"不在target中，且长度为1无法生成2-gram
+        assert _match_constraint_or_exception("X", "hello world") is False
+
+    def test_compute_run_summary_none_scores(self):
+        """scores为None时不应崩溃"""
+        from benchmark.scorer import compute_run_summary
+        results = [{"status": "success", "scores": None, "passed": True}]
+        summary = compute_run_summary(results)
+        assert summary["passed"] == 1
+
+
+class TestConsistencyCheckerEdgeCases:
+    """测试consistency_checker边界情况"""
+
+    def test_check_all_non_dict_requirement(self):
+        from governance.consistency_checker import ConsistencyChecker
+        checker = ConsistencyChecker()
+        # 非dict的requirement_json不应崩溃
+        result = checker.check_all("not a dict", "design", {}, "test")
+        assert result.score >= 0
+
+    def test_check_all_none_inputs(self):
+        from governance.consistency_checker import ConsistencyChecker
+        checker = ConsistencyChecker()
+        result = checker.check_all(None, None, None, None)
+        assert result.score >= 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -69,9 +69,13 @@ class HumanCheckpoint:
         action = self._get_user_action()
         feedback = ""
         if action == HumanAction.MODIFY:
-            raw = input("请输入修改建议: ").strip()
-            # 移除控制字符，防止日志注入
-            feedback = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
+            while True:
+                raw = input("请输入修改建议: ").strip()
+                # 移除控制字符，防止日志注入
+                feedback = "".join(c for c in raw if c.isprintable() or c in "\n\r\t")
+                if feedback:
+                    break
+                print("修改建议不能为空，请重新输入")
 
         decision = HumanDecision(
             stage=stage_name, action=action, feedback=feedback

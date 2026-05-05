@@ -43,8 +43,14 @@ class ConsistencyChecker:
             ConsistencyResult
         """
         result = ConsistencyResult()
+        if not isinstance(requirement_json, dict):
+            requirement_json = {}
         if diagrams is None:
             diagrams = {}
+        if design_text is None:
+            design_text = ""
+        if test_cases is None:
+            test_cases = ""
 
         self._check_requirement_to_design(requirement_json, design_text, result)
         self._check_entities_in_diagram(requirement_json, diagrams, result)

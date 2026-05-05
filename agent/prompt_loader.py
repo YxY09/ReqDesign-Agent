@@ -24,14 +24,18 @@ def load_prompt(filename: str, fallback: str = "") -> str:
     """
     # 防止路径穿越
     safe_name = os.path.basename(filename)
+    if not safe_name or safe_name in (".", ".."):
+        return fallback
     if safe_name in _cache:
         return _cache[safe_name]
     path = os.path.join(PROMPT_DIR, safe_name)
-    if os.path.exists(path):
+    try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         _cache[safe_name] = content
         return content
+    except FileNotFoundError:
+        pass
 
     logger.warning(f"Prompt模板不存在: {path}，使用默认模板")
     return fallback
