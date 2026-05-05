@@ -406,6 +406,9 @@ class TaskOrchestrator:
                 except Exception as e:
                     logger.error(f"重新生成失败: {e}", exc_info=True)
                     record.status = "failed"
+                    record.validation_result = ValidationResult(
+                        is_valid=False, errors=[f"重新生成失败: {e}"], score=0.0
+                    )
                 record.end_time = time.time()
                 self.stage_records[-1] = record
 

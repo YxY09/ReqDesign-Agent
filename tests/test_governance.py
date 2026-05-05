@@ -789,18 +789,34 @@ class TestOrchestratorContextOnFailure:
     """测试阶段失败时上下文是否正确设置"""
 
     def test_context_set_on_failure(self):
-        """验证修复后：阶段失败时上下文也被设置为空值"""
+        """验证：阶段失败时上下文也被设置为空值，下游阶段可安全读取"""
         from governance.orchestrator import TaskOrchestrator
         from governance.models import GovernanceConfig
 
         orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = AgentConfig()
+        orch.gov = GovernanceConfig()
         orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate()
+        orch.repair = RepairController(max_rounds=1)
+        orch.stage_records = []
 
-        # 模拟修复后的行为：即使失败也设置上下文
-        req_json = {}  # 失败时为空dict
-        orch.context.set("requirement_json", req_json)
-        assert orch.context.get("requirement_json") == {}
+        # 模拟阶段失败：stage_fn抛出异常
+        def failing_stage(record, *args):
+            raise RuntimeError("模拟阶段失败")
 
+        record = orch._run_stage("requirement_analysis", failing_stage)
+        assert record.status == "failed"
+
+        # 验证validation_result反映失败状态
+        assert not record.validation_result.is_valid
+        assert record.validation_result.score == 0.0
+
+        # 上下文快照不应崩溃
+        orch.context.snapshot()
         # 下游阶段读取不崩溃
         design_text = orch.context.get("design_text", "")
         assert design_text == ""
