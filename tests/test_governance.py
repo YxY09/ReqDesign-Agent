@@ -873,6 +873,97 @@ class TestOrchestratorGenerateReportError:
         assert review_report == ""
 
 
+class TestOrchestratorAnalyzeTask:
+    """测试run_analyze_task方法"""
+
+    def test_run_analyze_task_with_mock(self, tmp_path):
+        """验证run_analyze_task基本流程"""
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig
+
+        # 创建输入文件
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 用户注册\n- 用户登录")
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = AgentConfig()
+        orch.gov = GovernanceConfig()
+        orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate()
+        orch.repair = RepairController(max_rounds=1)
+        orch.stage_records = []
+
+        # Mock LLM
+        class MockLLM:
+            provider = "test"
+            model = "test-model"
+            temperature = 0.3
+            max_tokens = 100
+            def set_stage(self, s): pass
+            def chat(self, messages, temperature=None): return "ok"
+            def generate_json(self, prompt, system=""):
+                return {
+                    "project_name": "测试项目",
+                    "actors": [{"name": "用户", "description": "测试用户"}],
+                    "functions": [{"id": "F001", "name": "用户注册", "description": "注册功能"}],
+                    "entities": [],
+                    "constraints": [],
+                    "exceptions": [],
+                    "non_functional_requirements": [],
+                    "business_processes": [],
+                }
+            def generate_text(self, prompt, system=""): return "text"
+
+        orch.llm = MockLLM()
+
+        # Mock input_loader
+        class MockInputLoader:
+            def load(self, path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+
+        orch.input_loader = MockInputLoader()
+
+        # Mock prompt_registry
+        class MockPromptRegistry:
+            def get_all_versions(self):
+                return {}
+
+        orch.prompt_registry = MockPromptRegistry()
+
+        # Mock agents
+        class MockAnalyzer:
+            def analyze(self, text, max_retries=3):
+                return {
+                    "project_name": "测试项目",
+                    "actors": [{"name": "用户", "description": "测试用户"}],
+                    "functions": [{"id": "F001", "name": "用户注册", "description": "注册功能"}],
+                    "entities": [],
+                    "constraints": [],
+                    "exceptions": [],
+                    "non_functional_requirements": [],
+                    "business_processes": [],
+                }
+            def validate_result(self, result):
+                return []
+
+        orch.requirement_analyzer = MockAnalyzer()
+
+        output_dir = str(tmp_path / "output")
+        result = orch.run_analyze_task(str(input_file), output_dir)
+
+        # 验证结果结构
+        assert "requirement_analysis" in result
+        assert "lightweight_review" in result
+        assert result["requirement_analysis"]["project_name"] == "测试项目"
+
+        # 验证输出文件已创建
+        assert (tmp_path / "output" / "requirement_analysis.json").exists()
+
+
 # ========== Integration: StageGate with config ==========
 
 class TestStageGateIntegration:
