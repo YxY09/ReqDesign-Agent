@@ -231,6 +231,10 @@ class TracingLLMClient:
             })
             raise
 
+    def __getattr__(self, name):
+        """代理未包装的属性到内部客户端"""
+        return getattr(self._client, name)
+
 
 def _summarize_data(data: dict, max_len: int = 100) -> str:
     """截断数据为摘要"""

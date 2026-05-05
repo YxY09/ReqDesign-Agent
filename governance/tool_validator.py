@@ -12,7 +12,7 @@ logger = logging.getLogger("reqdesign")
 # 各阶段必需的JSON字段
 REQUIRED_JSON_FIELDS = {
     "requirement_analysis": ["actors", "functions", "entities"],
-    "review_result": ["overall_score"],
+    "review_agent": ["overall_score"],
 }
 
 # 设计文档必需章节

@@ -12,6 +12,7 @@ class ContextController:
 
     # 每个阶段需要的上下文字段
     STAGE_CONTEXT_SPEC = {
+        "input_loader": set(),
         "requirement_analysis": {"full_text"},
         "design_planner": {"requirement_json"},
         "diagram_generator": {"requirement_json", "design_text"},

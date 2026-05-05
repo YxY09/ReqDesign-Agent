@@ -28,8 +28,9 @@ class RetryManager:
         Raises:
             最后一次重试仍失败时抛出异常
         """
+        max_attempts = max(1, self.max_retries)
         last_error = None
-        for attempt in range(1, self.max_retries + 1):
+        for attempt in range(1, max_attempts + 1):
             try:
                 logger.info(f"执行尝试 {attempt}/{self.max_retries}")
                 result = func(*args, **kwargs)
