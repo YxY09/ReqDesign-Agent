@@ -745,5 +745,101 @@ class TestConsistencyCheckerEdgeCases:
         assert result.score >= 0
 
 
+class TestMermaidValidatorEdgeCases:
+    """测试Mermaid校验器边界情况"""
+
+    def test_apostrophe_in_label(self):
+        """单引号（撇号）不应导致括号校验失败"""
+        from agent.mermaid_validator import MermaidValidator
+        validator = MermaidValidator()
+        content = '''classDiagram
+    class User {
+        +getUserName() string
+    }
+    class User's Profile {
+        +getName() string
+    }
+    User --> User's Profile
+'''
+        is_valid, msg = validator.validate(content)
+        # 不应因为撇号而报括号不匹配
+        assert "括号" not in msg
+
+    def test_empty_content(self):
+        from agent.mermaid_validator import MermaidValidator
+        validator = MermaidValidator()
+        is_valid, msg = validator.validate("")
+        assert not is_valid
+        assert "空" in msg
+
+    def test_none_content(self):
+        from agent.mermaid_validator import MermaidValidator
+        validator = MermaidValidator()
+        is_valid, msg = validator.validate(None)
+        assert not is_valid
+
+
+class TestOutputManagerEdgeCases:
+    """测试输出管理器边界情况"""
+
+    def test_save_requirement_analysis_none(self, tmp_path):
+        from agent.output_manager import OutputManager
+        mgr = OutputManager(str(tmp_path))
+        # None输入不应崩溃
+        mgr.save_requirement_analysis(None)
+        assert (tmp_path / "requirement_analysis.json").exists()
+
+    def test_generate_summary_none_req(self, tmp_path):
+        from agent.output_manager import OutputManager
+        mgr = OutputManager(str(tmp_path))
+        mgr._generate_summary(None)
+        assert (tmp_path / "summary_report.md").exists()
+
+
+class TestTraceLoggerEdgeCases:
+    """测试追踪日志边界情况"""
+
+    def test_log_llm_call_none_result(self):
+        from governance.trace_logger import TraceLogger
+        trace = TraceLogger()
+        # None result不应崩溃
+        trace.log_llm_call("test", "chat", [{"role": "user", "content": "hi"}], None, 1.0)
+        assert len(trace.entries) == 1
+
+    def test_log_llm_call_empty_messages(self):
+        from governance.trace_logger import TraceLogger
+        trace = TraceLogger()
+        trace.log_llm_call("test", "chat", [], "result", 0.5)
+        assert len(trace.entries) == 1
+
+
+class TestRepairControllerEdgeCases:
+    """测试修复控制器边界情况"""
+
+    def test_max_rounds_zero_skips_repair(self):
+        from governance.repair_controller import RepairController
+        from governance.models import ValidationResult
+        controller = RepairController(max_rounds=0)
+        output, records = controller.attempt_repair(
+            "test", "original",
+            lambda o: ValidationResult(is_valid=False, errors=["err"]),
+            lambda o, e: "repaired"
+        )
+        assert output == "original"
+        assert records == []
+
+    def test_max_rounds_negative_skips_repair(self):
+        from governance.repair_controller import RepairController
+        from governance.models import ValidationResult
+        controller = RepairController(max_rounds=-1)
+        output, records = controller.attempt_repair(
+            "test", "original",
+            lambda o: ValidationResult(is_valid=False, errors=["err"]),
+            lambda o, e: "repaired"
+        )
+        assert output == "original"
+        assert records == []
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

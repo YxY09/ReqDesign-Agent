@@ -36,6 +36,10 @@ class RepairController:
         records = []
         current = output
 
+        if self.max_rounds <= 0:
+            logger.warning(f"[{stage_name}] max_rounds={self.max_rounds}，跳过修复")
+            return current, records
+
         for attempt in range(1, self.max_rounds + 1):
             try:
                 vr = validate_fn(current)

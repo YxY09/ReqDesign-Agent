@@ -101,10 +101,10 @@ class MermaidValidator:
             if char == "\\" and in_string:
                 escape_next = True
                 continue
-            if char in ('"', "'") and not in_string:
+            if char == '"' and not in_string:
                 in_string = True
                 string_char = char
-            elif char == string_char and in_string:
+            elif in_string and char == string_char:
                 in_string = False
                 string_char = None
             elif not in_string:

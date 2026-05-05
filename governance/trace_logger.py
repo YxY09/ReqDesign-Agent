@@ -40,11 +40,12 @@ class TraceLogger:
                 input_chars += len(str(m.content))
             else:
                 input_chars += len(str(m))
+        output_chars = len(result) if result is not None else 0
         self.log(stage, "llm_call", {
             "method": method,
             "input_messages": len(messages),
             "input_chars": input_chars,
-            "output_chars": len(result),
+            "output_chars": output_chars,
             "duration_seconds": round(duration, 3),
         })
 
@@ -196,10 +197,11 @@ class TracingLLMClient:
         try:
             result = self._client.generate_json(prompt, system)
             duration = time.time() - start
+            result_str = json.dumps(result, ensure_ascii=False) if result is not None else "null"
             self._trace.log_llm_call(
                 self._stage, "generate_json",
                 [{"role": "user", "content": prompt}],
-                json.dumps(result, ensure_ascii=False), duration
+                result_str, duration
             )
             return result
         except Exception as e:
@@ -221,7 +223,7 @@ class TracingLLMClient:
             self._trace.log_llm_call(
                 self._stage, "generate_text",
                 [{"role": "user", "content": prompt}],
-                result, duration
+                result or "", duration
             )
             return result
         except Exception as e:

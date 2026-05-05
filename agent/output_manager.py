@@ -70,6 +70,8 @@ class OutputManager:
 
     def save_requirement_analysis(self, requirement_json: dict, requirement_text: str = ""):
         """保存需求分析结果"""
+        if not requirement_json:
+            requirement_json = {}
         self._write_json("requirement_analysis.json", requirement_json)
 
         # 生成可读的Markdown版本
@@ -198,6 +200,8 @@ class OutputManager:
 
     def _generate_summary(self, req: dict, review_result: dict = None):
         """生成汇总报告"""
+        if not req:
+            req = {}
         lines = ["# 设计任务汇总报告\n"]
         lines.append(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
