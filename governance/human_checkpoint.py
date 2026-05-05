@@ -94,6 +94,8 @@ class HumanCheckpoint:
             preview = output_preview[:500]
             if len(output_preview) > 500:
                 preview += "..."
+            # 移除终端控制字符，防止注入
+            preview = "".join(c for c in preview if c.isprintable() or c in "\n\r\t")
             lines.append(f"  输出预览:\n{preview}")
         lines.extend([
             "-" * 60,

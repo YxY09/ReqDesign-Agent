@@ -72,7 +72,12 @@ class TestCaseGenerator:
         # 检查功能覆盖（大小写不敏感）
         functions = requirement_json.get("functions", [])
         for func in functions:
-            func_name = func.get("name", "")
+            if isinstance(func, dict):
+                func_name = func.get("name", "")
+            elif isinstance(func, str):
+                func_name = func
+            else:
+                continue
             if func_name and func_name.lower() not in tc_lower:
                 warnings.append(f"功能 '{func_name}' 未被测试用例覆盖")
 

@@ -79,7 +79,6 @@ class ReviewAgent:
                 "overall_pass": False,
                 "checks": [],
                 "repair_actions": [],
-                "llm_error": str(e),
             }
 
         # 3. 合并语法校验结果
@@ -166,6 +165,11 @@ class ReviewAgent:
 
             for check in diagrams_to_fix:
                 name = check["diagram"]
+                # 跳过空图表（生成失败的），浪费LLM调用
+                if name in repaired and not repaired[name].strip():
+                    logger.warning(f"{name} 内容为空，跳过修复")
+                    still_broken.append(check)
+                    continue
                 if name in repaired:
                     repaired[name] = self.repair_diagram(
                         name, repaired[name], check["message"]

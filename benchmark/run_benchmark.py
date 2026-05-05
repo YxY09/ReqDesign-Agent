@@ -97,12 +97,12 @@ class BenchmarkRunner:
         scores["state_diagram"] = score_state_diagram(diagrams, gold)
         scores["consistency"] = score_consistency(req_result, diagrams)
         scores["overall"] = compute_overall_score(
-            scores["requirement_coverage"],
-            scores["diagram_syntax"],
-            scores["entity_accuracy"],
-            scores["process_completeness"],
-            scores["consistency"],
-            scores["state_diagram"],
+            requirement_coverage=scores["requirement_coverage"],
+            diagram_syntax=scores["diagram_syntax"],
+            entity_accuracy=scores["entity_accuracy"],
+            process_completeness=scores["process_completeness"],
+            consistency=scores["consistency"],
+            state_diagram=scores["state_diagram"],
         )
 
         passed = scores["overall"] >= 80

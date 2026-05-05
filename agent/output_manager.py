@@ -14,6 +14,8 @@ _SAFE_NAME_RE = re.compile(r'^[\w一-鿿\-\.]+$')
 
 def _sanitize_filename(name: str) -> str:
     """清理文件名，防止路径穿越"""
+    if not name or not name.strip():
+        raise ValueError("文件名不能为空")
     # 移除路径分隔符
     name = name.replace("/", "_").replace("\\", "_")
     # 移除 ..
