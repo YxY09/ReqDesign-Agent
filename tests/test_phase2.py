@@ -1,11 +1,8 @@
 """Phase 2 测试：输入处理与需求分析"""
 
-import os
-import sys
 import json
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.input_loader import InputLoader
 

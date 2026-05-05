@@ -4,7 +4,6 @@ import os
 import sys
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.config import AgentConfig
 from agent.logger import setup_logger

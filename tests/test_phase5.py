@@ -1,10 +1,7 @@
 """Phase 5 测试：测试用例生成Agent"""
 
-import os
-import sys
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.test_case_generator import TestCaseGenerator
 

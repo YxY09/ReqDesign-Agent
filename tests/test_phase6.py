@@ -1,11 +1,8 @@
 """Phase 6 测试：审查Agent与重试机制"""
 
-import os
-import sys
 import pytest
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.retry_manager import RetryManager
 from agent.review_agent import ReviewAgent

@@ -1,10 +1,7 @@
 """Phase 8 测试：基准测试评分"""
 
-import os
-import sys
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from benchmark.scorer import (
     score_requirement_coverage,

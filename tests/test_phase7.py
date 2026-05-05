@@ -1,11 +1,8 @@
 """Phase 7 测试：工作流编排与CLI"""
 
-import os
-import sys
 import json
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.output_manager import OutputManager
 

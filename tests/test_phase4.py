@@ -1,11 +1,8 @@
 """Phase 4 测试：图模型生成与Mermaid校验"""
 
-import os
-import sys
 import pytest
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.mermaid_validator import MermaidValidator
 from agent.diagram_generator import DiagramGenerator

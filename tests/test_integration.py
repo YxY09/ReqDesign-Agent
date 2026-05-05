@@ -1,12 +1,9 @@
 """集成测试：验证完整工作流（mock LLM调用）"""
 
 import json
-import os
-import sys
 import pytest
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.config import AgentConfig
 from agent.input_loader import InputLoader
