@@ -519,13 +519,15 @@ def compute_run_summary(results: list[dict]) -> dict:
         return {"passed": 0, "failed": 0, "error": len(results), "avg_scores": {}}
 
     passed = sum(1 for r in success if r.get("passed", False))
+    failed = len(success) - passed
+    error = len(results) - len(success)
     avg_scores = {}
     for metric in [
         "requirement_coverage", "diagram_syntax",
         "entity_accuracy", "process_completeness",
         "state_diagram", "consistency", "overall"
     ]:
-        values = [r["scores"].get(metric, 0) for r in success]
+        values = [r.get("scores", {}).get(metric, 0) for r in success]
         avg_scores[metric] = round(
             sum(values) / len(values), 1
         ) if values else 0

@@ -68,8 +68,17 @@ class BenchmarkRunner:
         case_output_dir = os.path.join(self.output_dir, case["name"])
 
         # 加载gold label
-        with open(case["gold_path"], "r", encoding="utf-8") as f:
-            gold = json.load(f)
+        try:
+            with open(case["gold_path"], "r", encoding="utf-8") as f:
+                gold = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            self.logger.error(f"案例 {case['name']} gold label加载失败: {e}")
+            return {
+                "case_name": case["name"],
+                "status": "error",
+                "error": f"gold label加载失败: {e}",
+                "scores": {},
+            }
 
         # 运行智能体（使用TaskOrchestrator）
         orchestrator = TaskOrchestrator(self.config)
