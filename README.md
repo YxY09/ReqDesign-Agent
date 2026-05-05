@@ -95,6 +95,7 @@ ReqDesign-Agent/
 │   ├── test_case_generator.py # 测试用例生成
 │   ├── review_agent.py     # 审查Agent（多轮修复验证）
 │   ├── retry_manager.py    # 重试管理（指数退避）
+│   ├── prompt_loader.py    # 共享Prompt加载器（带缓存）
 │   ├── workflow_controller.py # 工作流编排（阶段降级）
 │   └── output_manager.py   # 输出管理（路径穿越防护）
 ├── governance/             # 治理框架

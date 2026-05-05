@@ -193,7 +193,29 @@ TracingLLMClient透明包装LLMClient，捕获每次LLM调用的：
 
 封装benchmark运行流程，支持多次运行取平均（消除LLM随机性），与历史结果对比生成趋势报告。
 
-## 7. 自主实现与框架边界
+## 7. 工程优化
+
+### 7.1 共享Prompt加载器（prompt_loader.py）
+
+5个Agent模块（RequirementAnalyzer、DesignPlanner、DiagramGenerator、TestCaseGenerator、ReviewAgent）原本各自实现相同的 `_load_prompt` 方法。提取为共享的 `agent/prompt_loader.py` 模块，带文件级缓存，消除重复代码并避免benchmark多次运行时的磁盘重复读取。
+
+### 7.2 状态图评分（score_state_diagram）
+
+benchmark评分体系新增状态图完整性指标（权重5%），检查状态图是否有开始/结束标记、转换箭头、足够的状态数量以及对预期流程的覆盖。综合得分权重调整为：需求覆盖35%、图语法20%、实体准确20%、流程完整10%、状态图5%、一致性10%。
+
+### 7.3 LLM客户端快速失败
+
+`LLMClient` 在初始化时检测API密钥缺失，立即抛出 `ValueError` 并给出明确的配置提示，而非延迟到运行时产生不透明的SDK错误。
+
+### 7.4 工作流降级追踪
+
+`WorkflowController.run_design_task` 新增 `degraded_phases` 字段，记录哪些阶段执行失败后降级继续。调用方可据此区分完整结果与降级结果，便于问题诊断。
+
+### 7.5 并行图生成
+
+`DiagramGenerator.generate_all` 使用 `ThreadPoolExecutor(max_workers=3)` 并行生成类图、活动图、状态图，将3次串行LLM调用缩短为1次并行调用。
+
+## 8. 自主实现与框架边界
 
 本项目的核心流程控制、Agent编排、上下文管理均为自主实现，未使用LangGraph、CrewAI等框架。这种选择基于以下考虑：
 
