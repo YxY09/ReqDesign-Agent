@@ -89,7 +89,6 @@ class ReviewAgent:
         # 3. 合并语法校验结果
         llm_review["syntax_check"] = syntax_results
         if not syntax_pass:
-            llm_review["syntax_check"] = syntax_results
             # 降低整体分数
             if "overall_score" in llm_review:
                 try:
