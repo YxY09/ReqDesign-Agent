@@ -11,8 +11,10 @@ from benchmark.scorer import (
     score_diagram_syntax,
     score_entity_accuracy,
     score_process_completeness,
+    score_state_diagram,
     score_consistency,
     compute_overall_score,
+    compute_run_summary,
 )
 
 
@@ -145,6 +147,71 @@ class TestOverallScore:
     def test_zero_score(self):
         score = compute_overall_score(0, 0, 0, 0, 0, 0)
         assert score == 0.0
+
+
+class TestStateDiagram:
+    def test_complete_state_diagram(self):
+        diagrams = {
+            "state_diagram": """stateDiagram-v2
+    [*] --> 待借阅
+    待借阅 --> 借阅中 : 借阅
+    借阅中 --> 已归还 : 归还
+    已归还 --> [*]"""
+        }
+        gold = {"expected_processes": ["借阅流程"]}
+        score = score_state_diagram(diagrams, gold)
+        assert score >= 70
+
+    def test_no_state_diagram(self):
+        diagrams = {}
+        gold = {"expected_processes": []}
+        score = score_state_diagram(diagrams, gold)
+        assert score == 0.0
+
+    def test_minimal_state_diagram(self):
+        diagrams = {
+            "state_diagram": "stateDiagram-v2\n    [*] --> A\n    A --> [*]"
+        }
+        gold = {"expected_processes": []}
+        score = score_state_diagram(diagrams, gold)
+        assert score >= 50  # has [*] and -->
+
+
+class TestRunSummary:
+    def test_all_success(self):
+        results = [
+            {"case_name": "A", "status": "success", "passed": True, "scores": {"overall": 90, "requirement_coverage": 95}},
+            {"case_name": "B", "status": "success", "passed": True, "scores": {"overall": 85, "requirement_coverage": 90}},
+        ]
+        summary = compute_run_summary(results)
+        assert summary["passed"] == 2
+        assert summary["failed"] == 0
+        assert summary["error"] == 0
+        assert summary["avg_scores"]["overall"] == 87.5
+
+    def test_mixed_results(self):
+        results = [
+            {"case_name": "A", "status": "success", "passed": True, "scores": {"overall": 90}},
+            {"case_name": "B", "status": "success", "passed": False, "scores": {"overall": 60}},
+            {"case_name": "C", "status": "error", "error": "timeout"},
+        ]
+        summary = compute_run_summary(results)
+        assert summary["passed"] == 1
+        assert summary["failed"] == 1
+        assert summary["error"] == 1
+
+    def test_all_error(self):
+        results = [
+            {"case_name": "A", "status": "error", "error": "fail"},
+        ]
+        summary = compute_run_summary(results)
+        assert summary["passed"] == 0
+        assert summary["avg_scores"] == {}
+
+    def test_empty_results(self):
+        summary = compute_run_summary([])
+        assert summary["passed"] == 0
+        assert summary["error"] == 0
 
 
 if __name__ == "__main__":
