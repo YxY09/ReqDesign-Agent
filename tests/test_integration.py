@@ -349,6 +349,47 @@ def foo():
         with pytest.raises(ValueError, match="不支持"):
             loader.load(str(bad_file))
 
+    def test_input_loader_file_too_large(self, tmp_path):
+        """测试文件超过大小限制"""
+        large_file = tmp_path / "large.md"
+        large_file.write_text("x" * (512 * 1024 + 1))
+        loader = InputLoader()
+        with pytest.raises(ValueError, match="过大"):
+            loader.load(str(large_file))
+
+    def test_input_loader_gbk_encoding(self, tmp_path):
+        """测试GBK编码文件"""
+        gbk_file = tmp_path / "gbk.md"
+        gbk_file.write_text("# 需求文档\n\n用户登录功能", encoding="gbk")
+        loader = InputLoader()
+        result = loader.load(str(gbk_file))
+        assert "用户登录" in result
+
+    def test_input_loader_json_with_content_field(self, tmp_path):
+        """测试JSON格式输入（含content字段）"""
+        json_file = tmp_path / "req.json"
+        json_file.write_text('{"content": "用户注册需求"}', encoding="utf-8")
+        loader = InputLoader()
+        result = loader.load(str(json_file))
+        assert "用户注册" in result
+
+    def test_input_loader_split_sections(self):
+        """测试文档分段"""
+        loader = InputLoader()
+        text = "# 第一章\n内容1\n# 第二章\n内容2"
+        sections = loader.split_sections(text)
+        assert len(sections) == 2
+        assert sections[0]["title"] == "第一章"
+        assert sections[1]["title"] == "第二章"
+
+    def test_input_loader_split_sections_code_fence(self):
+        """测试代码块内的#不分段"""
+        loader = InputLoader()
+        text = "# 标题\n```python\n# 注释\n```\n正文"
+        sections = loader.split_sections(text)
+        assert len(sections) == 1
+        assert sections[0]["title"] == "标题"
+
     def test_sanitize_filename_path_traversal(self):
         """测试文件名路径穿越防护"""
         assert _sanitize_filename("../../etc/passwd") == "____etc_passwd"
