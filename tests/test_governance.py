@@ -552,33 +552,32 @@ class TestHumanCheckpoint:
 # ========== prompt_registry.py ==========
 
 class TestPromptRegistry:
+    @pytest.fixture(autouse=True)
+    def _chdir(self, monkeypatch):
+        monkeypatch.chdir(PROJECT_ROOT)
+
     def test_scan_prompts(self):
-        os.chdir(PROJECT_ROOT)
-        pr = PromptRegistry("prompts")
+        pr = PromptRegistry()
         prompts = pr.list_prompts()
         assert len(prompts) > 0
 
     def test_has(self):
-        os.chdir(PROJECT_ROOT)
-        pr = PromptRegistry("prompts")
+        pr = PromptRegistry()
         assert pr.has("requirement_analysis")
         assert not pr.has("nonexistent")
 
     def test_get_content(self):
-        os.chdir(PROJECT_ROOT)
-        pr = PromptRegistry("prompts")
+        pr = PromptRegistry()
         content = pr.get_content("requirement_analysis")
         assert len(content) > 0
 
     def test_get_version(self):
-        os.chdir(PROJECT_ROOT)
-        pr = PromptRegistry("prompts")
+        pr = PromptRegistry()
         ver = pr.get_version("requirement_analysis")
         assert ver is not None
 
     def test_get_all_versions(self):
-        os.chdir(PROJECT_ROOT)
-        pr = PromptRegistry("prompts")
+        pr = PromptRegistry()
         versions = pr.get_all_versions()
         assert len(versions) > 0
 
@@ -1043,15 +1042,17 @@ class TestGovernanceConfigIntegration:
 class TestAgentConfigRaw:
     """测试 AgentConfig 存储原始配置"""
 
+    @pytest.fixture(autouse=True)
+    def _chdir(self, monkeypatch):
+        monkeypatch.chdir(PROJECT_ROOT)
+
     def test_raw_stored(self):
-        os.chdir(PROJECT_ROOT)
         config = AgentConfig.load_from_yaml("config.yaml")
         assert hasattr(config, '_raw')
         assert isinstance(config._raw, dict)
         assert "governance" in config._raw
 
     def test_raw_contains_governance(self):
-        os.chdir(PROJECT_ROOT)
         config = AgentConfig.load_from_yaml("config.yaml")
         gov = config._raw.get("governance", {})
         assert "enabled" in gov
