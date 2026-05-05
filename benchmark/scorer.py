@@ -394,6 +394,8 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     expected_processes = gold.get("expected_processes", [])
     if expected_processes:
         def _process_covered(proc_name: str, text: str) -> bool:
+            if not proc_name or not proc_name.strip():
+                return False
             keywords = [kw for kw in proc_name.split("流程") if kw.strip()]
             if not keywords:
                 return proc_name in text

@@ -36,6 +36,8 @@ class RequirementAnalyzer:
         for attempt in range(1, max_retries + 1):
             try:
                 result = self.llm.generate_json(prompt, system=system_msg)
+                if not isinstance(result, dict):
+                    raise ValueError(f"LLM返回非字典类型: {type(result).__name__}")
                 result = self._normalize_result(result)
                 logger.info(f"需求分析完成，提取到: {len(result.get('actors', []))} 个角色, "
                             f"{len(result.get('functions', []))} 个功能, "

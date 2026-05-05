@@ -139,6 +139,8 @@ class TaskOrchestrator:
             record.validation_result.score = max(
                 0.0, record.validation_result.score - 0.05 * len(lightweight_review["issues"])
             )
+            if record.validation_result.score < 0.3:
+                record.validation_result.is_valid = False
         results["lightweight_review"] = lightweight_review
         self.trace.log("system", "lightweight_review", lightweight_review)
 
@@ -415,6 +417,8 @@ class TaskOrchestrator:
                         }.get(stage_name)
                         if ctx_key:
                             self.context.set(ctx_key, output)
+                except (_RegenerateSignal, _AbortSignal):
+                    raise
                 except Exception as e:
                     logger.error(f"重新生成失败: {e}", exc_info=True)
                     record.status = "failed"
@@ -444,6 +448,8 @@ class TaskOrchestrator:
             if output is None:
                 return ValidationResult(is_valid=False, errors=["输出为None"], score=0.0)
             if isinstance(output, dict):
+                if not output:
+                    return ValidationResult(is_valid=False, errors=["图表输出为空字典"], score=0.0)
                 all_valid = True
                 errors = []
                 for name, content in output.items():

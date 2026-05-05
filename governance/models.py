@@ -1,9 +1,27 @@
 """治理框架数据模型"""
 
+import json
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Any
+
+
+def _safe_serialize(obj: Any) -> Any:
+    """安全序列化：尝试JSON兼容转换，失败则转为字符串"""
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [_safe_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _safe_serialize(v) for k, v in obj.items()}
+    try:
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        return str(obj)
 
 
 class GateDecision(Enum):
@@ -81,9 +99,12 @@ class HumanDecision:
 
     @classmethod
     def from_dict(cls, data: dict) -> "HumanDecision":
-        data = data.copy()
-        data["action"] = HumanAction(data.get("action", "continue"))
-        return cls(**data)
+        return cls(
+            stage=data.get("stage", ""),
+            action=HumanAction(data.get("action", "continue")),
+            feedback=data.get("feedback", ""),
+            timestamp=data.get("timestamp", time.time()),
+        )
 
 
 @dataclass
@@ -99,7 +120,12 @@ class TraceEntry:
 
     @classmethod
     def from_dict(cls, data: dict) -> "TraceEntry":
-        return cls(**data)
+        return cls(
+            timestamp=data.get("timestamp", 0.0),
+            stage=data.get("stage", ""),
+            event_type=data.get("event_type", ""),
+            data=data.get("data", {}),
+        )
 
 
 @dataclass
@@ -126,8 +152,8 @@ class StageRecord:
         """完整序列化（保留全部数据）"""
         return {
             "stage_name": self.stage_name,
-            "input_data": self.input_data,
-            "output_data": self.output_data,
+            "input_data": _safe_serialize(self.input_data),
+            "output_data": _safe_serialize(self.output_data),
             "validation": self.validation_result.to_dict(),
             "repair_records": [r.to_dict() for r in self.repair_records],
             "start_time": self.start_time,
