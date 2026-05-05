@@ -560,7 +560,7 @@ class TaskOrchestrator:
 
     def _stage_design(self, record: StageRecord) -> tuple[str, list]:
         """设计规划，返回(output, agent_warnings)"""
-        req_json = self.context.get("requirement_json")
+        req_json = self.context.get("requirement_json") or {}
         design = self.design_planner.generate_design(req_json)
         warnings = self.design_planner.validate_design(design, req_json)
         if warnings:
@@ -587,7 +587,7 @@ class TaskOrchestrator:
         """审查与修复"""
         req_json = self.context.get("requirement_json") or {}
         design = self.context.get("design_text") or ""
-        diagrams = self.context.get("diagrams", {})
+        diagrams = self.context.get("diagrams") or {}
         review_result, repaired = self.review_agent.review_and_repair(
             req_json, design, diagrams
         )
