@@ -727,6 +727,26 @@ class TestScorerEdgeCases:
         summary = compute_run_summary(results)
         assert summary["passed"] == 1
 
+    def test_score_process_completeness_none_diagrams(self):
+        from benchmark.scorer import score_process_completeness
+        assert score_process_completeness(None, {"expected_processes": []}) == 0.0
+
+    def test_score_process_completeness_none_gold(self):
+        from benchmark.scorer import score_process_completeness
+        assert score_process_completeness({"activity_diagram": "flowchart\nA-->B"}, None) >= 0
+
+    def test_score_state_diagram_none_diagrams(self):
+        from benchmark.scorer import score_state_diagram
+        assert score_state_diagram(None, {"expected_processes": []}) == 0.0
+
+    def test_score_state_diagram_none_gold(self):
+        from benchmark.scorer import score_state_diagram
+        assert score_state_diagram({"state_diagram": "stateDiagram-v2\n[*] --> A"}, None) >= 0
+
+    def test_score_consistency_none_diagrams(self):
+        from benchmark.scorer import score_consistency
+        assert score_consistency({"entities": [{"name": "User"}]}, None) >= 0
+
 
 class TestConsistencyCheckerEdgeCases:
     """测试consistency_checker边界情况"""

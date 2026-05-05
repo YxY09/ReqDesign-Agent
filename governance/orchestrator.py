@@ -161,6 +161,7 @@ class TaskOrchestrator:
         results["test_cases"] = test_cases
 
         # 跨产物一致性检查
+        consistency_result = None
         try:
             consistency_result = self.consistency.check_all(
                 req_json, design_text, diagrams, test_cases
@@ -188,14 +189,14 @@ class TaskOrchestrator:
         record = self._run_stage("review_agent", self._stage_review)
         review_result = record.output_data if record.status in ("success", "repaired") else {}
         # 将一致性检查结果合并到审查阶段门控
-        if consistency_result.errors:
+        if consistency_result and consistency_result.errors:
             for err in consistency_result.errors:
                 if err not in record.validation_result.errors:
                     record.validation_result.errors.append(err)
             record.validation_result.score = max(
                 0.0, record.validation_result.score - 0.1 * len(consistency_result.errors)
             )
-        if consistency_result.warnings:
+        if consistency_result and consistency_result.warnings:
             for w in consistency_result.warnings:
                 if w not in record.validation_result.warnings:
                     record.validation_result.warnings.append(w)

@@ -362,6 +362,11 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     Returns:
         0-100的得分
     """
+    if not diagrams:
+        return 0.0
+    if not gold:
+        gold = {}
+
     activity = diagrams.get("activity_diagram", "")
     if not activity:
         return 0.0
@@ -410,6 +415,11 @@ def score_state_diagram(diagrams: dict, gold: dict) -> float:
     Returns:
         0-100的得分
     """
+    if not diagrams:
+        return 0.0
+    if not gold:
+        gold = {}
+
     state = diagrams.get("state_diagram", "")
     if not state:
         return 0.0
