@@ -117,7 +117,7 @@ ReqDesign-Agent/
 │   └── scorer.py           # 评分函数
 ├── vscode-extension/       # VSCode插件
 ├── docs/                   # 文档
-├── tests/                  # 测试（358个用例）
+├── tests/                  # 测试（366个用例）
 ├── config.yaml             # 默认配置
 ├── requirements.txt        # Python依赖
 └── README.md
