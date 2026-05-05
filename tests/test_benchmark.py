@@ -61,6 +61,19 @@ class TestRequirementCoverage:
         score = score_requirement_coverage(result, gold)
         assert score == 100.0
 
+    def test_none_values_in_result(self):
+        """result dict中字段值为None时不崩溃"""
+        result = {"actors": None, "functions": None, "entities": None, "constraints": None, "exceptions": None}
+        gold = {
+            "expected_actors": ["管理员"],
+            "expected_functions": ["用户登录"],
+            "expected_entities": ["用户"],
+            "expected_constraints": ["约束1"],
+            "expected_exceptions": ["异常1"],
+        }
+        score = score_requirement_coverage(result, gold)
+        assert score == 0.0
+
 
 class TestDiagramSyntax:
     def test_all_valid(self):
@@ -97,6 +110,13 @@ class TestEntityAccuracy:
         score = score_entity_accuracy(result, gold)
         assert 0 < score < 100
 
+    def test_none_entities(self):
+        """entities为None时不崩溃"""
+        result = {"entities": None}
+        gold = {"expected_entities": ["用户"]}
+        score = score_entity_accuracy(result, gold)
+        assert score == 0.0
+
 
 class TestProcessCompleteness:
     def test_complete_activity(self):
@@ -132,6 +152,13 @@ class TestConsistency:
         }
         score = score_consistency(result, diagrams)
         assert score < 100
+
+    def test_none_entities(self):
+        """entities为None时不崩溃"""
+        result = {"entities": None}
+        diagrams = {"class_diagram": "classDiagram\n    class A", "activity_diagram": ""}
+        score = score_consistency(result, diagrams)
+        assert score == 100.0
 
 
 class TestOverallScore:

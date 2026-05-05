@@ -219,7 +219,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
 
     # 检查角色覆盖
     expected_actors = gold.get("expected_actors", [])
-    result_actors = [a.get("name", "") for a in result.get("actors", [])]
+    result_actors = [a.get("name", "") for a in (result.get("actors") or [])]
     for actor in expected_actors:
         total_points += 1
         if any(actor in ra for ra in result_actors):
@@ -227,7 +227,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
 
     # 检查功能覆盖
     expected_functions = gold.get("expected_functions", [])
-    result_functions = [f.get("name", "") for f in result.get("functions", [])]
+    result_functions = [f.get("name", "") for f in (result.get("functions") or [])]
     result_text = " ".join(result_functions)
     for func in expected_functions:
         total_points += 1
@@ -236,7 +236,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
 
     # 检查实体覆盖
     expected_entities = gold.get("expected_entities", [])
-    result_entities = [e.get("name", "") for e in result.get("entities", [])]
+    result_entities = [e.get("name", "") for e in (result.get("entities") or [])]
     for entity in expected_entities:
         total_points += 1
         if any(_fuzzy_match_entity(entity, res_ent) for res_ent in result_entities):
@@ -244,7 +244,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
 
     # 检查约束覆盖
     expected_constraints = gold.get("expected_constraints", [])
-    result_constraints = [c.get("description", "") for c in result.get("constraints", [])]
+    result_constraints = [c.get("description", "") for c in (result.get("constraints") or [])]
     constraint_text = " ".join(result_constraints)
     for constraint in expected_constraints:
         total_points += 1
@@ -253,7 +253,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
 
     # 检查异常流程覆盖
     expected_exceptions = gold.get("expected_exceptions", [])
-    result_exceptions = [e.get("description", "") for e in result.get("exceptions", [])]
+    result_exceptions = [e.get("description", "") for e in (result.get("exceptions") or [])]
     exception_text = " ".join(result_exceptions)
     for exc in expected_exceptions:
         total_points += 1
@@ -311,7 +311,7 @@ def score_entity_accuracy(result: dict, gold: dict) -> float:
         0-100的得分
     """
     expected_entities = gold.get("expected_entities", [])
-    result_entities = [e.get("name", "") for e in result.get("entities", [])]
+    result_entities = [e.get("name", "") for e in (result.get("entities") or [])]
 
     if not expected_entities:
         return 100.0
@@ -447,7 +447,7 @@ def score_consistency(result: dict, diagrams: dict) -> float:
     score = 100.0
 
     # 检查实体名是否在类图中出现
-    entities = [e.get("name", "") for e in result.get("entities", [])]
+    entities = [e.get("name", "") for e in (result.get("entities") or [])]
     class_diagram = diagrams.get("class_diagram", "")
 
     for entity in entities:
