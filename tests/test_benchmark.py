@@ -401,5 +401,46 @@ class TestWeightValidation:
         assert abs(score - expected) < 0.1
 
 
+class TestEditDistanceMatching:
+    """测试编辑距离匹配分支"""
+
+    def test_edit_distance_function(self):
+        """测试_edit_distance函数"""
+        from benchmark.scorer import _edit_distance
+        assert _edit_distance("kitten", "sitting") == 3
+        assert _edit_distance("", "abc") == 3
+        assert _edit_distance("abc", "abc") == 0
+        assert _edit_distance("abc", "") == 3
+
+    def test_fuzzy_match_function_edit_distance(self):
+        """测试编辑距离匹配分支（len(func_name) >= 6）"""
+        from benchmark.scorer import _fuzzy_match_function
+        # 编辑距离匹配：threshold = max(1, len(func_name) // 4)
+        # 图书管理系统(6字) vs 图书管理系统(6字) - 编辑距离为0，应匹配
+        assert _fuzzy_match_function(
+            "图书管理系统",
+            ["图书管理系统"],
+            "图书管理系统"
+        ) is True
+
+    def test_fuzzy_match_function_keyword_split(self):
+        """测试关键词拆分匹配"""
+        from benchmark.scorer import _fuzzy_match_function
+        assert _fuzzy_match_function(
+            "用户注册与登录",
+            ["用户注册", "用户登录"],
+            "用户注册 用户登录"
+        ) is True
+
+    def test_fuzzy_match_function_reverse_synonym(self):
+        """测试反向同义词匹配"""
+        from benchmark.scorer import _fuzzy_match_function
+        assert _fuzzy_match_function(
+            "图书借阅",
+            ["借阅图书"],
+            "借阅图书"
+        ) is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

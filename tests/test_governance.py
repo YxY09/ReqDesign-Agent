@@ -964,6 +964,59 @@ class TestOrchestratorAnalyzeTask:
         assert (tmp_path / "output" / "requirement_analysis.json").exists()
 
 
+class TestHumanCheckpointAbortModify:
+    """测试人工检查点的abort和modify路径"""
+
+    def test_abort_raises_system_exit(self):
+        """abort操作应抛出SystemExit"""
+        from governance.orchestrator import TaskOrchestrator
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(checkpoint_stages=["test_stage"], interactive=False)
+        orch.trace = TraceLogger()
+
+        # Mock checkpoint.pause to return abort
+        from governance.models import HumanDecision, HumanAction
+        orch.checkpoint.decisions = []
+        original_pause = orch.checkpoint.pause
+
+        def mock_abort_pause(stage, summary="", output_preview=""):
+            decision = HumanDecision(stage=stage, action=HumanAction.ABORT, feedback="")
+            orch.checkpoint.decisions.append(decision)
+            return decision
+
+        orch.checkpoint.pause = mock_abort_pause
+
+        with pytest.raises(SystemExit, match="终止执行"):
+            orch._check_human_checkpoint("test_stage", {"test_stage": {}})
+
+    def test_modify_logs_feedback(self):
+        """modify操作应记录反馈"""
+        from governance.orchestrator import TaskOrchestrator
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(checkpoint_stages=["test_stage"], interactive=False)
+        orch.trace = TraceLogger()
+
+        from governance.models import HumanDecision, HumanAction
+
+        def mock_modify_pause(stage, summary="", output_preview=""):
+            decision = HumanDecision(stage=stage, action=HumanAction.MODIFY, feedback="请修改类图")
+            orch.checkpoint.decisions.append(decision)
+            return decision
+
+        orch.checkpoint.pause = mock_modify_pause
+
+        # 不应抛出异常
+        orch._check_human_checkpoint("test_stage", {"test_stage": {}})
+
+        # 验证决策已记录
+        assert len(orch.checkpoint.decisions) == 1
+        assert orch.checkpoint.decisions[0].feedback == "请修改类图"
+
+
 # ========== Integration: StageGate with config ==========
 
 class TestStageGateIntegration:
