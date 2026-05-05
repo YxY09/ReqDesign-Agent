@@ -32,7 +32,7 @@ class RetryManager:
         last_error = None
         for attempt in range(1, max_attempts + 1):
             try:
-                logger.info(f"执行尝试 {attempt}/{self.max_retries}")
+                logger.info(f"执行尝试 {attempt}/{max_attempts}")
                 result = func(*args, **kwargs)
                 if attempt > 1:
                     logger.info(f"第 {attempt} 次尝试成功")

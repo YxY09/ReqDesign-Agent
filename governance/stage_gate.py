@@ -67,14 +67,11 @@ class StageGate:
         return GateDecision.HALT
 
     def _is_retryable(self, validation: ValidationResult) -> bool:
-        """判断错误是否可通过重试恢复"""
-        # 空响应、超时等可重试
-        retryable_patterns = ["空响应", "超时", "timeout", "empty", "截断"]
+        """判断错误是否可通过重试恢复（仅检查错误模式，不看分数）"""
+        retryable_patterns = ["空响应", "超时", "timeout", "empty", "截断", "网络", "network", "rate limit", "429", "503"]
         for err in validation.errors:
             err_lower = err.lower()
             if any(p in err_lower for p in retryable_patterns):
                 return True
-        # 分数>halt_threshold的也可以重试（与HALT阈值保持一致）
-        halt_threshold = self.thresholds.get("min_completeness", 0.8) * 0.4
-        return validation.score > halt_threshold
+        return False
 

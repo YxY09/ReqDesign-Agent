@@ -248,7 +248,7 @@ class TaskOrchestrator:
             })
         retry_count = 0
         repair_count = 0
-        max_retries = 2
+        max_retries = self.config.retry.max_retries
 
         while True:
             try:
