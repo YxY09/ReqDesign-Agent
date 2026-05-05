@@ -388,5 +388,46 @@ def foo():
         assert not _match_constraint_or_exception("完全无关的约束", "库存不足不能下单")
 
 
+class TestPromptLoader:
+    """测试共享Prompt加载器"""
+
+    def test_load_existing_prompt(self):
+        """测试加载已存在的prompt文件"""
+        from agent.prompt_loader import load_prompt
+        content = load_prompt("requirement_analysis.md")
+        assert len(content) > 0
+        assert "requirement" in content.lower() or "需求" in content
+
+    def test_load_with_fallback(self):
+        """测试文件不存在时使用fallback"""
+        from agent.prompt_loader import load_prompt
+        content = load_prompt("nonexistent_file.md", "fallback content")
+        assert content == "fallback content"
+
+    def test_load_default_fallback(self):
+        """测试文件不存在且无fallback时返回空字符串"""
+        from agent.prompt_loader import load_prompt
+        content = load_prompt("nonexistent_file.md")
+        assert content == ""
+
+    def test_cache_hit(self):
+        """测试缓存命中"""
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        content1 = load_prompt("requirement_analysis.md")
+        content2 = load_prompt("requirement_analysis.md")
+        assert content1 == content2
+
+    def test_clear_cache(self):
+        """测试清空缓存"""
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        content = load_prompt("requirement_analysis.md")
+        assert len(content) > 0
+        clear_cache()
+        content2 = load_prompt("requirement_analysis.md")
+        assert content == content2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
