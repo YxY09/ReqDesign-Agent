@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 from agent.config import AgentConfig
@@ -402,7 +403,6 @@ class TaskOrchestrator:
             "trace_summary": self.trace.get_summary(),
         }
 
-        from pathlib import Path
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         path = f"{output_dir}/governance_report.json"
         with open(path, "w", encoding="utf-8") as f:

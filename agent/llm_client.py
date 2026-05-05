@@ -56,6 +56,14 @@ class LLMClient:
 
     def chat(self, messages: list[dict], temperature: Optional[float] = None) -> str:
         """发送对话请求，返回文本响应"""
+        if not messages:
+            raise ValueError("messages 不能为空列表")
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict):
+                raise ValueError(f"messages[{i}] 必须是dict，实际: {type(msg).__name__}")
+            if "role" not in msg or "content" not in msg:
+                raise ValueError(f"messages[{i}] 缺少 'role' 或 'content' 字段")
+
         temp = temperature if temperature is not None else self.temperature
         logger.debug(f"LLM请求: {len(messages)} 条消息, temperature={temp}")
 

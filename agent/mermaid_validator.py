@@ -1,6 +1,7 @@
 """Mermaid语法校验工具"""
 
 import logging
+import os
 import re
 import subprocess
 import shutil
@@ -143,7 +144,6 @@ class MermaidValidator:
         except Exception as e:
             return False, f"CLI校验异常: {e}"
         finally:
-            import os
             os.unlink(tmp_path)
 
     def validate_and_report(self, mmd_content: str, diagram_type: str = "") -> str:

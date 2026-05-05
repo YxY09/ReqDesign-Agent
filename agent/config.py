@@ -75,17 +75,26 @@ class AgentConfig:
         logger.info(f"配置加载完成: provider={config.llm.provider}, model={config.llm.model}")
         return config
 
+    VALID_PROVIDERS = ("openai", "anthropic", "deepseek", "qwen")
+    VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
     def validate(self) -> list[str]:
         """验证配置，返回错误列表"""
         errors = []
         if not self.llm.provider:
             errors.append("llm.provider 不能为空")
+        elif self.llm.provider not in self.VALID_PROVIDERS:
+            errors.append(f"llm.provider 不支持 '{self.llm.provider}'，可选: {self.VALID_PROVIDERS}")
         if not self.llm.model:
             errors.append("llm.model 不能为空")
         if self.llm.temperature < 0 or self.llm.temperature > 2:
             errors.append("llm.temperature 必须在 0-2 之间")
+        if self.llm.max_tokens < 1:
+            errors.append("llm.max_tokens 必须 >= 1")
         if self.retry.max_retries < 0:
             errors.append("retry.max_retries 不能为负数")
+        if self.logging.level.upper() not in self.VALID_LOG_LEVELS:
+            errors.append(f"logging.level 不支持 '{self.logging.level}'，可选: {self.VALID_LOG_LEVELS}")
         return errors
 
     def get_api_key(self) -> str:
