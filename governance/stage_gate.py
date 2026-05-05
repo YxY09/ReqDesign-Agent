@@ -1,6 +1,7 @@
 """阶段门控模块"""
 
 import logging
+from typing import Optional
 
 from governance.models import (
     GateDecision, ValidationResult, GovernanceConfig
@@ -12,7 +13,7 @@ logger = logging.getLogger("reqdesign")
 class StageGate:
     """阶段门控：每阶段执行后决定下一步"""
 
-    def __init__(self, config: GovernanceConfig = None):
+    def __init__(self, config: Optional[GovernanceConfig] = None):
         self.config = config or GovernanceConfig()
         self.thresholds = self.config.gate_thresholds
 

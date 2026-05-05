@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from agent.config import AgentConfig
 from agent.input_loader import InputLoader
@@ -39,7 +39,7 @@ class TaskOrchestrator:
     """治理模式下的任务编排器"""
 
     def __init__(self, config: AgentConfig,
-                 gov_config: GovernanceConfig = None):
+                 gov_config: Optional[GovernanceConfig] = None):
         self.config = config
         self.gov = gov_config or GovernanceConfig.from_yaml_dict(config._raw)
 
