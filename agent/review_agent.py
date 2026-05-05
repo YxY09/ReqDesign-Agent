@@ -73,7 +73,7 @@ class ReviewAgent:
         try:
             llm_review = self.llm.generate_json(prompt, system=system_msg)
         except Exception as e:
-            logger.error(f"LLM审查失败: {e}")
+            logger.error(f"LLM审查失败: {e}", exc_info=True)
             llm_review = {
                 "overall_score": 0,
                 "overall_pass": False,
