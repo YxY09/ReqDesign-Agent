@@ -5,6 +5,7 @@ import logging
 import time
 import traceback
 from pathlib import Path
+from typing import Optional
 
 from governance.models import TraceEntry
 
@@ -18,7 +19,7 @@ class TraceLogger:
         self.entries: list[TraceEntry] = []
         self.output_dir = output_dir
 
-    def log(self, stage: str, event_type: str, data: dict = None):
+    def log(self, stage: str, event_type: str, data: Optional[dict] = None):
         """记录一条追踪条目"""
         entry = TraceEntry(
             timestamp=time.time(),
@@ -94,8 +95,8 @@ class TraceLogger:
             "duration_seconds": round(duration, 3),
         })
 
-    def get_entries(self, stage: str = None,
-                    event_type: str = None) -> list[TraceEntry]:
+    def get_entries(self, stage: Optional[str] = None,
+                    event_type: Optional[str] = None) -> list[TraceEntry]:
         """按条件过滤追踪条目"""
         result = self.entries
         if stage:
@@ -124,7 +125,7 @@ class TraceLogger:
             "stages": stages,
         }
 
-    def export_json(self, path: str = None) -> str:
+    def export_json(self, path: Optional[str] = None) -> str:
         """导出追踪记录为JSON"""
         data = {
             "summary": self.get_summary(),

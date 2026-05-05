@@ -16,7 +16,7 @@ class PromptEntry:
     """单个Prompt条目"""
 
     def __init__(self, name: str, path: str, content: str,
-                 version: str = None):
+                 version: Optional[str] = None):
         self.name = name
         self.path = path
         self.content = content
@@ -36,7 +36,7 @@ class PromptEntry:
 class PromptRegistry:
     """Prompt模板注册中心"""
 
-    def __init__(self, prompts_dir: str = None):
+    def __init__(self, prompts_dir: Optional[str] = None):
         if prompts_dir is None:
             prompts_dir = os.path.join(PROJECT_ROOT, "prompts")
         self.prompts_dir = Path(prompts_dir)

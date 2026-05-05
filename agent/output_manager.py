@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from datetime import datetime
+from typing import Optional
 
 logger = logging.getLogger("reqdesign")
 
@@ -97,7 +98,7 @@ class OutputManager:
         self._write_file("test_cases.md", test_cases or "")
         logger.info("测试用例已保存")
 
-    def save_review_report(self, review_report: str, review_result: dict = None):
+    def save_review_report(self, review_report: str, review_result: Optional[dict] = None):
         """保存审查报告"""
         self._write_file("review_report.md", review_report or "")
         if review_result:
@@ -112,7 +113,7 @@ class OutputManager:
         diagrams: dict,
         test_cases: str,
         review_report: str,
-        review_result: dict = None,
+        review_result: Optional[dict] = None,
     ):
         """保存所有输出文件"""
         self.save_requirement_analysis(requirement_json, requirement_text)
@@ -200,7 +201,7 @@ class OutputManager:
 
         return "\n".join(lines)
 
-    def _generate_summary(self, req: dict, review_result: dict = None):
+    def _generate_summary(self, req: dict, review_result: Optional[dict] = None):
         """生成汇总报告"""
         if not req:
             req = {}

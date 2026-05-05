@@ -7,7 +7,7 @@ from governance.models import HumanAction, HumanDecision
 logger = logging.getLogger("reqdesign")
 
 # Avoid circular import: TraceLogger is imported lazily via TYPE_CHECKING
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from governance.trace_logger import TraceLogger
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class HumanCheckpoint:
     """人工检查点：在关键阶段暂停等待人工确认"""
 
-    def __init__(self, checkpoint_stages: list[str] = None,
+    def __init__(self, checkpoint_stages: Optional[list[str]] = None,
                  trace_logger: "TraceLogger | None" = None,
                  interactive: bool = True):
         """
