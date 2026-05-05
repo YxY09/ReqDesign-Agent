@@ -25,6 +25,7 @@ class ReviewAgent:
 
     def validate_mermaid_syntax(self, diagrams: dict) -> list[dict]:
         """校验所有Mermaid图的语法"""
+        diagrams = diagrams or {}
         results = []
         for name, content in diagrams.items():
             is_valid, msg = self.mermaid_validator.validate(content, name)
@@ -54,6 +55,7 @@ class ReviewAgent:
         Returns:
             审查结果dict
         """
+        diagrams = diagrams or {}
         logger.info("开始审查设计产物...")
 
         # 1. 先做Mermaid语法校验
@@ -149,6 +151,7 @@ class ReviewAgent:
         Returns:
             (review_result, repaired_diagrams)
         """
+        diagrams = diagrams or {}
         # 审查
         review_result = self.review(requirement_json, design_text, diagrams)
 
