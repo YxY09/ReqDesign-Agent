@@ -56,26 +56,23 @@
 requirements.md
     │
     ▼
-InputLoader.load()
+InputLoader.load()  ← 编码容错、大小限制、代码围栏感知
     │
     ▼ (标准化需求文本)
-RequirementAnalyzer.analyze()
+RequirementAnalyzer.analyze()  ← 自动重试、类型规范化、prompt注入防护
     │
     ▼ (需求JSON)
-DesignPlanner.generate_design()
+DesignPlanner.generate_design()  ← 大小写不敏感验证
     │
     ▼ (系统设计说明)
-DiagramGenerator.generate_all()
+DiagramGenerator.generate_all()  ← 优先mermaid代码块提取
     │
     ├──▶ class_diagram.mmd
     ├──▶ activity_diagram.mmd
     └──▶ state_diagram.mmd
     │
     ▼ (Mermaid代码)
-MermaidValidator.validate()
-    │
-    ▼ (语法校验结果)
-ReviewAgent.review_and_repair()
+ReviewAgent.review_and_repair()  ← 多轮修复验证
     │
     ├──▶ 修复后的图文件
     └──▶ review_result.json
@@ -84,7 +81,7 @@ ReviewAgent.review_and_repair()
 TestCaseGenerator.generate()
     │
     ▼ (测试用例)
-OutputManager.save_all()
+OutputManager.save_all()  ← 路径穿越防护
     │
     ▼
 输出目录/
@@ -96,8 +93,11 @@ OutputManager.save_all()
 ├── state_diagram.mmd
 ├── test_cases.md
 ├── review_report.md
+├── review_result.json
 └── summary_report.md
 ```
+
+注意：每个阶段都有try/except降级处理，单个阶段失败不阻塞后续阶段。
 
 ## 4. 核心类/接口设计
 
