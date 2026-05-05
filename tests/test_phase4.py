@@ -207,6 +207,51 @@ class TestDiagramGeneratorMethods:
         assert result["state_diagram"] == ""
 
 
+class TestDiagramGeneratorBuildPrompt:
+    """测试_build_prompt方法"""
+
+    def _make_gen(self):
+        gen = DiagramGenerator.__new__(DiagramGenerator)
+        return gen
+
+    def test_build_prompt_normal(self):
+        """正常输入构建prompt"""
+        gen = self._make_gen()
+        template = "需求：{requirement_json}\n设计：{design_text}"
+        result = gen._build_prompt(template, {"actors": ["user"]}, "设计内容")
+        assert '"actors"' in result
+        assert "设计内容" in result
+
+    def test_build_prompt_none_requirement(self):
+        """requirement_json为None时使用空dict"""
+        gen = self._make_gen()
+        template = "需求：{requirement_json}"
+        result = gen._build_prompt(template, None, "")
+        assert "{}" in result
+
+    def test_build_prompt_empty_requirement(self):
+        """requirement_json为空dict"""
+        gen = self._make_gen()
+        template = "需求：{requirement_json}"
+        result = gen._build_prompt(template, {}, "")
+        assert "{}" in result
+
+    def test_build_prompt_none_design_text(self):
+        """design_text为None时使用空字符串"""
+        gen = self._make_gen()
+        template = "设计：{design_text}"
+        result = gen._build_prompt(template, {"a": 1}, None)
+        assert "设计：" in result
+        assert "None" not in result
+
+    def test_build_prompt_empty_design_text(self):
+        """design_text为空字符串"""
+        gen = self._make_gen()
+        template = "设计：{design_text}"
+        result = gen._build_prompt(template, {"a": 1}, "")
+        assert "设计：" in result
+
+
 # ========== CLI validation tests ==========
 
 class TestMermaidCLIValidation:
