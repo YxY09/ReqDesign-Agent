@@ -129,7 +129,12 @@ class BenchmarkRunner:
         cases = self.find_cases()
         if not cases:
             self.logger.error("未找到测试案例")
-            return {"cases": [], "summary": {}}
+            return {
+                "run_time": "",
+                "total_cases": 0,
+                "results": [],
+                "summary": {"passed": 0, "failed": 0, "error": 0, "avg_scores": {}},
+            }
 
         results = []
         for case in cases:
