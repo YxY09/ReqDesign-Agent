@@ -3,10 +3,12 @@
 import os
 import sys
 import pytest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.mermaid_validator import MermaidValidator
+from agent.diagram_generator import DiagramGenerator
 
 
 class TestMermaidValidator:
@@ -106,7 +108,6 @@ class TestDiagramGeneratorExtraction:
     """测试DiagramGenerator的Mermaid提取逻辑"""
 
     def setup_method(self):
-        from agent.diagram_generator import DiagramGenerator
         self.gen = DiagramGenerator.__new__(DiagramGenerator)
 
     def test_extract_from_code_block(self):
@@ -129,6 +130,78 @@ class TestDiagramGeneratorExtraction:
         raw = "以下是状态图：\n```mermaid\nstateDiagram-v2\n    [*] --> A\n```"
         result = self.gen._extract_mermaid(raw, "stateDiagram-v2")
         assert result.startswith("stateDiagram-v2")
+
+
+class TestDiagramGeneratorMethods:
+    """测试DiagramGenerator的生成方法（mock LLM）"""
+
+    def _make_gen(self):
+        mock_llm = MagicMock()
+        gen = DiagramGenerator.__new__(DiagramGenerator)
+        gen.llm = mock_llm
+        gen.prompts = {
+            "class_diagram": "生成类图\n{requirement_json}\n{design_text}",
+            "activity_diagram": "生成活动图\n{requirement_json}\n{design_text}",
+            "state_diagram": "生成状态图\n{requirement_json}\n{design_text}",
+        }
+        return gen, mock_llm
+
+    def test_generate_class_diagram(self):
+        gen, mock_llm = self._make_gen()
+        mock_llm.generate_text.return_value = "```mermaid\nclassDiagram\n    class User\n```"
+        result = gen.generate_class_diagram({"functions": []}, "设计说明")
+        assert "classDiagram" in result
+        assert "User" in result
+        mock_llm.generate_text.assert_called_once()
+
+    def test_generate_activity_diagram(self):
+        gen, mock_llm = self._make_gen()
+        mock_llm.generate_text.return_value = "```mermaid\nflowchart TD\n    A --> B\n```"
+        result = gen.generate_activity_diagram({"functions": []}, "设计说明")
+        assert "flowchart" in result
+        mock_llm.generate_text.assert_called_once()
+
+    def test_generate_state_diagram(self):
+        gen, mock_llm = self._make_gen()
+        mock_llm.generate_text.return_value = "```mermaid\nstateDiagram-v2\n    [*] --> A\n```"
+        result = gen.generate_state_diagram({"functions": []}, "设计说明")
+        assert "stateDiagram-v2" in result
+        mock_llm.generate_text.assert_called_once()
+
+    def test_generate_all_success(self):
+        gen, mock_llm = self._make_gen()
+        mock_llm.generate_text.side_effect = [
+            "classDiagram\n    class A",
+            "flowchart TD\n    A --> B",
+            "stateDiagram-v2\n    [*] --> A",
+        ]
+        result = gen.generate_all({"functions": []}, "设计说明")
+        assert "class_diagram" in result
+        assert "activity_diagram" in result
+        assert "state_diagram" in result
+        assert "classDiagram" in result["class_diagram"]
+        assert "flowchart" in result["activity_diagram"]
+        assert "stateDiagram-v2" in result["state_diagram"]
+
+    def test_generate_all_partial_failure(self):
+        gen, mock_llm = self._make_gen()
+        mock_llm.generate_text.side_effect = [
+            "classDiagram\n    class A",
+            Exception("LLM timeout"),
+            "stateDiagram-v2\n    [*] --> A",
+        ]
+        result = gen.generate_all({"functions": []}, "设计说明")
+        assert "classDiagram" in result["class_diagram"]
+        assert result["activity_diagram"] == ""
+        assert "stateDiagram-v2" in result["state_diagram"]
+
+    def test_generate_all_total_failure(self):
+        gen, mock_llm = self._make_gen()
+        mock_llm.generate_text.side_effect = Exception("API error")
+        result = gen.generate_all({"functions": []}, "设计说明")
+        assert result["class_diagram"] == ""
+        assert result["activity_diagram"] == ""
+        assert result["state_diagram"] == ""
 
 
 if __name__ == "__main__":

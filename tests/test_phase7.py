@@ -101,6 +101,50 @@ class TestOutputManager:
         assert "90" in content
         assert "是" in content
 
+    def test_save_review_report_with_result(self, tmp_path):
+        mgr = OutputManager(str(tmp_path))
+        report_md = "# 审查报告\n\n综合得分: 85\n通过: 是"
+        result_json = {"overall_score": 85, "overall_pass": True, "checks": []}
+        mgr.save_review_report(report_md, result_json)
+
+        report_path = tmp_path / "review_report.md"
+        assert report_path.exists()
+        assert "85" in report_path.read_text(encoding="utf-8")
+
+        result_path = tmp_path / "review_result.json"
+        assert result_path.exists()
+        saved = json.loads(result_path.read_text(encoding="utf-8"))
+        assert saved["overall_score"] == 85
+
+    def test_save_review_report_without_result(self, tmp_path):
+        mgr = OutputManager(str(tmp_path))
+        mgr.save_review_report("# 审查报告\n\n无结构化结果")
+
+        assert (tmp_path / "review_report.md").exists()
+        assert not (tmp_path / "review_result.json").exists()
+
+    def test_save_review_report_empty_result(self, tmp_path):
+        mgr = OutputManager(str(tmp_path))
+        mgr.save_review_report("# 报告", {})
+
+        assert (tmp_path / "review_report.md").exists()
+        # 空dict是falsy，不写JSON
+        assert not (tmp_path / "review_result.json").exists()
+
+    def test_path_traversal_sanitized(self, tmp_path):
+        mgr = OutputManager(str(tmp_path))
+        # 路径穿越被sanitize后不会逃出output_dir
+        mgr._write_file("../etc/passwd", "not malicious")
+        # 文件被安全写入到output_dir内
+        assert not (tmp_path.parent / "etc" / "passwd").exists()
+
+    def test_sanitize_filename(self, tmp_path):
+        from agent.output_manager import _sanitize_filename
+        # / 先被替换为 _，然后 .. 被替换为 _
+        assert _sanitize_filename("../../etc/passwd") == "____etc_passwd"
+        assert _sanitize_filename("normal_file.md") == "normal_file.md"
+        assert _sanitize_filename("file with spaces.md") == "file_with_spaces.md"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

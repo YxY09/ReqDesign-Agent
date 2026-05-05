@@ -3,6 +3,7 @@
 import os
 import sys
 import pytest
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -66,6 +67,40 @@ class TestDesignPlannerValidation:
         # 没有遗漏
         coverage_warnings = [w for w in warnings if "未在设计中体现" in w]
         assert len(coverage_warnings) == 0
+
+
+class TestDesignPlannerGenerate:
+    """测试DesignPlanner.generate_design（mock LLM）"""
+
+    def setup_method(self):
+        mock_llm = MagicMock()
+        self.planner = DesignPlanner.__new__(DesignPlanner)
+        self.planner.llm = mock_llm
+        self.planner.prompt_template = "请设计系统：\n{requirement_json}"
+        self.mock_llm = mock_llm
+
+    def test_generate_design_success(self):
+        self.mock_llm.generate_text.return_value = "## 模块划分\n\n用户管理模块\n\n## 核心类\n\nUser类\n\n## 数据流\n\n请求处理"
+        req = {"functions": [{"id": "F001", "name": "用户登录"}], "entities": []}
+        result = self.planner.generate_design(req)
+        assert "模块划分" in result
+        assert "核心类" in result
+        self.mock_llm.generate_text.assert_called_once()
+
+    def test_generate_design_llm_error(self):
+        self.mock_llm.generate_text.side_effect = Exception("API timeout")
+        req = {"functions": [], "entities": []}
+        with pytest.raises(Exception, match="API timeout"):
+            self.planner.generate_design(req)
+
+    def test_generate_design_passes_json_to_prompt(self):
+        self.mock_llm.generate_text.return_value = "设计结果"
+        req = {"functions": [{"id": "F001", "name": "登录"}], "entities": [{"name": "User"}]}
+        self.planner.generate_design(req)
+        call_args = self.mock_llm.generate_text.call_args
+        prompt = call_args[0][0]
+        assert "F001" in prompt
+        assert "User" in prompt
 
 
 if __name__ == "__main__":

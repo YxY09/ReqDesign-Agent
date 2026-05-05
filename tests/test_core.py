@@ -4,11 +4,13 @@ import os
 import sys
 import pytest
 import tempfile
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.config import AgentConfig, LLMConfig
 from agent.logger import setup_logger
+from agent.main import parse_args
 
 
 class TestAgentConfig:
@@ -106,6 +108,97 @@ governance:
         config = AgentConfig()
         config.llm.api_key = ""
         assert config.get_api_key() == ""
+
+    def test_get_base_url_from_config(self):
+        config = AgentConfig()
+        config.llm.base_url = "https://custom.api.com/v1"
+        assert config.get_base_url() == "https://custom.api.com/v1"
+
+    def test_get_base_url_from_env(self, monkeypatch):
+        config = AgentConfig()
+        config.llm.base_url = ""
+        config.llm.provider = "deepseek"
+        monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://deepseek.api.com")
+        assert config.get_base_url() == "https://deepseek.api.com"
+
+    def test_get_base_url_env_qwen(self, monkeypatch):
+        config = AgentConfig()
+        config.llm.base_url = ""
+        config.llm.provider = "qwen"
+        monkeypatch.setenv("QWEN_BASE_URL", "https://qwen.api.com")
+        assert config.get_base_url() == "https://qwen.api.com"
+
+    def test_get_base_url_env_anthropic(self, monkeypatch):
+        config = AgentConfig()
+        config.llm.base_url = ""
+        config.llm.provider = "anthropic"
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://anthropic.api.com")
+        assert config.get_base_url() == "https://anthropic.api.com"
+
+    def test_get_base_url_missing_env(self, monkeypatch):
+        config = AgentConfig()
+        config.llm.base_url = ""
+        config.llm.provider = "openai"
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        assert config.get_base_url() == ""
+
+    def test_get_base_url_unknown_provider(self, monkeypatch):
+        config = AgentConfig()
+        config.llm.base_url = ""
+        config.llm.provider = "unknown"
+        assert config.get_base_url() == ""
+
+
+class TestParseArgs:
+    def test_default_args(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["main", "--input", "test.md"])
+        args = parse_args()
+        assert args.task == "design"
+        assert args.input == "test.md"
+        assert args.output == "outputs/"
+        assert args.config == "config.yaml"
+        assert args.log_level == "INFO"
+        assert args.enable_governance is False
+        assert args.mode == "standard"
+        assert args.enable_trace is False
+        assert args.human_checkpoints == []
+        assert args.benchmark is False
+
+    def test_analyze_task(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["main", "--task", "analyze", "-i", "req.md"])
+        args = parse_args()
+        assert args.task == "analyze"
+
+    def test_governance_mode(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", [
+            "main", "-i", "req.md", "--enable-governance",
+            "--enable-trace", "--human-checkpoints", "requirement_analysis", "diagram_generation"
+        ])
+        args = parse_args()
+        assert args.enable_governance is True
+        assert args.enable_trace is True
+        assert args.human_checkpoints == ["requirement_analysis", "diagram_generation"]
+
+    def test_benchmark_flag(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["main", "-i", "cases/", "--benchmark"])
+        args = parse_args()
+        assert args.benchmark is True
+
+    def test_model_override(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["main", "-i", "test.md", "-m", "gpt-4o-mini", "-p", "openai"])
+        args = parse_args()
+        assert args.model == "gpt-4o-mini"
+        assert args.provider == "openai"
+
+    def test_max_retry(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["main", "-i", "test.md", "--max-retry", "5"])
+        args = parse_args()
+        assert args.max_retry == 5
+
+    def test_mode_governed(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["main", "-i", "test.md", "--mode", "governed"])
+        args = parse_args()
+        assert args.mode == "governed"
 
 
 class TestLogger:

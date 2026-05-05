@@ -3,6 +3,7 @@
 import os
 import sys
 import pytest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -139,6 +140,112 @@ class TestReviewAgentMermaidValidation:
         }
         results = self.agent.validate_mermaid_syntax(diagrams)
         assert not results[0]["valid"]
+
+
+class TestReviewAgentRepair:
+    """测试ReviewAgent的修复功能（mock LLM）"""
+
+    def _make_agent(self):
+        from agent.mermaid_validator import MermaidValidator
+        agent = ReviewAgent.__new__(ReviewAgent)
+        agent.llm = MagicMock()
+        agent.mermaid_validator = MermaidValidator()
+        agent.retry_manager = RetryManager(max_retries=2)
+        agent.prompt_template = "审查\n{requirement_json}\n{design_text}\n{class_diagram}\n{activity_diagram}\n{state_diagram}"
+        return agent
+
+    def test_repair_diagram_success(self):
+        agent = self._make_agent()
+        broken = "classDiagram\n    class User {\n        +login(\n    }"
+        repaired = "classDiagram\n    class User {\n        +login()\n    }"
+        agent.llm.generate_text.return_value = f"```mermaid\n{repaired}\n```"
+
+        result = agent.repair_diagram("class_diagram", broken, "括号不匹配")
+        assert "classDiagram" in result
+        assert "login()" in result
+
+    def test_repair_diagram_llm_returns_original_on_failure(self):
+        agent = self._make_agent()
+        broken = "classDiagram\n    class User {\n        +login(\n    }"
+        agent.llm.generate_text.side_effect = Exception("LLM error")
+
+        result = agent.repair_diagram("class_diagram", broken, "括号不匹配")
+        # 失败时返回原始内容
+        assert result == broken
+
+    def test_repair_diagram_retries(self):
+        agent = self._make_agent()
+        broken = "classDiagram\n    class A"
+        agent.llm.generate_text.side_effect = [
+            Exception("first fail"),
+            "classDiagram\n    class A {\n        +method()\n    }",
+        ]
+
+        result = agent.repair_diagram("class_diagram", broken, "缺少class定义")
+        assert "classDiagram" in result
+
+    def test_review_and_repair_no_syntax_issues(self):
+        agent = self._make_agent()
+        valid_diagrams = {
+            "class_diagram": "classDiagram\n    class User {\n        +login()\n    }\n    User --> Book",
+            "activity_diagram": "flowchart TD\n    A([开始]) --> B([结束])",
+            "state_diagram": "stateDiagram-v2\n    [*] --> A\n    A --> [*]",
+        }
+        # Mock LLM review to return passing result
+        agent.llm.generate_json.return_value = {
+            "overall_score": 85,
+            "overall_pass": True,
+            "checks": [],
+        }
+
+        review_result, repaired = agent.review_and_repair(
+            {"functions": []}, "设计说明", valid_diagrams
+        )
+        assert review_result["overall_score"] == 85
+        assert repaired == valid_diagrams
+
+    def test_review_and_repair_with_syntax_issues(self):
+        agent = self._make_agent()
+        broken_diagrams = {
+            "class_diagram": "classDiagram\n    class User {\n        +login(\n    }",
+            "activity_diagram": "flowchart TD\n    A([开始]) --> B([结束])",
+            "state_diagram": "stateDiagram-v2\n    [*] --> A\n    A --> [*]",
+        }
+        # Mock LLM review
+        agent.llm.generate_json.return_value = {
+            "overall_score": 60,
+            "overall_pass": False,
+            "checks": [],
+        }
+        # Mock repair to return fixed diagram
+        agent.llm.generate_text.return_value = "classDiagram\n    class User {\n        +login()\n    }\n    User --> Book"
+
+        review_result, repaired = agent.review_and_repair(
+            {"functions": []}, "设计说明", broken_diagrams, max_repair_rounds=1
+        )
+        # class_diagram should have been repaired
+        assert "login()" in repaired["class_diagram"]
+
+    def test_review_and_repair_multi_round(self):
+        agent = self._make_agent()
+        broken_diagrams = {
+            "class_diagram": "classDiagram\n    class User {\n        +login(\n    }",
+        }
+        agent.llm.generate_json.return_value = {
+            "overall_score": 60,
+            "overall_pass": False,
+            "checks": [],
+        }
+        # First repair attempt still broken, second succeeds
+        agent.llm.generate_text.side_effect = [
+            "classDiagram\n    class User {\n        +login(\n    }",  # still broken
+            "classDiagram\n    class User {\n        +login()\n    }",  # fixed
+        ]
+
+        review_result, repaired = agent.review_and_repair(
+            {"functions": []}, "设计说明", broken_diagrams, max_repair_rounds=2
+        )
+        assert "login()" in repaired["class_diagram"]
 
 
 if __name__ == "__main__":
