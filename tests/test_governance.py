@@ -7,7 +7,8 @@ import tempfile
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
 
 from governance.models import (
     StageRecord, ValidationResult, RepairRecord, HumanDecision,
@@ -545,31 +546,31 @@ class TestHumanCheckpoint:
 
 class TestPromptRegistry:
     def test_scan_prompts(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         pr = PromptRegistry("prompts")
         prompts = pr.list_prompts()
         assert len(prompts) > 0
 
     def test_has(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         pr = PromptRegistry("prompts")
         assert pr.has("requirement_analysis")
         assert not pr.has("nonexistent")
 
     def test_get_content(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         pr = PromptRegistry("prompts")
         content = pr.get_content("requirement_analysis")
         assert len(content) > 0
 
     def test_get_version(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         pr = PromptRegistry("prompts")
         ver = pr.get_version("requirement_analysis")
         assert ver is not None
 
     def test_get_all_versions(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         pr = PromptRegistry("prompts")
         versions = pr.get_all_versions()
         assert len(versions) > 0
@@ -1016,14 +1017,14 @@ class TestAgentConfigRaw:
     """测试 AgentConfig 存储原始配置"""
 
     def test_raw_stored(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         config = AgentConfig.load_from_yaml("config.yaml")
         assert hasattr(config, '_raw')
         assert isinstance(config._raw, dict)
         assert "governance" in config._raw
 
     def test_raw_contains_governance(self):
-        os.chdir("/home/y9/ReqDesign-Agent")
+        os.chdir(PROJECT_ROOT)
         config = AgentConfig.load_from_yaml("config.yaml")
         gov = config._raw.get("governance", {})
         assert "enabled" in gov
@@ -1608,24 +1609,24 @@ class TestNoWorkflowController:
 
     def test_no_workflow_controller_import(self):
         """main.py不导入WorkflowController"""
-        with open("/home/y9/ReqDesign-Agent/agent/main.py", "r") as f:
+        with open(os.path.join(PROJECT_ROOT, "agent", "main.py"), "r") as f:
             content = f.read()
         assert "WorkflowController" not in content
 
     def test_no_workflow_controller_file(self):
         """workflow_controller.py已删除"""
-        assert not os.path.exists("/home/y9/ReqDesign-Agent/agent/workflow_controller.py")
+        assert not os.path.exists(os.path.join(PROJECT_ROOT, "agent", "workflow_controller.py"))
 
     def test_benchmark_uses_orchestrator(self):
         """benchmark使用TaskOrchestrator"""
-        with open("/home/y9/ReqDesign-Agent/benchmark/run_benchmark.py", "r") as f:
+        with open(os.path.join(PROJECT_ROOT, "benchmark", "run_benchmark.py"), "r") as f:
             content = f.read()
         assert "TaskOrchestrator" in content
         assert "WorkflowController" not in content
 
     def test_standard_mode_uses_orchestrator(self):
         """标准模式使用TaskOrchestrator"""
-        with open("/home/y9/ReqDesign-Agent/agent/main.py", "r") as f:
+        with open(os.path.join(PROJECT_ROOT, "agent", "main.py"), "r") as f:
             content = f.read()
         assert "TaskOrchestrator" in content
         # 标准模式也用orchestrator
