@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.config import AgentConfig
 from agent.logger import setup_logger
-from agent.workflow_controller import WorkflowController
+from governance.orchestrator import TaskOrchestrator
+from governance.models import GovernanceConfig
 from benchmark.scorer import (
     score_requirement_coverage,
     score_diagram_syntax,
@@ -71,10 +72,10 @@ class BenchmarkRunner:
         with open(case["gold_path"], "r", encoding="utf-8") as f:
             gold = json.load(f)
 
-        # 运行智能体
-        controller = WorkflowController(self.config)
+        # 运行智能体（使用TaskOrchestrator）
+        orchestrator = TaskOrchestrator(self.config)
         try:
-            result = controller.run_design_task(case["case_path"], case_output_dir)
+            result = orchestrator.run_design_task(case["case_path"], case_output_dir)
         except Exception as e:
             self.logger.error(f"案例 {case['name']} 运行失败: {e}")
             return {

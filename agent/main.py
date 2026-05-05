@@ -8,7 +8,8 @@ import yaml
 
 from agent.config import AgentConfig
 from agent.logger import setup_logger
-from agent.workflow_controller import WorkflowController
+from governance.orchestrator import TaskOrchestrator
+from governance.models import GovernanceConfig
 
 
 def parse_args():
@@ -166,8 +167,7 @@ def main():
             print(f"\nBenchmark完成！输出目录: {args.output}")
 
         elif use_governance:
-            # 治理模式：从config._raw加载治理配置（避免重复解析YAML）
-            from governance.models import GovernanceConfig
+            # 治理模式：从config._raw加载治理配置
             gov_config = GovernanceConfig.from_yaml_dict(config._raw)
 
             # 命令行覆盖
@@ -176,7 +176,6 @@ def main():
             if args.human_checkpoints:
                 gov_config.human_checkpoints = args.human_checkpoints
 
-            from governance.orchestrator import TaskOrchestrator
             orchestrator = TaskOrchestrator(config, gov_config)
 
             # 检查输入文件
@@ -195,19 +194,18 @@ def main():
             print(f"\n任务完成（治理模式）！输出目录: {args.output}")
 
         else:
-            # 标准模式
-            # 检查输入文件
+            # 标准模式（使用TaskOrchestrator，不带治理配置）
             if not os.path.exists(args.input):
                 logger.error(f"输入文件不存在: {args.input}")
                 sys.exit(1)
 
-            controller = WorkflowController(config)
+            orchestrator = TaskOrchestrator(config)
 
             if args.task == "analyze":
-                result = controller.run_analyze_task(args.input, args.output)
+                result = orchestrator.run_analyze_task(args.input, args.output)
                 logger.info("需求分析完成")
             elif args.task == "design":
-                result = controller.run_design_task(args.input, args.output)
+                result = orchestrator.run_design_task(args.input, args.output)
                 score = result.get("review", {}).get("overall_score", 0)
                 logger.info(f"完整设计任务完成，综合得分: {score}")
 

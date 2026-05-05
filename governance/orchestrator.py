@@ -24,6 +24,7 @@ from governance.context_controller import ContextController
 from governance.repair_controller import RepairController
 from governance.human_checkpoint import HumanCheckpoint
 from governance.prompt_registry import PromptRegistry
+from governance.consistency_checker import ConsistencyChecker
 
 logger = logging.getLogger("reqdesign")
 
@@ -48,6 +49,7 @@ class TaskOrchestrator:
             interactive=True,
         )
         self.prompt_registry = PromptRegistry("prompts")
+        self.consistency = ConsistencyChecker()
 
         # LLM客户端（带追踪包装）
         from agent.llm_client import LLMClient
@@ -78,19 +80,16 @@ class TaskOrchestrator:
 
         # Stage 1: 读取输入
         record = self._run_stage("input_loader", self._stage_input, input_path)
-        if record.status == "success":
-            requirement_text = record.output_data
-            self.context.set("full_text", requirement_text)
-            results["requirement_text"] = requirement_text
-        else:
+        if record.status not in ("success", "repaired"):
             logger.error("输入读取失败，无法继续")
             return results
+        requirement_text = record.output_data
+        self.context.set("full_text", requirement_text)
+        results["requirement_text"] = requirement_text
 
         # Stage 2: 需求分析
         self.llm.set_stage("requirement_analysis")
-        record = self._run_stage(
-            "requirement_analysis", self._stage_analysis
-        )
+        record = self._run_stage("requirement_analysis", self._stage_analysis)
         req_json = record.output_data if record.status in ("success", "repaired") else {}
         self.context.set("requirement_json", req_json)
         results["requirement_analysis"] = req_json
@@ -100,8 +99,11 @@ class TaskOrchestrator:
             self._save_governance_report(results, output_dir)
             return results
 
-        # 人工检查点
-        self._check_human_checkpoint("requirement_analysis", results)
+        # 轻量审查：需求分析后规则检查
+        lightweight_review = self._lightweight_review(req_json)
+        if lightweight_review.get("issues"):
+            logger.warning(f"[轻量审查] 需求分析问题: {lightweight_review['issues']}")
+        results["lightweight_review"] = lightweight_review
 
         # Stage 3: 设计规划
         self.llm.set_stage("design_planner")
@@ -122,6 +124,21 @@ class TaskOrchestrator:
         record = self._run_stage("test_case_generator", self._stage_test_cases)
         test_cases = record.output_data if record.status in ("success", "repaired") else ""
         results["test_cases"] = test_cases
+
+        # 跨产物一致性检查
+        consistency_result = self.consistency.check_all(
+            req_json, design_text, diagrams, test_cases
+        )
+        results["consistency"] = {
+            "score": consistency_result.score,
+            "errors": consistency_result.errors,
+            "warnings": consistency_result.warnings,
+            "checks": consistency_result.checks,
+        }
+        self.trace.log("system", "consistency_check", {
+            "score": consistency_result.score,
+            "error_count": len(consistency_result.errors),
+        })
 
         # Stage 6: 审查与修复
         self.llm.set_stage("review_agent")
@@ -157,7 +174,7 @@ class TaskOrchestrator:
 
         # Stage 1: 读取输入
         record = self._run_stage("input_loader", self._stage_input, input_path)
-        if record.status != "success":
+        if record.status not in ("success", "repaired"):
             logger.error("输入读取失败")
             return {"requirement_analysis": {}}
 
@@ -166,10 +183,13 @@ class TaskOrchestrator:
 
         # Stage 2: 需求分析（带治理）
         self.llm.set_stage("requirement_analysis")
-        record = self._run_stage(
-            "requirement_analysis", self._stage_analysis
-        )
+        record = self._run_stage("requirement_analysis", self._stage_analysis)
         req_json = record.output_data if record.status in ("success", "repaired") else {}
+
+        # 轻量审查
+        lightweight_review = self._lightweight_review(req_json)
+        if lightweight_review.get("issues"):
+            logger.warning(f"[轻量审查] {lightweight_review['issues']}")
 
         # 保存输出
         output_mgr = OutputManager(output_dir)
@@ -185,62 +205,113 @@ class TaskOrchestrator:
 
     def _run_stage(self, stage_name: str, stage_fn,
                    *args) -> StageRecord:
-        """执行一个阶段，带追踪、校验、门控、修复"""
+        """执行一个阶段，带追踪、校验、门控、真正的重试和多轮修复"""
         record = StageRecord(stage_name=stage_name, start_time=time.time())
         self.trace.log_stage_start(stage_name)
         retry_count = 0
         repair_count = 0
+        max_retries = 2
 
-        try:
-            output = stage_fn(record, *args)
-            record.output_data = output
-
-            # 校验
-            vr = self._validate_stage_output(stage_name, output)
-            record.validation_result = vr
-            self.trace.log_validation(
-                stage_name, vr.is_valid, vr.errors, vr.warnings, vr.score
-            )
-
-            # 门控（传入重试/修复计数）
-            decision = self.gate.evaluate(
-                stage_name, vr,
-                retry_count=retry_count,
-                repair_count=repair_count
-            )
-            self.trace.log_gate_decision(stage_name, decision.value)
-
-            if decision == GateDecision.PROCEED:
-                record.status = "success"
-            elif decision == GateDecision.REPAIR:
-                # 尝试修复
-                output, repair_records = self._try_repair(
-                    stage_name, output, vr
-                )
-                record.repair_records = repair_records
+        while True:
+            try:
+                # 执行阶段
+                output = stage_fn(record, *args)
                 record.output_data = output
-                repair_count = len(repair_records)
-                # 重新校验
-                vr2 = self._validate_stage_output(stage_name, output)
-                record.validation_result = vr2
-                record.status = "repaired" if vr2.is_valid else "failed"
-            elif decision == GateDecision.RETRY:
-                record.status = "failed"
-            else:
-                record.status = "halted"
 
-        except Exception as e:
-            logger.error(f"阶段 {stage_name} 异常: {e}")
-            record.status = "failed"
-            record.validation_result = ValidationResult(
-                is_valid=False, errors=[str(e)], score=0.0
-            )
+                # 合并Agent自校验warnings（如果stage_fn返回元组）
+                agent_warnings = []
+                if isinstance(output, tuple) and len(output) == 2:
+                    output, agent_warnings = output
+                    record.output_data = output
+
+                # 校验
+                vr = self._validate_stage_output(stage_name, output)
+                # 合并Agent warnings
+                if agent_warnings:
+                    vr.warnings.extend(agent_warnings)
+                    vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
+                record.validation_result = vr
+                self.trace.log_validation(
+                    stage_name, vr.is_valid, vr.errors, vr.warnings, vr.score
+                )
+
+                # 门控
+                decision = self.gate.evaluate(
+                    stage_name, vr,
+                    retry_count=retry_count,
+                    repair_count=repair_count,
+                    max_retries=max_retries,
+                )
+                self.trace.log_gate_decision(stage_name, decision.value)
+
+                if decision == GateDecision.PROCEED:
+                    record.status = "success"
+                    break
+
+                elif decision == GateDecision.RETRY:
+                    retry_count += 1
+                    logger.info(
+                        f"[{stage_name}] RETRY {retry_count}/{max_retries}"
+                    )
+                    continue  # 重新执行stage_fn
+
+                elif decision == GateDecision.REPAIR:
+                    repair_count += 1
+                    logger.info(
+                        f"[{stage_name}] REPAIR 轮次 {repair_count}"
+                    )
+                    output, repair_records = self._try_repair(
+                        stage_name, output, vr
+                    )
+                    record.repair_records.extend(repair_records)
+                    record.output_data = output
+                    # 修复后重新校验，进入下一轮循环门控
+                    vr2 = self._validate_stage_output(stage_name, output)
+                    record.validation_result = vr2
+                    self.trace.log_validation(
+                        stage_name, vr2.is_valid, vr2.errors,
+                        vr2.warnings, vr2.score
+                    )
+                    # 重新门控
+                    decision2 = self.gate.evaluate(
+                        stage_name, vr2,
+                        retry_count=retry_count,
+                        repair_count=repair_count,
+                        max_retries=max_retries,
+                    )
+                    self.trace.log_gate_decision(stage_name, decision2.value)
+                    if decision2 == GateDecision.PROCEED:
+                        record.status = "repaired"
+                        break
+                    elif decision2 == GateDecision.HALT:
+                        record.status = "failed"
+                        break
+                    # 其他情况（RETRY/REPAIR）继续循环
+
+                else:  # HALT
+                    record.status = "halted"
+                    break
+
+            except Exception as e:
+                logger.error(f"阶段 {stage_name} 异常: {e}")
+                record.status = "failed"
+                record.validation_result = ValidationResult(
+                    is_valid=False, errors=[str(e)], score=0.0
+                )
+                break
 
         record.end_time = time.time()
         self.stage_records.append(record)
         self.trace.log_stage_end(
             stage_name, record.status, record.duration
         )
+
+        # 人工检查点（所有阶段都可配置）
+        self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
+
+        # 上下文快照
+        self.context.snapshot()
+
         return record
 
     def _validate_stage_output(self, stage: str,
@@ -322,6 +393,47 @@ class TaskOrchestrator:
         if decision.action.value == "abort":
             raise SystemExit(f"用户在 {stage} 阶段终止执行")
 
+    def _lightweight_review(self, req_json: dict) -> dict:
+        """需求分析后轻量审查（纯规则，不调用LLM）"""
+        issues = []
+        if not req_json:
+            return {"pass": False, "issues": ["需求分析结果为空"]}
+
+        # 检查核心字段
+        actors = req_json.get("actors", [])
+        functions = req_json.get("functions", [])
+        entities = req_json.get("entities", [])
+
+        if not actors:
+            issues.append("缺少参与者(actors)定义")
+        if not functions:
+            issues.append("缺少功能(functions)定义")
+        if not entities:
+            issues.append("缺少实体(entities)定义")
+
+        # 检查数量合理性
+        if isinstance(functions, list) and len(functions) < 2:
+            issues.append(f"功能点过少({len(functions)})，可能遗漏")
+        if isinstance(entities, list) and len(entities) < 2:
+            issues.append(f"实体定义过少({len(entities)})，可能遗漏")
+
+        # 检查功能完整性
+        if isinstance(functions, list):
+            for i, f in enumerate(functions):
+                if isinstance(f, dict):
+                    if not f.get("name") and not f.get("function_name"):
+                        issues.append(f"功能点[{i}]缺少名称")
+                    if not f.get("description"):
+                        issues.append(f"功能点[{i}]缺少描述")
+
+        return {
+            "pass": len(issues) == 0,
+            "issues": issues,
+            "actor_count": len(actors) if isinstance(actors, list) else 0,
+            "function_count": len(functions) if isinstance(functions, list) else 0,
+            "entity_count": len(entities) if isinstance(entities, list) else 0,
+        }
+
     # === 各阶段执行函数 ===
 
     def _stage_input(self, record: StageRecord,
@@ -329,23 +441,23 @@ class TaskOrchestrator:
         """读取输入"""
         return self.input_loader.load(input_path)
 
-    def _stage_analysis(self, record: StageRecord) -> dict:
-        """需求分析"""
+    def _stage_analysis(self, record: StageRecord) -> tuple[dict, list]:
+        """需求分析，返回(output, agent_warnings)"""
         text = self.context.get("full_text")
         req_json = self.requirement_analyzer.analyze(text)
         warnings = self.requirement_analyzer.validate_result(req_json)
         if warnings:
             logger.warning(f"[requirement_analysis] 验证警告: {warnings}")
-        return req_json
+        return req_json, warnings
 
-    def _stage_design(self, record: StageRecord) -> str:
-        """设计规划"""
+    def _stage_design(self, record: StageRecord) -> tuple[str, list]:
+        """设计规划，返回(output, agent_warnings)"""
         req_json = self.context.get("requirement_json")
         design = self.design_planner.generate_design(req_json)
         warnings = self.design_planner.validate_design(design, req_json)
         if warnings:
             logger.warning(f"[design_planner] 验证警告: {warnings}")
-        return design
+        return design, warnings
 
     def _stage_diagrams(self, record: StageRecord) -> dict:
         """图生成"""
@@ -353,15 +465,15 @@ class TaskOrchestrator:
         design = self.context.get("design_text")
         return self.diagram_generator.generate_all(req_json, design)
 
-    def _stage_test_cases(self, record: StageRecord) -> str:
-        """测试用例生成"""
+    def _stage_test_cases(self, record: StageRecord) -> tuple[str, list]:
+        """测试用例生成，返回(output, agent_warnings)"""
         req_json = self.context.get("requirement_json")
         design = self.context.get("design_text")
         cases = self.test_case_generator.generate(req_json, design)
         warnings = self.test_case_generator.validate_test_cases(cases, req_json)
         if warnings:
             logger.warning(f"[test_case_generator] 验证警告: {warnings}")
-        return cases
+        return cases, warnings
 
     def _stage_review(self, record: StageRecord) -> dict:
         """审查与修复"""
@@ -389,7 +501,7 @@ class TaskOrchestrator:
         )
 
     def _export_governance_report(self, output_dir: str, results: dict):
-        """导出治理报告"""
+        """导出治理报告（使用to_summary截断版本）"""
         report = {
             "governance_summary": {
                 "total_stages": len(self.stage_records),
@@ -403,9 +515,11 @@ class TaskOrchestrator:
                     1 for r in self.stage_records if r.status == "failed"
                 ),
             },
-            "stages": [r.to_dict() for r in self.stage_records],
+            "stages": [r.to_summary() for r in self.stage_records],
             "prompt_versions": self.prompt_registry.get_all_versions(),
             "trace_summary": self.trace.get_summary(),
+            "consistency": results.get("consistency", {}),
+            "lightweight_review": results.get("lightweight_review", {}),
         }
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)

@@ -79,17 +79,3 @@ class StageGate:
         halt_threshold = self.thresholds.get("min_completeness", 0.8) * 0.4
         return validation.score > halt_threshold
 
-    def check_syntax_gate(self, is_valid: bool) -> GateDecision:
-        """语法校验专用门控"""
-        if is_valid:
-            return GateDecision.PROCEED
-        return GateDecision.REPAIR
-
-    def check_completeness_gate(self, score: float) -> GateDecision:
-        """完整性校验专用门控"""
-        threshold = self.thresholds.get("min_completeness", 0.8)
-        if score >= threshold:
-            return GateDecision.PROCEED
-        if score >= threshold * 0.5:
-            return GateDecision.REPAIR
-        return GateDecision.HALT

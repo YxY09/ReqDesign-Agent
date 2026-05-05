@@ -118,6 +118,21 @@ class StageRecord:
         return 0.0
 
     def to_dict(self) -> dict:
+        """完整序列化（保留全部数据）"""
+        return {
+            "stage_name": self.stage_name,
+            "input_data": self.input_data,
+            "output_data": self.output_data,
+            "validation": self.validation_result.to_dict(),
+            "repair_records": [r.to_dict() for r in self.repair_records],
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration": self.duration,
+            "status": self.status,
+        }
+
+    def to_summary(self) -> dict:
+        """摘要序列化（截断input/output，用于治理报告）"""
         return {
             "stage_name": self.stage_name,
             "input_summary": _summarize(self.input_data),
@@ -134,8 +149,8 @@ class StageRecord:
     def from_dict(cls, data: dict) -> "StageRecord":
         return cls(
             stage_name=data["stage_name"],
-            input_data=data.get("input_summary"),
-            output_data=data.get("output_summary"),
+            input_data=data.get("input_data", data.get("input_summary")),
+            output_data=data.get("output_data", data.get("output_summary")),
             validation_result=ValidationResult.from_dict(data.get("validation", {})),
             repair_records=[
                 RepairRecord.from_dict(r) for r in data.get("repair_records", [])

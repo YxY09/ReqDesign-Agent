@@ -430,16 +430,6 @@ class TestRepairController:
         assert len(records) == 2
         assert all("exception" in r.result for r in records)
 
-    def test_should_retry(self):
-        rc = RepairController()
-        assert not rc.should_retry(ValidationResult(is_valid=True), 0, 3)
-        assert rc.should_retry(ValidationResult(is_valid=False, score=0.5), 1, 3)
-        assert not rc.should_retry(ValidationResult(is_valid=False, score=0.0), 1, 3)
-
-    def test_should_repair(self):
-        rc = RepairController()
-        assert rc.should_repair(ValidationResult(is_valid=False))
-        assert not rc.should_repair(ValidationResult(is_valid=True))
 
 
 # ========== stage_gate.py ==========
@@ -471,14 +461,6 @@ class TestStageGate:
         vr = ValidationResult(is_valid=False, errors=["bad"], score=0.5)
         assert self.gate.evaluate("test", vr, retry_count=2, repair_count=2) == GateDecision.HALT
 
-    def test_check_syntax_gate(self):
-        assert self.gate.check_syntax_gate(True) == GateDecision.PROCEED
-        assert self.gate.check_syntax_gate(False) == GateDecision.REPAIR
-
-    def test_check_completeness_gate(self):
-        assert self.gate.check_completeness_gate(0.9) == GateDecision.PROCEED
-        assert self.gate.check_completeness_gate(0.6) == GateDecision.REPAIR
-        assert self.gate.check_completeness_gate(0.2) == GateDecision.HALT
 
 
 # ========== context_controller.py ==========
@@ -1093,3 +1075,569 @@ class TestModelsEdgeCases:
         """所有GateDecision都能从字符串构造"""
         for decision in GateDecision:
             assert GateDecision(decision.value) == decision
+
+
+# ========== ConsistencyChecker ==========
+
+class TestConsistencyChecker:
+    """测试跨产物一致性检查"""
+
+    def setup_method(self):
+        from governance.consistency_checker import ConsistencyChecker
+        self.checker = ConsistencyChecker()
+
+    def test_check_all_complete(self):
+        """完整数据的一致性检查"""
+        req = {
+            "actors": ["user"],
+            "functions": [{"name": "login", "description": "用户登录"}],
+            "entities": [{"name": "User", "attributes": ["name"]}],
+        }
+        design = "# 系统设计\n\n## 登录模块\n\n用户登录功能"
+        diagrams = {
+            "class_diagram": "classDiagram\n    class User",
+            "activity_diagram": "flowchart TD\n    A-->B",
+            "state_diagram": "stateDiagram-v2\n    [*] --> Active",
+        }
+        test_cases = "| 编号 | 测试对象 | 测试步骤 |\n|------|----------|----------|"
+        result = self.checker.check_all(req, design, diagrams, test_cases)
+        assert result.score > 0
+        assert isinstance(result.checks, list)
+
+    def test_check_all_empty_input(self):
+        """空输入处理"""
+        result = self.checker.check_all({}, "", {}, "")
+        assert result.score < 1.0
+        assert len(result.checks) > 0
+
+    def test_entities_in_diagram(self):
+        """实体在类图中存在"""
+        req = {"entities": [{"name": "User"}, {"name": "Book"}]}
+        diagrams = {"class_diagram": "classDiagram\n    class User\n    class Book"}
+        result = self.checker.check_all(req, "design", diagrams, "tests")
+        # 不应有实体缺失错误
+        entity_errors = [e for e in result.warnings if "缺失实体" in e]
+        assert len(entity_errors) == 0
+
+    def test_missing_entity_detected(self):
+        """缺失实体被检测"""
+        req = {"entities": [{"name": "User"}, {"name": "Book"}, {"name": "Order"}]}
+        diagrams = {"class_diagram": "classDiagram\n    class User"}
+        result = self.checker.check_all(req, "design", diagrams, "tests")
+        entity_warnings = [w for w in result.warnings if "缺失实体" in w]
+        assert len(entity_warnings) >= 1
+
+    def test_no_functions_in_req(self):
+        """需求中无功能点"""
+        req = {"actors": ["user"], "functions": [], "entities": []}
+        result = self.checker.check_all(req, "design", {}, "tests")
+        assert any("功能" in c.get("issues", [""])[0] for c in result.checks if c.get("issues"))
+
+    def test_no_class_diagram(self):
+        """类图缺失"""
+        req = {"entities": [{"name": "User"}]}
+        result = self.checker.check_all(req, "design", {}, "tests")
+        assert any("类图" in w for w in result.warnings)
+
+    def test_consistency_result_is_valid(self):
+        """ConsistencyResult.is_valid属性"""
+        from governance.consistency_checker import ConsistencyResult
+        r = self.checker.check_all({"entities": [{"name": "A"}]}, "# Design", {"class_diagram": "classDiagram\n    class A"}, "test")
+        # 无errors时应为valid
+        assert r.is_valid == (len(r.errors) == 0)
+
+
+# ========== Lightweight Review ==========
+
+class TestLightweightReview:
+    """测试需求分析后轻量审查"""
+
+    def _make_orchestrator(self):
+        from governance.orchestrator import TaskOrchestrator
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.context = ContextController()
+        return orch
+
+    def test_complete_req_passes(self):
+        """完整需求通过轻量审查"""
+        orch = self._make_orchestrator()
+        req = {
+            "actors": ["user", "admin"],
+            "functions": [
+                {"name": "login", "description": "登录"},
+                {"name": "register", "description": "注册"},
+            ],
+            "entities": [
+                {"name": "User"},
+                {"name": "Order"},
+            ],
+        }
+        result = orch._lightweight_review(req)
+        assert result["pass"] is True
+        assert len(result["issues"]) == 0
+        assert result["actor_count"] == 2
+        assert result["function_count"] == 2
+        assert result["entity_count"] == 2
+
+    def test_empty_req_fails(self):
+        """空需求失败"""
+        orch = self._make_orchestrator()
+        result = orch._lightweight_review({})
+        assert result["pass"] is False
+        assert len(result["issues"]) > 0
+
+    def test_none_req_fails(self):
+        """None需求失败"""
+        orch = self._make_orchestrator()
+        result = orch._lightweight_review(None)
+        assert result["pass"] is False
+
+    def test_missing_actors(self):
+        """缺少actors"""
+        orch = self._make_orchestrator()
+        req = {"actors": [], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+        result = orch._lightweight_review(req)
+        assert any("actors" in i for i in result["issues"])
+
+    def test_missing_functions(self):
+        """缺少functions"""
+        orch = self._make_orchestrator()
+        req = {"actors": ["a"], "functions": [], "entities": [{"name": "E"}]}
+        result = orch._lightweight_review(req)
+        assert any("功能" in i for i in result["issues"])
+
+    def test_missing_entities(self):
+        """缺少entities"""
+        orch = self._make_orchestrator()
+        req = {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": []}
+        result = orch._lightweight_review(req)
+        assert any("实体" in i for i in result["issues"])
+
+    def test_function_without_name(self):
+        """功能点缺少名称"""
+        orch = self._make_orchestrator()
+        req = {
+            "actors": ["a"],
+            "functions": [{"description": "d"}, {"name": "ok", "description": "d2"}],
+            "entities": [{"name": "E"}],
+        }
+        result = orch._lightweight_review(req)
+        assert any("名称" in i for i in result["issues"])
+
+    def test_function_without_description(self):
+        """功能点缺少描述"""
+        orch = self._make_orchestrator()
+        req = {
+            "actors": ["a"],
+            "functions": [{"name": "f1"}, {"name": "f2", "description": "d"}],
+            "entities": [{"name": "E"}],
+        }
+        result = orch._lightweight_review(req)
+        assert any("描述" in i for i in result["issues"])
+
+
+# ========== StageRecord to_summary ==========
+
+class TestStageRecordSummary:
+    """测试StageRecord序列化"""
+
+    def test_to_dict_full_data(self):
+        """to_dict保存完整数据"""
+        sr = StageRecord(
+            stage_name="test",
+            input_data="x" * 500,
+            output_data="y" * 500,
+            start_time=1.0,
+            end_time=2.0,
+        )
+        d = sr.to_dict()
+        assert len(d["input_data"]) == 500
+        assert len(d["output_data"]) == 500
+
+    def test_to_summary_truncated(self):
+        """to_summary截断数据"""
+        sr = StageRecord(
+            stage_name="test",
+            input_data="x" * 500,
+            output_data="y" * 500,
+            start_time=1.0,
+            end_time=2.0,
+        )
+        s = sr.to_summary()
+        assert len(s["input_summary"]) <= 203  # 200 + "..."
+        assert len(s["output_summary"]) <= 203
+        assert "input_summary" in s
+        assert "output_summary" in s
+
+    def test_to_summary_none_data(self):
+        """to_summary处理None数据"""
+        sr = StageRecord(stage_name="test", input_data=None, output_data=None)
+        s = sr.to_summary()
+        assert s["input_summary"] == ""
+        assert s["output_summary"] == ""
+
+    def test_from_dict_backward_compat(self):
+        """from_dict兼容旧格式（input_summary/output_summary）"""
+        old_data = {
+            "stage_name": "test",
+            "input_summary": "truncated...",
+            "output_summary": "truncated...",
+            "validation": {"is_valid": True, "errors": [], "warnings": [], "score": 1.0},
+            "repair_records": [],
+            "start_time": 0,
+            "end_time": 0,
+            "status": "success",
+        }
+        sr = StageRecord.from_dict(old_data)
+        assert sr.stage_name == "test"
+        assert sr.input_data == "truncated..."
+
+    def test_from_dict_new_format(self):
+        """from_dict支持新格式（input_data/output_data）"""
+        new_data = {
+            "stage_name": "test",
+            "input_data": "full data",
+            "output_data": "full output",
+            "validation": {"is_valid": True, "errors": [], "warnings": [], "score": 1.0},
+            "repair_records": [],
+            "start_time": 0,
+            "end_time": 0,
+            "status": "success",
+        }
+        sr = StageRecord.from_dict(new_data)
+        assert sr.input_data == "full data"
+        assert sr.output_data == "full output"
+
+
+# ========== Gate RETRY/REPAIR loop ==========
+
+class TestGateRetryRepairLoop:
+    """测试门控RETRY和REPAIR循环逻辑"""
+
+    def test_retry_then_proceed(self):
+        """RETRY后重试成功→PROCEED"""
+        gate = StageGate(GovernanceConfig(
+            gate_thresholds={"min_completeness": 0.8}
+        ))
+        # 空响应错误，retry_count=0 → RETRY
+        vr = ValidationResult(is_valid=False, errors=["空响应"], score=0.5)
+        assert gate.evaluate("test", vr, retry_count=0, max_retries=2) == GateDecision.RETRY
+
+        # 重试后通过
+        vr2 = ValidationResult(is_valid=True, score=1.0)
+        assert gate.evaluate("test", vr2, retry_count=1, max_retries=2) == GateDecision.PROCEED
+
+    def test_repair_then_proceed(self):
+        """REPAIR后修复成功→PROCEED"""
+        gate = StageGate(GovernanceConfig(
+            max_repair_rounds=3,
+            gate_thresholds={"min_completeness": 0.8}
+        ))
+        # 不可重试错误，retry_count=2 → REPAIR
+        vr = ValidationResult(is_valid=False, errors=["格式错误"], score=0.5)
+        decision = gate.evaluate("test", vr, retry_count=2, max_retries=2, repair_count=0)
+        assert decision == GateDecision.REPAIR
+
+        # 修复后通过
+        vr2 = ValidationResult(is_valid=True, score=1.0)
+        assert gate.evaluate("test", vr2, retry_count=2, repair_count=1) == GateDecision.PROCEED
+
+    def test_halt_on_very_low_score_with_retry(self):
+        """极低分数且已重试→HALT"""
+        gate = StageGate(GovernanceConfig(
+            gate_thresholds={"min_completeness": 0.8}
+        ))
+        # score=0.1 < 0.8*0.4=0.32, 且retry_count>0 → HALT
+        vr = ValidationResult(is_valid=False, errors=["bad"], score=0.1)
+        assert gate.evaluate("test", vr, retry_count=1) == GateDecision.HALT
+
+    def test_halt_after_max_repairs(self):
+        """达到最大修复轮次→HALT"""
+        gate = StageGate(GovernanceConfig(
+            max_repair_rounds=2,
+            gate_thresholds={"min_completeness": 0.8}
+        ))
+        vr = ValidationResult(is_valid=False, errors=["bad"], score=0.5)
+        assert gate.evaluate("test", vr, retry_count=2, repair_count=2, max_retries=2) == GateDecision.HALT
+
+
+# ========== Orchestrator _run_stage with mock ==========
+
+class TestOrchestratorRunStage:
+    """测试orchestrator._run_stage的RETRY和REPAIR循环"""
+
+    def _make_orchestrator(self):
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig
+
+        class MockLLM:
+            provider = "test"
+            model = "test-model"
+            temperature = 0.3
+            max_tokens = 100
+            def chat(self, m, temperature=None): return "ok"
+            def generate_json(self, p, s=""): return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+            def generate_text(self, p, s=""): return "# Design\n\nContent here"
+
+        gov = GovernanceConfig(enabled=True, trace_enabled=True)
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.gov = gov
+        orch.config = AgentConfig()
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate(gov)
+        orch.context = ContextController()
+        orch.repair = RepairController(max_rounds=gov.max_repair_rounds)
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.consistency = None
+        orch.prompt_registry = PromptRegistry.__new__(PromptRegistry)
+        orch.prompt_registry._prompts = {}
+        orch.prompt_registry.prompts_dir = "/none"
+        orch.stage_records = []
+        orch.llm = MockLLM()
+        return orch
+
+    def test_stage_success(self):
+        """阶段正常执行成功"""
+        orch = self._make_orchestrator()
+        call_count = [0]
+        def stage_fn(record):
+            call_count[0] += 1
+            return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+
+        orch.context.set("full_text", "some text")
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        assert record.status == "success"
+        assert call_count[0] == 1
+
+    def test_retry_actually_retries(self):
+        """RETRY导致stage_fn被重新调用"""
+        orch = self._make_orchestrator()
+        call_count = [0]
+
+        def stage_fn(record):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return None  # 第一次返回空 → 校验失败 → RETRY
+            return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+
+        orch.context.set("full_text", "text")
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        assert call_count[0] == 2  # 被调用了2次
+        assert record.status == "success"
+
+    def test_repair_multi_round(self):
+        """REPAIR支持多轮修复"""
+        orch = self._make_orchestrator()
+        validate_count = [0]
+
+        # 用一个始终校验失败的stage来触发REPAIR
+        def stage_fn(record):
+            return {}  # 空dict → 校验失败
+
+        # 不设置full_text会导致stage_fn返回空
+        orch.context.set("full_text", "text")
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        # 应该尝试修复（如果gate返回REPAIR）
+        assert record.status in ("failed", "repaired", "halted")
+
+    def test_agent_warnings_merged(self):
+        """Agent自校验warnings合并到gate"""
+        orch = self._make_orchestrator()
+
+        def stage_fn(record):
+            # 返回(output, warnings)元组
+            return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}, ["warning1", "warning2"]
+
+        orch.context.set("full_text", "text")
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        # warnings应被合并到validation_result
+        assert len(record.validation_result.warnings) >= 2
+
+    def test_stage_exception_handled(self):
+        """阶段异常被正确处理"""
+        orch = self._make_orchestrator()
+
+        def stage_fn(record):
+            raise RuntimeError("boom")
+
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        assert record.status == "failed"
+        assert "boom" in str(record.validation_result.errors)
+
+    def test_snapshot_after_stage(self):
+        """阶段后上下文快照记录"""
+        orch = self._make_orchestrator()
+        orch.context.set("full_text", "text")
+
+        def stage_fn(record):
+            orch.context.set("requirement_json", {"a": 1})
+            return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+
+        orch._run_stage("requirement_analysis", stage_fn)
+        assert len(orch.context.get_history()) >= 1
+
+
+# ========== Human checkpoint on all stages ==========
+
+class TestHumanCheckpointAllStages:
+    """测试人工检查点扩展到所有阶段"""
+
+    def test_checkpoint_on_configured_stage(self):
+        """配置的阶段触发检查点"""
+        hc = HumanCheckpoint(
+            checkpoint_stages=["requirement_analysis", "design_planner"],
+            interactive=False,
+        )
+        assert hc.is_checkpoint("requirement_analysis")
+        assert hc.is_checkpoint("design_planner")
+        assert not hc.is_checkpoint("diagram_generator")
+
+    def test_checkpoint_on_all_stages(self):
+        """所有阶段都可配置为检查点"""
+        all_stages = [
+            "input_loader", "requirement_analysis", "design_planner",
+            "diagram_generator", "test_case_generator", "review_agent"
+        ]
+        hc = HumanCheckpoint(
+            checkpoint_stages=all_stages,
+            interactive=False,
+        )
+        for stage in all_stages:
+            assert hc.is_checkpoint(stage), f"{stage} should be a checkpoint"
+
+    def test_no_checkpoint_when_empty(self):
+        """空配置不触发任何检查点"""
+        hc = HumanCheckpoint(checkpoint_stages=[], interactive=False)
+        for stage in ["requirement_analysis", "design_planner"]:
+            assert not hc.is_checkpoint(stage)
+
+
+# ========== No WorkflowController ==========
+
+class TestNoWorkflowController:
+    """确认WorkflowController已移除"""
+
+    def test_no_workflow_controller_import(self):
+        """main.py不导入WorkflowController"""
+        with open("/home/y9/ReqDesign-Agent/agent/main.py", "r") as f:
+            content = f.read()
+        assert "WorkflowController" not in content
+
+    def test_no_workflow_controller_file(self):
+        """workflow_controller.py已删除"""
+        assert not os.path.exists("/home/y9/ReqDesign-Agent/agent/workflow_controller.py")
+
+    def test_benchmark_uses_orchestrator(self):
+        """benchmark使用TaskOrchestrator"""
+        with open("/home/y9/ReqDesign-Agent/benchmark/run_benchmark.py", "r") as f:
+            content = f.read()
+        assert "TaskOrchestrator" in content
+        assert "WorkflowController" not in content
+
+    def test_standard_mode_uses_orchestrator(self):
+        """标准模式使用TaskOrchestrator"""
+        with open("/home/y9/ReqDesign-Agent/agent/main.py", "r") as f:
+            content = f.read()
+        assert "TaskOrchestrator" in content
+        # 标准模式也用orchestrator
+        assert "orchestrator = TaskOrchestrator(config)" in content
+
+
+# ========== Edge cases ==========
+
+class TestValidationEdgeCases:
+    """测试校验边界场景"""
+
+    def _make_orchestrator(self):
+        from governance.orchestrator import TaskOrchestrator
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.validator = ToolValidator()
+        orch.context = ContextController()
+        return orch
+
+    def test_validate_empty_string_output(self):
+        """空字符串输出"""
+        orch = self._make_orchestrator()
+        for stage in ["design_planner", "test_case_generator"]:
+            vr = orch._validate_stage_output(stage, "")
+            assert not vr.is_valid
+
+    def test_validate_none_output_all_stages(self):
+        """所有阶段None输出"""
+        orch = self._make_orchestrator()
+        for stage in ["requirement_analysis", "design_planner", "diagram_generator",
+                       "test_case_generator", "review_agent"]:
+            vr = orch._validate_stage_output(stage, None)
+            assert not vr.is_valid
+            assert vr.score == 0.0
+
+    def test_validate_review_score_boundary(self):
+        """review分数边界：30分刚好通过"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": 30})
+        assert vr.is_valid
+        assert abs(vr.score - 0.3) < 0.01
+
+    def test_validate_review_score_29(self):
+        """review分数29不通过"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": 29})
+        assert not vr.is_valid
+
+
+class TestRepairRecordHistory:
+    """测试修复记录完整保存"""
+
+    def test_repair_records_accumulate(self):
+        """修复记录在多次修复中累积"""
+        rc = RepairController(max_rounds=3)
+        call_count = [0]
+        def validate(x):
+            call_count[0] += 1
+            return ValidationResult(is_valid=False, errors=[f"err{call_count[0]}"])
+        def repair(x, e):
+            return f"fixed_{call_count[0]}"
+
+        out, records = rc.attempt_repair("test", "bad", validate, repair)
+        assert len(records) == 3
+        for i, r in enumerate(records):
+            assert r.attempt == i + 1
+            assert r.action == "llm_repair"
+
+    def test_repair_records_serializable(self):
+        """修复记录可序列化"""
+        records = [
+            RepairRecord(1, "err", "fix", "ok", True),
+            RepairRecord(2, "err2", "fix2", "fail", False),
+        ]
+        for r in records:
+            d = r.to_dict()
+            assert isinstance(d, dict)
+            r2 = RepairRecord.from_dict(d)
+            assert r2.attempt == r.attempt
+            assert r2.success == r.success
+
+
+# ========== Governance report ==========
+
+class TestGovernanceReport:
+    """测试治理报告生成"""
+
+    def test_report_uses_summary(self):
+        """治理报告使用to_summary（截断版本）"""
+        sr = StageRecord(
+            stage_name="test",
+            input_data="x" * 500,
+            output_data="y" * 500,
+            start_time=1.0,
+            end_time=2.0,
+            status="success",
+        )
+        # to_summary应截断
+        summary = sr.to_summary()
+        assert len(summary["input_summary"]) < 500
+
+        # to_dict应完整
+        full = sr.to_dict()
+        assert len(full["input_data"]) == 500

@@ -82,18 +82,3 @@ class RepairController:
         )
         return current, records
 
-    def should_retry(self, validation: ValidationResult,
-                     attempt: int, max_retries: int) -> bool:
-        """判断是否应该重试"""
-        if validation.is_valid:
-            return False
-        if attempt >= max_retries:
-            return False
-        # 严重错误（score≈0）不重试，直接走修复
-        if validation.score <= 1e-9:
-            return False
-        return True
-
-    def should_repair(self, validation: ValidationResult) -> bool:
-        """判断是否应该触发修复"""
-        return not validation.is_valid
