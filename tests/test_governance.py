@@ -964,6 +964,51 @@ class TestOrchestratorAnalyzeTask:
         assert (tmp_path / "output" / "requirement_analysis.json").exists()
 
 
+class TestOrchestratorExportGovernanceReport:
+    """测试_export_governance_report方法"""
+
+    def test_export_governance_report(self, tmp_path):
+        """验证治理报告导出"""
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig, StageRecord, ValidationResult
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = AgentConfig()
+        orch.gov = GovernanceConfig()
+        orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.trace = TraceLogger()
+        orch.prompt_registry = type("MockPR", (), {"get_all_versions": lambda self: {}})()
+
+        # 创建模拟的stage_records
+        record = StageRecord(stage_name="requirement_analysis")
+        record.status = "success"
+        record.validation_result = ValidationResult(is_valid=True, score=0.9)
+        orch.stage_records = [record]
+
+        output_dir = str(tmp_path / "governance")
+        results = {
+            "consistency": {"score": 0.8, "errors": [], "warnings": []},
+            "lightweight_review": {"pass": True, "issues": []},
+        }
+
+        orch._export_governance_report(output_dir, results)
+
+        # 验证报告文件已创建
+        report_path = tmp_path / "governance" / "governance_report.json"
+        assert report_path.exists()
+
+        # 验证报告内容
+        import json
+        with open(report_path) as f:
+            report = json.load(f)
+        assert report["governance_summary"]["total_stages"] == 1
+        assert report["governance_summary"]["succeeded"] == 1
+        assert report["governance_summary"]["failed"] == 0
+        assert len(report["stages"]) == 1
+        assert report["consistency"]["score"] == 0.8
+
+
 class TestHumanCheckpointAbortModify:
     """测试人工检查点的abort和modify路径"""
 
