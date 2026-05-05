@@ -48,6 +48,7 @@ class ConsistencyChecker:
 
         self._check_requirement_to_design(requirement_json, design_text, result)
         self._check_entities_in_diagram(requirement_json, diagrams, result)
+        self._check_constraints_in_design(requirement_json, design_text, result)
         self._check_design_to_test(design_text, test_cases, result)
         self._check_activity_to_test(diagrams, test_cases, result)
         self._check_class_to_state(diagrams, result)
@@ -108,6 +109,51 @@ class ConsistencyChecker:
                     result.errors.append(msg)
                 else:
                     result.warnings.append(msg)
+
+        result.checks.append(check)
+
+    def _check_constraints_in_design(
+        self, req: dict, design: str, result: ConsistencyResult
+    ):
+        """需求约束→设计覆盖检查"""
+        check = {"dimension": "约束→设计覆盖", "score": 1.0, "issues": []}
+
+        if not req or not design:
+            result.checks.append(check)
+            return
+
+        constraints = req.get("constraints", [])
+        constraint_descs = []
+        for c in constraints:
+            if isinstance(c, dict):
+                desc = c.get("description", "")
+                if desc:
+                    constraint_descs.append(desc)
+            elif isinstance(c, str) and c.strip():
+                constraint_descs.append(c.strip())
+
+        if not constraint_descs:
+            result.checks.append(check)
+            return
+
+        design_lower = design.lower()
+        missing = []
+        for desc in constraint_descs:
+            # 提取关键词检查是否在设计中出现
+            keywords = re.split(r'[，,、;；的时了后]', desc)
+            keywords = [kw for kw in keywords if len(kw) >= 2]
+            if keywords:
+                matched = sum(1 for kw in keywords if kw in design_lower)
+                if matched / len(keywords) < 0.5:
+                    missing.append(desc)
+
+        if missing:
+            ratio = 1.0 - len(missing) / len(constraint_descs)
+            check["score"] = max(0.0, ratio)
+            for m in missing[:3]:
+                msg = f"设计文档未覆盖约束: {m}"
+                check["issues"].append(msg)
+                result.warnings.append(msg)
 
         result.checks.append(check)
 
