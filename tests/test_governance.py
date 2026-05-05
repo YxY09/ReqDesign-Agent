@@ -815,10 +815,10 @@ class TestStageGateIntegration:
         vr = ValidationResult(is_valid=False, errors=["bad"], score=0.2)
         assert gate.evaluate("test", vr, retry_count=1) == GateDecision.HALT
 
-        # score=0.3 > 0.24, 不触发HALT -> REPAIR
+        # score=0.3 > 0.24=halt_threshold, 可重试 -> RETRY
         vr = ValidationResult(is_valid=False, errors=["bad"], score=0.3)
         decision = gate.evaluate("test", vr, retry_count=1)
-        assert decision == GateDecision.REPAIR
+        assert decision == GateDecision.RETRY
 
     def test_proceed_on_valid_regardless_of_config(self):
         """校验通过时始终PROCEED"""

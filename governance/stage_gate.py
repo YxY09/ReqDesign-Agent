@@ -75,8 +75,9 @@ class StageGate:
             err_lower = err.lower()
             if any(p in err_lower for p in retryable_patterns):
                 return True
-        # 分数>0.3的也可以重试
-        return validation.score > 0.3
+        # 分数>halt_threshold的也可以重试（与HALT阈值保持一致）
+        halt_threshold = self.thresholds.get("min_completeness", 0.8) * 0.4
+        return validation.score > halt_threshold
 
     def check_syntax_gate(self, is_valid: bool) -> GateDecision:
         """语法校验专用门控"""
