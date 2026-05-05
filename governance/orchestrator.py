@@ -341,7 +341,7 @@ class TaskOrchestrator:
                     break
 
             except Exception as e:
-                logger.error(f"阶段 {stage_name} 异常: {e}")
+                logger.error(f"阶段 {stage_name} 异常: {e}", exc_info=True)
                 record.status = "failed"
                 record.validation_result = ValidationResult(
                     is_valid=False, errors=[str(e)], score=0.0

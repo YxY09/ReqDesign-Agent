@@ -58,7 +58,9 @@ class RequirementAnalyzer:
                        "exceptions", "non_functional_requirements", "business_processes"]
         for field in list_fields:
             val = result.get(field)
-            if val is not None and not isinstance(val, list):
+            if val is None:
+                result[field] = []
+            elif not isinstance(val, list):
                 if isinstance(val, str):
                     result[field] = [] if val.lower() in ("", "none", "null", "无") else [val]
                 else:

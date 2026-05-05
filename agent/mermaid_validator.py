@@ -150,6 +150,7 @@ class MermaidValidator:
         except subprocess.TimeoutExpired:
             return False, "CLI校验超时"
         except Exception as e:
+            logger.error(f"CLI校验异常: {e}", exc_info=True)
             return False, f"CLI校验异常: {e}"
         finally:
             os.unlink(tmp_path)

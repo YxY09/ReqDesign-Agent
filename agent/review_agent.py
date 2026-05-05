@@ -133,7 +133,7 @@ class ReviewAgent:
                 logger.warning(f"{diagram_name} 修复后仍有问题: {msg}")
             return repaired
         except Exception as e:
-            logger.error(f"{diagram_name} 修复失败: {e}")
+            logger.error(f"{diagram_name} 修复失败: {e}", exc_info=True)
             return diagram_content  # 返回原始内容
 
     def review_and_repair(
@@ -154,7 +154,7 @@ class ReviewAgent:
 
         # 对语法有问题的图进行修复
         repaired = dict(diagrams)
-        syntax_checks = review_result.get("syntax_check", [])
+        syntax_checks = review_result.get("syntax_check") or []
 
         diagrams_to_fix = [c for c in syntax_checks if not c["valid"]]
         if not diagrams_to_fix:

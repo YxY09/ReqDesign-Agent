@@ -116,6 +116,6 @@ class DiagramGenerator:
                     results[name] = future.result()
                     logger.info(f"  {name} 生成完成")
                 except Exception as e:
-                    logger.error(f"  {name} 生成失败: {e}")
+                    logger.error(f"  {name} 生成失败: {e}", exc_info=True)
                     results[name] = ""
         return results

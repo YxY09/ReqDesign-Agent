@@ -73,7 +73,7 @@ class RepairController:
                     success=False,
                 )
                 records.append(record)
-                logger.warning(f"[{stage_name}] 修复异常: {e}")
+                logger.warning(f"[{stage_name}] 修复异常: {e}", exc_info=True)
 
         logger.warning(
             f"[{stage_name}] 达到最大修复轮次({self.max_rounds})，保留当前输出"
