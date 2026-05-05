@@ -157,13 +157,13 @@ class LLMClient:
         escape_next = False
 
         for i, ch in enumerate(text):
+            if ch == "\\" and in_string and not escape_next:
+                escape_next = True
+                continue
             if escape_next:
                 escape_next = False
                 continue
-            if ch == "\\" and in_string:
-                escape_next = True
-                continue
-            if ch == '"' and not escape_next:
+            if ch == '"':
                 in_string = not in_string
                 continue
             if in_string:
