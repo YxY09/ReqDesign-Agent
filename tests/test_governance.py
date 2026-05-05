@@ -1009,6 +1009,276 @@ class TestOrchestratorExportGovernanceReport:
         assert report["consistency"]["score"] == 0.8
 
 
+class TestOrchestratorDesignTask:
+    """测试run_design_task完整设计流程"""
+
+    def _make_orchestrator(self, tmp_path):
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = AgentConfig()
+        orch.gov = GovernanceConfig(enabled=True, trace_enabled=True)
+        orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate(orch.gov)
+        orch.repair = RepairController(max_rounds=1)
+        orch.stage_records = []
+        orch.consistency = type("MockCC", (), {
+            "check_all": lambda self, r, d, di, t: type("CR", (), {
+                "score": 0.9, "errors": [], "warnings": [], "checks": [],
+                "is_valid": True,
+            })()
+        })()
+        orch.prompt_registry = type("MockPR", (), {
+            "get_all_versions": lambda self: {}
+        })()
+
+        # Mock LLM
+        class MockLLM:
+            provider = "test"
+            model = "test-model"
+            temperature = 0.3
+            max_tokens = 100
+            def set_stage(self, s): pass
+            def chat(self, messages, temperature=None): return "ok"
+            def generate_json(self, prompt, system=""):
+                return {
+                    "project_name": "测试项目",
+                    "actors": [{"name": "用户"}],
+                    "functions": [{"name": "登录", "description": "用户登录"}],
+                    "entities": [{"name": "用户"}],
+                    "constraints": [],
+                    "exceptions": [],
+                    "non_functional_requirements": [],
+                    "business_processes": [],
+                }
+            def generate_text(self, prompt, system=""):
+                return "# 系统设计\n\n## 模块划分\n- 用户管理模块"
+
+        orch.llm = MockLLM()
+
+        # Mock agents
+        orch.input_loader = type("MockIL", (), {
+            "load": lambda self, p: open(p, encoding="utf-8").read()
+        })()
+        orch.requirement_analyzer = type("MockRA", (), {
+            "analyze": lambda self, t, max_retries=3: {
+                "project_name": "测试项目",
+                "actors": [{"name": "用户"}],
+                "functions": [{"name": "登录", "description": "用户登录"}],
+                "entities": [{"name": "用户"}],
+                "constraints": [],
+                "exceptions": [],
+                "non_functional_requirements": [],
+                "business_processes": [],
+            },
+            "validate_result": lambda self, r: [],
+        })()
+        orch.design_planner = type("MockDP", (), {
+            "generate_design": lambda self, r: "# 系统设计\n\n## 模块划分\n- 用户管理模块",
+            "validate_design": lambda self, d, r: [],
+        })()
+        orch.diagram_generator = type("MockDG", (), {
+            "generate_all": lambda self, r, d: {
+                "class_diagram": "classDiagram\n    class User",
+                "activity_diagram": "flowchart TD\n    A([开始]) --> B([结束])",
+                "state_diagram": "stateDiagram-v2\n    [*] --> Active\n    Active --> [*]",
+            },
+        })()
+        orch.test_case_generator = type("MockTC", (), {
+            "generate": lambda self, r, d: "| 编号 | 测试对象 |\n|------|----------|\n| 1 | 登录 |",
+            "validate_test_cases": lambda self, c, r: [],
+        })()
+        orch.review_agent = type("MockRev", (), {
+            "review_and_repair": lambda self, r, d, di, max_repair_rounds=2: (
+                {"overall_score": 85, "overall_pass": True, "checks": [], "syntax_check": []},
+                di,
+            ),
+            "generate_report": lambda self, result: "# 审查报告\n\n得分: 85",
+        })()
+
+        return orch
+
+    def test_run_design_task_full_flow(self, tmp_path):
+        """验证完整设计流程输出结构"""
+        orch = self._make_orchestrator(tmp_path)
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 图书管理系统\n## 功能\n- 图书借阅\n- 图书归还")
+
+        output_dir = str(tmp_path / "output")
+        result = orch.run_design_task(str(input_file), output_dir)
+
+        # 验证结果结构
+        assert "requirement_analysis" in result
+        assert "system_design" in result
+        assert "diagrams" in result
+        assert "test_cases" in result
+        assert "review" in result
+        assert "consistency" in result
+        assert "lightweight_review" in result
+
+        # 验证具体内容
+        assert result["requirement_analysis"]["project_name"] == "测试项目"
+        assert "系统设计" in result["system_design"]
+        assert "class_diagram" in result["diagrams"]
+        assert "activity_diagram" in result["diagrams"]
+        assert "state_diagram" in result["diagrams"]
+
+    def test_run_design_task_creates_output_files(self, tmp_path):
+        """验证输出文件被创建"""
+        orch = self._make_orchestrator(tmp_path)
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        orch.run_design_task(str(input_file), output_dir)
+
+        # 验证文件被创建
+        output_path = tmp_path / "output"
+        assert (output_path / "requirement_analysis.json").exists()
+        assert (output_path / "system_design.md").exists()
+        assert (output_path / "class_diagram.mmd").exists()
+        assert (output_path / "activity_diagram.mmd").exists()
+        assert (output_path / "state_diagram.mmd").exists()
+        assert (output_path / "test_cases.md").exists()
+        assert (output_path / "review_report.md").exists()
+
+    def test_run_design_task_exports_trace(self, tmp_path):
+        """验证追踪文件被导出"""
+        orch = self._make_orchestrator(tmp_path)
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        orch.run_design_task(str(input_file), output_dir)
+
+        assert (tmp_path / "output" / "trace.json").exists()
+
+    def test_run_design_task_exports_governance_report(self, tmp_path):
+        """验证治理报告被导出"""
+        orch = self._make_orchestrator(tmp_path)
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        orch.run_design_task(str(input_file), output_dir)
+
+        report_path = tmp_path / "output" / "governance_report.json"
+        assert report_path.exists()
+
+        import json
+        with open(report_path) as f:
+            report = json.load(f)
+        assert "governance_summary" in report
+        assert "stages" in report
+        assert "consistency" in report
+        assert "lightweight_review" in report
+
+    def test_run_design_task_stage_records_populated(self, tmp_path):
+        """验证stage_records被填充"""
+        orch = self._make_orchestrator(tmp_path)
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        orch.run_design_task(str(input_file), output_dir)
+
+        # 应有6个阶段记录
+        assert len(orch.stage_records) == 6
+        stage_names = [r.stage_name for r in orch.stage_records]
+        assert "input_loader" in stage_names
+        assert "requirement_analysis" in stage_names
+        assert "design_planner" in stage_names
+        assert "diagram_generator" in stage_names
+        assert "test_case_generator" in stage_names
+        assert "review_agent" in stage_names
+
+    def test_run_design_task_input_failure_stops(self, tmp_path):
+        """输入读取失败时应停止后续阶段"""
+        orch = self._make_orchestrator(tmp_path)
+
+        # 不存在的文件
+        output_dir = str(tmp_path / "output")
+        result = orch.run_design_task("/nonexistent/file.md", output_dir)
+
+        # 只有input_loader阶段
+        assert len(orch.stage_records) == 1
+        assert orch.stage_records[0].stage_name == "input_loader"
+        assert orch.stage_records[0].status == "failed"
+
+    def test_run_design_task_analysis_failure_stops(self, tmp_path):
+        """需求分析失败且修复失败时应停止后续阶段"""
+        orch = self._make_orchestrator(tmp_path)
+
+        # 让分析抛异常（不可修复）
+        class FailAnalyzer:
+            def analyze(self, text, max_retries=3):
+                raise RuntimeError("LLM服务不可用")
+            def validate_result(self, result):
+                return []
+        orch.requirement_analyzer = FailAnalyzer()
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        result = orch.run_design_task(str(input_file), output_dir)
+
+        # 异常导致stage failed，req_json={}，后续阶段被跳过
+        assert len(orch.stage_records) == 2
+        assert orch.stage_records[1].status == "failed"
+
+    def test_run_design_task_review_failure_continues(self, tmp_path):
+        """审查失败不应阻塞输出"""
+        orch = self._make_orchestrator(tmp_path)
+
+        # 让review返回低分
+        orch.review_agent = type("FailRev", (), {
+            "review_and_repair": lambda self, r, d, di, max_repair_rounds=2: (
+                {"overall_score": 10, "overall_pass": False, "checks": [], "syntax_check": []},
+                di,
+            ),
+            "generate_report": lambda self, result: "# 审查报告\n\n得分: 10",
+        })()
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        result = orch.run_design_task(str(input_file), output_dir)
+
+        # 所有阶段都应执行
+        assert len(orch.stage_records) == 6
+        assert "review" in result
+
+    def test_run_design_task_consistency_failure_handled(self, tmp_path):
+        """一致性检查失败时应优雅处理"""
+        orch = self._make_orchestrator(tmp_path)
+
+        # 让一致性检查抛异常
+        orch.consistency = type("FailCC", (), {
+            "check_all": lambda self, r, d, di, t: (_ for _ in ()).throw(RuntimeError("consistency error"))
+        })()
+
+        input_file = tmp_path / "input.md"
+        input_file.write_text("# 测试需求\n## 功能\n- 功能A")
+
+        output_dir = str(tmp_path / "output")
+        result = orch.run_design_task(str(input_file), output_dir)
+
+        # 一致性检查失败但不应阻塞
+        assert "consistency" in result
+        assert result["consistency"]["score"] == 0
+
+
 class TestHumanCheckpointAbortModify:
     """测试人工检查点的abort和modify路径"""
 
