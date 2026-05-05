@@ -35,6 +35,12 @@ class _RegenerateSignal(Exception):
         self.stage = stage
 
 
+class _AbortSignal(Exception):
+    """内部信号：用户在人工检查点要求终止执行"""
+    def __init__(self, stage: str):
+        self.stage = stage
+
+
 class TaskOrchestrator:
     """治理模式下的任务编排器"""
 
@@ -354,6 +360,8 @@ class TaskOrchestrator:
 
             except _RegenerateSignal:
                 raise  # 不要捕获重新生成信号，让它传播到外层
+            except _AbortSignal:
+                raise  # 不要捕获终止信号，让它传播到外层
             except Exception as e:
                 logger.error(f"阶段 {stage_name} 异常: {e}", exc_info=True)
                 record.status = "failed"
@@ -374,6 +382,8 @@ class TaskOrchestrator:
             try:
                 self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
                 break
+            except _AbortSignal:
+                raise  # 终止信号传播到外层
             except _RegenerateSignal:
                 logger.info(f"[{stage_name}] 重新生成中...")
                 output = None
@@ -393,16 +403,17 @@ class TaskOrchestrator:
                         vr.warnings.extend(agent_warnings)
                         vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
                     record.validation_result = vr
-                    record.status = "success"
-                    # 更新上下文，使后续阶段使用新输出
-                    ctx_key = {
-                        "requirement_analysis": "requirement_json",
-                        "design_planner": "design_text",
-                        "diagram_generator": "diagrams",
-                        "test_case_generator": "test_cases",
-                    }.get(stage_name)
-                    if ctx_key:
-                        self.context.set(ctx_key, output)
+                    record.status = "success" if vr.is_valid else "failed"
+                    # 更新上下文，使后续阶段使用新输出（仅在成功时）
+                    if vr.is_valid:
+                        ctx_key = {
+                            "requirement_analysis": "requirement_json",
+                            "design_planner": "design_text",
+                            "diagram_generator": "diagrams",
+                            "test_case_generator": "test_cases",
+                        }.get(stage_name)
+                        if ctx_key:
+                            self.context.set(ctx_key, output)
                 except Exception as e:
                     logger.error(f"重新生成失败: {e}", exc_info=True)
                     record.status = "failed"
@@ -518,7 +529,7 @@ class TaskOrchestrator:
 
         decision = self.checkpoint.pause(stage, summary, preview)
         if decision.action.value == "abort":
-            raise SystemExit(f"用户在 {stage} 阶段终止执行")
+            raise _AbortSignal(stage)
         elif decision.action.value == "modify":
             feedback = decision.feedback or ""
             logger.info(f"[{stage}] 用户修改建议: {feedback}")
@@ -642,9 +653,6 @@ class TaskOrchestrator:
                 "total_stages": len(self.stage_records),
                 "succeeded": sum(
                     1 for r in self.stage_records if r.status == "success"
-                ),
-                "repaired": sum(
-                    1 for r in self.stage_records if r.status == "repaired"
                 ),
                 "failed": sum(
                     1 for r in self.stage_records if r.status == "failed"

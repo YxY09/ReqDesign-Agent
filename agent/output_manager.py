@@ -34,7 +34,7 @@ class OutputManager:
     """输出管理器：负责将各阶段结果写入文件"""
 
     def __init__(self, output_dir: str):
-        self.output_dir = os.path.abspath(output_dir)
+        self.output_dir = os.path.realpath(output_dir)
         os.makedirs(self.output_dir, exist_ok=True)
         logger.info(f"输出目录: {self.output_dir}")
 
@@ -42,8 +42,8 @@ class OutputManager:
         """写入文本文件"""
         safe_name = _sanitize_filename(filename)
         path = os.path.join(self.output_dir, safe_name)
-        # 二次校验：确保路径在输出目录内
-        if not os.path.abspath(path).startswith(self.output_dir):
+        # 二次校验：确保路径在输出目录内（使用realpath防止符号链接逃逸）
+        if not os.path.realpath(path).startswith(self.output_dir):
             logger.error(f"路径穿越拒绝: {filename}")
             raise ValueError(f"不安全的文件名: {filename}")
         try:
@@ -58,7 +58,7 @@ class OutputManager:
         """写入JSON文件"""
         safe_name = _sanitize_filename(filename)
         path = os.path.join(self.output_dir, safe_name)
-        if not os.path.abspath(path).startswith(self.output_dir):
+        if not os.path.realpath(path).startswith(self.output_dir):
             logger.error(f"路径穿越拒绝: {filename}")
             raise ValueError(f"不安全的文件名: {filename}")
         try:
@@ -126,6 +126,13 @@ class OutputManager:
         self._generate_summary(requirement_json, review_result)
         logger.info(f"所有输出已保存到: {self.output_dir}")
 
+    @staticmethod
+    def _escape_md_cell(text: str) -> str:
+        """转义Markdown表格单元格中的特殊字符"""
+        if not text:
+            return ""
+        return str(text).replace("|", "\\|").replace("\n", " ")
+
     def _generate_requirement_md(self, req: dict) -> str:
         """生成需求分析的Markdown格式"""
         lines = ["# 需求分析说明\n"]
@@ -142,7 +149,9 @@ class OutputManager:
             lines.append("| 角色名称 | 描述 |")
             lines.append("|----------|------|")
             for a in actors:
-                lines.append(f"| {a.get('name', '')} | {a.get('description', '')} |")
+                name = self._escape_md_cell(a.get('name', ''))
+                desc = self._escape_md_cell(a.get('description', ''))
+                lines.append(f"| {name} | {desc} |")
             lines.append("")
 
         # 功能
@@ -152,8 +161,12 @@ class OutputManager:
             lines.append("| 编号 | 名称 | 描述 | 相关角色 | 优先级 |")
             lines.append("|------|------|------|----------|--------|")
             for f in functions:
-                actors_str = ", ".join(str(x) for x in f.get("related_actors", []))
-                lines.append(f"| {f.get('id', '')} | {f.get('name', '')} | {f.get('description', '')} | {actors_str} | {f.get('priority', '')} |")
+                actors_str = self._escape_md_cell(", ".join(str(x) for x in f.get("related_actors", [])))
+                fid = self._escape_md_cell(f.get('id', ''))
+                fname = self._escape_md_cell(f.get('name', ''))
+                fdesc = self._escape_md_cell(f.get('description', ''))
+                fpriority = self._escape_md_cell(f.get('priority', ''))
+                lines.append(f"| {fid} | {fname} | {fdesc} | {actors_str} | {fpriority} |")
             lines.append("")
 
         # 实体
@@ -161,8 +174,10 @@ class OutputManager:
         if entities:
             lines.append("## 核心实体\n")
             for e in entities:
-                attrs = ", ".join(str(x) for x in e.get("attributes", []))
-                lines.append(f"### {e.get('name', '')}\n{e.get('description', '')}\n属性: {attrs}\n")
+                attrs = self._escape_md_cell(", ".join(str(x) for x in e.get("attributes", [])))
+                ename = self._escape_md_cell(e.get('name', ''))
+                edesc = self._escape_md_cell(e.get('description', ''))
+                lines.append(f"### {ename}\n{edesc}\n属性: {attrs}\n")
 
         # 约束
         constraints = req.get("constraints", [])

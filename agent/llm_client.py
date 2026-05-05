@@ -90,6 +90,8 @@ class LLMClient:
                     else:
                         chat_messages.append(msg)
                 system_msg = "\n\n".join(system_parts) if system_parts else ""
+                if not chat_messages:
+                    raise ValueError("Anthropic API需要至少一条非system消息")
                 kwargs = {
                     "model": self.model,
                     "messages": chat_messages,

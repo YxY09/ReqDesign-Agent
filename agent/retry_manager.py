@@ -47,7 +47,7 @@ class RetryManager:
                 self.history.append(record)
                 logger.warning(f"第 {attempt} 次尝试失败: {e}")
 
-                if attempt < self.max_retries:
+                if attempt < max_attempts:
                     wait_time = min(2 ** attempt, 10)
                     logger.info(f"等待 {wait_time} 秒后重试...")
                     time.sleep(wait_time)

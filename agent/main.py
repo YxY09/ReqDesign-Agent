@@ -6,7 +6,7 @@ import sys
 
 from agent.config import AgentConfig
 from agent.logger import setup_logger
-from governance.orchestrator import TaskOrchestrator
+from governance.orchestrator import TaskOrchestrator, _AbortSignal
 from governance.models import GovernanceConfig
 
 
@@ -218,6 +218,9 @@ def main():
 
             print(f"\n任务完成！输出目录: {args.output}")
 
+    except _AbortSignal as e:
+        logger.info(f"用户在 {e.stage} 阶段终止执行")
+        sys.exit(0)
     except Exception as e:
         logger.error(f"任务执行失败: {e}", exc_info=True)
         sys.exit(1)

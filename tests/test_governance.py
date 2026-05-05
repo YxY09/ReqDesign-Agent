@@ -1283,8 +1283,8 @@ class TestHumanCheckpointAbortModify:
     """测试人工检查点的abort和modify路径"""
 
     def test_abort_raises_system_exit(self):
-        """abort操作应抛出SystemExit"""
-        from governance.orchestrator import TaskOrchestrator
+        """abort操作应抛出_AbortSignal"""
+        from governance.orchestrator import TaskOrchestrator, _AbortSignal
 
         orch = TaskOrchestrator.__new__(TaskOrchestrator)
         orch.context = ContextController()
@@ -1303,7 +1303,7 @@ class TestHumanCheckpointAbortModify:
 
         orch.checkpoint.pause = mock_abort_pause
 
-        with pytest.raises(SystemExit, match="终止执行"):
+        with pytest.raises(_AbortSignal):
             orch._check_human_checkpoint("test_stage", {"test_stage": {}})
 
     def test_modify_logs_feedback(self):
@@ -2642,7 +2642,7 @@ class TestGovernanceReportMixedStatuses:
     """测试治理报告中混合状态计数"""
 
     def test_report_counts_all_statuses(self, tmp_path):
-        """报告正确计算success/repaired/failed/halted"""
+        """报告正确计算success/failed/halted"""
         from governance.orchestrator import TaskOrchestrator
         from governance.models import GovernanceConfig
 
@@ -2654,7 +2654,7 @@ class TestGovernanceReportMixedStatuses:
         orch.trace = TraceLogger()
         orch.prompt_registry = type("MockPR", (), {"get_all_versions": lambda self: {}})()
 
-        statuses = ["success", "success", "repaired", "failed", "halted", "failed"]
+        statuses = ["success", "success", "success", "failed", "halted", "failed"]
         orch.stage_records = []
         for i, status in enumerate(statuses):
             sr = StageRecord(stage_name=f"stage_{i}")
@@ -2671,8 +2671,7 @@ class TestGovernanceReportMixedStatuses:
 
         summary = report["governance_summary"]
         assert summary["total_stages"] == 6
-        assert summary["succeeded"] == 2
-        assert summary["repaired"] == 1
+        assert summary["succeeded"] == 3
         assert summary["failed"] == 2
         assert summary["halted"] == 1
 
