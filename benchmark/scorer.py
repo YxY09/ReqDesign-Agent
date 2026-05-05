@@ -118,6 +118,16 @@ FUNCTION_SYNONYMS = {
     "预约查看": ["查看预约", "预约查询"],
     "会议室管理": ["管理会议室"],
     "设备管理": ["管理设备"],
+    "患者注册": ["注册", "患者注册与登录"],
+    "科室浏览": ["浏览科室", "查看科室"],
+    "医生查询": ["查询医生", "查看医生"],
+    "排班管理": ["管理排班", "医生排班"],
+    "预约挂号": ["挂号预约", "挂号"],
+    "就诊管理": ["管理就诊"],
+    "就诊记录": ["查看就诊记录"],
+    "会议室浏览": ["浏览会议室", "查看会议室"],
+    "预约管理": ["管理预约"],
+    "挂号管理": ["管理挂号"],
 }
 
 
@@ -403,9 +413,13 @@ def score_state_diagram(diagrams: dict, gold: dict) -> float:
         score += 20
 
     # 检查状态数量（至少3个状态才算有意义）
-    state_names = re.findall(r"state\s+\"?(\w+)", state)
-    # 也匹配直接的状态定义（无 state 关键字）
-    arrow_states = re.findall(r"(\w+)\s*-->", state)
+    # 匹配带引号的状态名: state "Order Pending" as OP
+    state_names = re.findall(r'state\s+"([^"]+)"', state)
+    # 匹配不带引号的状态名: state Pending
+    state_names += re.findall(r'state\s+(\S+)', state)
+    # 匹配箭头两端的状态: A --> B
+    arrow_states = re.findall(r'(\S+)\s*-->', state)
+    arrow_states += re.findall(r'-->\s*(\S+)', state)
     all_states = set(state_names + arrow_states)
     # 排除 [*] 等特殊标记
     all_states = {s for s in all_states if s != "*" and len(s) > 1}

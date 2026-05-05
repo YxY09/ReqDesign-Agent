@@ -273,6 +273,11 @@ class ConsistencyChecker:
         # 从状态图中提取被引用的类名（state关键字后的名称）
         state_refs = set(re.findall(r'state\s+"?(\w+)"?', state_diagram))
         state_refs.update(re.findall(r'state\s+([一-龥]+)', state_diagram))
+        # 也从箭头定义中提取状态名（如 待借阅 --> 已借阅）
+        state_refs.update(re.findall(r'(\S+)\s*-->', state_diagram))
+        state_refs.update(re.findall(r'-->\s*(\S+)', state_diagram))
+        # 过滤掉 [*] 等特殊标记
+        state_refs = {s for s in state_refs if s != "[*]"}
 
         # 反向检查：状态图引用的类应在类图中定义
         orphaned = []
@@ -294,6 +299,8 @@ def _word_in_text(word: str, text: str) -> bool:
     """检查word是否作为完整词出现在text中（避免子串误匹配）"""
     # 中文字符不需要词边界（无空格分隔）
     if re.search(r'[一-龥]', word):
+        if len(word) < 2:
+            return False  # 单字中文太容易误匹配
         return word in text
     # 英文/数字：用非字母数字下划线字符作为分隔符判断完整词
     # 不用\b是因为Python regex将中文视为\w，导致"login和register"被当作一个词
