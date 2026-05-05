@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -96,7 +97,7 @@ class TaskOrchestrator:
             # 无论成功/失败/用户终止，都导出追踪和治理报告
             try:
                 if self.gov.trace_enabled:
-                    self.trace.export_json(f"{output_dir}/trace.json")
+                    self.trace.export_json(os.path.join(output_dir, "trace.json"))
             except Exception as e:
                 logger.error(f"追踪导出失败: {e}", exc_info=True)
             try:
@@ -263,7 +264,7 @@ class TaskOrchestrator:
         finally:
             try:
                 if self.gov.trace_enabled:
-                    self.trace.export_json(f"{output_dir}/trace.json")
+                    self.trace.export_json(os.path.join(output_dir, "trace.json"))
             except Exception as e:
                 logger.error(f"追踪导出失败: {e}", exc_info=True)
             try:
@@ -678,7 +679,7 @@ class TaskOrchestrator:
         }
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        path = f"{output_dir}/governance_report.json"
+        path = os.path.join(output_dir, "governance_report.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         logger.info(f"治理报告已导出: {path}")

@@ -30,8 +30,10 @@ class TestCaseGenerator:
         logger.info("开始生成测试用例...")
 
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
+        # 防止用户内容中的模板占位符被二次替换
+        safe_design = design_text.replace("{requirement_json}", "").replace("{design_text}", "")
         prompt = self.prompt_template.replace("{requirement_json}", req_str)
-        prompt = prompt.replace("{design_text}", design_text)
+        prompt = prompt.replace("{design_text}", safe_design)
 
         system_msg = "你是一个资深的测试工程师，擅长根据需求设计全面的测试用例。输出Markdown格式的测试用例表格。"
 

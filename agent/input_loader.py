@@ -23,6 +23,8 @@ class InputLoader:
             raise FileNotFoundError(f"输入文件不存在: {file_path}")
         if os.path.isdir(file_path):
             raise ValueError(f"输入路径是目录而非文件: {file_path}")
+        if not os.path.isfile(file_path):
+            raise ValueError(f"输入路径不是普通文件（可能是FIFO或设备文件）: {file_path}")
 
         file_size = os.path.getsize(file_path)
         if file_size > self.MAX_FILE_SIZE:

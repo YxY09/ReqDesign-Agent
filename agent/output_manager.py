@@ -149,8 +149,12 @@ class OutputManager:
             lines.append("| 角色名称 | 描述 |")
             lines.append("|----------|------|")
             for a in actors:
-                name = self._escape_md_cell(a.get('name', ''))
-                desc = self._escape_md_cell(a.get('description', ''))
+                if isinstance(a, dict):
+                    name = self._escape_md_cell(a.get('name', ''))
+                    desc = self._escape_md_cell(a.get('description', ''))
+                else:
+                    name = self._escape_md_cell(str(a))
+                    desc = ""
                 lines.append(f"| {name} | {desc} |")
             lines.append("")
 
@@ -161,11 +165,18 @@ class OutputManager:
             lines.append("| 编号 | 名称 | 描述 | 相关角色 | 优先级 |")
             lines.append("|------|------|------|----------|--------|")
             for f in functions:
-                actors_str = self._escape_md_cell(", ".join(str(x) for x in f.get("related_actors", [])))
-                fid = self._escape_md_cell(f.get('id', ''))
-                fname = self._escape_md_cell(f.get('name', ''))
-                fdesc = self._escape_md_cell(f.get('description', ''))
-                fpriority = self._escape_md_cell(f.get('priority', ''))
+                if isinstance(f, dict):
+                    actors_str = self._escape_md_cell(", ".join(str(x) for x in f.get("related_actors", [])))
+                    fid = self._escape_md_cell(f.get('id', ''))
+                    fname = self._escape_md_cell(f.get('name', ''))
+                    fdesc = self._escape_md_cell(f.get('description', ''))
+                    fpriority = self._escape_md_cell(f.get('priority', ''))
+                else:
+                    actors_str = ""
+                    fid = ""
+                    fname = self._escape_md_cell(str(f))
+                    fdesc = ""
+                    fpriority = ""
                 lines.append(f"| {fid} | {fname} | {fdesc} | {actors_str} | {fpriority} |")
             lines.append("")
 
@@ -174,9 +185,14 @@ class OutputManager:
         if entities:
             lines.append("## 核心实体\n")
             for e in entities:
-                attrs = self._escape_md_cell(", ".join(str(x) for x in e.get("attributes", [])))
-                ename = self._escape_md_cell(e.get('name', ''))
-                edesc = self._escape_md_cell(e.get('description', ''))
+                if isinstance(e, dict):
+                    attrs = self._escape_md_cell(", ".join(str(x) for x in e.get("attributes", [])))
+                    ename = self._escape_md_cell(e.get('name', ''))
+                    edesc = self._escape_md_cell(e.get('description', ''))
+                else:
+                    attrs = ""
+                    ename = self._escape_md_cell(str(e))
+                    edesc = ""
                 lines.append(f"### {ename}\n{edesc}\n属性: {attrs}\n")
 
         # 约束
@@ -184,7 +200,10 @@ class OutputManager:
         if constraints:
             lines.append("## 业务约束\n")
             for c in constraints:
-                lines.append(f"- **{c.get('id', '')}**: {c.get('description', '')}")
+                if isinstance(c, dict):
+                    lines.append(f"- **{self._escape_md_cell(c.get('id', ''))}**: {self._escape_md_cell(c.get('description', ''))}")
+                else:
+                    lines.append(f"- {self._escape_md_cell(str(c))}")
             lines.append("")
 
         # 异常流程
@@ -192,7 +211,10 @@ class OutputManager:
         if exceptions:
             lines.append("## 异常流程\n")
             for e in exceptions:
-                lines.append(f"- **{e.get('id', '')}**: {e.get('description', '')} (触发: {e.get('trigger', '')}, 处理: {e.get('handling', '')})")
+                if isinstance(e, dict):
+                    lines.append(f"- **{self._escape_md_cell(e.get('id', ''))}**: {self._escape_md_cell(e.get('description', ''))} (触发: {self._escape_md_cell(e.get('trigger', ''))}, 处理: {self._escape_md_cell(e.get('handling', ''))})")
+                else:
+                    lines.append(f"- {self._escape_md_cell(str(e))}")
             lines.append("")
 
         # 非功能需求
@@ -200,7 +222,10 @@ class OutputManager:
         if nfr:
             lines.append("## 非功能需求\n")
             for n in nfr:
-                lines.append(f"- **{n.get('category', '')}**: {n.get('description', '')}")
+                if isinstance(n, dict):
+                    lines.append(f"- **{self._escape_md_cell(n.get('category', ''))}**: {self._escape_md_cell(n.get('description', ''))}")
+                else:
+                    lines.append(f"- {self._escape_md_cell(str(n))}")
             lines.append("")
 
         # 业务流程
@@ -208,10 +233,13 @@ class OutputManager:
         if processes:
             lines.append("## 业务流程\n")
             for p in processes:
-                lines.append(f"### {p.get('name', '')}\n")
-                lines.append(f"参与角色: {', '.join(str(x) for x in p.get('actors', []))}\n")
-                for i, step in enumerate(p.get("steps", []), 1):
-                    lines.append(f"{i}. {step}")
+                if isinstance(p, dict):
+                    lines.append(f"### {self._escape_md_cell(p.get('name', ''))}\n")
+                    lines.append(f"参与角色: {self._escape_md_cell(', '.join(str(x) for x in p.get('actors', [])))}\n")
+                    for i, step in enumerate(p.get("steps", []), 1):
+                        lines.append(f"{i}. {self._escape_md_cell(str(step))}")
+                else:
+                    lines.append(f"- {self._escape_md_cell(str(p))}")
                 lines.append("")
 
         return "\n".join(lines)

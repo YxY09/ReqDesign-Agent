@@ -32,8 +32,10 @@ class DiagramGenerator:
             requirement_json = {}
         design_text = design_text or ""
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
+        # 防止用户内容中的模板占位符被二次替换
+        safe_design = design_text.replace("{requirement_json}", "").replace("{design_text}", "")
         prompt = template.replace("{requirement_json}", req_str)
-        prompt = prompt.replace("{design_text}", design_text)
+        prompt = prompt.replace("{design_text}", safe_design)
         return prompt
 
     @staticmethod
