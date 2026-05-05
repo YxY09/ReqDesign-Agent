@@ -194,6 +194,7 @@ python -m agent.main --benchmark --input benchmark/cases --output outputs/benchm
 | HumanCheckpoint | 关键节点暂停等待人工确认 |
 | TraceLogger | 全链路追踪（Prompt/响应/耗时） |
 | EvaluationManager | Benchmark运行管理与趋势分析 |
+| ConsistencyChecker | 跨产物一致性检查（需求→设计→图→测试） |
 
 ### 配置
 

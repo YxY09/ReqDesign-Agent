@@ -34,7 +34,7 @@ class DiagramGenerator:
         return prompt
 
     @staticmethod
-    def _extract_mermaid(raw_response: str, diagram_type: str) -> str:
+    def _extract_mermaid(raw_response: str, diagram_type: str = "") -> str:
         """从LLM响应中提取Mermaid代码"""
         text = raw_response.strip()
         mermaid_keywords = ("classDiagram", "flowchart", "graph", "stateDiagram-v2", "stateDiagram")

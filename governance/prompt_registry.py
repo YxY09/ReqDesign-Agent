@@ -2,10 +2,14 @@
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger("reqdesign")
+
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class PromptEntry:
@@ -32,7 +36,9 @@ class PromptEntry:
 class PromptRegistry:
     """Prompt模板注册中心"""
 
-    def __init__(self, prompts_dir: str = "prompts"):
+    def __init__(self, prompts_dir: str = None):
+        if prompts_dir is None:
+            prompts_dir = os.path.join(PROJECT_ROOT, "prompts")
         self.prompts_dir = Path(prompts_dir)
         self._prompts: dict[str, PromptEntry] = {}
         if self.prompts_dir.exists():
