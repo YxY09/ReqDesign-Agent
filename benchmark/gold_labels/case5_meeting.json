@@ -4,7 +4,7 @@
   "expected_actors": ["员工", "部门经理", "系统管理员"],
   "expected_entities": ["员工", "会议室", "预约记录", "设备"],
   "expected_functions": ["会议室浏览", "预约申请", "预约审批", "取消预约", "预约查看", "会议室管理", "设备管理"],
-  "expected_constraints": ["同一时段只能一个预约", "大型会议室需审批", "2小时前取消"],
+  "expected_constraints": ["同一时段只能一个预约", "30人以上大型会议室需要部门经理审批", "预约开始前2小时可取消"],
   "expected_exceptions": ["会议室已被占用", "不能预约过去时间", "超过取消期限"],
   "expected_processes": ["预约流程", "审批流程", "取消流程"],
   "required_diagrams": ["class_diagram", "activity_diagram", "state_diagram"],

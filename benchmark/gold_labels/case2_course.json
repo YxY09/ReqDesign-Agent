@@ -4,7 +4,7 @@
   "expected_actors": ["学生", "教师", "管理员"],
   "expected_entities": ["学生", "教师", "课程", "选课记录", "成绩"],
   "expected_functions": ["课程浏览", "选课", "退课", "课程发布", "课程审核", "成绩录入", "课表查看"],
-  "expected_constraints": ["课程人数限制", "时间冲突检查", "退课截止日期", "每学期最多6门"],
+  "expected_constraints": ["课程人数限制", "时间冲突检查", "退课截止日期", "每学期每个学生最多选修6门课程"],
   "expected_exceptions": ["课程已满", "时间冲突", "超过退课期限"],
   "expected_processes": ["选课流程", "退课流程", "课程发布流程"],
   "required_diagrams": ["class_diagram", "activity_diagram", "state_diagram"],
