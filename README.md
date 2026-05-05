@@ -96,19 +96,19 @@ ReqDesign-Agent/
 │   ├── review_agent.py     # 审查Agent（多轮修复验证）
 │   ├── retry_manager.py    # 重试管理（指数退避）
 │   ├── prompt_loader.py    # 共享Prompt加载器（带缓存）
-│   ├── workflow_controller.py # 工作流编排（阶段降级）
 │   └── output_manager.py   # 输出管理（路径穿越防护）
 ├── governance/             # 治理框架
 │   ├── models.py           # 数据模型（StageRecord, GateDecision等）
-│   ├── orchestrator.py     # 治理模式任务编排器
-│   ├── stage_gate.py       # 阶段门控
+│   ├── orchestrator.py     # 统一任务编排器（标准+治理模式）
+│   ├── stage_gate.py       # 阶段门控（真实RETRY/REPAIR循环）
 │   ├── context_controller.py # 上下文控制
 │   ├── prompt_registry.py  # Prompt注册与版本管理
 │   ├── tool_validator.py   # 工具输出校验
-│   ├── repair_controller.py # 修复控制
-│   ├── human_checkpoint.py # 人工检查点
+│   ├── repair_controller.py # 多轮修复控制
+│   ├── human_checkpoint.py # 人工检查点（全阶段可配置）
 │   ├── trace_logger.py     # 全链路追踪（含TracingLLMClient）
-│   └── evaluation_manager.py # 评估管理器
+│   ├── evaluation_manager.py # 评估管理器
+│   └── consistency_checker.py # 跨产物一致性检查
 ├── prompts/                # 7个Prompt模板
 ├── benchmark/              # 基准测试（5个案例+评分器）
 │   ├── cases/              # 测试案例需求文档
@@ -117,7 +117,7 @@ ReqDesign-Agent/
 │   └── scorer.py           # 评分函数
 ├── vscode-extension/       # VSCode插件
 ├── docs/                   # 文档
-├── tests/                  # 测试（103个用例）
+├── tests/                  # 测试（288个用例）
 ├── config.yaml             # 默认配置
 ├── requirements.txt        # Python依赖
 └── README.md
