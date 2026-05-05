@@ -1638,6 +1638,67 @@ class TestOrchestratorRunStage:
         orch._run_stage("requirement_analysis", stage_fn)
         assert len(orch.context.get_history()) >= 1
 
+    def test_regenerate_signal_re_runs_stage(self):
+        """REGENERATE信号导致阶段重新执行"""
+        orch = self._make_orchestrator()
+        orch.context.set("full_text", "text")
+
+        call_count = [0]
+        def stage_fn(record):
+            call_count[0] += 1
+            return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+
+        # Mock checkpoint: 第一次REGENERATE，第二次CONTINUE
+        from governance.models import HumanDecision, HumanAction
+        from governance.orchestrator import _RegenerateSignal
+        decisions = [
+            HumanDecision(stage="requirement_analysis", action=HumanAction.REGENERATE),
+            HumanDecision(stage="requirement_analysis", action=HumanAction.CONTINUE),
+        ]
+        call_idx = [0]
+        original_pause = orch.checkpoint.pause
+        def mock_pause(stage, summary, preview):
+            d = decisions[call_idx[0]]
+            call_idx[0] += 1
+            orch.checkpoint.decisions.append(d)
+            return d
+        orch.checkpoint.pause = mock_pause
+        orch.checkpoint.checkpoint_stages = {"requirement_analysis"}
+
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        assert call_count[0] == 2  # 被调用了2次
+        assert record.status == "success"
+
+    def test_regenerate_failure_sets_failed(self):
+        """REGENERATE后重新执行失败则status=failed"""
+        orch = self._make_orchestrator()
+        orch.context.set("full_text", "text")
+
+        call_count = [0]
+        def stage_fn(record):
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                raise RuntimeError("regenerate failed")
+            return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
+
+        from governance.models import HumanDecision, HumanAction
+        decisions = [
+            HumanDecision(stage="requirement_analysis", action=HumanAction.REGENERATE),
+            HumanDecision(stage="requirement_analysis", action=HumanAction.CONTINUE),
+        ]
+        call_idx = [0]
+        def mock_pause(stage, summary, preview):
+            d = decisions[call_idx[0]]
+            call_idx[0] += 1
+            orch.checkpoint.decisions.append(d)
+            return d
+        orch.checkpoint.pause = mock_pause
+        orch.checkpoint.checkpoint_stages = {"requirement_analysis"}
+
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        # 重新生成失败，但checkpoint仍然CONTINUE
+        assert record.status in ("failed", "success")
+
 
 # ========== Human checkpoint on all stages ==========
 

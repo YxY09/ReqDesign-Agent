@@ -400,6 +400,15 @@ def foo():
         with pytest.raises(ValueError, match="二进制"):
             loader.load(str(bin_file))
 
+    def test_input_loader_text_with_newlines_accepted(self, tmp_path):
+        """测试正常文本文件（含换行符）不被误判为二进制"""
+        text_file = tmp_path / "test.md"
+        # 正常文本，换行符不计入非打印字符
+        text_file.write_text("# 需求文档\n\n功能1\n功能2\n功能3\n" * 10)
+        loader = InputLoader()
+        result = loader.load(str(text_file))
+        assert "需求文档" in result
+
     def test_diagram_generator_prefers_last_mermaid_block(self):
         """测试多个Mermaid块时优先返回最后一个"""
         gen = DiagramGenerator.__new__(DiagramGenerator)

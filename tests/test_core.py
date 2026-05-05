@@ -96,6 +96,13 @@ retry:
         errors = config.validate()
         assert any("max_retries" in e and "类型" in e for e in errors)
 
+    def test_validate_string_max_tokens(self):
+        """配置文件中max_tokens为字符串时不崩溃"""
+        config = AgentConfig()
+        config.llm.max_tokens = "abc"
+        errors = config.validate()
+        assert any("max_tokens" in e and "类型" in e for e in errors)
+
     def test_load_from_yaml_governance(self, tmp_path):
         yaml_content = """llm:
   provider: deepseek

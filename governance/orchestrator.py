@@ -376,7 +376,7 @@ class TaskOrchestrator:
             except _RegenerateSignal:
                 logger.info(f"[{stage_name}] 重新生成中...")
                 output = None
-                record = StageRecord(stage=stage_name)
+                record = StageRecord(stage_name=stage_name)
                 record.start_time = time.time()
                 # 重新执行阶段
                 try:
