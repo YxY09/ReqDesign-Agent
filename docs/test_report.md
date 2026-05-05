@@ -10,24 +10,21 @@
 
 ### 2.1 测试覆盖
 
-共296个测试用例，覆盖所有核心模块：
+共329个测试用例，覆盖所有核心模块：
 
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
-| 配置管理 | test_core.py | 11 | 11 |
-| 日志系统 | test_core.py | 3 | 3 |
+| 配置管理/CLI | test_core.py | 29 | 29 |
 | 输入处理 | test_phase2.py | 11 | 11 |
-| 设计验证 | test_phase3.py | 5 | 5 |
-| Mermaid校验 | test_phase4.py | 15 | 15 |
-| 代码提取 | test_phase4.py | 4 | 4 |
+| 设计规划 | test_phase3.py | 8 | 8 |
+| Mermaid校验/图生成 | test_phase4.py | 21 | 21 |
 | 测试用例验证 | test_phase5.py | 6 | 6 |
-| 重试管理 | test_phase6.py | 10 | 10 |
-| 审查报告 | test_phase6.py | 3 | 3 |
-| 输出管理 | test_phase7.py | 5 | 5 |
+| 重试/审查/修复 | test_phase6.py | 16 | 16 |
+| 输出管理 | test_phase7.py | 10 | 10 |
 | 基准评分 | test_benchmark.py | 15 | 15 |
 | **治理框架** | **test_governance.py** | **175** | **175** |
-| **集成测试** | **test_integration.py** | **33** | **33** |
-| **总计** | | **296** | **296** |
+| **集成测试** | **test_integration.py** | **38** | **38** |
+| **总计** | | **329** | **329** |
 
 ### 2.2 治理框架测试详情（test_governance.py）
 
