@@ -1,13 +1,10 @@
 """工具输出校验模块"""
 
 import json
-import logging
 from typing import Any
 
 from governance.models import ValidationResult
 from agent.mermaid_validator import MermaidValidator
-
-logger = logging.getLogger("reqdesign")
 
 # 各阶段必需的JSON字段
 REQUIRED_JSON_FIELDS = {
@@ -17,9 +14,6 @@ REQUIRED_JSON_FIELDS = {
 
 # 设计文档必需章节
 DESIGN_SECTIONS = ["系统概述", "模块划分", "核心类"]
-
-# 测试用例必需表头
-TEST_CASE_HEADERS = ["编号", "测试"]
 
 
 class ToolValidator:

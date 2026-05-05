@@ -3,7 +3,7 @@
 import logging
 
 from governance.models import (
-    GateDecision, ValidationResult, StageRecord, GovernanceConfig
+    GateDecision, ValidationResult, GovernanceConfig
 )
 
 logger = logging.getLogger("reqdesign")

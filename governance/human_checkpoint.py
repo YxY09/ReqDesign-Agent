@@ -1,7 +1,6 @@
 """人工检查点模块"""
 
 import logging
-from typing import Any
 
 from governance.models import HumanAction, HumanDecision
 
