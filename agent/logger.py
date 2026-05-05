@@ -14,11 +14,15 @@ def _cleanup_old_logs(log_dir: str, max_files: int):
         files = sorted(
             [f for f in os.listdir(log_dir) if f.startswith("reqdesign_") and f.endswith(".log")],
         )
-        while len(files) > max_files:
-            oldest = files.pop(0)
-            os.remove(os.path.join(log_dir, oldest))
     except OSError:
-        logging.getLogger("reqdesign").warning("旧日志清理失败，跳过")
+        logging.getLogger("reqdesign").warning("旧日志目录访问失败，跳过清理")
+        return
+    while len(files) > max_files:
+        oldest = files.pop(0)
+        try:
+            os.remove(os.path.join(log_dir, oldest))
+        except OSError:
+            logging.getLogger("reqdesign").warning(f"删除旧日志失败: {oldest}")
 
 
 def setup_logger(

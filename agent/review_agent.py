@@ -67,11 +67,16 @@ class ReviewAgent:
 
         # 2. 调用LLM进行语义审查
         requirement_summary = json.dumps(requirement_json, ensure_ascii=False, indent=2)
+        # 防止用户内容中的模板占位符被二次替换
+        safe_design = design_text.replace("{requirement_json}", "").replace("{design_text}", "")
+        safe_class = diagrams.get("class_diagram", "").replace("{requirement_json}", "")
+        safe_activity = diagrams.get("activity_diagram", "").replace("{requirement_json}", "")
+        safe_state = diagrams.get("state_diagram", "").replace("{requirement_json}", "")
         prompt = self.prompt_template.replace("{requirement_json}", requirement_summary)
-        prompt = prompt.replace("{design_text}", design_text)
-        prompt = prompt.replace("{class_diagram}", diagrams.get("class_diagram", ""))
-        prompt = prompt.replace("{activity_diagram}", diagrams.get("activity_diagram", ""))
-        prompt = prompt.replace("{state_diagram}", diagrams.get("state_diagram", ""))
+        prompt = prompt.replace("{design_text}", safe_design)
+        prompt = prompt.replace("{class_diagram}", safe_class)
+        prompt = prompt.replace("{activity_diagram}", safe_activity)
+        prompt = prompt.replace("{state_diagram}", safe_state)
 
         system_msg = "你是一个资深的软件质量审查专家。只输出JSON格式的审查结果。"
 
