@@ -23,6 +23,10 @@ class TestCaseGenerator:
 
     def generate(self, requirement_json: dict, design_text: str) -> str:
         """生成测试用例（Markdown格式）"""
+        if not requirement_json or not isinstance(requirement_json, dict):
+            raise ValueError("需求JSON不能为空且必须是字典类型")
+        design_text = design_text or ""
+
         logger.info("开始生成测试用例...")
 
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
@@ -41,6 +45,11 @@ class TestCaseGenerator:
 
     def validate_test_cases(self, test_cases_md: str, requirement_json: dict) -> list[str]:
         """验证测试用例的完整性"""
+        if not test_cases_md:
+            return ["测试用例为空"]
+        if not requirement_json:
+            return ["需求JSON为空"]
+
         warnings = []
 
         # 检查是否包含表格格式

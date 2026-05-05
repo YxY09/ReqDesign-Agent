@@ -21,6 +21,9 @@ class RequirementAnalyzer:
 
     def analyze(self, requirement_text: str, max_retries: int = 3) -> dict:
         """分析需求文本，返回结构化JSON，JSON解析失败时自动重试"""
+        if not requirement_text or not isinstance(requirement_text, str):
+            raise ValueError("需求文本不能为空且必须是字符串")
+
         logger.info("开始需求分析...")
         logger.debug(f"输入文本长度: {len(requirement_text)} 字符")
 
@@ -38,9 +41,9 @@ class RequirementAnalyzer:
                             f"{len(result.get('functions', []))} 个功能, "
                             f"{len(result.get('entities', []))} 个实体")
                 return result
-            except json.JSONDecodeError as e:
+            except (json.JSONDecodeError, ValueError) as e:
                 last_error = e
-                logger.warning(f"第 {attempt} 次JSON解析失败: {e}")
+                logger.warning(f"第 {attempt} 次解析失败: {e}")
                 if attempt < max_retries:
                     logger.info("重试需求分析...")
             except Exception as e:

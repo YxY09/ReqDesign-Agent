@@ -15,6 +15,12 @@ logger = logging.getLogger("reqdesign")
 class EvaluationManager:
     """管理benchmark运行、评分对比、趋势分析"""
 
+    METRICS = [
+        "requirement_coverage", "diagram_syntax",
+        "entity_accuracy", "process_completeness",
+        "state_diagram", "consistency", "overall"
+    ]
+
     def __init__(self, config: AgentConfig):
         self.config = config
         self.history: list[dict] = []
@@ -52,6 +58,9 @@ class EvaluationManager:
                 self.config, cases_dir, gold_dir, run_output
             )
             report = runner.run_all()
+            if not report or not isinstance(report, dict):
+                logger.error(f"第 {i+1} 次运行返回无效结果: {report}")
+                report = {"results": [], "summary": {}}
             all_reports.append(report)
 
         # 合并多次运行结果
@@ -80,6 +89,9 @@ class EvaluationManager:
         for report in reports:
             for result in report.get("results", []):
                 name = result.get("case_name", "")
+                if not name:
+                    logger.warning(f"结果缺少case_name，跳过: {result}")
+                    continue
                 if name not in case_scores:
                     case_scores[name] = []
                 if result.get("status") == "success":
@@ -92,22 +104,14 @@ class EvaluationManager:
                 avg_results.append({
                     "case_name": case_name,
                     "status": "error",
-                    "scores": {m: 0.0 for m in [
-                        "requirement_coverage", "diagram_syntax",
-                        "entity_accuracy", "process_completeness",
-                        "state_diagram", "consistency", "overall"
-                    ]},
+                    "scores": {m: 0.0 for m in self.METRICS},
                     "passed": False,
                     "runs": 0,
                 })
                 continue
 
             avg_scores = {}
-            metrics = [
-                "requirement_coverage", "diagram_syntax",
-                "entity_accuracy", "process_completeness",
-                "state_diagram", "consistency", "overall"
-            ]
+            metrics = self.METRICS
             for metric in metrics:
                 values = [s.get(metric, 0) for s in score_list]
                 avg_scores[metric] = round(
@@ -135,10 +139,13 @@ class EvaluationManager:
         }
 
         # 保存合并结果
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-        report_path = os.path.join(output_dir, "benchmark_report.json")
-        with open(report_path, "w", encoding="utf-8") as f:
-            json.dump(merged, f, ensure_ascii=False, indent=2)
+        try:
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            report_path = os.path.join(output_dir, "benchmark_report.json")
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(merged, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            logger.error(f"保存合并结果失败: {e}")
 
         return merged
 

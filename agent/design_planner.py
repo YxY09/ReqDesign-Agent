@@ -21,6 +21,9 @@ class DesignPlanner:
 
     def generate_design(self, requirement_json: dict) -> str:
         """根据需求JSON生成系统设计说明（Markdown格式）"""
+        if not requirement_json or not isinstance(requirement_json, dict):
+            raise ValueError("需求JSON不能为空且必须是字典类型")
+
         logger.info("开始生成系统设计...")
 
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
@@ -38,6 +41,11 @@ class DesignPlanner:
 
     def validate_design(self, design_text: str, requirement_json: dict) -> list[str]:
         """验证设计是否覆盖了所有需求"""
+        if not design_text:
+            return ["设计文档为空"]
+        if not requirement_json:
+            return ["需求JSON为空"]
+
         warnings = []
 
         # 检查核心章节是否存在

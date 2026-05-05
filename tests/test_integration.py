@@ -583,5 +583,75 @@ class TestPromptLoaderCacheKey:
         assert content1 == content2
 
 
+class TestNoneInputGuards:
+    """测试各Agent对None/空输入的防御"""
+
+    def test_requirement_analyzer_none_input(self):
+        from agent.requirement_analyzer import RequirementAnalyzer
+        mock_llm = MagicMock()
+        analyzer = RequirementAnalyzer(mock_llm)
+        with pytest.raises(ValueError, match="需求文本不能为空"):
+            analyzer.analyze(None)
+
+    def test_requirement_analyzer_empty_input(self):
+        from agent.requirement_analyzer import RequirementAnalyzer
+        mock_llm = MagicMock()
+        analyzer = RequirementAnalyzer(mock_llm)
+        with pytest.raises(ValueError, match="需求文本不能为空"):
+            analyzer.analyze("")
+
+    def test_design_planner_none_json(self):
+        from agent.design_planner import DesignPlanner
+        mock_llm = MagicMock()
+        planner = DesignPlanner(mock_llm)
+        with pytest.raises(ValueError, match="需求JSON不能为空"):
+            planner.generate_design(None)
+
+    def test_design_planner_validate_none_text(self):
+        from agent.design_planner import DesignPlanner
+        mock_llm = MagicMock()
+        planner = DesignPlanner(mock_llm)
+        warnings = planner.validate_design(None, {"functions": []})
+        assert any("为空" in w for w in warnings)
+
+    def test_design_planner_validate_none_json(self):
+        from agent.design_planner import DesignPlanner
+        mock_llm = MagicMock()
+        planner = DesignPlanner(mock_llm)
+        warnings = planner.validate_design("some text", None)
+        assert any("为空" in w for w in warnings)
+
+    def test_test_case_generator_none_json(self):
+        from agent.test_case_generator import TestCaseGenerator
+        mock_llm = MagicMock()
+        gen = TestCaseGenerator(mock_llm)
+        with pytest.raises(ValueError, match="需求JSON不能为空"):
+            gen.generate(None, "design")
+
+    def test_test_case_generator_none_design(self):
+        """design_text为None时应转为空字符串"""
+        from agent.test_case_generator import TestCaseGenerator
+        mock_llm = MagicMock()
+        mock_llm.generate_text.return_value = "test output"
+        gen = TestCaseGenerator(mock_llm)
+        # 不应抛出异常
+        result = gen.generate({"functions": []}, None)
+        assert result == "test output"
+
+    def test_test_case_generator_validate_none_md(self):
+        from agent.test_case_generator import TestCaseGenerator
+        mock_llm = MagicMock()
+        gen = TestCaseGenerator(mock_llm)
+        warnings = gen.validate_test_cases(None, {"functions": []})
+        assert any("为空" in w for w in warnings)
+
+    def test_test_case_generator_validate_none_json(self):
+        from agent.test_case_generator import TestCaseGenerator
+        mock_llm = MagicMock()
+        gen = TestCaseGenerator(mock_llm)
+        warnings = gen.validate_test_cases("|a|b|", None)
+        assert any("为空" in w for w in warnings)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
