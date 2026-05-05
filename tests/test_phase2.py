@@ -83,6 +83,20 @@ class TestInputLoader:
         assert sections[0]["title"] == ""
         assert "纯文本" in sections[0]["content"]
 
+    def test_load_raises_on_directory(self, tmp_path):
+        """传入目录路径时抛出ValueError"""
+        with pytest.raises(ValueError, match="目录"):
+            self.loader.load(str(tmp_path))
+
+    def test_load_content_exceeds_max_chars(self, tmp_path):
+        """内容超过MAX_CHARS限制时抛出ValueError"""
+        # 写入一个超过100K字符的文件（但小于512KB文件大小限制）
+        content = "a" * 100_001
+        f = tmp_path / "long.txt"
+        f.write_text(content, encoding="utf-8")
+        with pytest.raises(ValueError, match="过长"):
+            self.loader.load(str(f))
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

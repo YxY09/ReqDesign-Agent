@@ -526,5 +526,19 @@ class TestDiagramSyntaxNonString:
         assert result == 0.0
 
 
+class TestMatchConstraintSingleChar:
+    """测试_match_constraint_or_exception单字符场景"""
+
+    def test_single_char_returns_false(self):
+        """单字符expected不应匹配"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("A", "some text here") is False
+
+    def test_single_char_empty_target(self):
+        """单字符expected+空target"""
+        from benchmark.scorer import _match_constraint_or_exception
+        assert _match_constraint_or_exception("A", "") is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

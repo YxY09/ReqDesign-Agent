@@ -1,5 +1,6 @@
 """核心模块测试"""
 
+import json
 import os
 import sys
 import pytest
@@ -263,6 +264,110 @@ class TestLogger:
         logger2 = setup_logger("test_dup", "INFO", log_dir)
         assert logger1 is logger2
         assert len(logger1.handlers) == 2
+
+
+# ========== LLMClient tests ==========
+
+class TestLLMClientInit:
+    """测试LLMClient初始化"""
+
+    def test_missing_api_key_raises(self):
+        """未设置API密钥时抛出ValueError"""
+        from agent.llm_client import LLMClient
+        import os
+        # 确保环境变量中没有key
+        old_key = os.environ.pop("TESTPROV_API_KEY", None)
+        old_key2 = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            config = AgentConfig()
+            config.llm.provider = "testprov"
+            config.llm.api_key = ""
+            with pytest.raises(ValueError, match="未设置API密钥"):
+                LLMClient(config)
+        finally:
+            if old_key is not None:
+                os.environ["TESTPROV_API_KEY"] = old_key
+            if old_key2 is not None:
+                os.environ["OPENAI_API_KEY"] = old_key2
+
+    def test_unsupported_provider_raises(self):
+        """不支持的provider抛出ValueError"""
+        from agent.llm_client import LLMClient
+        config = AgentConfig()
+        config.llm.provider = "unsupported_llm"
+        config.llm.api_key = "test-key"
+        with pytest.raises(ValueError, match="不支持"):
+            LLMClient(config)
+
+
+class TestLLMClientExtractJson:
+    """测试_extract_json_text"""
+
+    def _make_client(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        return client
+
+    def test_no_json_found_returns_raw(self):
+        """没有JSON对象时返回原文本"""
+        client = self._make_client()
+        result = client._extract_json_text("no json here")
+        assert result == "no json here"
+
+    def test_code_block_extraction(self):
+        """从markdown代码块中提取JSON"""
+        client = self._make_client()
+        raw = '```json\n{"key": "value"}\n```'
+        result = client._extract_json_text(raw)
+        assert result == '{"key": "value"}'
+
+    def test_json_with_surrounding_text(self):
+        """从包含前后文本的响应中提取JSON"""
+        client = self._make_client()
+        raw = 'Here is the result: {"key": "value"} end'
+        result = client._extract_json_text(raw)
+        assert result == '{"key": "value"}'
+
+
+class TestLLMClientParseJsonRobust:
+    """测试_parse_json_robust"""
+
+    def _make_client(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        return client
+
+    def test_trailing_garbage_after_brace(self):
+        """JSON后有垃圾内容时截取到最后一个}"""
+        client = self._make_client()
+        result = client._parse_json_robust('{"a": 1} garbage text')
+        assert result == {"a": 1}
+
+    def test_trailing_comma_in_object(self):
+        """尾部逗号被修复"""
+        client = self._make_client()
+        result = client._parse_json_robust('{"a": 1, "b": 2,}')
+        assert result == {"a": 1, "b": 2}
+
+    def test_comment_lines_removed(self):
+        """行首注释被移除"""
+        client = self._make_client()
+        text = '// comment\n{"a": 1}\n// another'
+        result = client._parse_json_robust(text)
+        assert result == {"a": 1}
+
+    def test_too_large_raises(self):
+        """超过1MB的JSON抛出异常"""
+        client = self._make_client()
+        huge = '{"a": "' + "x" * 2_000_000 + '"}'
+        with pytest.raises(json.JSONDecodeError, match="过大"):
+            client._parse_json_robust(huge)
+
+    def test_non_dict_raises(self):
+        """非dict类型JSON抛出异常"""
+        client = self._make_client()
+        with pytest.raises(json.JSONDecodeError, match="无法解析"):
+            client._parse_json_robust('[1, 2, 3]')
 
 
 if __name__ == "__main__":
