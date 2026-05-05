@@ -32,8 +32,14 @@ def setup_logger(
 ) -> logging.Logger:
     """创建统一日志器，同时输出到控制台和文件"""
     logger = logging.getLogger(name)
-    if logger.handlers:
-        logger.handlers.clear()
+    # 只移除本函数添加的handler（通过sentinel标记识别）
+    for h in list(logger.handlers):
+        if getattr(h, "_reqdesign_handler", False):
+            logger.removeHandler(h)
+            try:
+                h.close()
+            except Exception:
+                pass
 
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
 
@@ -45,15 +51,17 @@ def setup_logger(
     # 控制台输出
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
+    console_handler._reqdesign_handler = True
     logger.addHandler(console_handler)
 
     # 文件输出
     os.makedirs(log_dir, exist_ok=True)
     _cleanup_old_logs(log_dir, MAX_LOG_FILES)
-    date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"reqdesign_{date_str}.log")
+    date_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    log_file = os.path.join(log_dir, f"reqdesign_{date_str}_{os.getpid()}.log")
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setFormatter(formatter)
+    file_handler._reqdesign_handler = True
     logger.addHandler(file_handler)
 
     return logger

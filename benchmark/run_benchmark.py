@@ -97,22 +97,31 @@ class BenchmarkRunner:
         req_result = result.get("requirement_analysis", {})
         diagrams = result.get("diagrams", {})
 
-        # 计算各项得分
-        scores = {}
-        scores["requirement_coverage"] = score_requirement_coverage(req_result, gold)
-        scores["diagram_syntax"] = score_diagram_syntax(diagrams)
-        scores["entity_accuracy"] = score_entity_accuracy(req_result, gold)
-        scores["process_completeness"] = score_process_completeness(diagrams, gold)
-        scores["state_diagram"] = score_state_diagram(diagrams, gold)
-        scores["consistency"] = score_consistency(req_result, diagrams)
-        scores["overall"] = compute_overall_score(
-            requirement_coverage=scores["requirement_coverage"],
-            diagram_syntax=scores["diagram_syntax"],
-            entity_accuracy=scores["entity_accuracy"],
-            process_completeness=scores["process_completeness"],
-            consistency=scores["consistency"],
-            state_diagram=scores["state_diagram"],
-        )
+        # 计算各项得分（评分异常不阻塞整个批次）
+        try:
+            scores = {}
+            scores["requirement_coverage"] = score_requirement_coverage(req_result, gold)
+            scores["diagram_syntax"] = score_diagram_syntax(diagrams)
+            scores["entity_accuracy"] = score_entity_accuracy(req_result, gold)
+            scores["process_completeness"] = score_process_completeness(diagrams, gold)
+            scores["state_diagram"] = score_state_diagram(diagrams, gold)
+            scores["consistency"] = score_consistency(req_result, diagrams)
+            scores["overall"] = compute_overall_score(
+                requirement_coverage=scores["requirement_coverage"],
+                diagram_syntax=scores["diagram_syntax"],
+                entity_accuracy=scores["entity_accuracy"],
+                process_completeness=scores["process_completeness"],
+                consistency=scores["consistency"],
+                state_diagram=scores["state_diagram"],
+            )
+        except Exception as e:
+            self.logger.error(f"案例 {case['name']} 评分失败: {e}", exc_info=True)
+            return {
+                "case_name": case["name"],
+                "status": "scoring_error",
+                "error": str(e),
+                "scores": {},
+            }
 
         passed = scores["overall"] >= 80
         self.logger.info(f"案例 {case['name']} 得分: {scores['overall']}, {'通过' if passed else '未通过'}")

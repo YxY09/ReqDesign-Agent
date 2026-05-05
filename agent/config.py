@@ -109,6 +109,11 @@ class AgentConfig:
         except TypeError:
             errors.append(f"retry.max_retries 类型错误，期望整数，得到 {type(self.retry.max_retries).__name__}")
         try:
+            if self.llm.timeout <= 0:
+                errors.append("llm.timeout 必须为正数")
+        except TypeError:
+            errors.append(f"llm.timeout 类型错误，期望数字，得到 {type(self.llm.timeout).__name__}")
+        try:
             if self.logging.level.upper() not in self.VALID_LOG_LEVELS:
                 errors.append(f"logging.level 不支持 '{self.logging.level}'，可选: {self.VALID_LOG_LEVELS}")
             else:

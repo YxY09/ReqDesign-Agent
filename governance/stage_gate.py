@@ -1,6 +1,7 @@
 """阶段门控模块"""
 
 import logging
+import re
 from typing import Optional
 
 from governance.models import (
@@ -70,10 +71,16 @@ class StageGate:
 
     def _is_retryable(self, validation: ValidationResult) -> bool:
         """判断错误是否可通过重试恢复（仅检查错误模式，不看分数）"""
-        retryable_patterns = ["空响应", "超时", "timeout", "empty", "截断", "网络", "network", "rate limit", "429", "503", "为空", "为none", "解析失败"]
+        # 中文模式用子串匹配，英文/数字模式用词边界匹配避免误匹配
+        substring_patterns = ["空响应", "超时", "截断", "网络", "为空", "为none", "解析失败"]
+        word_patterns = re.compile(
+            r'\b(?:timeout|empty|network|rate\s*limit|429|503)\b', re.IGNORECASE
+        )
         for err in validation.errors:
             err_lower = err.lower()
-            if any(p in err_lower for p in retryable_patterns):
+            if any(p in err_lower for p in substring_patterns):
+                return True
+            if word_patterns.search(err):
                 return True
         return False
 

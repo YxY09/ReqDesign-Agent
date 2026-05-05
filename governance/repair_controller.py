@@ -61,12 +61,12 @@ class RepairController:
             try:
                 repaired = repair_fn(current, vr.errors)
                 if repaired is None:
-                    logger.warning(f"[{stage_name}] 修复函数返回None，跳过本轮")
+                    logger.warning(f"[{stage_name}] 修复函数返回None，停止修复")
                     records.append(RepairRecord(
                         attempt=attempt, error=str(vr.errors),
                         action="llm_repair", result="returned_none", success=False,
                     ))
-                    continue
+                    break
                 try:
                     new_vr = validate_fn(repaired)
                 except Exception as e:
@@ -82,7 +82,12 @@ class RepairController:
                     success=new_vr.is_valid,
                 )
                 records.append(record)
-                current = repaired
+
+                # 只接受不比原来更差的修复结果
+                if new_vr.is_valid or (new_vr.score is not None and vr.score is not None and new_vr.score >= vr.score):
+                    current = repaired
+                else:
+                    logger.warning(f"[{stage_name}] 修复后质量下降({vr.score}->{new_vr.score})，保留原输出")
 
                 if new_vr.is_valid:
                     logger.info(f"[{stage_name}] 修复成功（第{attempt}轮）")

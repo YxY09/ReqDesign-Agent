@@ -61,6 +61,28 @@ class MermaidValidator:
         if not has_header:
             return False, f"缺少图类型声明，应以 {valid_headers} 之一开头"
 
+        # 检查diagram_type与实际内容是否匹配（仅当diagram_type是已知Mermaid关键字时）
+        if diagram_type:
+            type_to_header = {
+                "class_diagram": "classDiagram",
+                "classDiagram": "classDiagram",
+                "activity_diagram": "flowchart",
+                "flowchart": "flowchart",
+                "graph": "flowchart",
+                "state_diagram": "stateDiagram-v2",
+                "stateDiagram-v2": "stateDiagram-v2",
+                "stateDiagram": "stateDiagram",
+            }
+            # 只有当diagram_type是已知映射key时才校验，否则视为显示标签跳过
+            if diagram_type in type_to_header:
+                expected_header = type_to_header[diagram_type]
+                actual_header = next((h for h in valid_headers if content.startswith(h)), "")
+                if expected_header != actual_header:
+                    expected_norm = type_to_header.get(expected_header, expected_header)
+                    actual_norm = type_to_header.get(actual_header, actual_header)
+                    if expected_norm != actual_norm:
+                        return False, f"声明的图类型 '{diagram_type}' 与实际内容头 '{actual_header}' 不匹配"
+
         # 检查是否有实际内容（不只是头部声明）
         lines = [l.strip() for l in content.split("\n") if l.strip() and not l.strip().startswith("%%")]
         if len(lines) < 2:
@@ -73,10 +95,13 @@ class MermaidValidator:
 
         # flowchart 特殊检查
         if content.startswith("flowchart") or content.startswith("graph"):
-            # 检查是否有节点连接关系（--> / --- / ==> / -.-> 等）
-            # 使用正则匹配连接语法，避免节点标签中的"--"误匹配
+            # 去除注释后再检查连接关系，避免注释中的箭头误匹配
+            comment_positions = self._find_comment_positions(content)
+            clean_content = "".join(
+                ch for i, ch in enumerate(content) if i not in comment_positions
+            )
             link_re = re.compile(r'(?:-->|---|==>|-\.->|\s--\s)')
-            if not link_re.search(content):
+            if not link_re.search(clean_content):
                 return False, "流程图中缺少节点连接关系"
 
         return True, ""
@@ -101,7 +126,7 @@ class MermaidValidator:
             if char == "\\" and in_string:
                 escape_next = True
                 continue
-            if char == '"' and not in_string:
+            if char in ('"', "'") and not in_string:
                 in_string = True
                 string_char = char
             elif in_string and char == string_char:
@@ -125,10 +150,41 @@ class MermaidValidator:
 
     @staticmethod
     def _find_comment_positions(content: str) -> set[int]:
-        """找出所有Mermaid注释字符位置（O(1)查找用）"""
+        """找出所有Mermaid注释字符位置（O(1)查找用），跳过字符串内的%%"""
         positions = set()
-        for match in re.finditer(r'%%.*', content):
-            positions.update(range(match.start(), match.end()))
+        in_string = False
+        string_char = None
+        escape_next = False
+        i = 0
+        while i < len(content):
+            ch = content[i]
+            if escape_next:
+                escape_next = False
+                i += 1
+                continue
+            if ch == "\\" and in_string:
+                escape_next = True
+                i += 1
+                continue
+            if ch in ('"', "'") and not in_string:
+                in_string = True
+                string_char = ch
+                i += 1
+                continue
+            if in_string and ch == string_char:
+                in_string = False
+                string_char = None
+                i += 1
+                continue
+            if not in_string and ch == "%" and i + 1 < len(content) and content[i + 1] == "%":
+                # 找到%%注释，标记到行尾
+                end = content.find("\n", i)
+                if end == -1:
+                    end = len(content)
+                positions.update(range(i, end))
+                i = end
+                continue
+            i += 1
         return positions
 
     def _validate_with_cli(self, content: str) -> tuple[bool, str]:
