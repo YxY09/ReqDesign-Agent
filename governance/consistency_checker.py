@@ -201,7 +201,7 @@ class ConsistencyChecker:
     def _check_class_to_state(
         self, diagrams: dict, result: ConsistencyResult
     ):
-        """类图→状态图实体一致性"""
+        """类图→状态图实体一致性（反向：状态图引用的类应在类图中存在）"""
         check = {"dimension": "类图→状态图一致性", "score": 1.0, "issues": []}
 
         class_diagram = diagrams.get("class_diagram", "")
@@ -213,29 +213,31 @@ class ConsistencyChecker:
             result.checks.append(check)
             return
 
-        # 从类图中提取类名 (class ClassName pattern)
+        # 从类图中提取类名
         class_names = set(re.findall(r'class\s+(\w+)', class_diagram))
-        # 也匹配中文类名
         class_names.update(re.findall(r'class\s+([一-龥]+)', class_diagram))
+        class_names_lower = {c.lower() for c in class_names}
 
         if not class_names:
             result.checks.append(check)
             return
 
-        state_lower = state_diagram.lower()
+        # 从状态图中提取被引用的类名（state关键字后的名称）
+        state_refs = set(re.findall(r'state\s+"?(\w+)"?', state_diagram))
+        state_refs.update(re.findall(r'state\s+([一-龥]+)', state_diagram))
 
-        # 正向：类图中的类，如果在状态图中被引用，应有一致的定义
-        referenced = set()
-        for cn in class_names:
-            if cn.lower() in state_lower:
-                referenced.add(cn)
+        # 反向检查：状态图引用的类应在类图中定义
+        orphaned = []
+        for ref in state_refs:
+            if ref.lower() not in class_names_lower:
+                orphaned.append(ref)
 
-        if referenced:
-            check["issues"].append(
-                f"类图中有{len(referenced)}个类在状态图中被引用"
-            )
-            for cn in referenced:
-                result.warnings.append(f"类图中类 {cn} 在状态图中被引用")
+        if orphaned:
+            check["score"] = max(0.0, 1.0 - len(orphaned) / max(len(state_refs), 1))
+            for o in orphaned:
+                msg = f"状态图引用了类图中不存在的类: {o}"
+                check["issues"].append(msg)
+                result.warnings.append(msg)
 
         result.checks.append(check)
 

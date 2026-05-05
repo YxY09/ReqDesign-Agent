@@ -29,7 +29,6 @@ class RepairController:
             output: 待校验的输出
             validate_fn: 校验函数，接收output返回ValidationResult
             repair_fn: 修复函数，接收(output, errors)返回修复后的output
-            stage_record: 阶段记录（可选，用于追踪）
 
         Returns:
             (修复后的output, 修复记录列表)

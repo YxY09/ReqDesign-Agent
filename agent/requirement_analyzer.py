@@ -68,6 +68,9 @@ class RequirementAnalyzer:
 
     def validate_result(self, result: dict) -> list[str]:
         """验证分析结果的完整性，返回缺失字段列表"""
+        if not result:
+            return ["需求分析结果为空"]
+
         required_fields = ["actors", "functions", "entities"]
         optional_fields = ["constraints", "exceptions", "non_functional_requirements", "business_processes"]
 

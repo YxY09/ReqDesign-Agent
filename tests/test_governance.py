@@ -1187,15 +1187,15 @@ class TestConsistencyChecker:
         entity_warnings = [w for w in result.warnings if "缺失实体" in w]
         assert len(entity_warnings) == 0
 
-    def test_class_to_state_propagates_warnings(self):
-        """_check_class_to_state应将引用信息传播到result.warnings"""
+    def test_class_to_state_orphaned_class_warning(self):
+        """状态图引用了类图中不存在的类时应产生warning"""
         req = {"entities": [], "functions": []}
         diagrams = {
             "class_diagram": "classDiagram\n    class Book",
-            "state_diagram": "stateDiagram-v2\n    state Book {\n        [*] --> Available\n    }",
+            "state_diagram": "stateDiagram-v2\n    state Order {\n        [*] --> Pending\n    }",
         }
         result = self.checker.check_all(req, "design", diagrams, "tests")
-        state_warnings = [w for w in result.warnings if "状态图中被引用" in w]
+        state_warnings = [w for w in result.warnings if "类图中不存在的类" in w]
         assert len(state_warnings) >= 1
 
 

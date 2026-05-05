@@ -4,8 +4,6 @@ import argparse
 import os
 import sys
 
-import yaml
-
 from agent.config import AgentConfig
 from agent.logger import setup_logger
 from governance.orchestrator import TaskOrchestrator

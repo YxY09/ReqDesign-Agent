@@ -21,7 +21,8 @@
 ├─────────────────────────────────────────────────────────┤
 │                    智能体编排层                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │ WorkflowCtrl │  │ ContextMgr   │  │ RetryManager │  │
+│  │TaskOrchestr  │  │ ContextCtrl  │  │ RetryManager │  │
+│  │ator(统一入口) │  │              │  │              │  │
 │  └──────┬───────┘  └──────────────┘  └──────────────┘  │
 ├─────────┴───────────────────────────────────────────────┤
 │                    核心智能体层                           │
@@ -35,8 +36,8 @@
 ├─────────────────────────────────────────────────────────┤
 │                    工具与数据层                           │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │LLMClient │ │ Mermaid  │ │FileManager│ │ PromptLib│  │
-│  │(Tracing) │ │ Validator│ │          │ │          │  │
+│  │LLMClient │ │ Mermaid  │ │  Output  │ │  Prompt  │  │
+│  │(Tracing) │ │ Validator│ │ Manager  │ │  Loader  │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -92,15 +93,15 @@ DiagramGenerator.generate_all()  ← 优先mermaid代码块提取
     └──▶ state_diagram.mmd
     │
     ▼ (Mermaid代码)
+TestCaseGenerator.generate()
+    │
+    ▼ (测试用例)
 ReviewAgent.review_and_repair()  ← 多轮修复验证
     │
     ├──▶ 修复后的图文件
     └──▶ review_result.json
     │
     ▼
-TestCaseGenerator.generate()
-    │
-    ▼ (测试用例)
 OutputManager.save_all()  ← 路径穿越防护
     │
     ▼
