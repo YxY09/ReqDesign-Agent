@@ -37,7 +37,12 @@ class RepairController:
         current = output
 
         for attempt in range(1, self.max_rounds + 1):
-            vr = validate_fn(current)
+            try:
+                vr = validate_fn(current)
+            except Exception as e:
+                logger.warning(f"[{stage_name}] 校验函数异常: {e}", exc_info=True)
+                vr = ValidationResult(is_valid=False, errors=[f"校验异常: {e}"], score=0.0)
+
             if vr.is_valid:
                 logger.info(f"[{stage_name}] 校验通过，无需修复")
                 return current, records
@@ -49,7 +54,18 @@ class RepairController:
 
             try:
                 repaired = repair_fn(current, vr.errors)
-                new_vr = validate_fn(repaired)
+                if repaired is None:
+                    logger.warning(f"[{stage_name}] 修复函数返回None，跳过本轮")
+                    records.append(RepairRecord(
+                        attempt=attempt, error=str(vr.errors),
+                        action="llm_repair", result="returned_none", success=False,
+                    ))
+                    continue
+                try:
+                    new_vr = validate_fn(repaired)
+                except Exception as e:
+                    logger.warning(f"[{stage_name}] 修复后校验异常: {e}", exc_info=True)
+                    new_vr = ValidationResult(is_valid=False, errors=[f"校验异常: {e}"], score=0.0)
                 record = RepairRecord(
                     attempt=attempt,
                     error=str(vr.errors),

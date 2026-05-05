@@ -21,6 +21,9 @@ def _sanitize_filename(name: str) -> str:
     # 如果不匹配白名单，强制清理
     if not _SAFE_NAME_RE.match(name):
         name = re.sub(r'[^\w一-鿿\-\.]', '_', name)
+    # 限制文件名长度（留空间给扩展名）
+    if len(name) > 200:
+        name = name[:200]
     return name
 
 
@@ -142,7 +145,7 @@ class OutputManager:
             lines.append("| 编号 | 名称 | 描述 | 相关角色 | 优先级 |")
             lines.append("|------|------|------|----------|--------|")
             for f in functions:
-                actors_str = ", ".join(f.get("related_actors", []))
+                actors_str = ", ".join(str(x) for x in f.get("related_actors", []))
                 lines.append(f"| {f.get('id', '')} | {f.get('name', '')} | {f.get('description', '')} | {actors_str} | {f.get('priority', '')} |")
             lines.append("")
 
@@ -151,7 +154,7 @@ class OutputManager:
         if entities:
             lines.append("## 核心实体\n")
             for e in entities:
-                attrs = ", ".join(e.get("attributes", []))
+                attrs = ", ".join(str(x) for x in e.get("attributes", []))
                 lines.append(f"### {e.get('name', '')}\n{e.get('description', '')}\n属性: {attrs}\n")
 
         # 约束
@@ -184,7 +187,7 @@ class OutputManager:
             lines.append("## 业务流程\n")
             for p in processes:
                 lines.append(f"### {p.get('name', '')}\n")
-                lines.append(f"参与角色: {', '.join(p.get('actors', []))}\n")
+                lines.append(f"参与角色: {', '.join(str(x) for x in p.get('actors', []))}\n")
                 for i, step in enumerate(p.get("steps", []), 1):
                     lines.append(f"{i}. {step}")
                 lines.append("")
@@ -222,11 +225,17 @@ class OutputManager:
 
         # 输出文件列表
         lines.append("## 输出文件\n")
-        for f in sorted(os.listdir(self.output_dir)):
-            path = os.path.join(self.output_dir, f)
-            if os.path.isfile(path):
-                size = os.path.getsize(path)
-                lines.append(f"- `{f}` ({size} bytes)")
+        try:
+            for f in sorted(os.listdir(self.output_dir)):
+                path = os.path.join(self.output_dir, f)
+                if os.path.isfile(path):
+                    try:
+                        size = os.path.getsize(path)
+                    except OSError:
+                        size = 0
+                    lines.append(f"- `{f}` ({size} bytes)")
+        except OSError as e:
+            lines.append(f"- （无法列出文件: {e}）")
         lines.append("")
 
         self._write_file("summary_report.md", "\n".join(lines))

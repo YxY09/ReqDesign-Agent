@@ -79,14 +79,15 @@ class LLMClient:
                     raise ValueError("LLM返回空响应（可能被内容过滤器拦截）")
                 result = resp.choices[0].message.content
             elif self.provider == "anthropic":
-                # Anthropic需要将system消息分离
-                system_msg = ""
+                # Anthropic需要将system消息分离（多个system消息合并）
+                system_parts = []
                 chat_messages = []
                 for msg in messages:
                     if msg["role"] == "system":
-                        system_msg = msg["content"]
+                        system_parts.append(msg["content"])
                     else:
                         chat_messages.append(msg)
+                system_msg = "\n\n".join(system_parts) if system_parts else ""
                 kwargs = {
                     "model": self.model,
                     "messages": chat_messages,

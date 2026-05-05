@@ -49,6 +49,8 @@ class DesignPlanner:
         # 检查功能覆盖
         functions = requirement_json.get("functions", [])
         for func in functions:
+            if not isinstance(func, dict):
+                continue
             func_id = func.get("id", "")
             func_name = func.get("name", "")
             if func_id and func_id not in design_text and func_name not in design_text:
@@ -58,6 +60,8 @@ class DesignPlanner:
         entities = requirement_json.get("entities", [])
         design_lower = design_text.lower()
         for entity in entities:
+            if not isinstance(entity, dict):
+                continue
             entity_name = entity.get("name", "")
             if entity_name and entity_name.lower() not in design_lower:
                 warnings.append(f"实体 '{entity_name}' 未在设计中体现")
