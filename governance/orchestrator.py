@@ -189,7 +189,7 @@ class TaskOrchestrator:
         try:
             review_report = self.review_agent.generate_report(review_result)
         except Exception as e:
-            logger.error(f"审查报告生成失败: {e}")
+            logger.error(f"审查报告生成失败: {e}", exc_info=True)
         results["review_report"] = review_report
 
         # 保存输出
@@ -495,7 +495,7 @@ class TaskOrchestrator:
 
     def _stage_analysis(self, record: StageRecord) -> tuple[dict, list]:
         """需求分析，返回(output, agent_warnings)"""
-        text = self.context.get("full_text")
+        text = self.context.get("full_text") or ""
         req_json = self.requirement_analyzer.analyze(text)
         warnings = self.requirement_analyzer.validate_result(req_json)
         if warnings:
@@ -529,8 +529,8 @@ class TaskOrchestrator:
 
     def _stage_review(self, record: StageRecord) -> dict:
         """审查与修复"""
-        req_json = self.context.get("requirement_json")
-        design = self.context.get("design_text")
+        req_json = self.context.get("requirement_json") or {}
+        design = self.context.get("design_text") or ""
         diagrams = self.context.get("diagrams", {})
         review_result, repaired = self.review_agent.review_and_repair(
             req_json, design, diagrams

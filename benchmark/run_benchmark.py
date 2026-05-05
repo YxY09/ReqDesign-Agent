@@ -85,7 +85,7 @@ class BenchmarkRunner:
         try:
             result = orchestrator.run_design_task(case["case_path"], case_output_dir)
         except Exception as e:
-            self.logger.error(f"案例 {case['name']} 运行失败: {e}")
+            self.logger.error(f"案例 {case['name']} 运行失败: {e}", exc_info=True)
             return {
                 "case_name": case["name"],
                 "status": "error",

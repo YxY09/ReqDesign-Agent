@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+import traceback
 from pathlib import Path
 
 from governance.models import TraceEntry
@@ -184,6 +185,7 @@ class TracingLLMClient:
             self._trace.log(self._stage, "llm_error", {
                 "method": "chat",
                 "error": str(e),
+                "traceback": traceback.format_exc(),
                 "duration_seconds": round(duration, 3),
             })
             raise
@@ -205,6 +207,7 @@ class TracingLLMClient:
             self._trace.log(self._stage, "llm_error", {
                 "method": "generate_json",
                 "error": str(e),
+                "traceback": traceback.format_exc(),
                 "duration_seconds": round(duration, 3),
             })
             raise
@@ -226,6 +229,7 @@ class TracingLLMClient:
             self._trace.log(self._stage, "llm_error", {
                 "method": "generate_text",
                 "error": str(e),
+                "traceback": traceback.format_exc(),
                 "duration_seconds": round(duration, 3),
             })
             raise
