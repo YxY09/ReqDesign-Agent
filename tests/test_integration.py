@@ -4,17 +4,15 @@ import json
 import os
 import sys
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.config import AgentConfig
 from agent.input_loader import InputLoader
 from agent.requirement_analyzer import RequirementAnalyzer
-from agent.design_planner import DesignPlanner
 from agent.diagram_generator import DiagramGenerator
 from agent.mermaid_validator import MermaidValidator
-from agent.test_case_generator import TestCaseGenerator
 from agent.review_agent import ReviewAgent
 from agent.output_manager import OutputManager
 from agent.output_manager import _sanitize_filename

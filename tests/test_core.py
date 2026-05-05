@@ -3,12 +3,10 @@
 import os
 import sys
 import pytest
-import tempfile
-from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent.config import AgentConfig, LLMConfig
+from agent.config import AgentConfig
 from agent.logger import setup_logger
 from agent.main import parse_args
 

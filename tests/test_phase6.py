@@ -3,7 +3,7 @@
 import os
 import sys
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -49,10 +49,8 @@ class TestRetryManager:
         def fail():
             raise Exception("fail")
 
-        try:
+        with pytest.raises(Exception):
             rm.retry(fail)
-        except Exception:
-            pass
 
         assert rm.has_failures()
         rm.clear_history()

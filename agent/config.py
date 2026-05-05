@@ -1,5 +1,6 @@
 """配置管理模块"""
 
+import copy
 import os
 import logging
 import yaml
@@ -53,7 +54,6 @@ class AgentConfig:
             logger.warning(f"配置文件为空: {path}，使用默认配置")
             return cls()
         # 存储原始配置，但脱敏API密钥
-        import copy
         safe_raw = copy.deepcopy(data)
         if "llm" in safe_raw and "api_key" in safe_raw["llm"]:
             safe_raw["llm"]["api_key"] = "***"
