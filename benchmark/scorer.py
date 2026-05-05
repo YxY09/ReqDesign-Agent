@@ -255,6 +255,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
             covered_points += 1
 
     if total_points == 0:
+        logger.warning("需求覆盖率: gold label无预期项，返回100（空标注）")
         return 100.0
 
     score = (covered_points / total_points) * 100

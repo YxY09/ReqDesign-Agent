@@ -95,6 +95,11 @@ class TaskOrchestrator:
         self.context.set("requirement_json", req_json)
         results["requirement_analysis"] = req_json
 
+        if not req_json:
+            logger.error("需求分析失败，跳过后续阶段")
+            self._save_governance_report(results, output_dir)
+            return results
+
         # 人工检查点
         self._check_human_checkpoint("requirement_analysis", results)
 

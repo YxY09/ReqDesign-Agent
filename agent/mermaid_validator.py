@@ -73,8 +73,9 @@ class MermaidValidator:
 
         # flowchart 特殊检查
         if content.startswith("flowchart") or content.startswith("graph"):
-            # 检查是否有节点定义
-            if "-->" not in content and "--" not in content:
+            # 检查是否有节点连接关系（--> / --- / ==> / -.-> 等）
+            link_patterns = ("-->", "---", "==>", "-.->", "--")
+            if not any(p in content for p in link_patterns):
                 return False, "流程图中缺少节点连接关系"
 
         return True, ""
