@@ -47,7 +47,8 @@ class DiagramGenerator:
             pattern = r"```\s*\n(.*?)(?:\n```|```|\Z)"
             matches = re.findall(pattern, text, re.DOTALL)
         if matches:
-            for block in matches:
+            # 优先返回最后一个匹配块（LLM常在后面给出修正版本）
+            for block in reversed(matches):
                 stripped = block.strip()
                 if any(stripped.startswith(kw) for kw in mermaid_keywords):
                     return stripped

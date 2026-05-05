@@ -53,7 +53,19 @@ class InputLoader:
         for encoding in ("utf-8", "gbk", "latin-1"):
             try:
                 with open(file_path, "r", encoding=encoding) as f:
-                    return f.read()
+                    content = f.read()
+                # 二进制内容检测：非打印字符占比过高
+                if content:
+                    non_printable = sum(
+                        1 for c in content
+                        if not c.isprintable() and c not in "\n\r\t"
+                    )
+                    if non_printable / len(content) > 0.3:
+                        raise ValueError(
+                            f"文件 {file_path} 可能是二进制文件，"
+                            f"非打印字符占比 {non_printable/len(content):.0%}"
+                        )
+                return content
             except (UnicodeDecodeError, UnicodeError):
                 continue
         # 最终兜底：替换无法解码的字符

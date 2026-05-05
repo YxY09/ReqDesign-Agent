@@ -391,6 +391,35 @@ def foo():
         assert _sanitize_filename("test/../../../etc/passwd") == "test_______etc_passwd"
         assert _sanitize_filename("normal_file.md") == "normal_file.md"
 
+    def test_input_loader_binary_file_rejected(self, tmp_path):
+        """测试二进制文件被拒绝"""
+        bin_file = tmp_path / "test.md"
+        # 写入大量非打印字符（>30%非打印字符）
+        bin_file.write_bytes(bytes(range(32)) * 100 + b"some text" * 10)
+        loader = InputLoader()
+        with pytest.raises(ValueError, match="二进制"):
+            loader.load(str(bin_file))
+
+    def test_diagram_generator_prefers_last_mermaid_block(self):
+        """测试多个Mermaid块时优先返回最后一个"""
+        gen = DiagramGenerator.__new__(DiagramGenerator)
+        # LLM先给出错误版本，然后修正
+        raw = """这是类图：
+```mermaid
+classDiagram
+    class A
+```
+修正后的版本：
+```mermaid
+classDiagram
+    class B {
+        +method()
+    }
+```"""
+        result = gen._extract_mermaid(raw, "classDiagram")
+        assert "class B" in result
+        assert "method" in result
+
     def test_config_empty_yaml(self, tmp_path):
         """测试空YAML配置文件"""
         empty_yaml = tmp_path / "empty.yaml"
