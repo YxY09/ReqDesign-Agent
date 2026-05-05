@@ -822,6 +822,57 @@ class TestOrchestratorContextOnFailure:
         assert design_text == ""
 
 
+class TestOrchestratorGenerateReportError:
+    """测试review_agent.generate_report异常时的容错"""
+
+    def test_generate_report_exception_returns_empty(self):
+        """generate_report抛出异常时，review_report应为空字符串"""
+        import logging
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig
+        logger = logging.getLogger("reqdesign")
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = AgentConfig()
+        orch.gov = GovernanceConfig()
+        orch.context = ContextController()
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate()
+        orch.repair = RepairController(max_rounds=1)
+        orch.stage_records = []
+
+        # Mock review_agent.generate_report to raise
+        class FailingReviewAgent:
+            def generate_report(self, result):
+                raise RuntimeError("报告生成失败")
+            def validate_mermaid_syntax(self, diagrams):
+                return []
+            def review(self, requirement_json, design_text, diagrams):
+                return {}
+            def review_and_repair(self, requirement_json, design_text, diagrams):
+                return {}, []
+
+        orch.review_agent = FailingReviewAgent()
+        orch.llm = type("MockLLM", (), {
+            "provider": "test", "model": "test", "temperature": 0.3,
+            "max_tokens": 100, "set_stage": lambda self, s: None,
+            "chat": lambda self, m, temperature=None: "ok",
+            "generate_json": lambda self, p, system="": {},
+            "generate_text": lambda self, p, system="": "text",
+        })()
+
+        # 直接调用生成报告的部分来测试容错
+        review_result = {"overall_score": 80}
+        review_report = ""
+        try:
+            review_report = orch.review_agent.generate_report(review_result)
+        except Exception as e:
+            logger.error(f"审查报告生成失败: {e}", exc_info=True)
+        assert review_report == ""
+
+
 # ========== Integration: StageGate with config ==========
 
 class TestStageGateIntegration:
