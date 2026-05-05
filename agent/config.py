@@ -100,6 +100,8 @@ class AgentConfig:
             errors.append("retry.max_retries 不能为负数")
         if self.logging.level.upper() not in self.VALID_LOG_LEVELS:
             errors.append(f"logging.level 不支持 '{self.logging.level}'，可选: {self.VALID_LOG_LEVELS}")
+        else:
+            self.logging.level = self.logging.level.upper()
         return errors
 
     def get_api_key(self) -> str:

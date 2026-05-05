@@ -89,8 +89,11 @@ class TestCaseGenerator:
         exception = len(re.findall(r"TC-E-\d+", test_cases_md, re.IGNORECASE))
         boundary = len(re.findall(r"TC-B-\d+", test_cases_md, re.IGNORECASE))
 
-        # 如果标准格式未匹配，尝试统计表格行数
-        total_rows = len(re.findall(r"\|.*\|", test_cases_md)) - 1  # 减去表头
+        # 如果标准格式未匹配，尝试统计表格行数（排除表头和分隔行）
+        all_rows = re.findall(r"\|.*\|", test_cases_md)
+        # 分隔行：每个单元格只含 - : 空格，如 |------|------|
+        data_rows = [r for r in all_rows if not re.match(r'^\|[\s:-]+(\|[\s:-]+)+\|$', r.strip())]
+        total_rows = max(0, len(data_rows) - 1)  # 减去表头
         total = max(normal + exception + boundary, total_rows)
 
         counts = {

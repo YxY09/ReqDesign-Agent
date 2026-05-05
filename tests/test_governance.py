@@ -313,6 +313,13 @@ class TestTracingLLMClient:
         assert len(tl.entries) == 1
         assert tl.entries[0].event_type == "llm_error"
 
+    def test_getattr_private_raises(self):
+        """访问私有属性应抛出AttributeError而非无限递归"""
+        tl = TraceLogger()
+        client = TracingLLMClient(self._make_client(), tl, "test")
+        with pytest.raises(AttributeError):
+            _ = client._nonexistent
+
 
 # ========== tool_validator.py ==========
 
@@ -589,6 +596,26 @@ class TestPromptRegistry:
         pr.prompts_dir = "/nonexistent"
         with pytest.raises(KeyError):
             pr.get_content("nonexistent")
+
+    def test_unreadable_file_skipped(self):
+        """单个不可读文件不阻塞其他模板注册"""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 创建一个正常文件
+            good = os.path.join(tmpdir, "good.md")
+            with open(good, "w") as f:
+                f.write("good content")
+            # 创建一个不可读文件（写入后移除读权限）
+            bad = os.path.join(tmpdir, "bad.md")
+            with open(bad, "w") as f:
+                f.write("bad content")
+            os.chmod(bad, 0o000)
+            try:
+                pr = PromptRegistry(tmpdir)
+                assert pr.has("good")
+                assert not pr.has("bad")
+            finally:
+                os.chmod(bad, 0o644)
 
 
 # ========== Integration: orchestrator import ==========
@@ -1234,6 +1261,35 @@ class TestConsistencyChecker:
         activity_checks = [c for c in result.checks if c.get("dimension") == "活动图→测试覆盖"]
         assert len(activity_checks) == 1
         assert activity_checks[0]["score"] == 0.5
+
+    def test_none_diagrams_no_crash(self):
+        """diagrams为None时不崩溃"""
+        req = {"entities": [{"name": "User"}], "functions": [{"name": "login"}]}
+        result = self.checker.check_all(req, "design", None, "tests")
+        assert isinstance(result.score, float)
+
+    def test_all_keywords_missing_detected(self):
+        """设计→测试覆盖：所有关键词都缺失时score应为0.0"""
+        req = {"entities": [], "functions": []}
+        design = "## 用户管理\n## 订单管理"
+        diagrams = {}
+        test_cases = "| 编号 | 测试对象 |\n|------|----------|\n| 1 | 完全无关 |"
+        result = self.checker.check_all(req, design, diagrams, test_cases)
+        design_checks = [c for c in result.checks if c.get("dimension") == "设计→测试覆盖"]
+        assert len(design_checks) == 1
+        assert design_checks[0]["score"] < 1.0
+
+    def test_activity_all_nodes_missing_detected(self):
+        """活动图→测试覆盖：所有节点都缺失时score应<1.0"""
+        req = {"entities": [], "functions": []}
+        diagrams = {
+            "activity_diagram": "flowchart TD\n    A[借阅] --> B[归还]",
+        }
+        test_cases = "| 编号 | 测试对象 |\n|------|----------|\n| 1 | 完全无关功能 |"
+        result = self.checker.check_all(req, "design", diagrams, test_cases)
+        activity_checks = [c for c in result.checks if c.get("dimension") == "活动图→测试覆盖"]
+        assert len(activity_checks) == 1
+        assert activity_checks[0]["score"] < 1.0
 
 
 # ========== Lightweight Review ==========

@@ -37,6 +37,9 @@ class EvaluationManager:
         """
         logger.info(f"开始benchmark评估，运行{runs}次")
 
+        if runs < 1:
+            raise ValueError("runs must be >= 1")
+
         all_reports = []
         for i in range(runs):
             if runs > 1:
@@ -89,8 +92,13 @@ class EvaluationManager:
                 avg_results.append({
                     "case_name": case_name,
                     "status": "error",
-                    "scores": {},
+                    "scores": {m: 0.0 for m in [
+                        "requirement_coverage", "diagram_syntax",
+                        "entity_accuracy", "process_completeness",
+                        "state_diagram", "consistency", "overall"
+                    ]},
                     "passed": False,
+                    "runs": 0,
                 })
                 continue
 

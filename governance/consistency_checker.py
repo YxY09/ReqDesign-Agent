@@ -43,6 +43,8 @@ class ConsistencyChecker:
             ConsistencyResult
         """
         result = ConsistencyResult()
+        if diagrams is None:
+            diagrams = {}
 
         self._check_requirement_to_design(requirement_json, design_text, result)
         self._check_entities_in_diagram(requirement_json, diagrams, result)
@@ -189,7 +191,7 @@ class ConsistencyChecker:
             if not _word_in_text(kw, test_lower):
                 missing.append(kw)
 
-        if missing and len(missing) < len(header_keywords):
+        if missing:
             ratio = 1.0 - len(missing) / len(header_keywords)
             check["score"] = max(0.0, ratio)
             for m in missing[:5]:  # 最多报告5个
@@ -234,7 +236,7 @@ class ConsistencyChecker:
             if not _word_in_text(nt, test_lower):
                 missing.append(nt)
 
-        if missing and len(missing) < len(node_texts):
+        if missing:
             ratio = 1.0 - len(missing) / len(node_texts)
             check["score"] = max(0.0, ratio)
             for m in missing[:5]:

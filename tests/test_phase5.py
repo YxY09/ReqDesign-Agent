@@ -68,6 +68,17 @@ class TestTestCaseGeneratorValidation:
         counts = self.gen.count_test_cases("没有测试用例")
         assert counts["总计"] == 0
 
+    def test_count_excludes_separator_rows(self):
+        """表格分隔行不应被计为测试用例"""
+        test_cases = """
+| 编号 | 测试对象 | 测试步骤 |
+|------|----------|----------|
+| TC-N-001 | 登录 | 输入用户名密码 |
+| TC-N-002 | 注册 | 填写注册信息 |
+"""
+        counts = self.gen.count_test_cases(test_cases)
+        assert counts["总计"] == 2
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

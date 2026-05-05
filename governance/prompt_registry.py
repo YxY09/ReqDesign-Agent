@@ -42,7 +42,11 @@ class PromptRegistry:
         """扫描prompts目录，注册所有模板"""
         for f in sorted(self.prompts_dir.glob("*.md")):
             name = f.stem
-            content = f.read_text(encoding="utf-8")
+            try:
+                content = f.read_text(encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"[PromptRegistry] 无法读取 {f}: {e}，跳过")
+                continue
             entry = PromptEntry(name=name, path=str(f), content=content)
             self._prompts[name] = entry
             logger.debug(f"[PromptRegistry] 注册: {name} v{entry.version}")

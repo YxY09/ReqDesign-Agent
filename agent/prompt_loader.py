@@ -31,7 +31,7 @@ def load_prompt(filename: str, fallback: str = "") -> str:
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
-        _cache[filename] = content
+        _cache[safe_name] = content
         return content
 
     logger.warning(f"Prompt模板不存在: {path}，使用默认模板")

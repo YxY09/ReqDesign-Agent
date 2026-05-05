@@ -146,6 +146,21 @@ governance:
         config.llm.provider = "unknown"
         assert config.get_base_url() == ""
 
+    def test_logging_level_normalized_to_uppercase(self):
+        """logging.level应在validate()后转为大写"""
+        config = AgentConfig()
+        config.logging.level = "info"
+        errors = config.validate()
+        assert errors == []
+        assert config.logging.level == "INFO"
+
+    def test_logging_level_invalid(self):
+        """无效的logging.level应报错"""
+        config = AgentConfig()
+        config.logging.level = "INVALID"
+        errors = config.validate()
+        assert len(errors) > 0
+
 
 class TestParseArgs:
     def test_default_args(self, monkeypatch):

@@ -232,6 +232,8 @@ class TracingLLMClient:
 
     def __getattr__(self, name):
         """代理未包装的属性到内部客户端"""
+        if name.startswith('_'):
+            raise AttributeError(name)
         return getattr(self._client, name)
 
 

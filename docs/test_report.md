@@ -14,17 +14,17 @@
 
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
-| 配置管理/CLI | test_core.py | 29 | 29 |
+| 配置管理/CLI | test_core.py | 31 | 31 |
 | 输入处理 | test_phase2.py | 11 | 11 |
 | 设计规划 | test_phase3.py | 8 | 8 |
 | Mermaid校验/图生成 | test_phase4.py | 21 | 21 |
-| 测试用例验证 | test_phase5.py | 6 | 6 |
+| 测试用例验证 | test_phase5.py | 7 | 7 |
 | 重试/审查/修复 | test_phase6.py | 16 | 16 |
 | 输出管理 | test_phase7.py | 10 | 10 |
-| 基准评分 | test_benchmark.py | 22 | 22 |
-| **治理框架** | **test_governance.py** | **176** | **176** |
+| 基准评分 | test_benchmark.py | 25 | 25 |
+| **治理框架** | **test_governance.py** | **181** | **181** |
 | **集成测试** | **test_integration.py** | **39** | **39** |
-| **总计** | | **338** | **338** |
+| **总计** | | **349** | **349** |
 
 ### 2.2 治理框架测试详情（test_governance.py）
 

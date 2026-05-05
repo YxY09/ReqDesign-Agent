@@ -27,7 +27,6 @@ class RequirementAnalyzer:
 
         # 防止输入文本中包含模板占位符或prompt注入指令
         safe_text = requirement_text.replace("{requirement_text}", "")
-        safe_text = re.sub(r'\{[a-z_]+\}', '', safe_text)  # 移除所有模板变量
         prompt = self.prompt_template.replace("{requirement_text}", safe_text)
         system_msg = "你是一个资深的软件需求分析师，擅长从自然语言需求中提取结构化信息。只输出JSON格式的结果。"
 
