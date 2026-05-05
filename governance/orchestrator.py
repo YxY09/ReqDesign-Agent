@@ -507,9 +507,16 @@ class TaskOrchestrator:
             for err in errors:
                 clean = err.replace("\n", " ").replace("\r", "")[:200]
                 safe_errors.append(clean)
+            # 为图表/测试阶段添加设计上下文
+            design_context = ""
+            if stage in ("diagram_generator", "test_case_generator"):
+                design_text = self.context.get("design_text") or ""
+                if design_text:
+                    design_context = f"\n设计说明: {design_text[:500]}\n"
             prompt = (
                 f"请修复以下输出中的问题。\n\n"
-                f"需求摘要: {req_summary}\n\n"
+                f"需求摘要: {req_summary}\n"
+                f"{design_context}\n"
                 f"需要修复的问题:\n{chr(10).join(safe_errors)}\n\n"
                 f"当前输出:\n{current_str}"
             )
