@@ -149,21 +149,27 @@ class TestDiagramGeneratorMethods:
         result = gen.generate_class_diagram({"functions": []}, "设计说明")
         assert "classDiagram" in result
         assert "User" in result
-        mock_llm.generate_text.assert_called_once()
+        prompt = mock_llm.generate_text.call_args[0][0]
+        assert "functions" in prompt
+        assert "设计说明" in prompt
 
     def test_generate_activity_diagram(self):
         gen, mock_llm = self._make_gen()
         mock_llm.generate_text.return_value = "```mermaid\nflowchart TD\n    A --> B\n```"
         result = gen.generate_activity_diagram({"functions": []}, "设计说明")
         assert "flowchart" in result
-        mock_llm.generate_text.assert_called_once()
+        prompt = mock_llm.generate_text.call_args[0][0]
+        assert "functions" in prompt
+        assert "设计说明" in prompt
 
     def test_generate_state_diagram(self):
         gen, mock_llm = self._make_gen()
         mock_llm.generate_text.return_value = "```mermaid\nstateDiagram-v2\n    [*] --> A\n```"
         result = gen.generate_state_diagram({"functions": []}, "设计说明")
         assert "stateDiagram-v2" in result
-        mock_llm.generate_text.assert_called_once()
+        prompt = mock_llm.generate_text.call_args[0][0]
+        assert "functions" in prompt
+        assert "设计说明" in prompt
 
     def test_generate_all_success(self):
         gen, mock_llm = self._make_gen()
