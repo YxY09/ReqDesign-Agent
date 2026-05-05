@@ -418,8 +418,24 @@ class TaskOrchestrator:
     def _try_repair(self, stage: str, output: Any,
                     vr: ValidationResult) -> tuple[Any, list]:
         """尝试修复"""
+        req_json = self.context.get("requirement_json") or {}
+
         def repair_fn(current, errors):
-            prompt = f"请修复以下问题:\n{chr(10).join(errors)}\n\n当前输出:\n{str(current)[:2000]}"
+            req_summary = str(req_json)[:500] if req_json else "无"
+            current_str = str(current)
+            # 在自然断点截断（换行符或句号）
+            if len(current_str) > 2000:
+                cut = current_str[:2000]
+                last_nl = cut.rfind('\n')
+                if last_nl > 1500:
+                    cut = cut[:last_nl]
+                current_str = cut + "\n...(截断)"
+            prompt = (
+                f"请修复以下输出中的问题。\n\n"
+                f"需求摘要: {req_summary}\n\n"
+                f"需要修复的问题:\n{chr(10).join(errors)}\n\n"
+                f"当前输出:\n{current_str}"
+            )
             if isinstance(current, dict):
                 return self.llm.generate_json(prompt)
             return self.llm.generate_text(prompt)
