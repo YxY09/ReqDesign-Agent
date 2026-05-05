@@ -52,7 +52,12 @@ class AgentConfig:
         if not data:
             logger.warning(f"配置文件为空: {path}，使用默认配置")
             return cls()
-        config = cls(_raw=data)
+        # 存储原始配置，但脱敏API密钥
+        import copy
+        safe_raw = copy.deepcopy(data)
+        if "llm" in safe_raw and "api_key" in safe_raw["llm"]:
+            safe_raw["llm"]["api_key"] = "***"
+        config = cls(_raw=safe_raw)
         if "llm" in data:
             for k, v in data["llm"].items():
                 if hasattr(config.llm, k):

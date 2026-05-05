@@ -128,6 +128,9 @@ class WorkflowController:
         except Exception as e:
             logger.error(f"审查修复失败，继续执行: {e}")
             degraded_phases.append("review")
+        if review_result.get("llm_error"):
+            degraded_phases.append("review_llm")
+            logger.warning(f"审查LLM调用失败: {review_result['llm_error']}")
         results["diagrams"] = repaired_diagrams
         results["review"] = review_result
 
