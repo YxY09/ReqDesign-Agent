@@ -15,6 +15,8 @@ logger = logging.getLogger("reqdesign")
 class TraceLogger:
     """全链路追踪记录器"""
 
+    MAX_ENTRIES = 5000
+
     def __init__(self, output_dir: str = ""):
         self.entries: list[TraceEntry] = []
         self.output_dir = output_dir
@@ -28,6 +30,8 @@ class TraceLogger:
             data=data or {},
         )
         self.entries.append(entry)
+        if len(self.entries) > self.MAX_ENTRIES:
+            self.entries = self.entries[-self.MAX_ENTRIES:]
         logger.debug(f"[Trace] {stage}/{event_type}: {_summarize_data(data)}")
 
     def log_llm_call(self, stage: str, method: str, messages: list,
@@ -198,7 +202,10 @@ class TracingLLMClient:
         try:
             result = self._client.generate_json(prompt, system)
             duration = time.time() - start
-            result_str = json.dumps(result, ensure_ascii=False) if result is not None else "null"
+            try:
+                result_str = json.dumps(result, ensure_ascii=False) if result is not None else "null"
+            except (TypeError, ValueError):
+                result_str = str(result)
             self._trace.log_llm_call(
                 self._stage, "generate_json",
                 [{"role": "user", "content": prompt}],

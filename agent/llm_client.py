@@ -130,19 +130,33 @@ class LLMClient:
         text = raw.strip()
 
         # 尝试从markdown代码块中提取
-        code_block = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
+        code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
         if code_block:
             return code_block.group(1).strip()
 
         # 尝试找到JSON对象的开始和结束
         start = text.find("{")
         if start >= 0:
-            # 从后往前找匹配的}
+            # 跟踪字符串上下文，避免字符串内的}干扰括号匹配
             depth = 0
+            in_string = False
+            escape_next = False
             for i in range(start, len(text)):
-                if text[i] == "{":
+                ch = text[i]
+                if ch == "\\" and in_string and not escape_next:
+                    escape_next = True
+                    continue
+                if escape_next:
+                    escape_next = False
+                    continue
+                if ch == '"' and not escape_next:
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                if ch == "{":
                     depth += 1
-                elif text[i] == "}":
+                elif ch == "}":
                     depth -= 1
                     if depth == 0:
                         return text[start:i+1]
@@ -189,9 +203,12 @@ class LLMClient:
 
         # 移除可能的尾部不完整内容（如截断的key或value）
         # 如果最后是引号后面跟着不完整内容，尝试清理
+        orig = result
         result = re.sub(r'",\s*"[^"]*$', '",', result)
         result = re.sub(r'":\s*"[^"]*$', '": null', result)
         result = re.sub(r'":\s*$', '": null', result)
+        if result != orig:
+            logger.warning("JSON截断补全：已将不完整的尾部值替换为null")
 
         # 添加缺失的闭合括号
         for closer in reversed(stack):

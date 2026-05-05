@@ -68,10 +68,16 @@ class ReviewAgent:
         # 2. 调用LLM进行语义审查
         requirement_summary = json.dumps(requirement_json, ensure_ascii=False, indent=2)
         # 防止用户内容中的模板占位符被二次替换
-        safe_design = design_text.replace("{requirement_json}", "").replace("{design_text}", "")
-        safe_class = diagrams.get("class_diagram", "").replace("{requirement_json}", "")
-        safe_activity = diagrams.get("activity_diagram", "").replace("{requirement_json}", "")
-        safe_state = diagrams.get("state_diagram", "").replace("{requirement_json}", "")
+        _placeholders = ("{requirement_json}", "{design_text}", "{class_diagram}", "{activity_diagram}", "{state_diagram}")
+        safe_design = design_text
+        safe_class = diagrams.get("class_diagram", "")
+        safe_activity = diagrams.get("activity_diagram", "")
+        safe_state = diagrams.get("state_diagram", "")
+        for ph in _placeholders:
+            safe_design = safe_design.replace(ph, "")
+            safe_class = safe_class.replace(ph, "")
+            safe_activity = safe_activity.replace(ph, "")
+            safe_state = safe_state.replace(ph, "")
         prompt = self.prompt_template.replace("{requirement_json}", requirement_summary)
         prompt = prompt.replace("{design_text}", safe_design)
         prompt = prompt.replace("{class_diagram}", safe_class)
@@ -127,9 +133,10 @@ class ReviewAgent:
 
         system_msg = "你是一个Mermaid语法修复专家。只输出修复后的Mermaid代码，不要输出其他内容。"
 
+        from agent.diagram_generator import DiagramGenerator
+
         def do_repair():
             raw = self.llm.generate_text(prompt, system=system_msg)
-            from agent.diagram_generator import DiagramGenerator
             return DiagramGenerator._extract_mermaid(raw, diagram_name)
 
         try:

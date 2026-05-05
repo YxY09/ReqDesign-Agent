@@ -49,6 +49,8 @@ ENTITY_NAME_MAP = {
 
 def _fuzzy_match_entity(entity_name: str, target: str) -> bool:
     """模糊匹配实体名称，支持中英文映射"""
+    entity_name = str(entity_name) if entity_name else ""
+    target = str(target) if target else ""
     if not entity_name or not target:
         return False
     # 直接匹配
@@ -133,6 +135,7 @@ FUNCTION_SYNONYMS = {
 
 def _fuzzy_match_function(func_name: str, result_functions: list[str], result_text: str) -> bool:
     """模糊匹配功能名称"""
+    func_name = str(func_name) if func_name else ""
     if not func_name:
         return False
     # 1. 直接子串匹配

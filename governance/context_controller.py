@@ -21,6 +21,8 @@ class ContextController:
         "output_manager": {"all_outputs"},
     }
 
+    MAX_HISTORY = 50
+
     def __init__(self):
         self._context: dict[str, Any] = {}
         self._history: list[dict] = []
@@ -53,13 +55,21 @@ class ContextController:
 
     def snapshot(self) -> dict:
         """保存当前上下文快照"""
-        snap = copy.deepcopy(self._context)
+        try:
+            snap = copy.deepcopy(self._context)
+        except TypeError:
+            snap = {k: str(v) for k, v in self._context.items()}
         self._history.append(snap)
+        if len(self._history) > self.MAX_HISTORY:
+            self._history = self._history[-self.MAX_HISTORY:]
         return snap
 
     def get_full_context(self) -> dict:
         """获取完整上下文（深拷贝，避免外部修改影响内部状态）"""
-        return copy.deepcopy(self._context)
+        try:
+            return copy.deepcopy(self._context)
+        except TypeError:
+            return {k: str(v) for k, v in self._context.items()}
 
     def get_history(self) -> list[dict]:
         """获取上下文变更历史"""
