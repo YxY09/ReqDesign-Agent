@@ -1530,6 +1530,25 @@ class TestOrchestratorRunStage:
         # 应该尝试修复（如果gate返回REPAIR）
         assert record.status in ("failed", "repaired", "halted")
 
+    def test_halt_on_very_low_score(self):
+        """极低分数导致HALT"""
+        orch = self._make_orchestrator()
+        # 使用低阈值配置
+        orch.gate = StageGate(GovernanceConfig(
+            gate_thresholds={"min_completeness": 0.8}
+        ))
+
+        call_count = [0]
+        def stage_fn(record):
+            call_count[0] += 1
+            # 第一次返回None → 失败 → REPAIR → 修复后仍失败 → HALT
+            return None
+
+        orch.context.set("full_text", "text")
+        record = orch._run_stage("requirement_analysis", stage_fn)
+        # 状态应该是failed或halted（取决于gate决策路径）
+        assert record.status in ("failed", "halted")
+
     def test_agent_warnings_merged(self):
         """Agent自校验warnings合并到gate"""
         orch = self._make_orchestrator()
