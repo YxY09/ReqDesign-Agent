@@ -28,6 +28,9 @@ class DiagramGenerator:
 
     def _build_prompt(self, template: str, requirement_json: dict, design_text: str) -> str:
         """构建完整Prompt"""
+        if not requirement_json:
+            requirement_json = {}
+        design_text = design_text or ""
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
         prompt = template.replace("{requirement_json}", req_str)
         prompt = prompt.replace("{design_text}", design_text)

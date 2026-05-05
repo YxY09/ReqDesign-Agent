@@ -56,6 +56,9 @@ class ReviewAgent:
             审查结果dict
         """
         diagrams = diagrams or {}
+        if not requirement_json:
+            requirement_json = {}
+        design_text = design_text or ""
         logger.info("开始审查设计产物...")
 
         # 1. 先做Mermaid语法校验
