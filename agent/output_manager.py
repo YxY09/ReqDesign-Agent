@@ -81,23 +81,25 @@ class OutputManager:
 
     def save_system_design(self, design_text: str):
         """保存系统设计说明"""
-        self._write_file("system_design.md", design_text)
+        self._write_file("system_design.md", design_text or "")
         logger.info("系统设计说明已保存")
 
     def save_diagrams(self, diagrams: dict):
         """保存Mermaid图文件"""
+        if not diagrams:
+            diagrams = {}
         for name, content in diagrams.items():
-            self._write_file(f"{name}.mmd", content)
+            self._write_file(f"{name}.mmd", content or "")
         logger.info(f"已保存 {len(diagrams)} 个图文件")
 
     def save_test_cases(self, test_cases: str):
         """保存测试用例"""
-        self._write_file("test_cases.md", test_cases)
+        self._write_file("test_cases.md", test_cases or "")
         logger.info("测试用例已保存")
 
     def save_review_report(self, review_report: str, review_result: dict = None):
         """保存审查报告"""
-        self._write_file("review_report.md", review_report)
+        self._write_file("review_report.md", review_report or "")
         if review_result:
             self._write_json("review_result.json", review_result)
         logger.info("审查报告已保存")
