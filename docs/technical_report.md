@@ -145,7 +145,55 @@ InputLoader → RequirementAnalyzer → DesignPlanner → DiagramGenerator
 - `mmdc` (mermaid-cli)：用于Mermaid图渲染和高级语法校验
 - `pandoc`：用于Markdown转PDF（文档生成）
 
-## 6. 自主实现与框架边界
+## 6. 治理框架
+
+### 6.1 设计理念
+
+治理框架采用"可选叠加"架构：不修改现有Agent代码，通过适配器/装饰器模式在流水线各阶段注入治理逻辑。默认不启用，通过 `--enable-governance` CLI参数开启。
+
+### 6.2 阶段门控（StageGate）
+
+每个阶段执行后，StageGate根据校验结果决定下一步：
+- **PROCEED**：校验通过，进入下一阶段
+- **RETRY**：可恢复错误（如空响应、超时），重试当前阶段
+- **REPAIR**：不可恢复错误，触发LLM修复流程
+- **HALT**：分数过低或达到修复上限，终止流水线
+
+### 6.3 全链路追踪（TraceLogger）
+
+TracingLLMClient透明包装LLMClient，捕获每次LLM调用的：
+- 输入消息数量和字符数
+- 输出字符数
+- 调用耗时
+- 错误信息
+
+追踪数据导出为JSON，支持事后分析和性能优化。
+
+### 6.4 修复控制（RepairController）
+
+多轮修复策略：
+1. 校验失败时，将错误信息和原始输出交给LLM修复
+2. 修复后立即重新校验
+3. 最多N轮修复（可配置），每轮记录 error → action → result
+4. 超过轮次标记为失败，不阻塞后续阶段
+
+### 6.5 人工检查点（HumanCheckpoint）
+
+在配置的阶段暂停，输出当前结果摘要，等待人工决策：
+- **CONTINUE**：继续执行
+- **MODIFY**：提供修改建议后继续
+- **REGENERATE**：重新生成当前阶段输出
+- **ABORT**：终止流水线
+
+### 6.6 Prompt注册（PromptRegistry）
+
+扫描 `prompts/` 目录，为每个Prompt模板计算内容hash作为版本号。支持按名称/版本查询，为A/B测试和Prompt迭代提供基础。
+
+### 6.7 效果评估（EvaluationManager）
+
+封装benchmark运行流程，支持多次运行取平均（消除LLM随机性），与历史结果对比生成趋势报告。
+
+## 7. 自主实现与框架边界
 
 本项目的核心流程控制、Agent编排、上下文管理均为自主实现，未使用LangGraph、CrewAI等框架。这种选择基于以下考虑：
 

@@ -2,15 +2,12 @@
 
 import json
 import logging
-import os
 import re
-from typing import Optional
 
 from agent.llm_client import LLMClient
+from agent.prompt_loader import load_prompt
 
 logger = logging.getLogger("reqdesign")
-
-PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 
 class RequirementAnalyzer:
@@ -18,16 +15,10 @@ class RequirementAnalyzer:
 
     def __init__(self, llm_client: LLMClient):
         self.llm = llm_client
-        self.prompt_template = self._load_prompt()
-
-    def _load_prompt(self) -> str:
-        """加载Prompt模板"""
-        prompt_path = os.path.join(PROMPT_DIR, "requirement_analysis.md")
-        if not os.path.exists(prompt_path):
-            logger.warning(f"Prompt模板不存在: {prompt_path}，使用默认模板")
-            return "请从以下需求文档中抽取结构化的需求要素，以JSON格式输出：\n\n{requirement_text}"
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            return f.read()
+        self.prompt_template = load_prompt(
+            "requirement_analysis.md",
+            "请从以下需求文档中抽取结构化的需求要素，以JSON格式输出：\n\n{requirement_text}",
+        )
 
     def analyze(self, requirement_text: str, max_retries: int = 3) -> dict:
         """分析需求文本，返回结构化JSON，JSON解析失败时自动重试"""

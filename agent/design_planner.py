@@ -2,13 +2,11 @@
 
 import json
 import logging
-import os
 
 from agent.llm_client import LLMClient
+from agent.prompt_loader import load_prompt
 
 logger = logging.getLogger("reqdesign")
-
-PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 
 class DesignPlanner:
@@ -16,16 +14,10 @@ class DesignPlanner:
 
     def __init__(self, llm_client: LLMClient):
         self.llm = llm_client
-        self.prompt_template = self._load_prompt()
-
-    def _load_prompt(self) -> str:
-        """加载Prompt模板"""
-        prompt_path = os.path.join(PROMPT_DIR, "design_planner.md")
-        if not os.path.exists(prompt_path):
-            logger.warning(f"Prompt模板不存在: {prompt_path}，使用默认模板")
-            return "请根据以下需求分析结果生成系统设计方案：\n\n{requirement_json}"
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            return f.read()
+        self.prompt_template = load_prompt(
+            "design_planner.md",
+            "请根据以下需求分析结果生成系统设计方案：\n\n{requirement_json}",
+        )
 
     def generate_design(self, requirement_json: dict) -> str:
         """根据需求JSON生成系统设计说明（Markdown格式）"""

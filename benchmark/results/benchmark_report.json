@@ -1,17 +1,17 @@
 {
-  "run_time": "2026-05-04 23:07:50",
+  "run_time": "2026-05-05 00:22:28",
   "total_cases": 5,
   "results": [
     {
       "case_name": "case1_library",
       "status": "success",
       "scores": {
-        "requirement_coverage": 84.2,
+        "requirement_coverage": 100.0,
         "diagram_syntax": 100.0,
         "entity_accuracy": 100.0,
         "process_completeness": 100.0,
-        "consistency": 100.0,
-        "overall": 93.7
+        "consistency": 95.0,
+        "overall": 99.5
       },
       "passed": true
     },
@@ -19,12 +19,12 @@
       "case_name": "case2_course",
       "status": "success",
       "scores": {
-        "requirement_coverage": 81.8,
+        "requirement_coverage": 100.0,
         "diagram_syntax": 100.0,
         "entity_accuracy": 100.0,
-        "process_completeness": 100.0,
-        "consistency": 100.0,
-        "overall": 92.7
+        "process_completeness": 83.3,
+        "consistency": 90.0,
+        "overall": 97.3
       },
       "passed": true
     },
@@ -32,12 +32,12 @@
       "case_name": "case3_mall",
       "status": "success",
       "scores": {
-        "requirement_coverage": 79.2,
+        "requirement_coverage": 95.8,
         "diagram_syntax": 100.0,
-        "entity_accuracy": 83.3,
-        "process_completeness": 83.3,
+        "entity_accuracy": 100.0,
+        "process_completeness": 100.0,
         "consistency": 100.0,
-        "overall": 86.7
+        "overall": 98.3
       },
       "passed": true
     },
@@ -45,12 +45,12 @@
       "case_name": "case4_hospital",
       "status": "success",
       "scores": {
-        "requirement_coverage": 91.7,
+        "requirement_coverage": 95.8,
         "diagram_syntax": 100.0,
         "entity_accuracy": 100.0,
         "process_completeness": 100.0,
         "consistency": 95.0,
-        "overall": 96.2
+        "overall": 97.8
       },
       "passed": true
     },
@@ -58,12 +58,12 @@
       "case_name": "case5_meeting",
       "status": "success",
       "scores": {
-        "requirement_coverage": 80.0,
+        "requirement_coverage": 90.0,
         "diagram_syntax": 100.0,
         "entity_accuracy": 100.0,
-        "process_completeness": 91.7,
+        "process_completeness": 100.0,
         "consistency": 95.0,
-        "overall": 90.7
+        "overall": 95.5
       },
       "passed": true
     }
@@ -73,12 +73,12 @@
     "failed": 0,
     "error": 0,
     "avg_scores": {
-      "requirement_coverage": 83.4,
+      "requirement_coverage": 96.3,
       "diagram_syntax": 100.0,
-      "entity_accuracy": 96.7,
-      "process_completeness": 95.0,
-      "consistency": 98.0,
-      "overall": 92.0
+      "entity_accuracy": 100.0,
+      "process_completeness": 96.7,
+      "consistency": 95.0,
+      "overall": 97.7
     }
   }
 }

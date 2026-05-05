@@ -179,15 +179,19 @@ def foo():
         valid, msg = validator.validate(diagram_with_comment, "activity_diagram")
         assert valid, f"带注释的流程图校验失败: {msg}"
 
-    def test_mermaid_validator_comment_ranges(self):
-        """测试注释区间检测"""
+    def test_mermaid_validator_comment_positions(self):
+        """测试注释位置检测"""
         content = "line1\n%% comment\nline3 %% inline\nline4"
-        ranges = MermaidValidator._find_comment_ranges(content)
-        assert len(ranges) == 2
-        # 行首注释
-        assert content[ranges[0][0]:ranges[0][1]] == "%% comment"
-        # 行内注释
-        assert content[ranges[1][0]:ranges[1][1]] == "%% inline"
+        positions = MermaidValidator._find_comment_positions(content)
+        # 行首注释 %% comment 的位置
+        assert 6 in positions   # '%%' 的第一个 %
+        assert 9 in positions   # 'c' of 'comment'
+        # 行内注释 %% inline 的位置
+        assert 23 in positions  # '%%' 的第一个 %
+        assert 26 in positions  # 'i' of 'inline'
+        # 非注释位置
+        assert 0 not in positions  # 'l' of 'line1'
+        assert 16 not in positions  # 换行符
 
     def test_output_manager(self, tmp_path):
         """测试输出管理"""

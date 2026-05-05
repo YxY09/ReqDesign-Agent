@@ -114,14 +114,6 @@ class MermaidValidator:
         return True, ""
 
     @staticmethod
-    def _find_comment_ranges(content: str) -> list[tuple[int, int]]:
-        """找出所有Mermaid注释区间（行首%% 和 行内%%）"""
-        ranges = []
-        for match in re.finditer(r'%%.*', content):
-            ranges.append((match.start(), match.end()))
-        return ranges
-
-    @staticmethod
     def _find_comment_positions(content: str) -> set[int]:
         """找出所有Mermaid注释字符位置（O(1)查找用）"""
         positions = set()

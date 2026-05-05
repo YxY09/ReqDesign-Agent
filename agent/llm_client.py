@@ -26,7 +26,10 @@ class LLMClient:
         """根据provider初始化对应客户端"""
         api_key = self.config.get_api_key()
         if not api_key:
-            logger.warning("未设置API密钥，LLM调用将失败")
+            raise ValueError(
+                f"未设置API密钥（provider={self.provider}）。"
+                f"请在config.yaml中设置 llm.api_key 或设置环境变量 {self.provider.upper()}_API_KEY"
+            )
 
         if self.provider in ("openai", "deepseek", "qwen"):
             from openai import OpenAI
@@ -134,6 +137,8 @@ class LLMClient:
             logger.warning("JSON可能被截断，尝试补全")
             return self._try_complete_json(text[start:])
 
+        # 没有找到JSON，返回原文本让解析器报更清晰的错误
+        logger.warning(f"LLM响应中未找到JSON对象，响应前200字符: {text[:200]}")
         return text
 
     def _try_complete_json(self, text: str) -> str:

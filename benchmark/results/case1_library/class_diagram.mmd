@@ -1,57 +1,63 @@
 classDiagram
-    class User {
-        -int id
-        -String username
-        -String password
-        -String role
-        -int maxBorrowLimit
-        +register()
-        +login()
-        +getProfile()
+    class 用户 {
+        -int 用户ID
+        -String 用户名
+        -String 密码
+        +登录()
     }
-    class Book {
-        -int id
-        -String title
-        -String author
-        -String isbn
-        -String status
-        +add()
-        +update()
-        +delete()
-        +search()
+    class 学生 {
+        -String 学号
+        -List~图书~ 当前借阅图书
+        +注册()
+        +搜索图书(String keyword)
+        +借阅图书(图书 book)
+        +归还图书(借阅记录 record)
+        +查看借阅记录()
     }
-    class BorrowRecord {
-        -int id
-        -int userId
-        -int bookId
-        -Date borrowDate
-        -Date dueDate
-        -Date returnDate
-        -String status
-        +create()
-        +updateReturn()
-        +checkOverdue()
+    class 管理员 {
+        -String 账号
+        +添加图书(图书 bookInfo)
+        +删除图书(int bookId)
+        +修改图书信息(int bookId, 图书 newInfo)
+        +查看所有借阅记录()
     }
-    class UserService {
-        +registerUser(UserDTO)
-        +authenticateUser(String username, String password)
+    class 图书 {
+        -int 图书ID
+        -String 书名
+        -String 作者
+        -String ISBN
+        -String 状态
+        +借阅()
+        +归还()
+        +更新信息()
     }
-    class BookService {
-        +addBook(BookDTO)
-        +updateBook(BookDTO)
-        +deleteBook(Long id)
-        +searchBooks(String keyword)
+    class 借阅记录 {
+        -int 记录ID
+        -Date 借阅日期
+        -Date 应还日期
+        -Date 实际归还日期
+        +创建()
+        +是否逾期() boolean
     }
-    class BorrowService {
-        +borrowBook(Long userId, Long bookId)
-        +returnBook(Long recordId)
-        +getUserBorrowRecords(Long userId)
-        +getAllBorrowRecords()
+    class 借阅服务 {
+        +借阅图书(int studentId, int bookId) 借阅记录
+        +归还图书(int recordId)
+        +检查借阅限制(int studentId) boolean
+        +计算罚款(int recordId) double
     }
-    User "1" --> "*" BorrowRecord
-    Book "1" --> "*" BorrowRecord
-    BorrowService ..> UserService
-    BorrowService ..> BookService
-    BorrowService ..> BorrowRecord
-    UserService ..> User
-    BookService ..> Book
+    class 图书服务 {
+        +搜索图书(String keyword) List~图书~
+        +添加图书(图书 bookInfo)
+        +更新图书(int bookId, 图书 newInfo)
+        +删除图书(int bookId)
+    }
+
+    用户 <|-- 学生
+    用户 <|-- 管理员
+    学生 "1" --> "*" 借阅记录 : 借阅
+    图书 "1" --> "*" 借阅记录 : 被借
+    管理员 "1" --> "*" 图书 : 管理
+    借阅服务 ..> 学生 : 依赖
+    借阅服务 ..> 图书 : 依赖
+    借阅服务 ..> 借阅记录 : 依赖
+    图书服务 ..> 图书 : 依赖

@@ -2,14 +2,12 @@
 
 import json
 import logging
-import os
 import re
 
 from agent.llm_client import LLMClient
+from agent.prompt_loader import load_prompt
 
 logger = logging.getLogger("reqdesign")
-
-PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 
 class TestCaseGenerator:
@@ -17,16 +15,10 @@ class TestCaseGenerator:
 
     def __init__(self, llm_client: LLMClient):
         self.llm = llm_client
-        self.prompt_template = self._load_prompt()
-
-    def _load_prompt(self) -> str:
-        """加载Prompt模板"""
-        prompt_path = os.path.join(PROMPT_DIR, "test_case.md")
-        if not os.path.exists(prompt_path):
-            logger.warning(f"Prompt模板不存在: {prompt_path}，使用默认模板")
-            return "请根据以下需求和设计生成测试用例：\n\n{requirement_json}\n\n{design_text}"
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            return f.read()
+        self.prompt_template = load_prompt(
+            "test_case.md",
+            "请根据以下需求和设计生成测试用例：\n\n{requirement_json}\n\n{design_text}",
+        )
 
     def generate(self, requirement_json: dict, design_text: str) -> str:
         """生成测试用例（Markdown格式）"""
@@ -66,6 +58,15 @@ class TestCaseGenerator:
             warnings.append("缺少异常场景测试用例")
         if not has_boundary:
             warnings.append("缺少边界场景测试用例")
+
+        # 检查测试用例数量
+        counts = self.count_test_cases(test_cases_md)
+        if counts["正常场景"] < 3:
+            warnings.append(f"正常场景测试用例不足（{counts['正常场景']}/3）")
+        if counts["异常场景"] < 2:
+            warnings.append(f"异常场景测试用例不足（{counts['异常场景']}/2）")
+        if counts["边界场景"] < 2:
+            warnings.append(f"边界场景测试用例不足（{counts['边界场景']}/2）")
 
         # 检查功能覆盖（大小写不敏感）
         functions = requirement_json.get("functions", [])

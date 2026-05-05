@@ -9,6 +9,16 @@
 │  │  CLI 命令行   │  │ VSCode 插件  │  │  Web API     │  │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  │
 ├─────────┴──────────────────┴──────────────────┴─────────┤
+│                    治理框架层（可选）                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │TaskOrch  │ │ StageGate│ │TraceLogger│ │  Repair  │  │
+│  │estrator  │ │          │ │          │ │Controller │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │Context   │ │  Tool    │ │  Human   │ │  Prompt  │  │
+│  │Controller│ │Validator │ │Checkpoint│ │ Registry │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+├─────────────────────────────────────────────────────────┤
 │                    智能体编排层                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │  │ WorkflowCtrl │  │ ContextMgr   │  │ RetryManager │  │
@@ -25,8 +35,8 @@
 ├─────────────────────────────────────────────────────────┤
 │                    工具与数据层                           │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │ LLMClient│ │ Mermaid  │ │ FileManager│ │ PromptLib│  │
-│  │          │ │ Validator│ │          │ │          │  │
+│  │LLMClient │ │ Mermaid  │ │FileManager│ │ PromptLib│  │
+│  │(Tracing) │ │ Validator│ │          │ │          │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -47,6 +57,16 @@
 | 重试管理 | 失败重试、历史记录 | retry_manager.py |
 | 输出管理 | 文件写入、报告生成 | output_manager.py |
 | LLM客户端 | 统一API调用 | llm_client.py |
+| **治理框架** | | **governance/** |
+| 任务编排器 | 治理模式任务编排 | orchestrator.py |
+| 阶段门控 | 阶段校验与决策 | stage_gate.py |
+| 上下文控制 | 阶段间上下文管理 | context_controller.py |
+| Prompt注册 | Prompt版本化管理 | prompt_registry.py |
+| 工具校验 | JSON/Mermaid/Markdown校验 | tool_validator.py |
+| 修复控制 | 多轮修复策略 | repair_controller.py |
+| 人工检查点 | 关键节点人工确认 | human_checkpoint.py |
+| 全链路追踪 | LLM调用/阶段追踪 | trace_logger.py |
+| 评估管理 | Benchmark与趋势分析 | evaluation_manager.py |
 | 配置管理 | 配置加载、验证 | config.py |
 | 日志系统 | 日志记录 | logger.py |
 

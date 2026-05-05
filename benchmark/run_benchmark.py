@@ -17,8 +17,10 @@ from benchmark.scorer import (
     score_diagram_syntax,
     score_entity_accuracy,
     score_process_completeness,
+    score_state_diagram,
     score_consistency,
     compute_overall_score,
+    compute_run_summary,
 )
 
 
@@ -92,6 +94,7 @@ class BenchmarkRunner:
         scores["diagram_syntax"] = score_diagram_syntax(diagrams)
         scores["entity_accuracy"] = score_entity_accuracy(req_result, gold)
         scores["process_completeness"] = score_process_completeness(diagrams, gold)
+        scores["state_diagram"] = score_state_diagram(diagrams, gold)
         scores["consistency"] = score_consistency(req_result, diagrams)
         scores["overall"] = compute_overall_score(
             scores["requirement_coverage"],
@@ -99,6 +102,7 @@ class BenchmarkRunner:
             scores["entity_accuracy"],
             scores["process_completeness"],
             scores["consistency"],
+            scores["state_diagram"],
         )
 
         passed = scores["overall"] >= 80
@@ -149,25 +153,8 @@ class BenchmarkRunner:
         return report
 
     def _compute_summary(self, results: list[dict]) -> dict:
-        """计算汇总统计"""
-        success_results = [r for r in results if r["status"] == "success"]
-        if not success_results:
-            return {"passed": 0, "failed": 0, "avg_score": 0}
-
-        passed = sum(1 for r in success_results if r.get("passed", False))
-        failed = len(success_results) - passed
-
-        avg_scores = {}
-        for metric in ["requirement_coverage", "diagram_syntax", "entity_accuracy", "process_completeness", "consistency", "overall"]:
-            values = [r["scores"].get(metric, 0) for r in success_results]
-            avg_scores[metric] = round(sum(values) / len(values), 1) if values else 0
-
-        return {
-            "passed": passed,
-            "failed": failed,
-            "error": len(results) - len(success_results),
-            "avg_scores": avg_scores,
-        }
+        """计算汇总统计（委托给scorer.compute_run_summary）"""
+        return compute_run_summary(results)
 
     def _generate_md_report(self, report: dict) -> str:
         """生成Markdown格式的报告"""
@@ -190,12 +177,13 @@ class BenchmarkRunner:
             lines.append(f"| 图语法通过率 | {avg.get('diagram_syntax', 0)} |")
             lines.append(f"| 实体识别准确率 | {avg.get('entity_accuracy', 0)} |")
             lines.append(f"| 流程完整性 | {avg.get('process_completeness', 0)} |")
+            lines.append(f"| 状态图完整性 | {avg.get('state_diagram', 0)} |")
             lines.append(f"| 一致性 | {avg.get('consistency', 0)} |")
             lines.append(f"| **综合得分** | **{avg.get('overall', 0)}** |")
 
         lines.append(f"\n## 各案例详情\n")
-        lines.append("| 案例 | 状态 | 需求覆盖 | 图语法 | 实体准确 | 流程完整 | 一致性 | 综合 | 通过 |")
-        lines.append("|------|------|----------|--------|----------|----------|--------|------|------|")
+        lines.append("| 案例 | 状态 | 需求覆盖 | 图语法 | 实体准确 | 流程完整 | 状态图 | 一致性 | 综合 | 通过 |")
+        lines.append("|------|------|----------|--------|----------|----------|--------|--------|------|------|")
 
         for r in report.get("results", []):
             name = r["case_name"]
@@ -203,9 +191,9 @@ class BenchmarkRunner:
             if status == "success":
                 s = r["scores"]
                 passed = "是" if r.get("passed") else "否"
-                lines.append(f"| {name} | {status} | {s.get('requirement_coverage', 0)} | {s.get('diagram_syntax', 0)} | {s.get('entity_accuracy', 0)} | {s.get('process_completeness', 0)} | {s.get('consistency', 0)} | {s.get('overall', 0)} | {passed} |")
+                lines.append(f"| {name} | {status} | {s.get('requirement_coverage', 0)} | {s.get('diagram_syntax', 0)} | {s.get('entity_accuracy', 0)} | {s.get('process_completeness', 0)} | {s.get('state_diagram', 0)} | {s.get('consistency', 0)} | {s.get('overall', 0)} | {passed} |")
             else:
-                lines.append(f"| {name} | {status} | - | - | - | - | - | - | - |")
+                lines.append(f"| {name} | {status} | - | - | - | - | - | - | - | - |")
 
         lines.append("")
         return "\n".join(lines)

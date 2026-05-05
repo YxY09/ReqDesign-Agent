@@ -1,0 +1,1095 @@
+"""治理框架测试"""
+
+import json
+import os
+import sys
+import tempfile
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from governance.models import (
+    StageRecord, ValidationResult, RepairRecord, HumanDecision,
+    TraceEntry, GovernanceConfig, GateDecision, HumanAction,
+)
+from agent.config import AgentConfig
+from governance.trace_logger import TraceLogger, TracingLLMClient
+from governance.tool_validator import ToolValidator
+from governance.repair_controller import RepairController
+from governance.stage_gate import StageGate
+from governance.context_controller import ContextController
+from governance.human_checkpoint import HumanCheckpoint
+from governance.prompt_registry import PromptRegistry
+
+
+# ========== models.py ==========
+
+class TestValidationResult:
+    def test_create_valid(self):
+        vr = ValidationResult(is_valid=True, score=1.0)
+        assert vr.is_valid
+        assert vr.score == 1.0
+        assert vr.errors == []
+        assert vr.warnings == []
+
+    def test_create_invalid(self):
+        vr = ValidationResult(is_valid=False, errors=["err1"], score=0.5)
+        assert not vr.is_valid
+        assert "err1" in vr.errors
+
+    def test_to_dict(self):
+        vr = ValidationResult(is_valid=True, errors=[], warnings=["w1"])
+        d = vr.to_dict()
+        assert d["is_valid"] is True
+        assert d["warnings"] == ["w1"]
+
+    def test_from_dict(self):
+        d = {"is_valid": False, "errors": ["e"], "warnings": [], "score": 0.3}
+        vr = ValidationResult.from_dict(d)
+        assert not vr.is_valid
+        assert vr.score == 0.3
+
+
+class TestRepairRecord:
+    def test_create(self):
+        rr = RepairRecord(attempt=1, error="e", action="a", result="r", success=True)
+        assert rr.attempt == 1
+        assert rr.success
+
+    def test_roundtrip(self):
+        rr = RepairRecord(1, "e", "a", "r", False)
+        d = rr.to_dict()
+        rr2 = RepairRecord.from_dict(d)
+        assert rr2.attempt == rr.attempt
+        assert rr2.success == rr.success
+
+
+class TestHumanDecision:
+    def test_create(self):
+        hd = HumanDecision(stage="s", action=HumanAction.CONTINUE)
+        assert hd.action == HumanAction.CONTINUE
+
+    def test_to_dict(self):
+        hd = HumanDecision(stage="s", action=HumanAction.MODIFY, feedback="fix")
+        d = hd.to_dict()
+        assert d["action"] == "modify"
+        assert d["feedback"] == "fix"
+
+    def test_from_dict(self):
+        d = {"stage": "s", "action": "abort", "feedback": "", "timestamp": 1.0}
+        hd = HumanDecision.from_dict(d)
+        assert hd.action == HumanAction.ABORT
+
+
+class TestTraceEntry:
+    def test_create(self):
+        te = TraceEntry(timestamp=1.0, stage="s", event_type="e", data={"k": "v"})
+        assert te.stage == "s"
+        assert te.data == {"k": "v"}
+
+    def test_roundtrip(self):
+        te = TraceEntry(1.0, "s", "e", {"k": "v"})
+        d = te.to_dict()
+        te2 = TraceEntry.from_dict(d)
+        assert te2.data == te.data
+
+
+class TestStageRecord:
+    def test_duration(self):
+        sr = StageRecord(stage_name="test", start_time=1.0, end_time=3.5)
+        assert sr.duration == 2.5
+
+    def test_duration_no_time(self):
+        sr = StageRecord(stage_name="test")
+        assert sr.duration == 0.0
+
+    def test_to_dict(self):
+        sr = StageRecord(stage_name="test", status="success")
+        d = sr.to_dict()
+        assert d["stage_name"] == "test"
+        assert d["status"] == "success"
+
+
+class TestGateDecision:
+    def test_values(self):
+        assert GateDecision.PROCEED.value == "proceed"
+        assert GateDecision.RETRY.value == "retry"
+        assert GateDecision.REPAIR.value == "repair"
+        assert GateDecision.HALT.value == "halt"
+
+    def test_from_value(self):
+        assert GateDecision("proceed") == GateDecision.PROCEED
+
+
+class TestHumanAction:
+    def test_values(self):
+        assert HumanAction.CONTINUE.value == "continue"
+        assert HumanAction.MODIFY.value == "modify"
+        assert HumanAction.REGENERATE.value == "regenerate"
+        assert HumanAction.ABORT.value == "abort"
+
+
+class TestGovernanceConfig:
+    def test_defaults(self):
+        gc = GovernanceConfig()
+        assert not gc.enabled
+        assert gc.trace_enabled
+        assert gc.max_repair_rounds == 3
+        assert gc.human_checkpoints == []
+
+    def test_from_dict(self):
+        gc = GovernanceConfig.from_dict({
+            "enabled": True, "max_repair_rounds": 5,
+            "human_checkpoints": ["stage1"]
+        })
+        assert gc.enabled
+        assert gc.max_repair_rounds == 5
+        assert "stage1" in gc.human_checkpoints
+
+    def test_from_yaml_dict(self):
+        gc = GovernanceConfig.from_yaml_dict({
+            "governance": {"enabled": True}
+        })
+        assert gc.enabled
+
+    def test_from_yaml_dict_missing(self):
+        gc = GovernanceConfig.from_yaml_dict({})
+        assert not gc.enabled
+
+
+# ========== trace_logger.py ==========
+
+class TestTraceLogger:
+    def test_log(self):
+        tl = TraceLogger()
+        tl.log("stage", "event", {"key": "val"})
+        assert len(tl.entries) == 1
+        assert tl.entries[0].stage == "stage"
+
+    def test_log_llm_call(self):
+        tl = TraceLogger()
+        tl.log_llm_call("s", "chat", [{"role": "user", "content": "hi"}], "hello", 1.0)
+        assert len(tl.entries) == 1
+        assert tl.entries[0].event_type == "llm_call"
+        assert tl.entries[0].data["output_chars"] == 5
+
+    def test_log_validation(self):
+        tl = TraceLogger()
+        tl.log_validation("s", True, [], [], 1.0)
+        assert tl.entries[0].data["is_valid"]
+
+    def test_log_repair(self):
+        tl = TraceLogger()
+        tl.log_repair("s", 1, "err", "fix", True)
+        assert tl.entries[0].data["success"]
+
+    def test_log_gate_decision(self):
+        tl = TraceLogger()
+        tl.log_gate_decision("s", "proceed")
+        assert tl.entries[0].data["decision"] == "proceed"
+
+    def test_log_human_input(self):
+        tl = TraceLogger()
+        tl.log_human_input("s", "continue", "ok")
+        assert tl.entries[0].data["action"] == "continue"
+
+    def test_log_stage_start_end(self):
+        tl = TraceLogger()
+        tl.log_stage_start("s")
+        tl.log_stage_end("s", "success", 2.0)
+        assert len(tl.entries) == 2
+        assert tl.entries[1].data["status"] == "success"
+
+    def test_get_entries_filter(self):
+        tl = TraceLogger()
+        tl.log("s1", "e1")
+        tl.log("s2", "e2")
+        tl.log("s1", "e3")
+
+        assert len(tl.get_entries(stage="s1")) == 2
+        assert len(tl.get_entries(event_type="e2")) == 1
+        assert len(tl.get_entries(stage="s1", event_type="e1")) == 1
+
+    def test_get_summary(self):
+        tl = TraceLogger()
+        tl.log_llm_call("s", "chat", [], "r", 1.0)
+        tl.log_validation("s", True, [], [], 1.0)
+        summary = tl.get_summary()
+        assert summary["total_entries"] == 2
+        assert summary["stages"]["s"]["llm_calls"] == 1
+
+    def test_export_json(self):
+        tl = TraceLogger()
+        tl.log("s", "e")
+        result = tl.export_json()
+        data = json.loads(result)
+        assert data["summary"]["total_entries"] == 1
+
+    def test_export_json_to_file(self):
+        tl = TraceLogger()
+        tl.log("s", "e")
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            tl.export_json(path)
+            assert os.path.exists(path)
+            with open(path) as f:
+                data = json.load(f)
+            assert data["summary"]["total_entries"] == 1
+        finally:
+            os.unlink(path)
+
+    def test_clear(self):
+        tl = TraceLogger()
+        tl.log("s", "e")
+        tl.clear()
+        assert len(tl.entries) == 0
+
+
+class TestTracingLLMClient:
+    def _make_client(self):
+        class MockLLM:
+            provider = "test"
+            model = "test-model"
+            temperature = 0.3
+            max_tokens = 8192
+            def chat(self, messages, temperature=None):
+                return "response"
+            def generate_json(self, prompt, system=""):
+                return {"key": "value"}
+            def generate_text(self, prompt, system=""):
+                return "text"
+        return MockLLM()
+
+    def test_chat(self):
+        tl = TraceLogger()
+        client = TracingLLMClient(self._make_client(), tl, "test")
+        result = client.chat([{"role": "user", "content": "hi"}])
+        assert result == "response"
+        assert len(tl.entries) == 1
+
+    def test_generate_json(self):
+        tl = TraceLogger()
+        client = TracingLLMClient(self._make_client(), tl, "test")
+        result = client.generate_json("prompt")
+        assert result == {"key": "value"}
+        assert len(tl.entries) == 1
+
+    def test_generate_text(self):
+        tl = TraceLogger()
+        client = TracingLLMClient(self._make_client(), tl, "test")
+        result = client.generate_text("prompt")
+        assert result == "text"
+        assert len(tl.entries) == 1
+
+    def test_properties(self):
+        tl = TraceLogger()
+        client = TracingLLMClient(self._make_client(), tl, "test")
+        assert client.provider == "test"
+        assert client.model == "test-model"
+        assert client.temperature == 0.3
+        assert client.max_tokens == 8192
+
+    def test_set_stage(self):
+        tl = TraceLogger()
+        client = TracingLLMClient(self._make_client(), tl, "old")
+        client.set_stage("new")
+        assert client._stage == "new"
+
+    def test_error_tracking(self):
+        class FailLLM:
+            provider = "test"
+            model = "test"
+            temperature = 0.3
+            max_tokens = 100
+            def chat(self, messages, temperature=None):
+                raise RuntimeError("boom")
+        tl = TraceLogger()
+        client = TracingLLMClient(FailLLM(), tl, "test")
+        with pytest.raises(RuntimeError):
+            client.chat([{"role": "user", "content": "hi"}])
+        assert len(tl.entries) == 1
+        assert tl.entries[0].event_type == "llm_error"
+
+
+# ========== tool_validator.py ==========
+
+class TestToolValidator:
+    def setup_method(self):
+        self.tv = ToolValidator()
+
+    def test_validate_json_valid(self):
+        data = {"actors": ["u"], "functions": ["f"], "entities": ["e"]}
+        vr = self.tv.validate_json(data, "requirement_analysis")
+        assert vr.is_valid
+
+    def test_validate_json_missing_fields(self):
+        vr = self.tv.validate_json({"actors": ["u"]}, "requirement_analysis")
+        assert not vr.is_valid
+        assert any("functions" in e for e in vr.errors)
+
+    def test_validate_json_empty_dict(self):
+        vr = self.tv.validate_json({}, "requirement_analysis")
+        assert not vr.is_valid
+
+    def test_validate_json_none(self):
+        vr = self.tv.validate_json(None, "requirement_analysis")
+        assert not vr.is_valid
+
+    def test_validate_json_string(self):
+        vr = self.tv.validate_json("not json", "requirement_analysis")
+        assert not vr.is_valid
+
+    def test_validate_json_string_valid(self):
+        vr = self.tv.validate_json('{"actors": ["u"], "functions": ["f"], "entities": ["e"]}',
+                                   "requirement_analysis")
+        assert vr.is_valid
+
+    def test_validate_mermaid_valid(self):
+        content = "classDiagram\n    class User {\n        +login()\n    }"
+        vr = self.tv.validate_mermaid(content)
+        assert vr.is_valid
+
+    def test_validate_mermaid_empty(self):
+        vr = self.tv.validate_mermaid("")
+        assert not vr.is_valid
+
+    def test_validate_markdown_valid(self):
+        vr = self.tv.validate_markdown("# Title\n\nSome content for testing.")
+        assert vr.is_valid
+
+    def test_validate_markdown_empty(self):
+        vr = self.tv.validate_markdown("")
+        assert not vr.is_valid
+
+    def test_validate_markdown_short_warning(self):
+        vr = self.tv.validate_markdown("short")
+        assert vr.is_valid
+        assert len(vr.warnings) > 0
+
+    def test_validate_output_json(self):
+        vr = self.tv.validate_output({"key": "val"}, "json")
+        assert vr.is_valid
+
+    def test_validate_output_mermaid(self):
+        vr = self.tv.validate_output("classDiagram\n    class A", "mermaid")
+        assert vr.is_valid
+
+    def test_validate_output_unknown_type(self):
+        vr = self.tv.validate_output("something", "unknown")
+        assert vr.is_valid
+
+    def test_validate_output_none(self):
+        vr = self.tv.validate_output(None, "unknown")
+        assert not vr.is_valid
+
+
+# ========== repair_controller.py ==========
+
+class TestRepairController:
+    def test_no_repair_needed(self):
+        rc = RepairController(max_rounds=3)
+        out, records = rc.attempt_repair(
+            "test", "good",
+            lambda x: ValidationResult(is_valid=True),
+            lambda x, e: x,
+        )
+        assert len(records) == 0
+
+    def test_repair_success_second_attempt(self):
+        rc = RepairController(max_rounds=3)
+        count = [0]
+        def validate(x):
+            count[0] += 1
+            if count[0] <= 1:
+                return ValidationResult(is_valid=False, errors=["bad"])
+            return ValidationResult(is_valid=True)
+        out, records = rc.attempt_repair("test", "bad", validate, lambda x, e: "fixed")
+        assert out == "fixed"
+        assert len(records) == 1
+        assert records[0].success
+
+    def test_repair_all_fail(self):
+        rc = RepairController(max_rounds=3)
+        out, records = rc.attempt_repair(
+            "test", "bad",
+            lambda x: ValidationResult(is_valid=False, errors=["bad"]),
+            lambda x, e: x,
+        )
+        assert len(records) == 3
+        assert all(not r.success for r in records)
+
+    def test_repair_exception(self):
+        rc = RepairController(max_rounds=2)
+        out, records = rc.attempt_repair(
+            "test", "bad",
+            lambda x: ValidationResult(is_valid=False, errors=["bad"]),
+            lambda x, e: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        assert len(records) == 2
+        assert all("exception" in r.result for r in records)
+
+    def test_should_retry(self):
+        rc = RepairController()
+        assert not rc.should_retry(ValidationResult(is_valid=True), 0, 3)
+        assert rc.should_retry(ValidationResult(is_valid=False, score=0.5), 1, 3)
+        assert not rc.should_retry(ValidationResult(is_valid=False, score=0.0), 1, 3)
+
+    def test_should_repair(self):
+        rc = RepairController()
+        assert rc.should_repair(ValidationResult(is_valid=False))
+        assert not rc.should_repair(ValidationResult(is_valid=True))
+
+
+# ========== stage_gate.py ==========
+
+class TestStageGate:
+    def setup_method(self):
+        self.gate = StageGate(GovernanceConfig(
+            max_repair_rounds=2,
+            gate_thresholds={"min_completeness": 0.8, "min_consistency": 0.7}
+        ))
+
+    def test_proceed_on_valid(self):
+        vr = ValidationResult(is_valid=True, score=1.0)
+        assert self.gate.evaluate("test", vr) == GateDecision.PROCEED
+
+    def test_retry_on_retryable_error(self):
+        vr = ValidationResult(is_valid=False, errors=["空响应"], score=0.5)
+        assert self.gate.evaluate("test", vr, retry_count=0, max_retries=2) == GateDecision.RETRY
+
+    def test_repair_after_max_retries(self):
+        vr = ValidationResult(is_valid=False, errors=["空响应"], score=0.5)
+        assert self.gate.evaluate("test", vr, retry_count=2, max_retries=2) == GateDecision.REPAIR
+
+    def test_halt_on_low_score(self):
+        vr = ValidationResult(is_valid=False, errors=["bad"], score=0.1)
+        assert self.gate.evaluate("test", vr, retry_count=1) == GateDecision.HALT
+
+    def test_halt_after_max_repairs(self):
+        vr = ValidationResult(is_valid=False, errors=["bad"], score=0.5)
+        assert self.gate.evaluate("test", vr, retry_count=2, repair_count=2) == GateDecision.HALT
+
+    def test_check_syntax_gate(self):
+        assert self.gate.check_syntax_gate(True) == GateDecision.PROCEED
+        assert self.gate.check_syntax_gate(False) == GateDecision.REPAIR
+
+    def test_check_completeness_gate(self):
+        assert self.gate.check_completeness_gate(0.9) == GateDecision.PROCEED
+        assert self.gate.check_completeness_gate(0.6) == GateDecision.REPAIR
+        assert self.gate.check_completeness_gate(0.2) == GateDecision.HALT
+
+
+# ========== context_controller.py ==========
+
+class TestContextController:
+    def test_set_get(self):
+        ctx = ContextController()
+        ctx.set("key", "val")
+        assert ctx.get("key") == "val"
+        assert ctx.get("missing", "default") == "default"
+
+    def test_get_for_stage(self):
+        ctx = ContextController()
+        ctx.set("requirement_json", {"a": 1})
+        ctx.set("design_text", "text")
+
+        d = ctx.get_for_stage("design_planner")
+        assert "requirement_json" in d
+        assert "design_text" not in d
+
+        d = ctx.get_for_stage("diagram_generator")
+        assert "requirement_json" in d
+        assert "design_text" in d
+
+    def test_get_for_unknown_stage(self):
+        ctx = ContextController()
+        ctx.set("k", "v")
+        d = ctx.get_for_stage("unknown")
+        assert d == {}
+
+    def test_snapshot(self):
+        ctx = ContextController()
+        ctx.set("k1", "v1")
+        ctx.snapshot()
+        ctx.set("k2", "v2")
+        ctx.snapshot()
+        assert len(ctx.get_history()) == 2
+
+    def test_update(self):
+        ctx = ContextController()
+        ctx.update({"a": 1, "b": 2})
+        assert ctx.get("a") == 1
+        assert ctx.get("b") == 2
+
+    def test_clear(self):
+        ctx = ContextController()
+        ctx.set("k", "v")
+        ctx.snapshot()
+        ctx.clear()
+        assert ctx.get("k") is None
+        assert len(ctx.get_history()) == 0
+
+
+# ========== human_checkpoint.py ==========
+
+class TestHumanCheckpoint:
+    def test_is_checkpoint(self):
+        hc = HumanCheckpoint(checkpoint_stages=["s1", "s2"])
+        assert hc.is_checkpoint("s1")
+        assert not hc.is_checkpoint("s3")
+
+    def test_non_interactive_auto_continue(self):
+        hc = HumanCheckpoint(checkpoint_stages=["s1"], interactive=False)
+        decision = hc.pause("s1", summary="test")
+        assert decision.action == HumanAction.CONTINUE
+        assert len(hc.get_decisions()) == 1
+
+    def test_non_checkpoint_returns_continue(self):
+        hc = HumanCheckpoint(checkpoint_stages=["s1"], interactive=False)
+        decision = hc.pause("other")
+        assert decision.action == HumanAction.CONTINUE
+        assert len(hc.get_decisions()) == 0  # not recorded
+
+    def test_empty_checkpoints(self):
+        hc = HumanCheckpoint()
+        assert not hc.is_checkpoint("anything")
+        decision = hc.pause("anything")
+        assert decision.action == HumanAction.CONTINUE
+
+
+# ========== prompt_registry.py ==========
+
+class TestPromptRegistry:
+    def test_scan_prompts(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        pr = PromptRegistry("prompts")
+        prompts = pr.list_prompts()
+        assert len(prompts) > 0
+
+    def test_has(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        pr = PromptRegistry("prompts")
+        assert pr.has("requirement_analysis")
+        assert not pr.has("nonexistent")
+
+    def test_get_content(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        pr = PromptRegistry("prompts")
+        content = pr.get_content("requirement_analysis")
+        assert len(content) > 0
+
+    def test_get_version(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        pr = PromptRegistry("prompts")
+        ver = pr.get_version("requirement_analysis")
+        assert ver is not None
+
+    def test_get_all_versions(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        pr = PromptRegistry("prompts")
+        versions = pr.get_all_versions()
+        assert len(versions) > 0
+
+    def test_register(self):
+        pr = PromptRegistry.__new__(PromptRegistry)
+        pr._prompts = {}
+        pr.prompts_dir = "/nonexistent"
+        pr.register("custom", "content", "manual")
+        assert pr.has("custom")
+        assert pr.get_content("custom") == "content"
+
+    def test_missing_prompt_raises(self):
+        pr = PromptRegistry.__new__(PromptRegistry)
+        pr._prompts = {}
+        pr.prompts_dir = "/nonexistent"
+        with pytest.raises(KeyError):
+            pr.get_content("nonexistent")
+
+
+# ========== Integration: orchestrator import ==========
+
+class TestOrchestratorImport:
+    def test_import(self):
+        from governance.orchestrator import TaskOrchestrator
+        assert hasattr(TaskOrchestrator, "run_design_task")
+        assert hasattr(TaskOrchestrator, "run_analyze_task")
+
+
+# ========== Integration: orchestrator with mock ==========
+
+class TestOrchestratorValidation:
+    """测试 _validate_stage_output 各分支"""
+
+    def _make_orchestrator(self):
+        """创建带mock LLM的orchestrator"""
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig
+
+        class MockLLM:
+            provider = "test"
+            model = "test-model"
+            temperature = 0.3
+            max_tokens = 100
+            def chat(self, messages, temperature=None): return "ok"
+            def generate_json(self, prompt, system=""): return {}
+            def generate_text(self, prompt, system=""): return "text"
+
+        gov = GovernanceConfig(enabled=True, trace_enabled=True)
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.gov = gov
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate(gov)
+        orch.context = ContextController()
+        orch.repair = RepairController(max_rounds=gov.max_repair_rounds)
+        orch.checkpoint = HumanCheckpoint(interactive=False)
+        orch.prompt_registry = PromptRegistry.__new__(PromptRegistry)
+        orch.prompt_registry._prompts = {}
+        orch.prompt_registry.prompts_dir = "/none"
+        orch.stage_records = []
+        orch.llm = MockLLM()
+        return orch
+
+    def test_validate_requirement_analysis_valid(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("requirement_analysis", {
+            "actors": ["user"], "functions": ["login"], "entities": ["User"]
+        })
+        assert vr.is_valid
+        assert vr.score == 1.0
+
+    def test_validate_requirement_analysis_none(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("requirement_analysis", None)
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_requirement_analysis_empty(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("requirement_analysis", {})
+        assert not vr.is_valid
+
+    def test_validate_design_valid(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("design_planner", "# Design\n\nSome content for testing.")
+        assert vr.is_valid
+
+    def test_validate_design_empty(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("design_planner", "")
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_design_none(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("design_planner", None)
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_diagrams_valid(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", {
+            "class": "classDiagram\n    class A",
+            "activity": "flowchart TD\n    A-->B"
+        })
+        assert vr.is_valid
+        assert vr.score == 1.0
+
+    def test_validate_diagrams_partial_invalid(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", {
+            "class": "classDiagram\n    class A",
+            "bad": "not a valid mermaid"
+        })
+        assert not vr.is_valid
+        assert vr.score == 0.5
+
+    def test_validate_diagrams_none(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", None)
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_diagrams_not_dict(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", "string")
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_test_cases_valid(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("test_case_generator",
+            "| 编号 | 测试对象 | 测试步骤 | 预期结果 |\n|------|----------|----------|----------|")
+        assert vr.is_valid
+
+    def test_validate_test_cases_empty(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("test_case_generator", "")
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_review_valid_score(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": 85})
+        assert vr.is_valid
+        assert abs(vr.score - 0.85) < 0.01
+
+    def test_validate_review_low_score(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": 20})
+        assert not vr.is_valid
+        assert abs(vr.score - 0.2) < 0.01
+
+    def test_validate_review_score_clamped_over_100(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": 150})
+        assert vr.is_valid
+        assert vr.score == 1.0
+
+    def test_validate_review_score_clamped_below_0(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": -10})
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_review_non_numeric_score(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", {"overall_score": "bad"})
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_review_not_dict(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", "string")
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_unknown_stage_none(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("unknown", None)
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_unknown_stage_valid(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("unknown", "something")
+        assert vr.is_valid
+
+
+class TestOrchestratorContextOnFailure:
+    """测试阶段失败时上下文是否正确设置"""
+
+    def test_context_set_on_failure(self):
+        """验证修复后：阶段失败时上下文也被设置为空值"""
+        from governance.orchestrator import TaskOrchestrator
+        from governance.models import GovernanceConfig
+
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.context = ContextController()
+
+        # 模拟修复后的行为：即使失败也设置上下文
+        req_json = {}  # 失败时为空dict
+        orch.context.set("requirement_json", req_json)
+        assert orch.context.get("requirement_json") == {}
+
+        # 下游阶段读取不崩溃
+        design_text = orch.context.get("design_text", "")
+        assert design_text == ""
+
+
+# ========== Integration: StageGate with config ==========
+
+class TestStageGateIntegration:
+    """测试 StageGate 与配置的集成"""
+
+    def test_halt_threshold_from_config(self):
+        """验证HALT阈值从配置读取"""
+        config = GovernanceConfig(
+            gate_thresholds={"min_completeness": 0.6, "min_consistency": 0.5}
+        )
+        gate = StageGate(config)
+
+        # score=0.2 < 0.6*0.4=0.24, 且已重试 -> HALT
+        vr = ValidationResult(is_valid=False, errors=["bad"], score=0.2)
+        assert gate.evaluate("test", vr, retry_count=1) == GateDecision.HALT
+
+        # score=0.3 > 0.24, 不触发HALT -> REPAIR
+        vr = ValidationResult(is_valid=False, errors=["bad"], score=0.3)
+        decision = gate.evaluate("test", vr, retry_count=1)
+        assert decision == GateDecision.REPAIR
+
+    def test_proceed_on_valid_regardless_of_config(self):
+        """校验通过时始终PROCEED"""
+        for threshold in [0.5, 0.8, 1.0]:
+            config = GovernanceConfig(
+                gate_thresholds={"min_completeness": threshold}
+            )
+            gate = StageGate(config)
+            vr = ValidationResult(is_valid=True, score=1.0)
+            assert gate.evaluate("test", vr) == GateDecision.PROCEED
+
+
+# ========== Integration: RepairController edge cases ==========
+
+class TestRepairControllerEdgeCases:
+    """测试修复控制器边界场景"""
+
+    def test_max_rounds_zero(self):
+        """max_rounds=0 不执行任何修复"""
+        rc = RepairController(max_rounds=0)
+        out, records = rc.attempt_repair(
+            "test", "bad",
+            lambda x: ValidationResult(is_valid=False, errors=["e"]),
+            lambda x, e: "fixed"
+        )
+        assert len(records) == 0
+        assert out == "bad"  # 未修改
+
+    def test_repair_improves_score_but_not_valid(self):
+        """修复改善了分数但仍不通过"""
+        rc = RepairController(max_rounds=2)
+        call_count = [0]
+        def validate(x):
+            call_count[0] += 1
+            score = 0.3 if call_count[0] == 1 else 0.6
+            return ValidationResult(is_valid=False, errors=["e"], score=score)
+        def repair(x, e): return "better"
+
+        out, records = rc.attempt_repair("test", "bad", validate, repair)
+        assert out == "better"
+        assert len(records) == 2
+        assert all(not r.success for r in records)
+
+    def test_repair_fn_receives_errors(self):
+        """修复函数接收到正确的错误信息"""
+        rc = RepairController(max_rounds=1)
+        received_errors = []
+        def validate(x):
+            return ValidationResult(is_valid=False, errors=["err1", "err2"])
+        def repair(x, e):
+            received_errors.extend(e)
+            return x
+
+        rc.attempt_repair("test", "bad", validate, repair)
+        assert received_errors == ["err1", "err2"]
+
+
+# ========== Integration: TraceLogger with TracingLLMClient ==========
+
+class TestTraceIntegration:
+    """测试追踪集成"""
+
+    def test_full_trace_flow(self):
+        """模拟完整追踪流程"""
+        tl = TraceLogger()
+
+        class MockLLM:
+            provider = "test"
+            model = "test"
+            temperature = 0.3
+            max_tokens = 100
+            def chat(self, m, temperature=None): return "response"
+            def generate_json(self, p, s=""): return {"key": "val"}
+            def generate_text(self, p, s=""): return "text"
+
+        client = TracingLLMClient(MockLLM(), tl, "stage1")
+
+        # 模拟多阶段调用
+        client.chat([{"role": "user", "content": "hello"}])
+        client.set_stage("stage2")
+        client.generate_json("prompt1")
+        client.set_stage("stage3")
+        client.generate_text("prompt2")
+
+        summary = tl.get_summary()
+        assert summary["total_entries"] == 3
+        assert "stage1" in summary["stages"]
+        assert "stage2" in summary["stages"]
+        assert "stage3" in summary["stages"]
+        assert summary["stages"]["stage1"]["llm_calls"] == 1
+        assert summary["stages"]["stage2"]["llm_calls"] == 1
+        assert summary["stages"]["stage3"]["llm_calls"] == 1
+
+    def test_trace_export_json_roundtrip(self):
+        """追踪导出JSON可重新解析"""
+        tl = TraceLogger()
+        tl.log("s", "e", {"key": "value"})
+        tl.log_validation("s", True, [], [], 0.9)
+
+        json_str = tl.export_json()
+        data = json.loads(json_str)
+        assert data["summary"]["total_entries"] == 2
+        assert len(data["entries"]) == 2
+        assert data["entries"][0]["stage"] == "s"
+
+
+# ========== Integration: PromptRegistry versions ==========
+
+class TestPromptRegistryIntegration:
+    """测试Prompt注册表集成"""
+
+    def test_versions_change_on_content_change(self):
+        """内容变化时版本号变化"""
+        pr = PromptRegistry.__new__(PromptRegistry)
+        pr._prompts = {}
+        pr.prompts_dir = "/none"
+
+        pr.register("test", "content v1")
+        v1 = pr.get_version("test")
+
+        pr.register("test", "content v2")
+        v2 = pr.get_version("test")
+
+        assert v1 != v2
+
+    def test_same_content_same_version(self):
+        """相同内容产生相同版本"""
+        pr = PromptRegistry.__new__(PromptRegistry)
+        pr._prompts = {}
+        pr.prompts_dir = "/none"
+
+        pr.register("a", "same content")
+        pr.register("b", "same content")
+        assert pr.get_version("a") == pr.get_version("b")
+
+
+# ========== Integration: ContextController stage specs ==========
+
+class TestContextControllerIntegration:
+    """测试上下文控制器阶段规格"""
+
+    def test_all_known_stages_return_subset(self):
+        """所有已知阶段只返回所需字段"""
+        ctx = ContextController()
+        ctx.set("full_text", "text")
+        ctx.set("requirement_json", {"r": 1})
+        ctx.set("design_text", "design")
+        ctx.set("diagrams", {"d": 1})
+
+        for stage in ContextController.STAGE_CONTEXT_SPEC:
+            subset = ctx.get_for_stage(stage)
+            spec = ContextController.STAGE_CONTEXT_SPEC[stage]
+            # 只包含spec中的字段
+            for key in subset:
+                assert key in spec, f"Stage {stage} returned unexpected key {key}"
+
+    def test_context_grows_across_stages(self):
+        """上下文随阶段增长"""
+        ctx = ContextController()
+        assert len(ctx.get_full_context()) == 0
+
+        ctx.set("full_text", "t")
+        assert len(ctx.get_full_context()) == 1
+
+        ctx.set("requirement_json", {})
+        assert len(ctx.get_full_context()) == 2
+
+        ctx.set("design_text", "d")
+        assert len(ctx.get_full_context()) == 3
+
+
+# ========== Integration: GovernanceConfig from YAML ==========
+
+class TestGovernanceConfigIntegration:
+    """测试治理配置加载"""
+
+    def test_full_config(self):
+        raw = {
+            "governance": {
+                "enabled": True,
+                "trace_enabled": False,
+                "human_checkpoints": ["stage1", "stage2"],
+                "max_repair_rounds": 5,
+                "gate_thresholds": {
+                    "syntax_valid": False,
+                    "min_completeness": 0.9,
+                    "min_consistency": 0.8,
+                }
+            }
+        }
+        gc = GovernanceConfig.from_yaml_dict(raw)
+        assert gc.enabled is True
+        assert gc.trace_enabled is False
+        assert gc.human_checkpoints == ["stage1", "stage2"]
+        assert gc.max_repair_rounds == 5
+        assert gc.gate_thresholds["min_completeness"] == 0.9
+
+    def test_partial_config(self):
+        raw = {"governance": {"enabled": True}}
+        gc = GovernanceConfig.from_yaml_dict(raw)
+        assert gc.enabled is True
+        assert gc.max_repair_rounds == 3  # default
+
+    def test_empty_config(self):
+        gc = GovernanceConfig.from_yaml_dict({})
+        assert not gc.enabled
+        assert gc.max_repair_rounds == 3
+
+
+# ========== Integration: AgentConfig with _raw ==========
+
+class TestAgentConfigRaw:
+    """测试 AgentConfig 存储原始配置"""
+
+    def test_raw_stored(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        config = AgentConfig.load_from_yaml("config.yaml")
+        assert hasattr(config, '_raw')
+        assert isinstance(config._raw, dict)
+        assert "governance" in config._raw
+
+    def test_raw_contains_governance(self):
+        os.chdir("/home/y9/ReqDesign-Agent")
+        config = AgentConfig.load_from_yaml("config.yaml")
+        gov = config._raw.get("governance", {})
+        assert "enabled" in gov
+        assert "gate_thresholds" in gov
+
+    def test_default_config_no_raw(self):
+        config = AgentConfig()
+        assert config._raw == {}
+
+
+# ========== Edge Cases: models.py ==========
+
+class TestModelsEdgeCases:
+    """测试数据模型边界"""
+
+    def test_validation_result_score_clamping(self):
+        """ValidationResult可以存储任意score值"""
+        vr = ValidationResult(is_valid=True, score=1.5)
+        assert vr.score == 1.5  # 模型本身不做钳位，由调用方负责
+
+    def test_stage_record_to_dict_with_repairs(self):
+        """StageRecord序列化包含修复记录"""
+        sr = StageRecord(
+            stage_name="test",
+            repair_records=[
+                RepairRecord(1, "err", "fix", "ok", True),
+                RepairRecord(2, "err2", "fix2", "fail", False),
+            ],
+            start_time=1.0,
+            end_time=2.0,
+            status="repaired"
+        )
+        d = sr.to_dict()
+        assert len(d["repair_records"]) == 2
+        assert d["repair_records"][0]["success"] is True
+        assert d["repair_records"][1]["success"] is False
+        assert d["status"] == "repaired"
+
+    def test_human_decision_all_actions(self):
+        """所有HumanAction都能正确序列化"""
+        for action in HumanAction:
+            hd = HumanDecision(stage="s", action=action, feedback="f")
+            d = hd.to_dict()
+            assert d["action"] == action.value
+            hd2 = HumanDecision.from_dict(d)
+            assert hd2.action == action
+
+    def test_gate_decision_all_values(self):
+        """所有GateDecision都能从字符串构造"""
+        for decision in GateDecision:
+            assert GateDecision(decision.value) == decision

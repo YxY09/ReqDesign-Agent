@@ -97,6 +97,17 @@ ReqDesign-Agent/
 │   ├── retry_manager.py    # 重试管理（指数退避）
 │   ├── workflow_controller.py # 工作流编排（阶段降级）
 │   └── output_manager.py   # 输出管理（路径穿越防护）
+├── governance/             # 治理框架
+│   ├── models.py           # 数据模型（StageRecord, GateDecision等）
+│   ├── orchestrator.py     # 治理模式任务编排器
+│   ├── stage_gate.py       # 阶段门控
+│   ├── context_controller.py # 上下文控制
+│   ├── prompt_registry.py  # Prompt注册与版本管理
+│   ├── tool_validator.py   # 工具输出校验
+│   ├── repair_controller.py # 修复控制
+│   ├── human_checkpoint.py # 人工检查点
+│   ├── trace_logger.py     # 全链路追踪（含TracingLLMClient）
+│   └── evaluation_manager.py # 评估管理器
 ├── prompts/                # 7个Prompt模板
 ├── benchmark/              # 基准测试（5个案例+评分器）
 │   ├── cases/              # 测试案例需求文档
@@ -147,6 +158,63 @@ outputs/demo/
 | 医院挂号 | 95.8 | 100.0 | 100.0 | 100.0 | 95.0 | 97.8 |
 | 会议室预约 | 90.0 | 100.0 | 100.0 | 100.0 | 95.0 | 95.5 |
 | **平均** | **96.3** | **100.0** | **100.0** | **96.7** | **95.0** | **97.7** |
+
+## 治理框架（Governance Framework）
+
+系统内置可选的治理框架，提供阶段门控、全链路追踪、修复控制、人工检查点等能力。
+
+### 启用方式
+
+```bash
+# 治理模式运行
+python -m agent.main --task design --enable-governance --input requirements.md --output outputs/governed
+
+# 启用追踪
+python -m agent.main --task design --enable-governance --enable-trace --input requirements.md --output outputs/governed
+
+# 指定人工检查点
+python -m agent.main --task design --enable-governance --human-checkpoints requirement_analysis diagram_generation --input requirements.md --output outputs/governed
+
+# Benchmark评估模式
+python -m agent.main --benchmark --input benchmark/cases --output outputs/benchmark
+```
+
+### 治理模块
+
+| 模块 | 职责 |
+|------|------|
+| TaskOrchestrator | 治理模式下的任务编排器，注入门控/追踪 |
+| StageGate | 每阶段校验后决定 PROCEED/RETRY/REPAIR/HALT |
+| ContextController | 管理阶段间上下文传递与裁剪 |
+| PromptRegistry | 版本化Prompt模板管理 |
+| ToolValidator | 校验JSON/Mermaid/Markdown输出 |
+| RepairController | 多轮修复策略与历史追踪 |
+| HumanCheckpoint | 关键节点暂停等待人工确认 |
+| TraceLogger | 全链路追踪（Prompt/响应/耗时） |
+| EvaluationManager | Benchmark运行管理与趋势分析 |
+
+### 配置
+
+```yaml
+governance:
+  enabled: false
+  trace_enabled: true
+  human_checkpoints: []
+  max_repair_rounds: 3
+  gate_thresholds:
+    syntax_valid: true
+    min_completeness: 0.8
+    min_consistency: 0.7
+```
+
+### 输出（治理模式额外文件）
+
+```
+outputs/governed/
+├── ... (标准输出文件)
+├── trace.json              # 全链路追踪记录
+└── governance_report.json  # 治理报告（阶段记录、门控决策、修复历史）
+```
 
 ## 技术栈
 

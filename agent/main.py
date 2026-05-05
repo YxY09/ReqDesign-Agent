@@ -4,6 +4,8 @@ import argparse
 import os
 import sys
 
+import yaml
+
 from agent.config import AgentConfig
 from agent.logger import setup_logger
 from agent.workflow_controller import WorkflowController
@@ -21,8 +23,11 @@ def parse_args():
   # 只生成需求分析结果
   python -m agent.main --task analyze --input requirements.md --output outputs/analyze
 
-  # 指定配置文件和模型
-  python -m agent.main --task design --input requirements.md --output outputs/demo --config config.yaml --model deepseek
+  # 治理模式
+  python -m agent.main --task design --enable-governance --input requirements.md --output outputs/governed
+
+  # Benchmark评估（--input为案例目录）
+  python -m agent.main --benchmark --input benchmark/cases --output outputs/benchmark
         """,
     )
     parser.add_argument(
@@ -34,7 +39,7 @@ def parse_args():
     parser.add_argument(
         "--input", "-i",
         required=True,
-        help="输入需求文档路径",
+        help="输入需求文档路径（benchmark模式下为案例目录）",
     )
     parser.add_argument(
         "--output", "-o",
@@ -65,6 +70,36 @@ def parse_args():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="日志级别 (默认: INFO)",
     )
+
+    # 治理框架参数
+    parser.add_argument(
+        "--enable-governance",
+        action="store_true",
+        help="启用治理框架（阶段门控、追踪、修复控制等）",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["standard", "governed", "benchmark"],
+        default="standard",
+        help="运行模式: standard(默认), governed(治理模式), benchmark(基准评估)",
+    )
+    parser.add_argument(
+        "--enable-trace",
+        action="store_true",
+        help="启用全链路追踪（需配合 --enable-governance）",
+    )
+    parser.add_argument(
+        "--human-checkpoints",
+        nargs="*",
+        default=[],
+        help="指定人工检查点阶段（如: requirement_analysis diagram_generation）",
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="运行benchmark评估（--input应为案例目录，等价于 --mode benchmark）",
+    )
+
     return parser.parse_args()
 
 
@@ -102,30 +137,81 @@ def main():
             logger.error(f"配置错误: {err}")
         sys.exit(1)
 
-    # 检查输入文件
-    if not os.path.exists(args.input):
-        logger.error(f"输入文件不存在: {args.input}")
-        sys.exit(1)
-
     # 检查API密钥
     api_key = config.get_api_key()
     if not api_key:
         logger.error("未设置API密钥，请在配置文件中设置 api_key 或设置环境变量")
         sys.exit(1)
 
+    # 判断运行模式
+    use_governance = args.enable_governance or args.mode == "governed"
+    use_benchmark = args.benchmark or args.mode == "benchmark"
+
     # 执行任务
     try:
-        controller = WorkflowController(config)
+        if use_benchmark:
+            # Benchmark模式：--input应为案例目录
+            if not os.path.isdir(args.input):
+                logger.error(
+                    f"Benchmark模式下 --input 必须为案例目录，"
+                    f"当前: {args.input}"
+                )
+                sys.exit(1)
 
-        if args.task == "analyze":
-            result = controller.run_analyze_task(args.input, args.output)
-            logger.info("需求分析完成")
-        elif args.task == "design":
-            result = controller.run_design_task(args.input, args.output)
-            score = result.get("review", {}).get("overall_score", 0)
-            logger.info(f"完整设计任务完成，综合得分: {score}")
+            from governance.evaluation_manager import EvaluationManager
+            eval_mgr = EvaluationManager(config)
+            result = eval_mgr.run_benchmark(
+                args.input, output_dir=args.output
+            )
+            print(f"\nBenchmark完成！输出目录: {args.output}")
 
-        print(f"\n任务完成！输出目录: {args.output}")
+        elif use_governance:
+            # 治理模式：从config._raw加载治理配置（避免重复解析YAML）
+            from governance.models import GovernanceConfig
+            gov_config = GovernanceConfig.from_yaml_dict(config._raw)
+
+            # 命令行覆盖
+            if args.enable_trace:
+                gov_config.trace_enabled = True
+            if args.human_checkpoints:
+                gov_config.human_checkpoints = args.human_checkpoints
+
+            from governance.orchestrator import TaskOrchestrator
+            orchestrator = TaskOrchestrator(config, gov_config)
+
+            # 检查输入文件
+            if not os.path.exists(args.input):
+                logger.error(f"输入文件不存在: {args.input}")
+                sys.exit(1)
+
+            if args.task == "analyze":
+                result = orchestrator.run_analyze_task(args.input, args.output)
+                logger.info("[Governed] 需求分析完成")
+            elif args.task == "design":
+                result = orchestrator.run_design_task(args.input, args.output)
+                score = result.get("review", {}).get("overall_score", 0)
+                logger.info(f"[Governed] 完整设计任务完成，综合得分: {score}")
+
+            print(f"\n任务完成（治理模式）！输出目录: {args.output}")
+
+        else:
+            # 标准模式
+            # 检查输入文件
+            if not os.path.exists(args.input):
+                logger.error(f"输入文件不存在: {args.input}")
+                sys.exit(1)
+
+            controller = WorkflowController(config)
+
+            if args.task == "analyze":
+                result = controller.run_analyze_task(args.input, args.output)
+                logger.info("需求分析完成")
+            elif args.task == "design":
+                result = controller.run_design_task(args.input, args.output)
+                score = result.get("review", {}).get("overall_score", 0)
+                logger.info(f"完整设计任务完成，综合得分: {score}")
+
+            print(f"\n任务完成！输出目录: {args.output}")
 
     except Exception as e:
         logger.error(f"任务执行失败: {e}", exc_info=True)

@@ -32,8 +32,12 @@ class TestTestCaseGeneratorValidation:
         test_cases = """| 编号 | 类型 |
 |------|------|
 | TC-N-001 | 正常 |
+| TC-N-002 | 正常 |
+| TC-N-003 | 正常 |
 | TC-E-001 | 异常 |
-| TC-B-001 | 边界 |"""
+| TC-E-002 | 异常 |
+| TC-B-001 | 边界 |
+| TC-B-002 | 边界 |"""
         req = {"functions": []}
         warnings = self.gen.validate_test_cases(test_cases, req)
         type_warnings = [w for w in warnings if "场景" in w]

@@ -134,16 +134,16 @@ class TestConsistency:
 
 class TestOverallScore:
     def test_compute(self):
-        score = compute_overall_score(90, 100, 80, 70, 85)
-        expected = 90*0.4 + 100*0.2 + 80*0.2 + 70*0.1 + 85*0.1
+        score = compute_overall_score(90, 100, 80, 70, 85, 90)
+        expected = 90*0.35 + 100*0.2 + 80*0.2 + 70*0.1 + 90*0.05 + 85*0.1
         assert abs(score - expected) < 0.1
 
     def test_perfect_score(self):
-        score = compute_overall_score(100, 100, 100, 100, 100)
+        score = compute_overall_score(100, 100, 100, 100, 100, 100)
         assert score == 100.0
 
     def test_zero_score(self):
-        score = compute_overall_score(0, 0, 0, 0, 0)
+        score = compute_overall_score(0, 0, 0, 0, 0, 0)
         assert score == 0.0
 
 

@@ -73,6 +73,7 @@ class WorkflowController:
         logger.info(f"输出: {output_dir}")
 
         results = {}
+        degraded_phases = []
 
         # 1. 读取输入
         logger.info("[1/6] 读取需求文档...")
@@ -92,6 +93,7 @@ class WorkflowController:
             self.design_planner.validate_design(design_text, req_json)
         except Exception as e:
             logger.error(f"设计规划失败，继续执行: {e}")
+            degraded_phases.append("system_design")
         results["system_design"] = design_text
 
         # 4. 图模型生成（允许降级）
@@ -101,6 +103,7 @@ class WorkflowController:
             diagrams = self.diagram_generator.generate_all(req_json, design_text)
         except Exception as e:
             logger.error(f"图模型生成失败，继续执行: {e}")
+            degraded_phases.append("diagrams")
         results["diagrams"] = diagrams
 
         # 5. 测试用例生成（允许降级）
@@ -111,6 +114,7 @@ class WorkflowController:
             self.test_case_generator.validate_test_cases(test_cases, req_json)
         except Exception as e:
             logger.error(f"测试用例生成失败，继续执行: {e}")
+            degraded_phases.append("test_cases")
         results["test_cases"] = test_cases
 
         # 6. 审查与修复（允许降级）
@@ -123,6 +127,7 @@ class WorkflowController:
             )
         except Exception as e:
             logger.error(f"审查修复失败，继续执行: {e}")
+            degraded_phases.append("review")
         results["diagrams"] = repaired_diagrams
         results["review"] = review_result
 
@@ -132,7 +137,10 @@ class WorkflowController:
             review_report = self.review_agent.generate_report(review_result)
         except Exception as e:
             logger.error(f"审查报告生成失败: {e}")
+            degraded_phases.append("review_report")
         results["review_report"] = review_report
+
+        results["degraded_phases"] = degraded_phases
 
         # 保存所有输出
         logger.info("保存输出文件...")

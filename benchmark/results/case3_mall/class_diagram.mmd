@@ -1,107 +1,110 @@
 classDiagram
-    class User {
-        -int id
-        -String username
-        -String passwordHash
-        -String phoneNumber
-        -String role
-        +register()
-        +login()
-        +updateProfile()
+    class 用户 {
+        -int 用户ID
+        -String 用户名
+        -String 手机号
+        -String 邮箱
+        -String 角色
+        +注册()
+        +登录()
+        +更新资料()
+    }
+    class 顾客 {
+        -String 默认地址
+        +加入购物车()
+        +下单()
+        +申请退款()
+    }
+    class 商家 {
+        -String 店铺名称
+        -String 店铺状态
+        +管理商品()
+        +确认订单()
+        +处理退款()
+    }
+    class 平台管理员 {
+        +管理用户()
+        +查看数据()
+        +处理纠纷()
+    }
+    class 商品 {
+        -int 商品ID
+        -String 名称
+        -String 分类
+        -float 价格
+        -int 库存
+        -int 商家ID
+        +更新信息()
+        +扣减库存()
+        +恢复库存()
+    }
+    class 购物车 {
+        -int 购物车ID
+        -int 顾客ID
+        -List~CartItem~ 商品列表
+        +添加商品()
+        +移除商品()
+        +更新数量()
+        +清空()
+    }
+    class 购物车项 {
+        -int ID
+        -int 购物车ID
+        -int 商品ID
+        -int 数量
+    }
+    class 订单 {
+        -int 订单ID
+        -int 顾客ID
+        -int 商家ID
+        -String 状态
+        -float 总金额
+        -Date 创建时间
+        +创建()
+        +支付()
+        +取消()
+        +发货()
+        +完成()
+    }
+    class 订单项 {
+        -int ID
+        -int 订单ID
+        -int 商品ID
+        -int 数量
+        -float 价格
+    }
+    class 支付记录 {
+        -int 支付ID
+        -int 订单ID
+        -String 支付方式
+        -String 状态
+        -String 交易ID
+        +发起支付()
+        +处理回调()
+    }
+    class 退款记录 {
+        -int 退款ID
+        -int 订单ID
+        -float 金额
+        -String 状态
+        -Date 申请时间
+        +申请()
+        +批准()
+        +拒绝()
+        +处理退款()
     }
 
-    class Product {
-        -int id
-        -String name
-        -String description
-        -double price
-        -int stockQuantity
-        +getDetails()
-        +deductStock(int quantity)
-        +restoreStock(int quantity)
-    }
-
-    class ShoppingCart {
-        -int id
-        -int userId
-        -List~CartItem~ items
-        +addItem(Product product, int quantity)
-        +updateItemQuantity(int productId, int quantity)
-        +removeItem(int productId)
-        +clear()
-    }
-
-    class CartItem {
-        -int quantity
-        +Product product
-    }
-
-    class Order {
-        -int id
-        -int userId
-        -List~OrderItem~ orderItems
-        -double totalAmount
-        -String status
-        -Date createTime
-        -int paymentId
-        +create()
-        +cancel()
-        +updateStatus(String newStatus)
-        +calculateTotal()
-    }
-
-    class OrderItem {
-        -int quantity
-        -double price
-        +Product product
-    }
-
-    class Payment {
-        -int id
-        -int orderId
-        -double amount
-        -String paymentMethod
-        -String transactionId
-        -String status
-        +initiate()
-        +handleCallback(Map callbackData)
-        +queryStatus()
-    }
-
-    class Refund {
-        -int id
-        -int orderId
-        -double refundAmount
-        -String reason
-        -String status
-        -Date applyTime
-        +apply(int orderId, String reason)
-        +approve()
-        +reject()
-        +executeRefund()
-    }
-
-    class InventoryService {
-        <<interface>>
-        +checkAndDeductStock(int productId, int quantity)
-        +restoreStock(int productId, int quantity)
-    }
-
-    class PaymentService {
-        <<interface>>
-        +createPayment(Order order)
-        +processPaymentCallback(Map callbackData)
-        +refund(int paymentId, double amount)
-    }
-
-    User "1" --> "1" ShoppingCart : has
-    ShoppingCart "1" --> "*" CartItem : contains
-    CartItem "*" --> "1" Product : references
-    User "1" --> "*" Order : places
-    Order "1" --> "*" OrderItem : contains
-    OrderItem "*" --> "1" Product : references
-    Order "1" --> "1" Payment : has
-    Order "1" --> "*" Refund : may have
-    Refund "*" --> "1" Payment : references
-    Order ..> InventoryService : depends on
-    Order ..> PaymentService : depends on
+    用户 <|-- 顾客
+    用户 <|-- 商家
+    用户 <|-- 平台管理员
+    顾客 "1" --> "*" 订单 : 下单
+    顾客 "1" --> "1" 购物车 : 拥有
+    商家 "1" --> "*" 商品 : 管理
+    商家 "1" --> "*" 订单 : 处理
+    购物车 "1" *-- "*" 购物车项 : 包含
+    购物车项 "*" --> "1" 商品 : 关联
+    订单 "1" *-- "*" 订单项 : 包含
+    订单项 "*" --> "1" 商品 : 关联
+    订单 "1" --> "0..1" 支付记录 : 生成
+    订单 "1" --> "*" 退款记录 : 可能生成
+    退款记录 "1" --> "1" 支付记录 : 关联

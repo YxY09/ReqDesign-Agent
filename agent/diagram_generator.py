@@ -2,14 +2,13 @@
 
 import json
 import logging
-import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from agent.llm_client import LLMClient
+from agent.prompt_loader import load_prompt
 
 logger = logging.getLogger("reqdesign")
-
-PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 
 class DiagramGenerator:
@@ -23,13 +22,8 @@ class DiagramGenerator:
         """加载所有图生成Prompt模板"""
         templates = {}
         for name in ("class_diagram", "activity_diagram", "state_diagram"):
-            path = os.path.join(PROMPT_DIR, f"{name}.md")
-            if os.path.exists(path):
-                with open(path, "r", encoding="utf-8") as f:
-                    templates[name] = f.read()
-            else:
-                logger.warning(f"Prompt模板不存在: {path}")
-                templates[name] = f"请生成Mermaid格式的{name}，基于以下需求：\n\n{{requirement_json}}\n\n{{design_text}}"
+            fallback = f"请生成Mermaid格式的{name}，基于以下需求：\n\n{{requirement_json}}\n\n{{design_text}}"
+            templates[name] = load_prompt(f"{name}.md", fallback)
         return templates
 
     def _build_prompt(self, template: str, requirement_json: dict, design_text: str) -> str:
@@ -103,10 +97,25 @@ class DiagramGenerator:
         return result
 
     def generate_all(self, requirement_json: dict, design_text: str) -> dict:
-        """生成所有图"""
-        logger.info("开始生成所有图模型...")
-        return {
-            "class_diagram": self.generate_class_diagram(requirement_json, design_text),
-            "activity_diagram": self.generate_activity_diagram(requirement_json, design_text),
-            "state_diagram": self.generate_state_diagram(requirement_json, design_text),
+        """生成所有图（并行执行）"""
+        logger.info("开始生成所有图模型（并行）...")
+        generators = {
+            "class_diagram": self.generate_class_diagram,
+            "activity_diagram": self.generate_activity_diagram,
+            "state_diagram": self.generate_state_diagram,
         }
+        results = {}
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(fn, requirement_json, design_text): name
+                for name, fn in generators.items()
+            }
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    results[name] = future.result()
+                    logger.info(f"  {name} 生成完成")
+                except Exception as e:
+                    logger.error(f"  {name} 生成失败: {e}")
+                    results[name] = ""
+        return results

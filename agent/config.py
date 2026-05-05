@@ -40,6 +40,7 @@ class AgentConfig:
     retry: RetryConfig = field(default_factory=RetryConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    _raw: dict = field(default_factory=dict, repr=False)
 
     @classmethod
     def load_from_yaml(cls, path: str) -> "AgentConfig":
@@ -51,7 +52,7 @@ class AgentConfig:
         if not data:
             logger.warning(f"配置文件为空: {path}，使用默认配置")
             return cls()
-        config = cls()
+        config = cls(_raw=data)
         if "llm" in data:
             for k, v in data["llm"].items():
                 if hasattr(config.llm, k):

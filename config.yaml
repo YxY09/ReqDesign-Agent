@@ -18,3 +18,13 @@ output:
 logging:
   level: INFO
   log_dir: logs/
+
+governance:
+  enabled: false
+  trace_enabled: true
+  human_checkpoints: []  # 如 ["requirement_analysis", "diagram_generation"]
+  max_repair_rounds: 3
+  gate_thresholds:
+    syntax_valid: true
+    min_completeness: 0.8
+    min_consistency: 0.7

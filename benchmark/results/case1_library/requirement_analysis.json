@@ -1,6 +1,6 @@
 {
   "project_name": "图书管理系统",
-  "project_overview": "某高校图书馆需要一套图书管理系统，方便学生和管理员进行图书借阅和管理。",
+  "project_overview": "该系统旨在为高校图书馆提供图书借阅和管理功能，方便学生和管理员操作。",
   "actors": [
     {
       "name": "学生",
@@ -14,8 +14,8 @@
   "functions": [
     {
       "id": "F001",
-      "name": "用户注册与登录",
-      "description": "学生可以通过学号和密码注册和登录系统",
+      "name": "用户注册",
+      "description": "学生可以通过学号和密码注册系统",
       "related_actors": [
         "学生"
       ],
@@ -23,6 +23,16 @@
     },
     {
       "id": "F002",
+      "name": "用户登录",
+      "description": "学生和管理员可以通过账号和密码登录系统",
+      "related_actors": [
+        "学生",
+        "管理员"
+      ],
+      "priority": "中"
+    },
+    {
+      "id": "F003",
       "name": "图书搜索",
       "description": "学生可以按书名、作者、ISBN搜索图书",
       "related_actors": [
@@ -31,7 +41,7 @@
       "priority": "中"
     },
     {
-      "id": "F003",
+      "id": "F004",
       "name": "图书借阅",
       "description": "学生可以借阅状态为'可借'的图书，每人最多同时借阅5本",
       "related_actors": [
@@ -40,7 +50,7 @@
       "priority": "中"
     },
     {
-      "id": "F004",
+      "id": "F005",
       "name": "图书归还",
       "description": "学生可以归还已借阅的图书",
       "related_actors": [
@@ -49,7 +59,7 @@
       "priority": "中"
     },
     {
-      "id": "F005",
+      "id": "F006",
       "name": "借阅记录",
       "description": "学生可以查看自己的借阅历史",
       "related_actors": [
@@ -58,7 +68,7 @@
       "priority": "中"
     },
     {
-      "id": "F006",
+      "id": "F007",
       "name": "图书管理",
       "description": "管理员可以添加、删除、修改图书信息",
       "related_actors": [
@@ -67,7 +77,7 @@
       "priority": "中"
     },
     {
-      "id": "F007",
+      "id": "F008",
       "name": "借阅管理",
       "description": "管理员可以查看所有用户的借阅记录",
       "related_actors": [
@@ -76,55 +86,87 @@
       "priority": "中"
     }
   ],
-  "entities": [],
+  "entities": [
+    {
+      "name": "学生",
+      "description": "系统中的学生用户",
+      "attributes": [
+        "学号",
+        "密码"
+      ]
+    },
+    {
+      "name": "管理员",
+      "description": "系统中的管理员用户",
+      "attributes": [
+        "账号",
+        "密码"
+      ]
+    },
+    {
+      "name": "图书",
+      "description": "图书馆中的图书资源",
+      "attributes": [
+        "书名",
+        "作者",
+        "ISBN",
+        "状态"
+      ]
+    },
+    {
+      "name": "借阅记录",
+      "description": "图书借阅的历史记录",
+      "attributes": []
+    }
+  ],
   "constraints": [
     {
       "id": "C001",
       "description": "同一时间一本图书只能被一个用户借阅",
       "related_functions": [
-        "F003"
+        "图书借阅"
       ]
     },
     {
       "id": "C002",
       "description": "每个学生最多同时借阅5本图书",
       "related_functions": [
-        "F003"
+        "图书借阅"
       ]
     },
     {
       "id": "C003",
       "description": "借阅期限为30天，超期需要缴纳罚款",
       "related_functions": [
-        "F003",
-        "F004"
+        "图书借阅",
+        "图书归还"
       ]
     },
     {
       "id": "C004",
       "description": "管理员不能借阅图书",
       "related_functions": [
-        "F003"
+        "图书借阅"
       ]
     }
   ],
   "exceptions": [
     {
       "id": "E001",
-      "description": "用户尝试借阅已被借出的图书时，系统提示'该图书已被借出'",
-      "trigger": "用户尝试借阅已被借出的图书",
+      "description": "用户尝试借阅已被借出的图书",
+      "trigger": "用户尝试借阅状态为'已借出'的图书",
       "handling": "系统提示'该图书已被借出'"
     },
     {
       "id": "E002",
-      "description": "用户借阅数量达到上限时，系统提示'借阅数量已达上限'",
-      "trigger": "用户借阅数量达到上限",
+      "description": "用户借阅数量达到上限",
+      "trigger": "用户借阅数量达到5本",
       "handling": "系统提示'借阅数量已达上限'"
     },
     {
       "id": "E003",
-      "description": "用户逾期未还时，系统标记逾期状态并提示用户",
-      "trigger": "用户逾期未还",
+      "description": "用户逾期未还",
+      "trigger": "借阅超过30天未归还",
       "handling": "系统标记逾期状态并提示用户"
     }
   ],
@@ -134,11 +176,11 @@
       "description": "系统响应时间不超过3秒"
     },
     {
-      "category": "可用性",
+      "category": "性能",
       "description": "支持至少100个并发用户"
     },
     {
-      "category": "数据完整性",
+      "category": "可靠性",
       "description": "数据定期备份"
     }
   ],

@@ -59,11 +59,11 @@ def _fuzzy_match_entity(entity_name: str, target: str) -> bool:
         if en_name in target:
             return True
 
-    # 反向查找：target是中文，entity_name是英文
+    # 反向查找：target中包含中文名，entity_name是英文
     for cn, en_list in ENTITY_NAME_MAP.items():
-        if cn in entity_name:
+        if cn in target:
             for en_name in en_list:
-                if en_name in target:
+                if en_name in entity_name or entity_name in en_name:
                     return True
 
     return False
@@ -176,9 +176,9 @@ def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
     if all(kw in target_text for kw in keywords):
         return True
 
-    # 4. 多数关键词匹配（>=60%）
+    # 4. 多数关键词匹配（>=70%）
     matched = sum(1 for kw in keywords if kw in target_text)
-    if len(keywords) >= 2 and matched / len(keywords) >= 0.6:
+    if len(keywords) >= 2 and matched / len(keywords) >= 0.7:
         return True
 
     # 5. 数字/量词匹配（如"30分钟"、"7天"、"6门"）
@@ -339,8 +339,8 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     # 检查是否有开始和结束节点
     start_keywords = ["[开始]", "([开始])", "[*]", "([开始", "开始"]
     end_keywords = ["[结束]", "([结束])", "[*]", "([结束", "结束"]
-    has_start = any(kw in activity[:300] for kw in start_keywords)
-    has_end = any(kw in activity[-300:] for kw in end_keywords)
+    has_start = any(kw in activity for kw in start_keywords)
+    has_end = any(kw in activity for kw in end_keywords)
     if has_start:
         score += 25
     if has_end:
@@ -367,6 +367,65 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     return round(score, 1)
 
 
+def score_state_diagram(diagrams: dict, gold: dict) -> float:
+    """
+    计算状态图完整性（是否有开始/结束状态、转换、关键实体状态覆盖）
+
+    Args:
+        diagrams: 图文件内容
+        gold: gold label
+
+    Returns:
+        0-100的得分
+    """
+    state = diagrams.get("state_diagram", "")
+    if not state:
+        return 0.0
+
+    score = 0
+
+    # 检查是否有 [*] 开始/结束标记（Mermaid stateDiagram-v2 标准）
+    if "[*]" in state:
+        score += 30
+    # 也检查中文标记
+    elif any(kw in state for kw in ["开始", "Start", "start"]):
+        score += 30
+
+    # 检查是否有状态转换箭头 (-->)
+    if "-->" in state:
+        score += 20
+
+    # 检查状态数量（至少3个状态才算有意义）
+    state_names = re.findall(r"state\s+\"?(\w+)", state)
+    # 也匹配直接的状态定义（无 state 关键字）
+    arrow_states = re.findall(r"(\w+)\s*-->", state)
+    all_states = set(state_names + arrow_states)
+    # 排除 [*] 等特殊标记
+    all_states = {s for s in all_states if s != "*" and len(s) > 1}
+    if len(all_states) >= 3:
+        score += 25
+    elif len(all_states) >= 2:
+        score += 15
+
+    # 检查是否覆盖预期流程中的关键实体状态
+    expected_processes = gold.get("expected_processes", [])
+    if expected_processes:
+        covered = 0
+        for proc in expected_processes:
+            keywords = [kw for kw in proc.split("流程") if kw.strip()]
+            if not keywords:
+                keywords = [proc]
+            if any(kw in state for kw in keywords):
+                covered += 1
+        score += (covered / len(expected_processes)) * 25
+    else:
+        score += 25
+
+    score = min(100, score)
+    logger.info(f"状态图完整性: {score:.1f}%")
+    return round(score, 1)
+
+
 def score_consistency(result: dict, diagrams: dict) -> float:
     """
     计算一致性（类图、活动图、状态图之间是否矛盾）
@@ -389,16 +448,16 @@ def score_consistency(result: dict, diagrams: dict) -> float:
             score -= 10
             logger.warning(f"一致性问题: 实体 '{entity}' 未在类图中出现")
 
-    # 检查类图中的类名是否在活动图中出现
-    # 提取类图中的类名
+    # 检查核心实体对应的类是否在活动图中出现
     class_names = re.findall(r"class\s+(\w+)", class_diagram)
     activity_diagram = diagrams.get("activity_diagram", "")
 
-    # 不是所有类都需要在活动图中出现，但核心类应该出现
-    if class_names and activity_diagram:
-        core_classes = class_names[:3]  # 取前3个作为核心类
+    # 用需求中的实体名作为核心类（而非盲取前3个）
+    if entities and activity_diagram:
+        core_classes = [e for e in entities if e][:3]
         for cls in core_classes:
-            if cls not in activity_diagram:
+            # 检查实体名或其英文映射是否在活动图中
+            if not _fuzzy_match_entity(cls, activity_diagram):
                 score -= 5
 
     score = max(0, score)
@@ -412,14 +471,42 @@ def compute_overall_score(
     entity_accuracy: float,
     process_completeness: float,
     consistency: float,
+    state_diagram: float = 0.0,
 ) -> float:
     """计算综合得分"""
     overall = (
-        requirement_coverage * 0.40
+        requirement_coverage * 0.35
         + diagram_syntax * 0.20
         + entity_accuracy * 0.20
         + process_completeness * 0.10
+        + state_diagram * 0.05
         + consistency * 0.10
     )
     logger.info(f"综合得分: {overall:.1f}")
     return round(overall, 1)
+
+
+def compute_run_summary(results: list[dict]) -> dict:
+    """计算多案例运行的汇总统计（供BenchmarkRunner和EvaluationManager共用）"""
+    success = [r for r in results if r.get("status") == "success"]
+    if not success:
+        return {"passed": 0, "failed": 0, "error": len(results), "avg_scores": {}}
+
+    passed = sum(1 for r in success if r.get("passed", False))
+    avg_scores = {}
+    for metric in [
+        "requirement_coverage", "diagram_syntax",
+        "entity_accuracy", "process_completeness",
+        "state_diagram", "consistency", "overall"
+    ]:
+        values = [r["scores"].get(metric, 0) for r in success]
+        avg_scores[metric] = round(
+            sum(values) / len(values), 1
+        ) if values else 0
+
+    return {
+        "passed": passed,
+        "failed": len(success) - passed,
+        "error": len(results) - len(success),
+        "avg_scores": avg_scores,
+    }

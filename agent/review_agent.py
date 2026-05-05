@@ -2,15 +2,13 @@
 
 import json
 import logging
-import os
 
 from agent.llm_client import LLMClient
 from agent.mermaid_validator import MermaidValidator
+from agent.prompt_loader import load_prompt
 from agent.retry_manager import RetryManager
 
 logger = logging.getLogger("reqdesign")
-
-PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 
 class ReviewAgent:
@@ -20,15 +18,10 @@ class ReviewAgent:
         self.llm = llm_client
         self.mermaid_validator = MermaidValidator()
         self.retry_manager = RetryManager(max_retries)
-        self.prompt_template = self._load_prompt()
-
-    def _load_prompt(self) -> str:
-        """加载审查Prompt模板"""
-        prompt_path = os.path.join(PROMPT_DIR, "review.md")
-        if os.path.exists(prompt_path):
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                return f.read()
-        return "请审查以下设计产物：\n\n{requirement_json}\n\n{design_text}"
+        self.prompt_template = load_prompt(
+            "review.md",
+            "请审查以下设计产物：\n\n{requirement_json}\n\n{design_text}",
+        )
 
     def validate_mermaid_syntax(self, diagrams: dict) -> list[dict]:
         """校验所有Mermaid图的语法"""
