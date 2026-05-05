@@ -540,5 +540,75 @@ class TestMatchConstraintSingleChar:
         assert _match_constraint_or_exception("A", "") is False
 
 
+class TestEvaluationManagerMultiRun:
+    """测试EvaluationManager多次运行"""
+
+    def _make_manager(self):
+        from governance.evaluation_manager import EvaluationManager
+        from agent.config import AgentConfig
+        return EvaluationManager(AgentConfig())
+
+    def test_run_benchmark_multi_run(self):
+        """多次运行结果正确合并"""
+        import tempfile
+        from unittest.mock import patch, MagicMock
+
+        mgr = self._make_manager()
+        mock_report_1 = {
+            "results": [{"case_name": "c1", "status": "success",
+                         "scores": {"overall": 80, "requirement_coverage": 90,
+                                    "diagram_syntax": 100, "entity_accuracy": 80,
+                                    "process_completeness": 70, "state_diagram": 85,
+                                    "consistency": 95}}],
+            "summary": {"passed": 1, "failed": 0, "error": 0, "avg_scores": {"overall": 80}},
+        }
+        mock_report_2 = {
+            "results": [{"case_name": "c1", "status": "success",
+                         "scores": {"overall": 90, "requirement_coverage": 95,
+                                    "diagram_syntax": 100, "entity_accuracy": 90,
+                                    "process_completeness": 80, "state_diagram": 85,
+                                    "consistency": 95}}],
+            "summary": {"passed": 1, "failed": 0, "error": 0, "avg_scores": {"overall": 90}},
+        }
+
+        call_count = [0]
+        def mock_run_all():
+            call_count[0] += 1
+            return mock_report_1 if call_count[0] == 1 else mock_report_2
+
+        with patch("governance.evaluation_manager.BenchmarkRunner") as MockRunner:
+            MockRunner.return_value.run_all = mock_run_all
+            with tempfile.TemporaryDirectory() as tmpdir:
+                result = mgr.run_benchmark(output_dir=tmpdir, runs=2)
+
+        assert result["total_runs"] == 2
+        assert len(mgr.history) == 1
+
+
+class TestBenchmarkReportPassedFalse:
+    """测试基准报告中passed=False的情况"""
+
+    def test_success_but_not_passed(self):
+        """成功但未通过的案例显示"否" """
+        from benchmark.run_benchmark import BenchmarkRunner
+        from agent.config import AgentConfig
+        runner = BenchmarkRunner.__new__(BenchmarkRunner)
+        report = {
+            "run_time": "2025-01-01 00:00:00",
+            "total_cases": 1,
+            "results": [
+                {"case_name": "low_score", "status": "success", "passed": False,
+                 "scores": {"requirement_coverage": 50, "diagram_syntax": 50,
+                            "entity_accuracy": 50, "process_completeness": 50,
+                            "state_diagram": 50, "consistency": 50, "overall": 50}},
+            ],
+            "summary": {"passed": 0, "failed": 1, "error": 0, "avg_scores": {"overall": 50}},
+        }
+        md = runner._generate_md_report(report)
+        assert "low_score" in md
+        assert "否" in md
+        assert "50" in md
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -2,6 +2,7 @@
 
 import json
 import pytest
+from unittest.mock import MagicMock
 
 
 from agent.input_loader import InputLoader
@@ -96,6 +97,75 @@ class TestInputLoader:
         f.write_text(content, encoding="utf-8")
         with pytest.raises(ValueError, match="过长"):
             self.loader.load(str(f))
+
+
+class TestRequirementAnalyzerValidation:
+    """测试RequirementAnalyzer.validate_result"""
+
+    def _make_analyzer(self):
+        from agent.requirement_analyzer import RequirementAnalyzer
+        analyzer = RequirementAnalyzer.__new__(RequirementAnalyzer)
+        return analyzer
+
+    def test_validate_empty_dict(self):
+        """空dict返回"结果为空"警告"""
+        analyzer = self._make_analyzer()
+        warnings = analyzer.validate_result({})
+        assert any("为空" in w for w in warnings)
+
+    def test_validate_none_returns_empty_warning(self):
+        """None返回"结果为空"警告"""
+        analyzer = self._make_analyzer()
+        warnings = analyzer.validate_result(None)
+        assert any("为空" in w for w in warnings)
+
+    def test_validate_required_field_empty_list(self):
+        """必需字段存在但为空列表时警告"""
+        analyzer = self._make_analyzer()
+        result = {
+            "actors": [],
+            "functions": [],
+            "entities": [],
+        }
+        warnings = analyzer.validate_result(result)
+        assert any("actors" in w and "为空" in w for w in warnings)
+        assert any("functions" in w and "为空" in w for w in warnings)
+        assert any("entities" in w and "为空" in w for w in warnings)
+
+    def test_validate_required_field_missing(self):
+        """必需字段缺失时警告"""
+        analyzer = self._make_analyzer()
+        result = {"actors": ["user"]}  # 缺少functions和entities
+        warnings = analyzer.validate_result(result)
+        assert any("functions" in w and "缺少" in w for w in warnings)
+        assert any("entities" in w and "缺少" in w for w in warnings)
+
+    def test_validate_optional_fields_missing(self):
+        """可选字段缺失时警告"""
+        analyzer = self._make_analyzer()
+        result = {
+            "actors": ["user"],
+            "functions": [{"name": "login"}],
+            "entities": [{"name": "User"}],
+        }
+        warnings = analyzer.validate_result(result)
+        assert any("constraints" in w for w in warnings)
+        assert any("exceptions" in w for w in warnings)
+
+    def test_validate_complete_result_no_warnings(self):
+        """完整结果无警告"""
+        analyzer = self._make_analyzer()
+        result = {
+            "actors": ["user"],
+            "functions": [{"name": "login"}],
+            "entities": [{"name": "User"}],
+            "constraints": ["密码不能为空"],
+            "exceptions": ["登录失败"],
+            "non_functional_requirements": ["响应时间<3s"],
+            "business_processes": ["登录流程"],
+        }
+        warnings = analyzer.validate_result(result)
+        assert len(warnings) == 0
 
 
 if __name__ == "__main__":

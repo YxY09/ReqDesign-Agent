@@ -76,6 +76,23 @@ class TestTestCaseGeneratorValidation:
         counts = self.gen.count_test_cases(test_cases)
         assert counts["总计"] == 2
 
+    def test_validate_string_function_entries(self):
+        """functions为字符串列表时也能检查覆盖"""
+        test_cases = "| 编号 | 测试对象 |\n|------|----------|\n| TC-N-001 | 用户登录 |"
+        req = {"functions": ["用户登录", "用户注册"]}
+        warnings = self.gen.validate_test_cases(test_cases, req)
+        assert any("用户注册" in w for w in warnings)
+        # 用户登录已被覆盖，不应有警告
+        assert not any("用户登录" in w for w in warnings)
+
+    def test_validate_string_function_covered(self):
+        """字符串功能名被测试用例覆盖时无警告"""
+        test_cases = "| 编号 | 测试对象 |\n|------|----------|\n| TC-N-001 | 用户登录 |\n| TC-N-002 | 用户注册 |"
+        req = {"functions": ["用户登录", "用户注册"]}
+        warnings = self.gen.validate_test_cases(test_cases, req)
+        func_warnings = [w for w in warnings if "未被测试用例覆盖" in w]
+        assert len(func_warnings) == 0
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

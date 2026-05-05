@@ -243,5 +243,43 @@ class TestReviewAgentRepair:
         assert "login()" in repaired["class_diagram"]
 
 
+class TestReviewAgentLLMException:
+    """测试review()中LLM异常的fallback"""
+
+    def test_review_llm_exception_returns_zero_score(self):
+        """LLM审查失败时返回零分fallback"""
+        mock_llm = MagicMock()
+        mock_llm.generate_json.side_effect = RuntimeError("LLM服务不可用")
+        agent = ReviewAgent(mock_llm, max_retries=1)
+
+        result = agent.review(
+            {"functions": []},
+            "设计说明",
+            {"class_diagram": "classDiagram\n    class A"},
+        )
+
+        assert result["overall_score"] == 0
+        assert result["overall_pass"] is False
+        assert result["checks"] == []
+        assert result["repair_actions"] == []
+        # 语法检查结果仍应存在
+        assert "syntax_check" in result
+
+    def test_review_llm_exception_with_invalid_diagram(self):
+        """LLM失败+语法错误时分数仍为0"""
+        mock_llm = MagicMock()
+        mock_llm.generate_json.side_effect = TimeoutError("超时")
+        agent = ReviewAgent(mock_llm, max_retries=1)
+
+        result = agent.review(
+            {"functions": []},
+            "设计说明",
+            {"class_diagram": "invalid mermaid content"},
+        )
+
+        assert result["overall_score"] == 0
+        assert result["overall_pass"] is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
