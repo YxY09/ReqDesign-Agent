@@ -375,6 +375,15 @@ class TaskOrchestrator:
                         vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
                     record.validation_result = vr
                     record.status = "success"
+                    # 更新上下文，使后续阶段使用新输出
+                    ctx_key = {
+                        "requirement_analysis": "requirement_json",
+                        "design_planner": "design_text",
+                        "diagram_generator": "diagrams",
+                        "test_case_generator": "test_cases",
+                    }.get(stage_name)
+                    if ctx_key:
+                        self.context.set(ctx_key, output)
                 except Exception as e:
                     logger.error(f"重新生成失败: {e}", exc_info=True)
                     record.status = "failed"
