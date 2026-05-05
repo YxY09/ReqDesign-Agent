@@ -42,6 +42,8 @@ class RepairController:
             except Exception as e:
                 logger.warning(f"[{stage_name}] 校验函数异常: {e}", exc_info=True)
                 vr = ValidationResult(is_valid=False, errors=[f"校验异常: {e}"], score=0.0)
+            if vr is None:
+                vr = ValidationResult(is_valid=False, errors=["校验函数返回None"], score=0.0)
 
             if vr.is_valid:
                 logger.info(f"[{stage_name}] 校验通过，无需修复")
@@ -66,6 +68,8 @@ class RepairController:
                 except Exception as e:
                     logger.warning(f"[{stage_name}] 修复后校验异常: {e}", exc_info=True)
                     new_vr = ValidationResult(is_valid=False, errors=[f"校验异常: {e}"], score=0.0)
+                if new_vr is None:
+                    new_vr = ValidationResult(is_valid=False, errors=["校验函数返回None"], score=0.0)
                 record = RepairRecord(
                     attempt=attempt,
                     error=str(vr.errors),
