@@ -200,6 +200,8 @@ class GovernanceConfig:
     def from_yaml_dict(cls, data: dict) -> "GovernanceConfig":
         """从YAML配置段加载"""
         gov = data.get("governance", {})
+        if not isinstance(gov, dict):
+            gov = {}
         return cls.from_dict(gov)
 
 

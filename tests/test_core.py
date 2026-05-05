@@ -75,6 +75,27 @@ retry:
         errors = config.validate()
         assert any("max_tokens" in e for e in errors)
 
+    def test_validate_string_temperature(self):
+        """配置文件中temperature为字符串时不崩溃"""
+        config = AgentConfig()
+        config.llm.temperature = "hot"
+        errors = config.validate()
+        assert any("temperature" in e and "类型" in e for e in errors)
+
+    def test_validate_int_log_level(self):
+        """配置文件中level为整数时不崩溃"""
+        config = AgentConfig()
+        config.logging.level = 123
+        errors = config.validate()
+        assert any("level" in e and "类型" in e for e in errors)
+
+    def test_validate_string_max_retries(self):
+        """配置文件中max_retries为字符串时不崩溃"""
+        config = AgentConfig()
+        config.retry.max_retries = "three"
+        errors = config.validate()
+        assert any("max_retries" in e and "类型" in e for e in errors)
+
     def test_load_from_yaml_governance(self, tmp_path):
         yaml_content = """llm:
   provider: deepseek

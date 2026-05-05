@@ -158,6 +158,9 @@ def main():
                 sys.exit(1)
 
             from governance.evaluation_manager import EvaluationManager
+            gold_dir = "benchmark/gold_labels"
+            if not os.path.isdir(gold_dir):
+                logger.warning(f"Gold labels目录不存在: {gold_dir}，评分将不可用")
             eval_mgr = EvaluationManager(config)
             result = eval_mgr.run_benchmark(
                 args.input, output_dir=args.output
@@ -180,6 +183,9 @@ def main():
             if not os.path.exists(args.input):
                 logger.error(f"输入文件不存在: {args.input}")
                 sys.exit(1)
+            if os.path.isdir(args.input):
+                logger.error(f"设计/分析模式下 --input 必须为文件，不是目录: {args.input}")
+                sys.exit(1)
 
             if args.task == "analyze":
                 result = orchestrator.run_analyze_task(args.input, args.output)
@@ -195,6 +201,9 @@ def main():
             # 标准模式（使用TaskOrchestrator，不带治理配置）
             if not os.path.exists(args.input):
                 logger.error(f"输入文件不存在: {args.input}")
+                sys.exit(1)
+            if os.path.isdir(args.input):
+                logger.error(f"设计/分析模式下 --input 必须为文件，不是目录: {args.input}")
                 sys.exit(1)
 
             orchestrator = TaskOrchestrator(config)

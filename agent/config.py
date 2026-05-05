@@ -92,16 +92,28 @@ class AgentConfig:
             errors.append(f"llm.provider 不支持 '{self.llm.provider}'，可选: {self.VALID_PROVIDERS}")
         if not self.llm.model:
             errors.append("llm.model 不能为空")
-        if not (0 <= self.llm.temperature <= 2):
-            errors.append("llm.temperature 必须在 0-2 之间")
-        if self.llm.max_tokens < 1:
-            errors.append("llm.max_tokens 必须 >= 1")
-        if self.retry.max_retries < 0:
-            errors.append("retry.max_retries 不能为负数")
-        if self.logging.level.upper() not in self.VALID_LOG_LEVELS:
-            errors.append(f"logging.level 不支持 '{self.logging.level}'，可选: {self.VALID_LOG_LEVELS}")
-        else:
-            self.logging.level = self.logging.level.upper()
+        try:
+            if not (0 <= self.llm.temperature <= 2):
+                errors.append("llm.temperature 必须在 0-2 之间")
+        except TypeError:
+            errors.append(f"llm.temperature 类型错误，期望数字，得到 {type(self.llm.temperature).__name__}")
+        try:
+            if self.llm.max_tokens < 1:
+                errors.append("llm.max_tokens 必须 >= 1")
+        except TypeError:
+            errors.append(f"llm.max_tokens 类型错误，期望整数，得到 {type(self.llm.max_tokens).__name__}")
+        try:
+            if self.retry.max_retries < 0:
+                errors.append("retry.max_retries 不能为负数")
+        except TypeError:
+            errors.append(f"retry.max_retries 类型错误，期望整数，得到 {type(self.retry.max_retries).__name__}")
+        try:
+            if self.logging.level.upper() not in self.VALID_LOG_LEVELS:
+                errors.append(f"logging.level 不支持 '{self.logging.level}'，可选: {self.VALID_LOG_LEVELS}")
+            else:
+                self.logging.level = self.logging.level.upper()
+        except AttributeError:
+            errors.append(f"logging.level 类型错误，期望字符串，得到 {type(self.logging.level).__name__}")
         return errors
 
     def get_api_key(self) -> str:
