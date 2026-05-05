@@ -104,6 +104,7 @@ class TaskOrchestrator:
         if lightweight_review.get("issues"):
             logger.warning(f"[轻量审查] 需求分析问题: {lightweight_review['issues']}")
         results["lightweight_review"] = lightweight_review
+        self.trace.log("system", "lightweight_review", lightweight_review)
 
         # Stage 3: 设计规划
         self.llm.set_stage("design_planner")
@@ -138,6 +139,10 @@ class TaskOrchestrator:
         self.trace.log("system", "consistency_check", {
             "score": consistency_result.score,
             "error_count": len(consistency_result.errors),
+            "warning_count": len(consistency_result.warnings),
+            "errors": consistency_result.errors,
+            "warnings": consistency_result.warnings,
+            "checks": consistency_result.checks,
         })
 
         # Stage 6: 审查与修复
@@ -195,19 +200,33 @@ class TaskOrchestrator:
         output_mgr = OutputManager(output_dir)
         output_mgr.save_requirement_analysis(req_json, requirement_text)
 
+        # 构建结果（包含轻量审查）
+        analyze_results = {
+            "requirement_analysis": req_json,
+            "lightweight_review": lightweight_review,
+        }
+
         # 导出追踪和治理报告
         if self.gov.trace_enabled:
             self.trace.export_json(f"{output_dir}/trace.json")
-        self._export_governance_report(output_dir, {})
+        self._export_governance_report(output_dir, analyze_results)
 
         logger.info("=== [Governed] 需求分析任务完成 ===")
-        return {"requirement_analysis": req_json}
+        return analyze_results
 
     def _run_stage(self, stage_name: str, stage_fn,
                    *args) -> StageRecord:
         """执行一个阶段，带追踪、校验、门控、真正的重试和多轮修复"""
         record = StageRecord(stage_name=stage_name, start_time=time.time())
         self.trace.log_stage_start(stage_name)
+
+        # 记录该阶段期望的上下文字段
+        expected_ctx = self.context.get_for_stage(stage_name)
+        if expected_ctx:
+            self.trace.log("context", "stage_context", {
+                "stage": stage_name,
+                "available_keys": list(expected_ctx.keys()),
+            })
         retry_count = 0
         repair_count = 0
         max_retries = 2
@@ -215,14 +234,15 @@ class TaskOrchestrator:
         while True:
             try:
                 # 执行阶段
-                output = stage_fn(record, *args)
-                record.output_data = output
+                raw_output = stage_fn(record, *args)
 
-                # 合并Agent自校验warnings（如果stage_fn返回元组）
+                # 解包(output, warnings)元组
                 agent_warnings = []
-                if isinstance(output, tuple) and len(output) == 2:
-                    output, agent_warnings = output
-                    record.output_data = output
+                if isinstance(raw_output, tuple) and len(raw_output) == 2:
+                    output, agent_warnings = raw_output
+                else:
+                    output = raw_output
+                record.output_data = output
 
                 # 校验
                 vr = self._validate_stage_output(stage_name, output)

@@ -1,6 +1,5 @@
 """治理框架数据模型"""
 
-import json
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum

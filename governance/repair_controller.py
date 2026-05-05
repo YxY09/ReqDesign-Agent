@@ -1,7 +1,6 @@
 """修复控制模块"""
 
 import logging
-import time
 from typing import Callable, Any
 
 from governance.models import RepairRecord, ValidationResult

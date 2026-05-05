@@ -1,7 +1,6 @@
 """阶段门控模块"""
 
 import logging
-from typing import Any
 
 from governance.models import (
     GateDecision, ValidationResult, StageRecord, GovernanceConfig

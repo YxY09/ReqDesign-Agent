@@ -4,7 +4,6 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 from governance.models import TraceEntry
 
