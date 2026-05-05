@@ -78,6 +78,17 @@ class TaskOrchestrator:
 
         results = {}
 
+        try:
+            return self._run_design_stages(input_path, output_dir, results)
+        finally:
+            # 无论成功/失败/用户终止，都导出追踪和治理报告
+            if self.gov.trace_enabled:
+                self.trace.export_json(f"{output_dir}/trace.json")
+            self._export_governance_report(output_dir, results)
+
+    def _run_design_stages(self, input_path: str, output_dir: str, results: dict) -> dict:
+        """执行设计任务的各个阶段"""
+
         # Stage 1: 读取输入
         record = self._run_stage("input_loader", self._stage_input, input_path)
         if record.status not in ("success", "repaired"):
@@ -96,7 +107,6 @@ class TaskOrchestrator:
 
         if not req_json:
             logger.error("需求分析失败，跳过后续阶段")
-            self._export_governance_report(output_dir, results)
             return results
 
         # 轻量审查：需求分析后规则检查，结果合并到阶段门控
@@ -181,13 +191,6 @@ class TaskOrchestrator:
         # 保存输出
         self._save_outputs(output_dir, results, requirement_text)
 
-        # 导出追踪
-        if self.gov.trace_enabled:
-            self.trace.export_json(f"{output_dir}/trace.json")
-
-        # 导出治理报告
-        self._export_governance_report(output_dir, results)
-
         score = review_result.get("overall_score", 0) if isinstance(review_result, dict) else 0
         logger.info(f"=== [Governed] 设计任务完成 === 综合得分: {score}")
         return results
@@ -196,42 +199,43 @@ class TaskOrchestrator:
         """治理模式下的需求分析任务（使用治理流程）"""
         logger.info("=== [Governed] 开始需求分析任务 ===")
 
-        # Stage 1: 读取输入
-        record = self._run_stage("input_loader", self._stage_input, input_path)
-        if record.status not in ("success", "repaired"):
-            logger.error("输入读取失败")
-            return {"requirement_analysis": {}}
+        analyze_results = {"requirement_analysis": {}}
 
-        requirement_text = record.output_data
-        self.context.set("full_text", requirement_text)
+        try:
+            # Stage 1: 读取输入
+            record = self._run_stage("input_loader", self._stage_input, input_path)
+            if record.status not in ("success", "repaired"):
+                logger.error("输入读取失败")
+                return analyze_results
 
-        # Stage 2: 需求分析（带治理）
-        self.llm.set_stage("requirement_analysis")
-        record = self._run_stage("requirement_analysis", self._stage_analysis)
-        req_json = record.output_data if record.status in ("success", "repaired") else {}
+            requirement_text = record.output_data
+            self.context.set("full_text", requirement_text)
 
-        # 轻量审查
-        lightweight_review = self._lightweight_review(req_json)
-        if lightweight_review.get("issues"):
-            logger.warning(f"[轻量审查] {lightweight_review['issues']}")
+            # Stage 2: 需求分析（带治理）
+            self.llm.set_stage("requirement_analysis")
+            record = self._run_stage("requirement_analysis", self._stage_analysis)
+            req_json = record.output_data if record.status in ("success", "repaired") else {}
 
-        # 保存输出
-        output_mgr = OutputManager(output_dir)
-        output_mgr.save_requirement_analysis(req_json, requirement_text)
+            # 轻量审查
+            lightweight_review = self._lightweight_review(req_json)
+            if lightweight_review.get("issues"):
+                logger.warning(f"[轻量审查] {lightweight_review['issues']}")
 
-        # 构建结果（包含轻量审查）
-        analyze_results = {
-            "requirement_analysis": req_json,
-            "lightweight_review": lightweight_review,
-        }
+            # 保存输出
+            output_mgr = OutputManager(output_dir)
+            output_mgr.save_requirement_analysis(req_json, requirement_text)
 
-        # 导出追踪和治理报告
-        if self.gov.trace_enabled:
-            self.trace.export_json(f"{output_dir}/trace.json")
-        self._export_governance_report(output_dir, analyze_results)
+            analyze_results = {
+                "requirement_analysis": req_json,
+                "lightweight_review": lightweight_review,
+            }
 
-        logger.info("=== [Governed] 需求分析任务完成 ===")
-        return analyze_results
+            logger.info("=== [Governed] 需求分析任务完成 ===")
+            return analyze_results
+        finally:
+            if self.gov.trace_enabled:
+                self.trace.export_json(f"{output_dir}/trace.json")
+            self._export_governance_report(output_dir, analyze_results)
 
     def _run_stage(self, stage_name: str, stage_fn,
                    *args) -> StageRecord:
