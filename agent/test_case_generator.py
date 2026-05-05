@@ -12,6 +12,7 @@ logger = logging.getLogger("reqdesign")
 
 class TestCaseGenerator:
     """测试用例生成Agent：按正常/异常/边界生成测试用例"""
+    __test__ = False  # 排除pytest收集
 
     def __init__(self, llm_client: LLMClient):
         self.llm = llm_client
