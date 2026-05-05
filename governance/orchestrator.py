@@ -155,23 +155,27 @@ class TaskOrchestrator:
         results["test_cases"] = test_cases
 
         # 跨产物一致性检查
-        consistency_result = self.consistency.check_all(
-            req_json, design_text, diagrams, test_cases
-        )
-        results["consistency"] = {
-            "score": consistency_result.score,
-            "errors": consistency_result.errors,
-            "warnings": consistency_result.warnings,
-            "checks": consistency_result.checks,
-        }
-        self.trace.log("system", "consistency_check", {
-            "score": consistency_result.score,
-            "error_count": len(consistency_result.errors),
-            "warning_count": len(consistency_result.warnings),
-            "errors": consistency_result.errors,
-            "warnings": consistency_result.warnings,
-            "checks": consistency_result.checks,
-        })
+        try:
+            consistency_result = self.consistency.check_all(
+                req_json, design_text, diagrams, test_cases
+            )
+            results["consistency"] = {
+                "score": consistency_result.score,
+                "errors": consistency_result.errors,
+                "warnings": consistency_result.warnings,
+                "checks": consistency_result.checks,
+            }
+            self.trace.log("system", "consistency_check", {
+                "score": consistency_result.score,
+                "error_count": len(consistency_result.errors),
+                "warning_count": len(consistency_result.warnings),
+                "errors": consistency_result.errors,
+                "warnings": consistency_result.warnings,
+                "checks": consistency_result.checks,
+            })
+        except Exception as e:
+            logger.error(f"一致性检查失败: {e}", exc_info=True)
+            results["consistency"] = {"score": 0, "errors": [str(e)], "warnings": [], "checks": []}
 
         # Stage 6: 审查与修复
         self.llm.set_stage("review_agent")
