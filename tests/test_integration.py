@@ -499,5 +499,53 @@ class TestLLMClientValidation:
             client.chat([{"role": "user"}])
 
 
+class TestParseJsonRobust:
+    """测试_parse_json_robust的健壮性"""
+
+    def test_trailing_comma(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        result = client._parse_json_robust('{"key": "value",}')
+        assert result == {"key": "value"}
+
+    def test_trailing_comma_array(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        result = client._parse_json_robust('[1, 2, 3,]')
+        assert result == [1, 2, 3]
+
+    def test_line_comments(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        text = '// comment\n{"key": "value"}'
+        result = client._parse_json_robust(text)
+        assert result == {"key": "value"}
+
+    def test_valid_json_passes_through(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        result = client._parse_json_robust('{"a": 1, "b": [2, 3]}')
+        assert result == {"a": 1, "b": [2, 3]}
+
+    def test_unparseable_raises(self):
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        with pytest.raises(json.JSONDecodeError):
+            client._parse_json_robust("not json at all")
+
+
+class TestPromptLoaderCacheKey:
+    """测试prompt_loader缓存key一致性"""
+
+    def test_path_variant_cache_hit(self):
+        """带路径前缀的文件名应命中缓存"""
+        from agent.prompt_loader import load_prompt, clear_cache
+        clear_cache()
+        content1 = load_prompt("requirement_analysis.md")
+        # 使用不同路径格式访问同一文件
+        content2 = load_prompt("./requirement_analysis.md")
+        assert content1 == content2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

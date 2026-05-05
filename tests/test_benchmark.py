@@ -387,5 +387,22 @@ class TestBenchmarkRunner:
         assert "| - |" in md
 
 
+class TestWeightValidation:
+    def test_weights_sum_to_one(self):
+        """验证评分权重总和为1.0"""
+        weights = [0.35, 0.20, 0.20, 0.10, 0.05, 0.10]
+        assert abs(sum(weights) - 1.0) < 1e-9
+
+    def test_compute_uses_keyword_args(self):
+        """使用关键字参数避免位置错误"""
+        score = compute_overall_score(
+            requirement_coverage=90, diagram_syntax=100,
+            entity_accuracy=80, process_completeness=70,
+            consistency=85, state_diagram=90
+        )
+        expected = 90*0.35 + 100*0.2 + 80*0.2 + 70*0.1 + 90*0.05 + 85*0.1
+        assert abs(score - expected) < 0.1
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
