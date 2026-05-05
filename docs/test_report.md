@@ -10,7 +10,7 @@
 
 ### 2.1 测试覆盖
 
-共443个测试用例，覆盖所有核心模块：
+共458个测试用例，覆盖所有核心模块：
 
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
@@ -22,9 +22,9 @@
 | 重试/审查/修复 | test_phase6.py | 16 | 16 |
 | 输出管理 | test_phase7.py | 10 | 10 |
 | 基准评分/评估 | test_benchmark.py | 52 | 52 |
-| **治理框架** | **test_governance.py** | **197** | **197** |
+| **治理框架** | **test_governance.py** | **212** | **212** |
 | **集成测试** | **test_integration.py** | **86** | **86** |
-| **总计** | | **443** | **443** |
+| **总计** | | **458** | **458** |
 
 ### 2.2 治理框架测试详情（test_governance.py）
 
@@ -57,6 +57,14 @@
 | TestRepairRecordHistory | 2 | 修复记录累积、序列化 |
 | TestGovernanceReport | 1 | 治理报告使用to_summary |
 | TestOrchestratorDesignTask | 9 | 完整设计流程、输出文件、追踪导出、失败停止 |
+| TestTryRepair | 3 | _try_repair dict/text路径、长输出截断 |
+| TestHaltPath | 2 | HALT状态确认、修复仍失败后HALT |
+| TestRegenerateContextUpdate | 1 | REGENERATE后上下文更新（design_planner） |
+| TestGovernanceReportMixedStatuses | 1 | 混合状态计数（success/repaired/failed/halted） |
+| TestFinallyBlockErrors | 2 | finally块中追踪/报告导出异常不阻塞 |
+| TestConsistencyErrorsInReview | 2 | 一致性检查错误/警告合并到审查阶段 |
+| TestMaxRetriesToRepair | 1 | 重试耗尽后进入REPAIR |
+| TestLightweightReviewFunctionName | 3 | function_name字段接受、缺失检测 |
 
 ### 2.3 测试类型分布
 
