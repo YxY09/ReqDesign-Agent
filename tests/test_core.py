@@ -52,6 +52,44 @@ retry:
         errors = config.validate()
         assert len(errors) == 3
 
+    def test_validate_unknown_provider(self):
+        config = AgentConfig()
+        config.llm.provider = "unknown_llm"
+        errors = config.validate()
+        assert any("provider" in e and "不支持" in e for e in errors)
+
+    def test_validate_invalid_log_level(self):
+        config = AgentConfig()
+        config.logging.level = "VERBOSE"
+        errors = config.validate()
+        assert any("level" in e for e in errors)
+
+    def test_validate_negative_max_tokens(self):
+        config = AgentConfig()
+        config.llm.max_tokens = -1
+        errors = config.validate()
+        assert any("max_tokens" in e for e in errors)
+
+    def test_validate_zero_max_tokens(self):
+        config = AgentConfig()
+        config.llm.max_tokens = 0
+        errors = config.validate()
+        assert any("max_tokens" in e for e in errors)
+
+    def test_load_from_yaml_governance(self, tmp_path):
+        yaml_content = """llm:
+  provider: deepseek
+  model: deepseek-chat
+governance:
+  enabled: true
+  max_repair_rounds: 5
+"""
+        config_file = tmp_path / "test.yaml"
+        config_file.write_text(yaml_content)
+        config = AgentConfig.load_from_yaml(str(config_file))
+        assert config._raw["governance"]["enabled"] is True
+        assert config._raw["governance"]["max_repair_rounds"] == 5
+
     def test_get_api_key_from_config(self):
         config = AgentConfig()
         config.llm.api_key = "test-key"

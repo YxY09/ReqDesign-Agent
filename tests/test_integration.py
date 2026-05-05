@@ -429,5 +429,37 @@ class TestPromptLoader:
         assert content == content2
 
 
+class TestLLMClientValidation:
+    """测试LLM客户端输入验证"""
+
+    def test_chat_empty_messages(self):
+        """测试空消息列表"""
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        with pytest.raises(ValueError, match="不能为空"):
+            client.chat([])
+
+    def test_chat_invalid_message_type(self):
+        """测试消息类型错误"""
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        with pytest.raises(ValueError, match="必须是dict"):
+            client.chat(["not a dict"])
+
+    def test_chat_missing_role(self):
+        """测试缺少role字段"""
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        with pytest.raises(ValueError, match="缺少.*role"):
+            client.chat([{"content": "hello"}])
+
+    def test_chat_missing_content(self):
+        """测试缺少content字段"""
+        from agent.llm_client import LLMClient
+        client = LLMClient.__new__(LLMClient)
+        with pytest.raises(ValueError, match="缺少.*content"):
+            client.chat([{"role": "user"}])
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
