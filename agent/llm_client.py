@@ -199,9 +199,16 @@ class LLMClient:
 
     def _parse_json_robust(self, text: str) -> dict:
         """健壮的JSON解析，处理常见格式问题"""
+        # 大小限制：防止异常大的JSON消耗过多内存
+        if len(text) > 1_000_000:  # 1MB
+            raise json.JSONDecodeError("JSON文本过大（>1MB）", text, 0)
+
         # 尝试直接解析
         try:
-            return json.loads(text)
+            result = json.loads(text)
+            if not isinstance(result, dict):
+                raise json.JSONDecodeError(f"期望dict，得到{type(result).__name__}", text, 0)
+            return result
         except json.JSONDecodeError:
             pass
 
@@ -216,7 +223,9 @@ class LLMClient:
 
         # 尝试解析修复后的文本
         try:
-            return json.loads(fixed)
+            result = json.loads(fixed)
+            if isinstance(result, dict):
+                return result
         except json.JSONDecodeError:
             pass
 
@@ -224,14 +233,18 @@ class LLMClient:
         last_brace = fixed.rfind("}")
         if last_brace > 0:
             try:
-                return json.loads(fixed[:last_brace+1])
+                result = json.loads(fixed[:last_brace+1])
+                if isinstance(result, dict):
+                    return result
             except json.JSONDecodeError:
                 pass
 
         # 尝试补全截断的JSON
         completed = self._try_complete_json(fixed)
         try:
-            return json.loads(completed)
+            result = json.loads(completed)
+            if isinstance(result, dict):
+                return result
         except json.JSONDecodeError:
             pass
 

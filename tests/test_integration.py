@@ -508,8 +508,9 @@ class TestParseJsonRobust:
     def test_trailing_comma_array(self):
         from agent.llm_client import LLMClient
         client = LLMClient.__new__(LLMClient)
-        result = client._parse_json_robust('[1, 2, 3,]')
-        assert result == [1, 2, 3]
+        # _parse_json_robust returns dict only; list input raises JSONDecodeError
+        with pytest.raises(json.JSONDecodeError):
+            client._parse_json_robust('[1, 2, 3,]')
 
     def test_line_comments(self):
         from agent.llm_client import LLMClient
