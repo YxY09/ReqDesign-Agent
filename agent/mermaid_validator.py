@@ -88,11 +88,18 @@ class MermaidValidator:
         stack = []
         in_string = False
         string_char = None
+        escape_next = False
 
         for i, char in enumerate(content):
             if i in comment_positions:
                 continue
 
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\" and in_string:
+                escape_next = True
+                continue
             if char in ('"', "'") and not in_string:
                 in_string = True
                 string_char = char
