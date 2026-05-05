@@ -1,7 +1,7 @@
 """Phase 4 测试：图模型生成与Mermaid校验"""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 from agent.mermaid_validator import MermaidValidator
@@ -205,6 +205,94 @@ class TestDiagramGeneratorMethods:
         assert result["class_diagram"] == ""
         assert result["activity_diagram"] == ""
         assert result["state_diagram"] == ""
+
+
+# ========== CLI validation tests ==========
+
+class TestMermaidCLIValidation:
+    """测试mermaid-cli校验路径"""
+
+    def _make_cli_validator(self):
+        """创建use_cli=True的校验器（绕过mmdc检查）"""
+        validator = MermaidValidator.__new__(MermaidValidator)
+        validator.use_cli = True
+        return validator
+
+    def test_cli_success(self):
+        """CLI校验成功"""
+        import subprocess
+        validator = self._make_cli_validator()
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stderr = ""
+        with patch("agent.mermaid_validator.subprocess.run", return_value=mock_result) as mock_run:
+            is_valid, msg = validator._validate_with_cli("classDiagram\n    class A")
+            assert is_valid is True
+            assert "通过" in msg
+            mock_run.assert_called_once()
+
+    def test_cli_failure(self):
+        """CLI校验失败"""
+        import subprocess
+        validator = self._make_cli_validator()
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "syntax error at line 3"
+        with patch("agent.mermaid_validator.subprocess.run", return_value=mock_result):
+            is_valid, msg = validator._validate_with_cli("classDiagram\n    class A {")
+            assert is_valid is False
+            assert "失败" in msg
+            assert "syntax error" in msg
+
+    def test_cli_timeout(self):
+        """CLI校验超时"""
+        import subprocess
+        validator = self._make_cli_validator()
+        with patch("agent.mermaid_validator.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("mmdc", 30)):
+            is_valid, msg = validator._validate_with_cli("classDiagram\n    class A")
+            assert is_valid is False
+            assert "超时" in msg
+
+    def test_cli_generic_exception(self):
+        """CLI校验其他异常"""
+        validator = self._make_cli_validator()
+        with patch("agent.mermaid_validator.subprocess.run",
+                   side_effect=OSError("command not found")):
+            is_valid, msg = validator._validate_with_cli("classDiagram\n    class A")
+            assert is_valid is False
+            assert "异常" in msg
+
+    def test_cli_cleans_up_temp_file(self):
+        """CLI校验后临时文件被清理"""
+        import os
+        import subprocess
+        validator = self._make_cli_validator()
+        created_paths = []
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stderr = ""
+
+        original_unlink = os.unlink
+        def track_unlink(path):
+            created_paths.append(path)
+            original_unlink(path)
+
+        with patch("agent.mermaid_validator.subprocess.run", return_value=mock_result):
+            with patch("agent.mermaid_validator.os.unlink", side_effect=track_unlink):
+                validator._validate_with_cli("classDiagram\n    class A")
+
+        # 临时文件应被清理
+        assert len(created_paths) == 1
+        assert created_paths[0].endswith(".mmd")
+
+    def test_validate_with_structure_check_first(self):
+        """正则校验在CLI之前执行"""
+        validator = MermaidValidator(use_cli=False)
+        # 缺少头部声明应直接失败，不调用CLI
+        is_valid, msg = validator.validate("no header here\n    class A")
+        assert is_valid is False
+        assert "缺少图类型声明" in msg
 
 
 if __name__ == "__main__":
