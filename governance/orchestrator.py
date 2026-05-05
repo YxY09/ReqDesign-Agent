@@ -484,10 +484,15 @@ class TaskOrchestrator:
                 if last_nl > 1500:
                     cut = cut[:last_nl]
                 current_str = cut + "\n...(截断)"
+            # 截断并清理error消息，防止prompt注入
+            safe_errors = []
+            for err in errors:
+                clean = err.replace("\n", " ").replace("\r", "")[:200]
+                safe_errors.append(clean)
             prompt = (
                 f"请修复以下输出中的问题。\n\n"
                 f"需求摘要: {req_summary}\n\n"
-                f"需要修复的问题:\n{chr(10).join(errors)}\n\n"
+                f"需要修复的问题:\n{chr(10).join(safe_errors)}\n\n"
                 f"当前输出:\n{current_str}"
             )
             if isinstance(current, dict):
