@@ -16,7 +16,6 @@ from agent.mermaid_validator import MermaidValidator
 from agent.review_agent import ReviewAgent
 from agent.output_manager import OutputManager
 from agent.output_manager import _sanitize_filename
-from agent.config import AgentConfig
 
 SAMPLE_REQUIREMENT = """# 简单计算器系统
 ## 用户角色
@@ -380,8 +379,8 @@ def foo():
         assert sections[0]["title"] == "第一章"
         assert sections[1]["title"] == "第二章"
 
-    def test_input_loader_split_sections_code_fence(self):
-        """测试代码块内的#不分段"""
+    def test_input_loader_split_sections_code_fence_simple(self):
+        """测试代码块内的#不分段（简版）"""
         loader = InputLoader()
         text = "# 标题\n```python\n# 注释\n```\n正文"
         sections = loader.split_sections(text)
