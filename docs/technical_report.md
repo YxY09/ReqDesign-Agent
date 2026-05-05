@@ -155,9 +155,11 @@ InputLoader → RequirementAnalyzer → DesignPlanner → DiagramGenerator
 
 每个阶段执行后，StageGate根据校验结果决定下一步：
 - **PROCEED**：校验通过，进入下一阶段
-- **RETRY**：可恢复错误（如空响应、超时），重试当前阶段
-- **REPAIR**：不可恢复错误，触发LLM修复流程
+- **RETRY**：可恢复错误（如空响应、超时），**实际重新执行stage_fn**（循环回到阶段开头）
+- **REPAIR**：不可恢复错误，触发LLM修复流程，修复后重新校验并再次门控
 - **HALT**：分数过低或达到修复上限，终止流水线
+
+`_run_stage` 实现为while循环状态机：RETRY分支递增retry_count并continue重新执行，REPAIR分支调用修复后重新校验并再次评估门控，支持多轮修复直到PROCEED或HALT。Agent自校验warnings（如requirement_analyzer.validate_result返回的警告）被合并到ValidationResult中，每个warning降低score 0.05。
 
 ### 6.3 全链路追踪（TraceLogger）
 
@@ -179,7 +181,7 @@ TracingLLMClient透明包装LLMClient，捕获每次LLM调用的：
 
 ### 6.5 人工检查点（HumanCheckpoint）
 
-在配置的阶段暂停，输出当前结果摘要，等待人工决策：
+在配置的阶段暂停，输出当前结果摘要，等待人工决策。`_run_stage` 末尾统一调用检查点，因此**所有阶段**都可配置为检查点（不仅限于requirement_analysis）。决策选项：
 - **CONTINUE**：继续执行
 - **MODIFY**：提供修改建议后继续
 - **REGENERATE**：重新生成当前阶段输出
@@ -189,7 +191,26 @@ TracingLLMClient透明包装LLMClient，捕获每次LLM调用的：
 
 扫描 `prompts/` 目录，为每个Prompt模板计算内容hash作为版本号。支持按名称/版本查询，为A/B测试和Prompt迭代提供基础。
 
-### 6.7 效果评估（EvaluationManager）
+### 6.7 跨产物一致性检查（ConsistencyChecker）
+
+在所有阶段完成后、ReviewAgent之前，执行基于关键词匹配的一致性检查（不依赖LLM）：
+- **需求→设计**：设计文档是否覆盖需求中的所有功能点
+- **实体→类图**：类图中是否包含需求定义的所有实体
+- **设计→测试**：测试用例是否覆盖设计文档中的章节关键词
+- **类图→状态图**：状态图引用的类是否在类图中存在
+
+返回ConsistencyResult(errors, warnings, score)，errors影响一致性评分，warnings仅记录。
+
+### 6.8 需求分析轻量审查
+
+需求分析阶段成功后，执行纯规则的轻量审查（不调用LLM）：
+- 检查actors、functions、entities字段是否非空
+- 检查功能点和实体数量是否合理（≥2）
+- 检查每个功能点是否有名称和描述
+
+结果写入治理报告，帮助在早期发现明显的遗漏。
+
+### 6.9 效果评估（EvaluationManager）
 
 封装benchmark运行流程，支持多次运行取平均（消除LLM随机性），与历史结果对比生成趋势报告。
 
@@ -207,9 +228,9 @@ benchmark评分体系新增状态图完整性指标（权重5%），检查状态
 
 `LLMClient` 在初始化时检测API密钥缺失，立即抛出 `ValueError` 并给出明确的配置提示，而非延迟到运行时产生不透明的SDK错误。
 
-### 7.4 工作流降级追踪
+### 7.4 统一入口（TaskOrchestrator）
 
-`WorkflowController.run_design_task` 新增 `degraded_phases` 字段，记录哪些阶段执行失败后降级继续。调用方可据此区分完整结果与降级结果，便于问题诊断。
+`WorkflowController` 已移除，所有模式（标准/治理）统一使用 `TaskOrchestrator`。治理功能通过 `GovernanceConfig` 控制开关：标准模式使用默认配置，治理模式可通过CLI参数启用追踪、人工检查点等增强功能。`StageRecord.to_dict()` 保存完整数据，`to_summary()` 提供截断版本用于治理报告。
 
 ### 7.5 并行图生成
 
@@ -223,4 +244,4 @@ benchmark评分体系新增状态图完整性指标（权重5%），检查状态
 2. 自主实现更容易在课程报告中说明技术细节
 3. 减少外部依赖，降低环境配置复杂度
 
-如需使用框架，可将 `WorkflowController` 替换为LangGraph实现，Agent接口保持不变。
+如需使用框架，可将 `TaskOrchestrator` 替换为LangGraph实现，Agent接口保持不变。
