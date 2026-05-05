@@ -10,7 +10,7 @@
 
 ### 2.1 测试覆盖
 
-共293个测试用例，覆盖所有核心模块：
+共296个测试用例，覆盖所有核心模块：
 
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
@@ -25,9 +25,9 @@
 | 审查报告 | test_phase6.py | 3 | 3 |
 | 输出管理 | test_phase7.py | 5 | 5 |
 | 基准评分 | test_benchmark.py | 15 | 15 |
-| **治理框架** | **test_governance.py** | **172** | **172** |
+| **治理框架** | **test_governance.py** | **175** | **175** |
 | **集成测试** | **test_integration.py** | **33** | **33** |
-| **总计** | | **293** | **293** |
+| **总计** | | **296** | **296** |
 
 ### 2.2 治理框架测试详情（test_governance.py）
 
@@ -49,7 +49,7 @@
 | TestContextController | 5 | 上下文管理、阶段过滤 |
 | TestHumanCheckpoint | 4 | 检查点暂停/继续 |
 | TestPromptRegistry | 7 | Prompt注册、版本管理 |
-| TestConsistencyChecker | 12 | 跨产物一致性检查、词边界匹配、字符串项处理 |
+| TestConsistencyChecker | 15 | 跨产物一致性检查、词边界匹配、字符串项处理、活动图覆盖 |
 | TestLightweightReview | 8 | 需求分析轻量审查 |
 | TestStageRecordSummary | 5 | StageRecord完整/截断序列化 |
 | TestGateRetryRepairLoop | 4 | RETRY/REPAIR循环门控 |

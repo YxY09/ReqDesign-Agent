@@ -47,6 +47,7 @@ class ConsistencyChecker:
         self._check_requirement_to_design(requirement_json, design_text, result)
         self._check_entities_in_diagram(requirement_json, diagrams, result)
         self._check_design_to_test(design_text, test_cases, result)
+        self._check_activity_to_test(diagrams, test_cases, result)
         self._check_class_to_state(diagrams, result)
 
         # 计算综合分
@@ -185,7 +186,7 @@ class ConsistencyChecker:
         test_lower = test_cases.lower()
         missing = []
         for kw in header_keywords:
-            if kw not in test_lower:
+            if not _word_in_text(kw, test_lower):
                 missing.append(kw)
 
         if missing and len(missing) < len(header_keywords):
@@ -193,6 +194,51 @@ class ConsistencyChecker:
             check["score"] = max(0.0, ratio)
             for m in missing[:5]:  # 最多报告5个
                 msg = f"测试用例未覆盖设计章节关键词: {m}"
+                check["issues"].append(msg)
+                result.warnings.append(msg)
+
+        result.checks.append(check)
+
+    def _check_activity_to_test(
+        self, diagrams: dict, test_cases: str, result: ConsistencyResult
+    ):
+        """活动图→测试用例覆盖"""
+        check = {"dimension": "活动图→测试覆盖", "score": 1.0, "issues": []}
+
+        activity_diagram = diagrams.get("activity_diagram", "")
+        if not activity_diagram or not test_cases:
+            check["score"] = 0.5 if not activity_diagram else 1.0
+            if not activity_diagram:
+                check["issues"].append("活动图缺失")
+            result.checks.append(check)
+            return
+
+        # 从活动图中提取节点文本（括号内的内容和节点ID）
+        node_texts = set()
+        # 匹配 A[文本] 或 A(文本) 或 A{文本} 或 A>文本]
+        for m in re.findall(r'\w+[\[\(>{]([^}\]\)]+)', activity_diagram):
+            words = re.findall(r'[一-龥a-zA-Z]{2,}', m)
+            node_texts.update(w.lower() for w in words)
+        # 也匹配纯节点ID（如 A-->B 中的 B）
+        node_ids = re.findall(r'(?:-->|---)\s*(\w+)', activity_diagram)
+        # 过滤掉单字母节点ID（太短容易误匹配）
+        node_texts.update(n.lower() for n in node_ids if len(n) > 1)
+
+        if not node_texts:
+            result.checks.append(check)
+            return
+
+        test_lower = test_cases.lower()
+        missing = []
+        for nt in node_texts:
+            if not _word_in_text(nt, test_lower):
+                missing.append(nt)
+
+        if missing and len(missing) < len(node_texts):
+            ratio = 1.0 - len(missing) / len(node_texts)
+            check["score"] = max(0.0, ratio)
+            for m in missing[:5]:
+                msg = f"测试用例未覆盖活动图节点: {m}"
                 check["issues"].append(msg)
                 result.warnings.append(msg)
 

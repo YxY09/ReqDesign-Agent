@@ -1198,6 +1198,42 @@ class TestConsistencyChecker:
         state_warnings = [w for w in result.warnings if "类图中不存在的类" in w]
         assert len(state_warnings) >= 1
 
+    def test_activity_to_test_coverage(self):
+        """活动图节点应在测试用例中被覆盖"""
+        req = {"entities": [], "functions": []}
+        diagrams = {
+            "class_diagram": "",
+            "activity_diagram": "flowchart TD\n    A[借阅图书] --> B[归还图书]\n    B --> C[查询记录]",
+        }
+        test_cases = "| 编号 | 测试对象 |\n|------|----------|\n| 1 | 借阅图书测试 |\n| 2 | 归还图书测试 |"
+        result = self.checker.check_all(req, "design", diagrams, test_cases)
+        activity_checks = [c for c in result.checks if c.get("dimension") == "活动图→测试覆盖"]
+        assert len(activity_checks) == 1
+        # "查询记录"未在测试用例中，应有warning
+        activity_warnings = [w for w in result.warnings if "活动图节点" in w]
+        assert len(activity_warnings) >= 1
+
+    def test_activity_to_test_all_covered(self):
+        """活动图节点全部被测试用例覆盖时score应为1.0"""
+        req = {"entities": [], "functions": []}
+        diagrams = {
+            "activity_diagram": "flowchart TD\n    A[登录] --> B[注册]",
+        }
+        test_cases = "| 编号 | 测试对象 |\n|------|----------|\n| 1 | 登录功能 |\n| 2 | 注册功能 |"
+        result = self.checker.check_all(req, "design", diagrams, test_cases)
+        activity_checks = [c for c in result.checks if c.get("dimension") == "活动图→测试覆盖"]
+        assert len(activity_checks) == 1
+        assert activity_checks[0]["score"] == 1.0
+
+    def test_activity_missing_diagram(self):
+        """活动图缺失时score降为0.5"""
+        req = {"entities": [], "functions": []}
+        diagrams = {}
+        result = self.checker.check_all(req, "design", diagrams, "tests")
+        activity_checks = [c for c in result.checks if c.get("dimension") == "活动图→测试覆盖"]
+        assert len(activity_checks) == 1
+        assert activity_checks[0]["score"] == 0.5
+
 
 # ========== Lightweight Review ==========
 
