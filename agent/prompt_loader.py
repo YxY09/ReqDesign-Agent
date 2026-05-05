@@ -25,7 +25,9 @@ def load_prompt(filename: str, fallback: str = "") -> str:
     if filename in _cache:
         return _cache[filename]
 
-    path = os.path.join(PROMPT_DIR, filename)
+    # 防止路径穿越
+    safe_name = os.path.basename(filename)
+    path = os.path.join(PROMPT_DIR, safe_name)
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
