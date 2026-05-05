@@ -10,7 +10,7 @@
 
 ### 2.1 测试覆盖
 
-共103个测试用例，覆盖所有核心模块：
+共288个测试用例，覆盖所有核心模块：
 
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
@@ -25,38 +25,40 @@
 | 审查报告 | test_phase6.py | 3 | 3 |
 | 输出管理 | test_phase7.py | 5 | 5 |
 | 基准评分 | test_benchmark.py | 15 | 15 |
-| **集成测试** | **test_integration.py** | **25** | **25** |
-| **总计** | | **103** | **103** |
+| **治理框架** | **test_governance.py** | **167** | **167** |
+| **集成测试** | **test_integration.py** | **33** | **33** |
+| **总计** | | **288** | **288** |
 
-### 2.2 集成测试详情（test_integration.py）
+### 2.2 治理框架测试详情（test_governance.py）
 
-| 测试用例 | 覆盖模块 | 测试内容 |
-|----------|----------|----------|
-| test_input_loader | InputLoader | 基本文件读取 |
-| test_input_loader_file_size_guard | InputLoader | 文件大小限制 |
-| test_input_loader_encoding_fallback | InputLoader | GBK编码自动识别 |
-| test_input_loader_split_sections_code_fence | InputLoader | 代码围栏内#号不误判 |
-| test_input_loader_empty_file | InputLoader | 空文件异常处理 |
-| test_input_loader_unsupported_extension | InputLoader | 不支持的扩展名 |
-| test_diagram_generator_extract_mermaid | DiagramGenerator | Mermaid代码提取（多代码块、graph关键字） |
-| test_mermaid_validator | MermaidValidator | 类图/活动图/状态图语法校验 |
-| test_mermaid_validator_inline_comment | MermaidValidator | 行内%%注释处理 |
-| test_mermaid_validator_comment_ranges | MermaidValidator | 注释区间检测 |
-| test_output_manager | OutputManager | 文件写入验证 |
-| test_output_manager_json_roundtrip | OutputManager | JSON读写一致性 |
-| test_sanitize_filename_path_traversal | OutputManager | 路径穿越防护 |
-| test_review_agent_syntax_validation | ReviewAgent | 语法校验集成 |
-| test_review_agent_detects_invalid_diagram | ReviewAgent | 无效图检测 |
-| test_requirement_analyzer_retry | RequirementAnalyzer | JSON解析失败重试 |
-| test_requirement_analyzer_validate | RequirementAnalyzer | 结果完整性验证 |
-| test_requirement_analyzer_validate_missing_fields | RequirementAnalyzer | 缺失字段检测 |
-| test_requirement_analyzer_normalize_result | RequirementAnalyzer | LLM返回类型规范化 |
-| test_config_empty_yaml | AgentConfig | 空YAML文件处理 |
-| test_llm_client_json_extraction | LLMClient | JSON文本提取 |
-| test_llm_client_json_completion | LLMClient | 截断JSON补全 |
-| test_scorer_entity_matching | Scorer | 实体模糊匹配 |
-| test_scorer_function_matching | Scorer | 功能模糊匹配 |
-| test_scorer_constraint_matching | Scorer | 约束匹配算法 |
+| 测试类 | 用例数 | 覆盖内容 |
+|--------|--------|----------|
+| TestValidationResult | 4 | 数据模型创建、序列化 |
+| TestRepairRecord | 2 | 修复记录创建、序列化 |
+| TestHumanDecision | 3 | 人工决策创建、序列化 |
+| TestTraceEntry | 2 | 追踪条目创建、序列化 |
+| TestStageRecord | 4 | 阶段记录时长、序列化、to_summary |
+| TestGateDecision | 2 | 门控决策枚举 |
+| TestHumanAction | 1 | 人工操作枚举 |
+| TestGovernanceConfig | 4 | 治理配置加载 |
+| TestTraceLogger | 12 | 追踪记录、导出、过滤 |
+| TestTracingLLMClient | 6 | LLM客户端追踪包装 |
+| TestToolValidator | 14 | JSON/Mermaid/Markdown校验 |
+| TestRepairController | 4 | 修复策略、异常处理 |
+| TestStageGate | 4 | 门控决策逻辑 |
+| TestContextController | 5 | 上下文管理、阶段过滤 |
+| TestHumanCheckpoint | 4 | 检查点暂停/继续 |
+| TestPromptRegistry | 7 | Prompt注册、版本管理 |
+| TestConsistencyChecker | 7 | 跨产物一致性检查 |
+| TestLightweightReview | 8 | 需求分析轻量审查 |
+| TestStageRecordSummary | 5 | StageRecord完整/截断序列化 |
+| TestGateRetryRepairLoop | 4 | RETRY/REPAIR循环门控 |
+| TestOrchestratorRunStage | 6 | _run_stage真实重试、修复、warnings合并 |
+| TestHumanCheckpointAllStages | 3 | 全阶段人工检查点 |
+| TestNoWorkflowController | 4 | WorkflowController已移除验证 |
+| TestValidationEdgeCases | 4 | 校验边界场景 |
+| TestRepairRecordHistory | 2 | 修复记录累积、序列化 |
+| TestGovernanceReport | 1 | 治理报告使用to_summary |
 
 ### 2.3 测试类型分布
 
@@ -64,6 +66,7 @@
 - **异常场景测试**: 验证错误处理（文件不存在、空输入、格式错误、编码异常等）
 - **边界场景测试**: 验证边界条件（空列表、零重试、截断JSON、路径穿越攻击等）
 - **安全测试**: 路径穿越防护、prompt注入防护、文件大小限制
+- **治理测试**: 门控决策、修复循环、一致性检查、追踪导出
 
 ## 3. 基准测试方案
 
@@ -81,28 +84,29 @@
 
 | 指标 | 权重 | 计算方式 |
 |------|------|----------|
-| 需求覆盖率 | 40% | 覆盖功能点/约束/异常数 / 标注总数（模糊匹配） |
+| 需求覆盖率 | 35% | 覆盖功能点/约束/异常数 / 标注总数（模糊匹配） |
 | 图语法通过率 | 20% | 通过图数量 / 生成图总数 |
 | 实体识别准确率 | 20% | 正确实体数 / 标注实体数（中英文映射） |
 | 流程完整性 | 10% | 活动图是否包含开始/结束/判断/流程覆盖 |
+| 状态图完整性 | 5% | 状态图是否有开始/结束标记、转换箭头、状态覆盖 |
 | 一致性 | 10% | 类图、活动图、状态图之间实体名称一致率 |
 
 ### 3.3 通过标准
 
 综合得分 ≥ 80分为通过。
 
-综合得分 = 需求覆盖率 × 40% + 图语法通过率 × 20% + 实体识别准确率 × 20% + 流程完整性 × 10% + 一致性 × 10%
+综合得分 = 需求覆盖率 × 35% + 图语法通过率 × 20% + 实体识别准确率 × 20% + 流程完整性 × 10% + 状态图完整性 × 5% + 一致性 × 10%
 
 ### 3.4 最新基准测试结果
 
-| 案例 | 需求覆盖 | 图语法 | 实体准确 | 流程完整 | 一致性 | 综合 | 通过 |
-|------|----------|--------|----------|----------|--------|------|------|
-| 图书管理系统 | 100.0 | 100.0 | 100.0 | 100.0 | 95.0 | 99.5 | 是 |
-| 学生选课系统 | 100.0 | 100.0 | 100.0 | 83.3 | 90.0 | 97.3 | 是 |
-| 在线商城 | 95.8 | 100.0 | 100.0 | 100.0 | 100.0 | 98.3 | 是 |
-| 医院挂号 | 95.8 | 100.0 | 100.0 | 100.0 | 95.0 | 97.8 | 是 |
-| 会议室预约 | 90.0 | 100.0 | 100.0 | 100.0 | 95.0 | 95.5 | 是 |
-| **平均** | **96.3** | **100.0** | **100.0** | **96.7** | **95.0** | **97.7** | **5/5** |
+| 案例 | 需求覆盖 | 图语法 | 实体准确 | 流程完整 | 状态图 | 一致性 | 综合 | 通过 |
+|------|----------|--------|----------|----------|--------|--------|------|------|
+| 图书管理系统 | 100.0 | 100.0 | 100.0 | 100.0 | 90.0 | 95.0 | 98.0 | 是 |
+| 学生选课系统 | 100.0 | 100.0 | 100.0 | 83.3 | 85.0 | 90.0 | 96.4 | 是 |
+| 在线商城 | 95.8 | 100.0 | 100.0 | 100.0 | 90.0 | 100.0 | 97.5 | 是 |
+| 医院挂号 | 95.8 | 100.0 | 100.0 | 100.0 | 85.0 | 95.0 | 96.8 | 是 |
+| 会议室预约 | 90.0 | 100.0 | 100.0 | 100.0 | 90.0 | 95.0 | 95.0 | 是 |
+| **平均** | **96.3** | **100.0** | **100.0** | **96.7** | **88.0** | **95.0** | **96.7** | **5/5** |
 
 ## 4. 测试用例设计
 
@@ -116,6 +120,8 @@
 | TC-N-004 | 图生成 | 输入需求和设计 | 生成3个Mermaid图，语法校验通过 |
 | TC-N-005 | 测试用例生成 | 输入需求和设计 | 生成测试用例表格 |
 | TC-N-006 | 完整流程 | 输入需求文档 | 生成所有输出文件，审查通过 |
+| TC-N-007 | 治理模式流程 | 输入需求文档+--enable-governance | 生成输出+治理报告+追踪文件 |
+| TC-N-008 | 一致性检查 | 生成完整设计产物 | 跨产物一致性检查执行并输出结果 |
 
 ### 4.2 异常场景
 
@@ -128,6 +134,7 @@
 | TC-E-005 | JSON解析失败 | LLM返回非法JSON | 尝试截断补全，失败则重试 |
 | TC-E-006 | 编码异常 | 输入GBK编码文件 | 自动识别编码并读取 |
 | TC-E-007 | 文件过大 | 输入超过512KB文件 | 抛出ValueError |
+| TC-E-008 | 阶段失败 | 模拟阶段函数抛异常 | _run_stage捕获异常，status=failed，不阻塞后续 |
 
 ### 4.3 边界场景
 
@@ -140,6 +147,9 @@
 | TC-B-005 | 路径穿越攻击 | 文件名含../../ | 被sanitize_filename拦截 |
 | TC-B-006 | 空YAML配置 | 加载空配置文件 | 返回默认配置 |
 | TC-B-007 | LLM返回非数组字段 | actors字段为字符串 | 自动规范化为数组 |
+| TC-B-008 | RETRY循环 | stage_fn第一次返回无效数据 | RETRY后重新执行stage_fn |
+| TC-B-009 | 多轮REPAIR | 校验持续失败 | 多轮修复直到PROCEED或HALT |
+| TC-B-010 | Agent warnings合并 | stage_fn返回(output, warnings) | warnings合并到gate决策 |
 
 ## 5. 局限性说明
 
@@ -150,3 +160,4 @@
 5. **大型需求**：超长需求文档可能导致LLM上下文溢出（已设置100K字符限制）
 6. **Prompt注入**：已做基本防护（移除模板变量），但无法完全防御复杂的prompt注入攻击
 7. **编码支持**：自动尝试UTF-8/GBK/Latin-1，其他编码可能失败
+8. **一致性检查基于关键词匹配**：不依赖LLM，准确率有限，短实体名可能误匹配

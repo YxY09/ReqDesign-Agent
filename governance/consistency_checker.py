@@ -80,6 +80,8 @@ class ConsistencyChecker:
                 name = f.get("name", f.get("function_name", ""))
                 if name:
                     func_names.add(name.lower())
+            elif isinstance(f, str) and f.strip():
+                func_names.add(f.strip().lower())
 
         if not func_names:
             check["issues"].append("需求中未找到功能点")
@@ -90,10 +92,7 @@ class ConsistencyChecker:
         design_lower = design.lower()
         missing = []
         for name in func_names:
-            # 用前3个字符做模糊匹配
-            keywords = [name[:max(3, len(name) // 2)]] if len(name) > 3 else [name]
-            found = any(kw in design_lower for kw in keywords)
-            if not found:
+            if not _word_in_text(name, design_lower):
                 missing.append(name)
 
         if missing:
@@ -127,6 +126,8 @@ class ConsistencyChecker:
                 name = e.get("name", e.get("entity_name", ""))
                 if name:
                     entity_names.add(name.lower())
+            elif isinstance(e, str) and e.strip():
+                entity_names.add(e.strip().lower())
 
         if not entity_names:
             check["issues"].append("需求中未找到实体定义")
@@ -145,7 +146,7 @@ class ConsistencyChecker:
         class_lower = class_diagram.lower()
         missing = []
         for name in entity_names:
-            if name not in class_lower:
+            if not _word_in_text(name, class_lower):
                 missing.append(name)
 
         if missing:
@@ -222,9 +223,6 @@ class ConsistencyChecker:
             return
 
         state_lower = state_diagram.lower()
-        # 状态图通常只为有状态变化的实体定义状态
-        # 只检查在状态图中出现的类名是否在类图中存在（反向检查）
-        state_classes = set(re.findall(r'stateDiagram-v2\s*\n\s*(\w+)', state_lower))
 
         # 正向：类图中的类，如果在状态图中被引用，应有一致的定义
         referenced = set()
@@ -236,5 +234,18 @@ class ConsistencyChecker:
             check["issues"].append(
                 f"类图中有{len(referenced)}个类在状态图中被引用"
             )
+            for cn in referenced:
+                result.warnings.append(f"类图中类 {cn} 在状态图中被引用")
 
         result.checks.append(check)
+
+
+def _word_in_text(word: str, text: str) -> bool:
+    """检查word是否作为完整词出现在text中（避免子串误匹配）"""
+    # 中文字符不需要词边界（无空格分隔）
+    if re.search(r'[一-龥]', word):
+        return word in text
+    # 英文/数字：用非字母数字下划线字符作为分隔符判断完整词
+    # 不用\b是因为Python regex将中文视为\w，导致"login和register"被当作一个词
+    pattern = r'(?<![a-zA-Z0-9_])' + re.escape(word) + r'(?![a-zA-Z0-9_])'
+    return bool(re.search(pattern, text, re.IGNORECASE))

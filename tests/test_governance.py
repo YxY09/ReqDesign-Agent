@@ -1146,6 +1146,58 @@ class TestConsistencyChecker:
         # 无errors时应为valid
         assert r.is_valid == (len(r.errors) == 0)
 
+    def test_word_boundary_no_false_positive(self):
+        """短实体名不应子串误匹配"""
+        from governance.consistency_checker import _word_in_text
+        # "A" 不应匹配 "class Admin" (Admin包含A但不是完整词)
+        assert not _word_in_text("a", "class admin")
+        # "A" 应匹配 "class A" (完整词)
+        assert _word_in_text("a", "class A")
+        # "Book" 应匹配 "Book" 但不匹配 "BookStore" (除非完整词)
+        assert _word_in_text("book", "the Book entity")
+        assert not _word_in_text("book", "the BookStore entity")
+
+    def test_chinese_substring_matching(self):
+        """中文实体使用子串匹配（无空格分隔）"""
+        from governance.consistency_checker import _word_in_text
+        assert _word_in_text("图书", "图书管理系统")
+        assert _word_in_text("用户", "用户角色定义")
+
+    def test_string_function_items(self):
+        """functions为字符串列表时也能处理"""
+        req = {
+            "functions": ["login", "register"],
+            "entities": [{"name": "User"}],
+        }
+        design = "# 系统设计\n\nlogin和register功能"
+        diagrams = {"class_diagram": "classDiagram\n    class User"}
+        result = self.checker.check_all(req, design, diagrams, "tests")
+        # 字符串功能名应被正确提取和匹配
+        func_issues = [i for i in result.checks if i.get("dimension") == "需求→设计覆盖"]
+        if func_issues:
+            missing = [i for i in func_issues[0].get("issues", []) if "未覆盖" in i]
+            # "login"和"register"都在design中出现，不应缺失
+            assert len(missing) == 0
+
+    def test_string_entity_items(self):
+        """entities为字符串列表时也能处理"""
+        req = {"entities": ["User", "Book"]}
+        diagrams = {"class_diagram": "classDiagram\n    class User\n    class Book"}
+        result = self.checker.check_all(req, "design", diagrams, "tests")
+        entity_warnings = [w for w in result.warnings if "缺失实体" in w]
+        assert len(entity_warnings) == 0
+
+    def test_class_to_state_propagates_warnings(self):
+        """_check_class_to_state应将引用信息传播到result.warnings"""
+        req = {"entities": [], "functions": []}
+        diagrams = {
+            "class_diagram": "classDiagram\n    class Book",
+            "state_diagram": "stateDiagram-v2\n    state Book {\n        [*] --> Available\n    }",
+        }
+        result = self.checker.check_all(req, "design", diagrams, "tests")
+        state_warnings = [w for w in result.warnings if "状态图中被引用" in w]
+        assert len(state_warnings) >= 1
+
 
 # ========== Lightweight Review ==========
 

@@ -72,7 +72,7 @@ LLM输出可能因token限制被截断。`LLMClient._try_complete_json()` 实现
 ### 3.1 确定性流程 + LLM推理 + 工具校验
 
 系统采用混合架构：
-- **确定性流程**：`WorkflowController` 控制任务顺序、文件读写、校验与重试
+- **确定性流程**：`TaskOrchestrator` 控制任务顺序、文件读写、校验与重试
 - **LLM推理**：各Agent负责语义理解和设计生成
 - **工具校验**：`MermaidValidator` 执行语法检查
 
@@ -110,7 +110,7 @@ InputLoader → RequirementAnalyzer → DesignPlanner → DiagramGenerator
 
 ### 4.3 工作流阶段降级
 
-`WorkflowController.run_design_task()` 中每个阶段（设计规划、图生成、测试用例、审查）都包裹在try/except中。单个阶段失败不会阻塞整个流水线，后续阶段继续执行，输出中该阶段为空。这保证了即使LLM在某一阶段返回异常，用户仍能获得其他阶段的输出。
+`TaskOrchestrator.run_design_task()` 中每个阶段（设计规划、图生成、测试用例、审查）通过 `_run_stage` 执行，内部有异常捕获。单个阶段失败不会阻塞整个流水线，后续阶段继续执行，输出中该阶段为空。这保证了即使LLM在某一阶段返回异常，用户仍能获得其他阶段的输出。
 
 ### 4.4 LLM响应健壮性
 

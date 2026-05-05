@@ -46,7 +46,7 @@
 | 模块 | 职责 | 对应文件 |
 |------|------|----------|
 | 用户交互层 | CLI命令解析、IDE集成 | main.py |
-| 工作流控制 | 任务编排、流程控制 | workflow_controller.py |
+| 任务编排 | 任务编排、流程控制（标准+治理模式） | governance/orchestrator.py |
 | 输入处理 | 读取、清洗需求文档 | input_loader.py |
 | 需求分析 | 抽取角色/功能/实体/约束 | requirement_analyzer.py |
 | 设计规划 | 生成模块划分、核心类 | design_planner.py |
@@ -191,14 +191,16 @@ Mermaid语法校验工具。
 | review_and_repair(req, design, diagrams) | 审查并自动修复 |
 | generate_report(review_result) | 生成审查报告 |
 
-### 4.8 WorkflowController
+### 4.8 TaskOrchestrator
 
-工作流控制器。
+统一任务编排器（标准模式+治理模式）。
 
 | 方法 | 说明 |
 |------|------|
-| run_analyze_task(input, output) | 运行需求分析任务 |
-| run_design_task(input, output) | 运行完整设计任务 |
+| run_analyze_task(input, output) | 运行需求分析任务（带门控/追踪） |
+| run_design_task(input, output) | 运行完整设计任务（带门控/追踪/一致性检查） |
+| _run_stage(name, fn, *args) | 执行单阶段（RETRY循环+多轮REPAIR+人工检查点） |
+| _lightweight_review(req_json) | 需求分析后轻量审查（纯规则） |
 
 ### 4.9 RetryManager
 

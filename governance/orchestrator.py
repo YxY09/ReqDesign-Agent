@@ -284,6 +284,11 @@ class TaskOrchestrator:
                         stage_name, output, vr
                     )
                     record.repair_records.extend(repair_records)
+                    for rr in repair_records:
+                        self.trace.log_repair(
+                            stage_name, rr.attempt, rr.error,
+                            rr.action, rr.success
+                        )
                     record.output_data = output
                     # 修复后重新校验，进入下一轮循环门控
                     vr2 = self._validate_stage_output(stage_name, output)
