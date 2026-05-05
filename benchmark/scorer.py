@@ -222,7 +222,7 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
     result_actors = [a.get("name", "") for a in (result.get("actors") or [])]
     for actor in expected_actors:
         total_points += 1
-        if any(actor in ra for ra in result_actors):
+        if any(_fuzzy_match_entity(actor, ra) for ra in result_actors):
             covered_points += 1
 
     # 检查功能覆盖
@@ -353,8 +353,8 @@ def score_process_completeness(diagrams: dict, gold: dict) -> float:
     if has_end:
         score += 25
 
-    # 检查是否有判断节点（菱形）
-    if "{" in activity and "}" in activity:
+    # 检查是否有判断节点（菱形语法：节点ID后跟{条件文本}）
+    if re.search(r'\w+\s*\{[^}]+\}', activity):
         score += 25
 
     # 检查是否覆盖预期流程

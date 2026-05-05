@@ -130,6 +130,10 @@ class TaskOrchestrator:
         self.context.set("design_text", design_text)
         results["system_design"] = design_text
 
+        if not design_text:
+            logger.error("设计规划失败，跳过后续阶段")
+            return results
+
         # Stage 4: 图生成
         self.llm.set_stage("diagram_generator")
         record = self._run_stage("diagram_generator", self._stage_diagrams)
@@ -509,14 +513,14 @@ class TaskOrchestrator:
 
     def _stage_diagrams(self, record: StageRecord) -> dict:
         """图生成"""
-        req_json = self.context.get("requirement_json")
-        design = self.context.get("design_text")
+        req_json = self.context.get("requirement_json") or {}
+        design = self.context.get("design_text") or ""
         return self.diagram_generator.generate_all(req_json, design)
 
     def _stage_test_cases(self, record: StageRecord) -> tuple[str, list]:
         """测试用例生成，返回(output, agent_warnings)"""
-        req_json = self.context.get("requirement_json")
-        design = self.context.get("design_text")
+        req_json = self.context.get("requirement_json") or {}
+        design = self.context.get("design_text") or ""
         cases = self.test_case_generator.generate(req_json, design)
         warnings = self.test_case_generator.validate_test_cases(cases, req_json)
         if warnings:

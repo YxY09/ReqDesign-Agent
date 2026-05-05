@@ -30,40 +30,40 @@
 请从以下维度进行审查，以JSON格式输出审查结果：
 
 ```json
-{{
+{
   "overall_score": 85,
   "overall_pass": true,
   "checks": [
-    {{
+    {
       "dimension": "需求覆盖",
       "score": 90,
       "pass": true,
       "issues": [],
       "suggestions": []
-    }},
-    {{
+    },
+    {
       "dimension": "图语法",
       "score": 80,
       "pass": true,
       "issues": ["类图中缺少Book类的方法定义"],
       "suggestions": ["为Book类添加getInfo()方法"]
-    }},
-    {{
+    },
+    {
       "dimension": "模型一致性",
       "score": 85,
       "pass": true,
       "issues": [],
       "suggestions": []
-    }}
+    }
   ],
   "repair_actions": [
-    {{
+    {
       "target": "class_diagram",
       "action": "添加Book类的getInfo方法",
       "priority": "中"
-    }}
+    }
   ]
-}}
+}
 ```
 
 ### 审查维度：

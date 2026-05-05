@@ -241,5 +241,151 @@ class TestRunSummary:
         assert summary["error"] == 0
 
 
+class TestEvaluationManager:
+    """测试EvaluationManager"""
+
+    def _make_manager(self):
+        from governance.evaluation_manager import EvaluationManager
+        from agent.config import AgentConfig
+        return EvaluationManager(AgentConfig())
+
+    def test_merge_runs_averages_scores(self):
+        """多次运行结果取平均"""
+        import tempfile
+        mgr = self._make_manager()
+        reports = [
+            {"results": [
+                {"case_name": "case1", "status": "success", "scores": {"overall": 80, "requirement_coverage": 90, "diagram_syntax": 100, "entity_accuracy": 80, "process_completeness": 70, "state_diagram": 85, "consistency": 95}},
+            ]},
+            {"results": [
+                {"case_name": "case1", "status": "success", "scores": {"overall": 90, "requirement_coverage": 95, "diagram_syntax": 100, "entity_accuracy": 90, "process_completeness": 80, "state_diagram": 85, "consistency": 95}},
+            ]},
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            merged = mgr._merge_runs(reports, tmpdir)
+        assert merged["total_runs"] == 2
+        assert len(merged["results"]) == 1
+        case1 = merged["results"][0]
+        assert case1["case_name"] == "case1"
+        assert case1["status"] == "success"
+        assert case1["scores"]["overall"] == 85.0
+        assert case1["runs"] == 2
+
+    def test_merge_runs_all_failed(self):
+        """所有运行都失败时scores填充0.0"""
+        import tempfile
+        mgr = self._make_manager()
+        reports = [
+            {"results": [
+                {"case_name": "case1", "status": "error", "scores": {}},
+            ]},
+            {"results": [
+                {"case_name": "case1", "status": "error", "scores": {}},
+            ]},
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            merged = mgr._merge_runs(reports, tmpdir)
+        case1 = merged["results"][0]
+        assert case1["status"] == "error"
+        assert case1["scores"]["overall"] == 0.0
+        assert case1["runs"] == 0
+
+    def test_merge_runs_empty_reports(self):
+        """空报告列表返回空字典"""
+        mgr = self._make_manager()
+        result = mgr._merge_runs([], "/tmp")
+        assert result == {}
+
+    def test_run_benchmark_runs_lt_1_raises(self):
+        """runs<1时抛出ValueError"""
+        mgr = self._make_manager()
+        import pytest
+        with pytest.raises(ValueError, match="runs must be >= 1"):
+            mgr.run_benchmark(runs=0)
+
+    def test_run_benchmark_records_history(self):
+        """运行后history应有记录"""
+        import tempfile
+        from unittest.mock import patch, MagicMock
+        mgr = self._make_manager()
+        mock_report = {"results": [], "summary": {"passed": 0, "failed": 0, "error": 0, "avg_scores": {}}}
+        with patch("governance.evaluation_manager.BenchmarkRunner") as MockRunner:
+            MockRunner.return_value.run_all.return_value = mock_report
+            with tempfile.TemporaryDirectory() as tmpdir:
+                mgr.run_benchmark(output_dir=tmpdir)
+        assert len(mgr.history) == 1
+        assert "timestamp" in mgr.history[0]
+
+
+class TestBenchmarkRunner:
+    """测试BenchmarkRunner"""
+
+    def test_find_cases_missing_dir(self):
+        """案例目录不存在时抛出FileNotFoundError"""
+        from benchmark.run_benchmark import BenchmarkRunner
+        from agent.config import AgentConfig
+        runner = BenchmarkRunner(AgentConfig(), "/nonexistent", "/nonexistent", "/tmp")
+        import pytest
+        with pytest.raises(FileNotFoundError):
+            runner.find_cases()
+
+    def test_find_cases_with_files(self, tmp_path):
+        """正常查找案例和gold label"""
+        from benchmark.run_benchmark import BenchmarkRunner
+        from agent.config import AgentConfig
+        cases_dir = tmp_path / "cases"
+        gold_dir = tmp_path / "gold"
+        cases_dir.mkdir()
+        gold_dir.mkdir()
+        (cases_dir / "case1.md").write_text("# Case 1")
+        (cases_dir / "case2.md").write_text("# Case 2")
+        (gold_dir / "case1.json").write_text("{}")
+        # case2 has no gold label
+        runner = BenchmarkRunner(AgentConfig(), str(cases_dir), str(gold_dir), str(tmp_path / "out"))
+        cases = runner.find_cases()
+        assert len(cases) == 1
+        assert cases[0]["name"] == "case1"
+
+    def test_generate_md_report_structure(self):
+        """Markdown报告结构正确"""
+        from benchmark.run_benchmark import BenchmarkRunner
+        from agent.config import AgentConfig
+        runner = BenchmarkRunner(AgentConfig(), "", "", "")
+        report = {
+            "run_time": "2025-01-01 00:00:00",
+            "total_cases": 1,
+            "results": [
+                {"case_name": "test", "status": "success", "passed": True,
+                 "scores": {"requirement_coverage": 100, "diagram_syntax": 100,
+                            "entity_accuracy": 100, "process_completeness": 100,
+                            "state_diagram": 100, "consistency": 100, "overall": 100}},
+            ],
+            "summary": {"passed": 1, "failed": 0, "error": 0, "avg_scores": {"overall": 100}},
+        }
+        md = runner._generate_md_report(report)
+        assert "# 基准测试报告" in md
+        assert "| 案例 |" in md
+        assert "test" in md
+        assert "100" in md
+
+    def test_generate_md_report_error_case(self):
+        """错误案例在报告中显示-"""
+        from benchmark.run_benchmark import BenchmarkRunner
+        from agent.config import AgentConfig
+        runner = BenchmarkRunner(AgentConfig(), "", "", "")
+        report = {
+            "run_time": "2025-01-01 00:00:00",
+            "total_cases": 1,
+            "results": [
+                {"case_name": "fail", "status": "error", "error": "timeout"},
+            ],
+            "summary": {"passed": 0, "failed": 0, "error": 1, "avg_scores": {}},
+        }
+        md = runner._generate_md_report(report)
+        assert "fail" in md
+        assert "error" in md
+        assert "| - |" in md
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

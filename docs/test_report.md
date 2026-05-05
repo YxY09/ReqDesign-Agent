@@ -21,10 +21,10 @@
 | 测试用例验证 | test_phase5.py | 7 | 7 |
 | 重试/审查/修复 | test_phase6.py | 16 | 16 |
 | 输出管理 | test_phase7.py | 10 | 10 |
-| 基准评分 | test_benchmark.py | 25 | 25 |
+| 基准评分/评估 | test_benchmark.py | 34 | 34 |
 | **治理框架** | **test_governance.py** | **181** | **181** |
 | **集成测试** | **test_integration.py** | **39** | **39** |
-| **总计** | | **349** | **349** |
+| **总计** | | **358** | **358** |
 
 ### 2.2 治理框架测试详情（test_governance.py）
 
