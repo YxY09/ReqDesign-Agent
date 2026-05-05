@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 
 from agent.llm_client import LLMClient
 from agent.prompt_loader import load_prompt
