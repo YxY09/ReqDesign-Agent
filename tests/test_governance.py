@@ -1562,7 +1562,7 @@ class TestOrchestratorRunStage:
         def stage_fn(record):
             call_count[0] += 1
             if call_count[0] == 1:
-                return None  # 第一次返回空 → 校验失败 → RETRY
+                return None  # "输出为空" 包含 "为空" → RETRY
             return {"actors": ["a"], "functions": [{"name": "f", "description": "d"}], "entities": [{"name": "E"}]}
 
         orch.context.set("full_text", "text")
@@ -1571,19 +1571,17 @@ class TestOrchestratorRunStage:
         assert record.status == "success"
 
     def test_repair_multi_round(self):
-        """REPAIR支持多轮修复"""
+        """REPAIR支持多轮修复，修复成功后可PROCEED"""
         orch = self._make_orchestrator()
-        validate_count = [0]
 
-        # 用一个始终校验失败的stage来触发REPAIR
+        # 用一个校验失败的stage来触发REPAIR
         def stage_fn(record):
             return {}  # 空dict → 校验失败
 
-        # 不设置full_text会导致stage_fn返回空
         orch.context.set("full_text", "text")
         record = orch._run_stage("requirement_analysis", stage_fn)
-        # 应该尝试修复（如果gate返回REPAIR）
-        assert record.status in ("failed", "repaired", "halted")
+        # 修复可能成功（success）或失败（halted/failed）
+        assert record.status in ("success", "failed", "halted")
 
     def test_halt_on_very_low_score(self):
         """极低分数导致HALT"""

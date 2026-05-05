@@ -29,6 +29,12 @@ from governance.consistency_checker import ConsistencyChecker
 logger = logging.getLogger("reqdesign")
 
 
+class _RegenerateSignal(Exception):
+    """内部信号：用户在人工检查点要求重新生成"""
+    def __init__(self, stage: str):
+        self.stage = stage
+
+
 class TaskOrchestrator:
     """治理模式下的任务编排器"""
 
@@ -145,6 +151,7 @@ class TaskOrchestrator:
         self.llm.set_stage("test_case_generator")
         record = self._run_stage("test_case_generator", self._stage_test_cases)
         test_cases = record.output_data if record.status in ("success", "repaired") else ""
+        self.context.set("test_cases", test_cases)
         results["test_cases"] = test_cases
 
         # 跨产物一致性检查
@@ -257,19 +264,22 @@ class TaskOrchestrator:
         retry_count = 0
         repair_count = 0
         max_retries = self.config.retry.max_retries
+        output = None  # 修复后跳过stage_fn，直接校验修复结果
+        agent_warnings = []
 
         while True:
             try:
-                # 执行阶段
-                raw_output = stage_fn(record, *args)
+                # 执行阶段（REPAIR后跳过，直接使用修复结果）
+                if output is None:
+                    raw_output = stage_fn(record, *args)
 
-                # 解包(output, warnings)元组
-                agent_warnings = []
-                if isinstance(raw_output, tuple) and len(raw_output) == 2:
-                    output, agent_warnings = raw_output
-                else:
-                    output = raw_output
-                record.output_data = output
+                    # 解包(output, warnings)元组
+                    agent_warnings = []
+                    if isinstance(raw_output, tuple) and len(raw_output) == 2:
+                        output, agent_warnings = raw_output
+                    else:
+                        output = raw_output
+                    record.output_data = output
 
                 # 校验
                 vr = self._validate_stage_output(stage_name, output)
@@ -300,7 +310,8 @@ class TaskOrchestrator:
                     logger.info(
                         f"[{stage_name}] RETRY {retry_count}/{max_retries}"
                     )
-                    continue  # 重新执行stage_fn
+                    output = None  # 清空，下次循环重新执行stage_fn
+                    continue
 
                 elif decision == GateDecision.REPAIR:
                     repair_count += 1
@@ -317,7 +328,8 @@ class TaskOrchestrator:
                             rr.action, rr.success
                         )
                     record.output_data = output
-                    # 修复后继续外层循环，由外层统一校验+门控
+                    agent_warnings = []  # 修复后清空旧warnings
+                    # output已更新，下次循环跳过stage_fn直接校验
 
                 else:  # HALT
                     record.status = "halted"
@@ -338,7 +350,36 @@ class TaskOrchestrator:
         )
 
         # 人工检查点（所有阶段都可配置）
-        self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
+        # REGENERATE时重新执行整个阶段
+        while True:
+            try:
+                self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
+                break
+            except _RegenerateSignal:
+                logger.info(f"[{stage_name}] 重新生成中...")
+                output = None
+                record = StageRecord(stage=stage_name)
+                record.start_time = time.time()
+                # 重新执行阶段
+                try:
+                    raw_output = stage_fn(record, *args)
+                    agent_warnings = []
+                    if isinstance(raw_output, tuple) and len(raw_output) == 2:
+                        output, agent_warnings = raw_output
+                    else:
+                        output = raw_output
+                    record.output_data = output
+                    vr = self._validate_stage_output(stage_name, output)
+                    if agent_warnings:
+                        vr.warnings.extend(agent_warnings)
+                        vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
+                    record.validation_result = vr
+                    record.status = "success"
+                except Exception as e:
+                    logger.error(f"重新生成失败: {e}", exc_info=True)
+                    record.status = "failed"
+                record.end_time = time.time()
+                self.stage_records[-1] = record
 
         # 上下文快照
         self.context.snapshot()
@@ -442,6 +483,12 @@ class TaskOrchestrator:
         decision = self.checkpoint.pause(stage, summary, preview)
         if decision.action.value == "abort":
             raise SystemExit(f"用户在 {stage} 阶段终止执行")
+        elif decision.action.value == "modify":
+            feedback = decision.feedback or ""
+            logger.info(f"[{stage}] 用户修改建议: {feedback}")
+        elif decision.action.value == "regenerate":
+            logger.info(f"[{stage}] 用户要求重新生成，将重新执行该阶段")
+            raise _RegenerateSignal(stage)
 
     def _lightweight_review(self, req_json: dict) -> dict:
         """需求分析后轻量审查（纯规则，不调用LLM）"""
@@ -566,12 +613,24 @@ class TaskOrchestrator:
                 "failed": sum(
                     1 for r in self.stage_records if r.status == "failed"
                 ),
+                "halted": sum(
+                    1 for r in self.stage_records if r.status == "halted"
+                ),
             },
             "stages": [r.to_summary() for r in self.stage_records],
             "prompt_versions": self.prompt_registry.get_all_versions(),
             "trace_summary": self.trace.get_summary(),
             "consistency": results.get("consistency", {}),
             "lightweight_review": results.get("lightweight_review", {}),
+            "human_decisions": [
+                {
+                    "stage": d.stage,
+                    "action": d.action.value,
+                    "feedback": d.feedback,
+                    "timestamp": d.timestamp,
+                }
+                for d in self.checkpoint.decisions
+            ],
         }
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)

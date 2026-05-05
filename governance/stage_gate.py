@@ -69,7 +69,7 @@ class StageGate:
 
     def _is_retryable(self, validation: ValidationResult) -> bool:
         """判断错误是否可通过重试恢复（仅检查错误模式，不看分数）"""
-        retryable_patterns = ["空响应", "超时", "timeout", "empty", "截断", "网络", "network", "rate limit", "429", "503"]
+        retryable_patterns = ["空响应", "超时", "timeout", "empty", "截断", "网络", "network", "rate limit", "429", "503", "为空", "为none", "解析失败"]
         for err in validation.errors:
             err_lower = err.lower()
             if any(p in err_lower for p in retryable_patterns):
