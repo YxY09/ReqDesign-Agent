@@ -808,6 +808,50 @@ class TestOrchestratorValidation:
         vr = orch._validate_stage_output("unknown", "something")
         assert vr.is_valid
 
+    # --- LLM返回意外类型 ---
+
+    def test_validate_requirement_analysis_list(self):
+        """LLM返回list而非dict时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("requirement_analysis", [1, 2, 3])
+        assert not vr.is_valid
+
+    def test_validate_requirement_analysis_int(self):
+        """LLM返回int而非dict时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("requirement_analysis", 42)
+        assert not vr.is_valid
+
+    def test_validate_diagram_generator_list(self):
+        """LLM返回list而非dict时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", ["a", "b"])
+        assert not vr.is_valid
+
+    def test_validate_diagram_generator_int(self):
+        """LLM返回int而非dict时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", 123)
+        assert not vr.is_valid
+
+    def test_validate_review_agent_list(self):
+        """审查返回list而非dict时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", [{"score": 80}])
+        assert not vr.is_valid
+
+    def test_validate_review_agent_none(self):
+        """审查返回None时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("review_agent", None)
+        assert not vr.is_valid
+
+    def test_validate_test_cases_none(self):
+        """测试用例返回None时应标记无效"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("test_case_generator", None)
+        assert not vr.is_valid
+
 
 class TestOrchestratorContextOnFailure:
     """测试阶段失败时上下文是否正确设置"""
@@ -2136,17 +2180,21 @@ class TestOrchestratorRunStage:
         assert record.status == "success"
 
     def test_repair_multi_round(self):
-        """REPAIR支持多轮修复，修复成功后可PROCEED"""
+        """REPAIR触发修复流程并产生修复记录"""
         orch = self._make_orchestrator()
 
-        # 用一个校验失败的stage来触发REPAIR
+        # stage_fn返回空dict → 校验失败 → 触发REPAIR流程
         def stage_fn(record):
-            return {}  # 空dict → 校验失败
+            return {}
 
         orch.context.set("full_text", "text")
         record = orch._run_stage("requirement_analysis", stage_fn)
-        # 修复可能成功（success）或失败（halted/failed）
-        assert record.status in ("success", "failed", "halted")
+        # 无论修复是否成功，应有修复记录（证明REPAIR分支被触发）
+        assert len(record.repair_records) >= 1
+        # 修复记录应包含attempt和error信息
+        first_record = record.repair_records[0]
+        assert first_record.attempt >= 1
+        assert first_record.error  # error不为空
 
     def test_halt_on_very_low_score(self):
         """极低分数导致HALT"""
