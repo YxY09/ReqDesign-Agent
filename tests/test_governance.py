@@ -49,6 +49,11 @@ class TestValidationResult:
         assert not vr.is_valid
         assert vr.score == 0.3
 
+    def test_from_dict_empty(self):
+        vr = ValidationResult.from_dict({})
+        assert not vr.is_valid
+        assert vr.score == 1.0
+
 
 class TestRepairRecord:
     def test_create(self):
@@ -80,6 +85,12 @@ class TestHumanDecision:
         hd = HumanDecision.from_dict(d)
         assert hd.action == HumanAction.ABORT
 
+    def test_from_dict_extra_keys(self):
+        d = {"stage": "s", "action": "continue", "extra_key": "ignored"}
+        hd = HumanDecision.from_dict(d)
+        assert hd.stage == "s"
+        assert hd.action == HumanAction.CONTINUE
+
 
 class TestTraceEntry:
     def test_create(self):
@@ -92,6 +103,11 @@ class TestTraceEntry:
         d = te.to_dict()
         te2 = TraceEntry.from_dict(d)
         assert te2.data == te.data
+
+    def test_from_dict_extra_keys(self):
+        d = {"timestamp": 1.0, "stage": "s", "event_type": "e", "data": {}, "unknown": 42}
+        te = TraceEntry.from_dict(d)
+        assert te.stage == "s"
 
 
 class TestStageRecord:
@@ -724,6 +740,13 @@ class TestOrchestratorValidation:
         vr = orch._validate_stage_output("diagram_generator", "string")
         assert not vr.is_valid
         assert vr.score == 0.0
+
+    def test_validate_diagrams_empty_dict(self):
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("diagram_generator", {})
+        assert not vr.is_valid
+        assert vr.score == 0.0
+        assert "空字典" in vr.errors[0]
 
     def test_validate_test_cases_valid(self):
         orch = self._make_orchestrator()
