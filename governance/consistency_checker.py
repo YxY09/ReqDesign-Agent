@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 logger = logging.getLogger("reqdesign")
 
 # 预编译热路径正则
-_RE_CJK = re.compile(r'[一-龥]')
+_RE_CJK = re.compile(r'[一-鿿]')
 _RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；的时了后]')
 _RE_HEADER_FIND = re.compile(r'#{1,3}\s+(.+)')
 _RE_HEADER_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
@@ -17,9 +17,9 @@ _RE_ACTIVITY_NODE_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
 _RE_ACTIVITY_NODE_ID = re.compile(r'(?:-->|---)\s*(\w+)')
 # 类图/状态图类名提取
 _RE_CLASS_NAME = re.compile(r'class\s+(\w+)')
-_RE_CLASS_NAME_CJK = re.compile(r'class\s+([一-龥]+)')
+_RE_CLASS_NAME_CJK = re.compile(r'class\s+([一-鿿]+)')
 _RE_STATE_NAME = re.compile(r'state\s+"?(\w+)"?')
-_RE_STATE_NAME_CJK = re.compile(r'state\s+([一-龥]+)')
+_RE_STATE_NAME_CJK = re.compile(r'state\s+([一-鿿]+)')
 _RE_ARROW_LEFT = re.compile(r'(\S+)\s*-->')
 _RE_ARROW_RIGHT = re.compile(r'-->\s*(\S+)')
 

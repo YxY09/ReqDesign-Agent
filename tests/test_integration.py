@@ -786,6 +786,24 @@ class TestMermaidValidatorEdgeCases:
         # 不应因为撇号而报括号不匹配
         assert "括号" not in msg
 
+    def test_apostrophe_only_one_brace_affected(self):
+        """撇号在类定义外部时不应影响括号匹配"""
+        from agent.mermaid_validator import MermaidValidator
+        validator = MermaidValidator()
+        # 撇号在第一个类之后、第二个类之前
+        # 如果把'当作字符串分隔符，会跳过第二个类的{但不跳过}
+        content = '''classDiagram
+    class Foo {
+        +bar() string
+    }
+    note "User's note"
+    class Baz {
+        +qux() string
+    }
+'''
+        is_valid, msg = validator.validate(content)
+        assert is_valid, f"不应因撇号报错: {msg}"
+
     def test_empty_content(self):
         from agent.mermaid_validator import MermaidValidator
         validator = MermaidValidator()

@@ -126,7 +126,7 @@ class MermaidValidator:
             if char == "\\" and in_string:
                 escape_next = True
                 continue
-            if char in ('"', "'") and not in_string:
+            if char == '"' and not in_string:
                 in_string = True
                 string_char = char
             elif in_string and char == string_char:
