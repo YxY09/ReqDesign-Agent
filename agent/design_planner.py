@@ -27,6 +27,8 @@ class DesignPlanner:
         logger.info("开始生成系统设计...")
 
         req_str = json.dumps(requirement_json, ensure_ascii=False, indent=2)
+        # 防止用户输入中包含模板占位符导致prompt注入
+        req_str = req_str.replace("{requirement_json}", "")
         prompt = self.prompt_template.replace("{requirement_json}", req_str)
 
         system_msg = "你是一个资深的系统架构师，擅长根据需求分析结果设计软件系统架构。输出格式为Markdown。"

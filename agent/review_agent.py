@@ -217,6 +217,7 @@ class ReviewAgent:
 
     def generate_report(self, review_result: dict) -> str:
         """生成可读的审查报告（Markdown格式）"""
+        review_result = review_result or {}
         lines = ["# 设计审查报告\n"]
 
         score = review_result.get("overall_score", 0)
@@ -245,8 +246,8 @@ class ReviewAgent:
         if syntax:
             lines.append("## Mermaid语法检查\n")
             for s in syntax:
-                status = "通过" if s["valid"] else "失败"
-                lines.append(f"- **{s['diagram']}**: [{status}] {s['message']}")
+                status = "通过" if s.get("valid", False) else "失败"
+                lines.append(f"- **{s.get('diagram', '?')}**: [{status}] {s.get('message', '')}")
             lines.append("")
 
         # 修复建议
