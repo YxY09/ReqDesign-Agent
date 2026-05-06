@@ -472,7 +472,13 @@ class TaskOrchestrator:
                 )
                 raise
             except _RegenerateSignal:
-                # 嵌套的regenerate信号，继续外层循环处理
+                # 嵌套的regenerate信号，记录当前record后继续外层循环
+                record.end_time = time.time()
+                record.status = "regenerated"
+                if self.stage_records:
+                    self.stage_records[-1] = record
+                else:
+                    self.stage_records.append(record)
                 continue
             except Exception as e:
                 logger.error(f"重新生成失败: {e}", exc_info=True)

@@ -347,11 +347,9 @@ class ConsistencyChecker:
             return
 
         # 从状态图中提取被引用的类名（state关键字后的名称）
+        # 注意：箭头目标是状态名（如 待借阅 --> 已借阅），不是类引用，不应纳入检查
         state_refs = set(_RE_STATE_NAME.findall(state_diagram))
         state_refs.update(_RE_STATE_NAME_CJK.findall(state_diagram))
-        # 也从箭头定义中提取状态名（如 待借阅 --> 已借阅）
-        state_refs.update(_RE_ARROW_LEFT.findall(state_diagram))
-        state_refs.update(_RE_ARROW_RIGHT.findall(state_diagram))
         # 过滤掉Mermaid关键字和特殊标记
         state_refs = {s for s in state_refs if s not in _MERMAID_KEYWORDS and len(s) > 1}
 
