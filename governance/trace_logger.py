@@ -135,7 +135,10 @@ class TraceLogger:
             "summary": self.get_summary(),
             "entries": [e.to_dict() for e in self.entries],
         }
-        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        try:
+            json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        except TypeError:
+            json_str = json.dumps(data, ensure_ascii=False, indent=2, default=str)
         if path:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             Path(path).write_text(json_str, encoding="utf-8")
