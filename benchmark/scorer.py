@@ -63,20 +63,18 @@ def _fuzzy_match_entity(entity_name: str, target: str) -> bool:
         if en_name in target:
             return True
 
-    # 反向查找：target中包含中文名，entity_name是英文
-    for cn, en_list in ENTITY_NAME_MAP.items():
-        if cn in target:
-            for en_name in en_list:
-                if en_name in entity_name or entity_name in en_name:
-                    return True
+    # 反向查找：entity_name是英文名，检查target是否包含对应中文名
+    cn_match = _EN_TO_CN.get(entity_name.lower())
+    if cn_match and cn_match in target:
+        return True
 
     return False
 
 
-def _edit_distance(s1: str, s2: str) -> int:
-    """计算两个字符串的编辑距离"""
+def _edit_distance(s1: str, s2: str, threshold: int = -1) -> int:
+    """计算两个字符串的编辑距离，threshold>=0时可提前终止"""
     if len(s1) < len(s2):
-        return _edit_distance(s2, s1)
+        return _edit_distance(s2, s1, threshold)
     if len(s2) == 0:
         return len(s1)
     prev = range(len(s2) + 1)
@@ -87,6 +85,9 @@ def _edit_distance(s1: str, s2: str) -> int:
             deletions = curr[j] + 1
             substitutions = prev[j] + (c1 != c2)
             curr.append(min(insertions, deletions, substitutions))
+        # 提前终止：当前行最小值已超过阈值
+        if threshold >= 0 and min(curr) > threshold:
+            return threshold + 1
         prev = curr
     return prev[-1]
 
@@ -132,6 +133,21 @@ FUNCTION_SYNONYMS = {
     "挂号管理": ["管理挂号"],
 }
 
+# 反向查找：英文名 → 中文名（用于O(1)模糊匹配）
+_EN_TO_CN: dict[str, str] = {}
+for _cn, _en_list in ENTITY_NAME_MAP.items():
+    for _en in _en_list:
+        _EN_TO_CN[_en.lower()] = _cn
+
+# 预编译热路径正则
+_RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；（）()\s的时了后]')
+_RE_NUMBER_QUANT = re.compile(r'\d+\s*[分天时月秒门]')
+_RE_FUNC_SPLIT = re.compile(r'[与和及、]')
+_RE_STATE_QUOTED = re.compile(r'state\s+"([^"]+)"')
+_RE_STATE_UNQUOTED = re.compile(r'state\s+(?!"[\s])(\S+)')
+_RE_ARROW_LEFT = re.compile(r'(\S+)\s*-->')
+_RE_ARROW_RIGHT = re.compile(r'-->\s*(\S+)')
+
 
 def _fuzzy_match_function(func_name: str, result_functions: list[str], result_text: str) -> bool:
     """模糊匹配功能名称"""
@@ -143,7 +159,7 @@ def _fuzzy_match_function(func_name: str, result_functions: list[str], result_te
         return True
 
     # 2. 关键词拆分匹配
-    keywords = [kw for kw in re.split(r'[与和及、]', func_name) if len(kw) > 1]
+    keywords = [kw for kw in _RE_FUNC_SPLIT.split(func_name) if len(kw) > 1]
     if len(keywords) >= 2 and all(kw in result_text for kw in keywords):
         return True
 
@@ -165,10 +181,10 @@ def _fuzzy_match_function(func_name: str, result_functions: list[str], result_te
 
     # 5. 编辑距离匹配（仅对较长字符串，避免短字符串误匹配）
     if len(func_name) >= 6:
+        threshold = max(1, len(func_name) // 4)
         for rf in result_functions:
             if abs(len(func_name) - len(rf)) <= 2:
-                dist = _edit_distance(func_name, rf)
-                threshold = max(1, len(func_name) // 4)
+                dist = _edit_distance(func_name, rf, threshold)
                 if dist <= threshold:
                     return True
 
@@ -184,7 +200,7 @@ def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
         return True
 
     # 2. 按分隔符和结构词拆分关键词（保留"不"等否定词在关键词中）
-    keywords = re.split(r'[，,、;；（）()\s的时了后]', expected)
+    keywords = _RE_CONSTRAINT_SPLIT.split(expected)
     keywords = [kw for kw in keywords if len(kw) >= 2]
 
     if not keywords:
@@ -204,7 +220,7 @@ def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
         return True
 
     # 5. 数字/量词匹配（如"30分钟"、"7天"、"6门"）
-    numbers_in_expected = re.findall(r'\d+\s*[分天时月秒门]', expected)
+    numbers_in_expected = _RE_NUMBER_QUANT.findall(expected)
     if numbers_in_expected and any(n in target_text for n in numbers_in_expected):
         return True
 
@@ -444,13 +460,13 @@ def score_state_diagram(diagrams: dict, gold: dict) -> float:
 
     # 检查状态数量（至少3个状态才算有意义）
     # 匹配带引号的状态名: state "Order Pending" as OP
-    quoted_states = set(re.findall(r'state\s+"([^"]+)"', state))
+    quoted_states = set(_RE_STATE_QUOTED.findall(state))
     # 匹配不带引号的状态名: state Pending（排除带引号的）
-    unquoted_states = set(re.findall(r'state\s+(?!"[\s])(\S+)', state))
+    unquoted_states = set(_RE_STATE_UNQUOTED.findall(state))
     state_names = list(quoted_states | unquoted_states)
     # 匹配箭头两端的状态: A --> B
-    arrow_states = re.findall(r'(\S+)\s*-->', state)
-    arrow_states += re.findall(r'-->\s*(\S+)', state)
+    arrow_states = _RE_ARROW_LEFT.findall(state)
+    arrow_states += _RE_ARROW_RIGHT.findall(state)
     all_states = set(state_names + arrow_states)
     # 排除 [*] 等特殊标记
     all_states = {s for s in all_states if s != "*" and len(s) > 1}

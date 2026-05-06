@@ -6,6 +6,12 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("reqdesign")
 
+# 预编译热路径正则
+_RE_CJK = re.compile(r'[一-龥]')
+_RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；的时了后]')
+_RE_HEADER_FIND = re.compile(r'#{1,3}\s+(.+)')
+_RE_HEADER_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
+
 
 @dataclass
 class ConsistencyResult:
@@ -146,7 +152,7 @@ class ConsistencyChecker:
         missing = []
         for desc in constraint_descs:
             # 提取关键词检查是否在设计中出现
-            keywords = re.split(r'[，,、;；的时了后]', desc)
+            keywords = _RE_CONSTRAINT_SPLIT.split(desc)
             keywords = [kw for kw in keywords if len(kw) >= 2]
             if keywords:
                 matched = sum(1 for kw in keywords if kw in design_lower)
@@ -227,10 +233,10 @@ class ConsistencyChecker:
             return
 
         # 从设计中提取标题关键词
-        headers = re.findall(r'#{1,3}\s+(.+)', design)
+        headers = _RE_HEADER_FIND.findall(design)
         header_keywords = set()
         for h in headers:
-            words = re.findall(r'[一-龥a-zA-Z]{2,}', h)
+            words = _RE_HEADER_WORDS.findall(h)
             header_keywords.update(w.lower() for w in words)
 
         if not header_keywords:
@@ -350,7 +356,7 @@ class ConsistencyChecker:
 def _word_in_text(word: str, text: str) -> bool:
     """检查word是否作为完整词出现在text中（避免子串误匹配）"""
     # 中文字符不需要词边界（无空格分隔）
-    if re.search(r'[一-龥]', word):
+    if _RE_CJK.search(word):
         if len(word) < 2:
             return False  # 单字中文太容易误匹配
         return word in text
