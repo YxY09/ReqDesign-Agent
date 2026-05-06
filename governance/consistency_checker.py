@@ -11,6 +11,17 @@ _RE_CJK = re.compile(r'[一-龥]')
 _RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；的时了后]')
 _RE_HEADER_FIND = re.compile(r'#{1,3}\s+(.+)')
 _RE_HEADER_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
+# 活动图节点提取
+_RE_ACTIVITY_NODE_CONTENT = re.compile(r'\w+[\[\(>{]([^}\]\)]+)')
+_RE_ACTIVITY_NODE_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
+_RE_ACTIVITY_NODE_ID = re.compile(r'(?:-->|---)\s*(\w+)')
+# 类图/状态图类名提取
+_RE_CLASS_NAME = re.compile(r'class\s+(\w+)')
+_RE_CLASS_NAME_CJK = re.compile(r'class\s+([一-龥]+)')
+_RE_STATE_NAME = re.compile(r'state\s+"?(\w+)"?')
+_RE_STATE_NAME_CJK = re.compile(r'state\s+([一-龥]+)')
+_RE_ARROW_LEFT = re.compile(r'(\S+)\s*-->')
+_RE_ARROW_RIGHT = re.compile(r'-->\s*(\S+)')
 
 # Mermaid关键字集合（用于过滤状态图中的非实体引用）
 _MERMAID_KEYWORDS = frozenset({
@@ -283,11 +294,11 @@ class ConsistencyChecker:
         # 从活动图中提取节点文本（括号内的内容和节点ID）
         node_texts = set()
         # 匹配 A[文本] 或 A(文本) 或 A{文本} 或 A>文本]
-        for m in re.findall(r'\w+[\[\(>{]([^}\]\)]+)', activity_diagram):
-            words = re.findall(r'[一-龥a-zA-Z]{2,}', m)
+        for m in _RE_ACTIVITY_NODE_CONTENT.findall(activity_diagram):
+            words = _RE_ACTIVITY_NODE_WORDS.findall(m)
             node_texts.update(w.lower() for w in words)
         # 也匹配纯节点ID（如 A-->B 中的 B）
-        node_ids = re.findall(r'(?:-->|---)\s*(\w+)', activity_diagram)
+        node_ids = _RE_ACTIVITY_NODE_ID.findall(activity_diagram)
         # 过滤掉单字母节点ID（太短容易误匹配）
         node_texts.update(n.lower() for n in node_ids if len(n) > 1)
 
@@ -327,8 +338,8 @@ class ConsistencyChecker:
             return
 
         # 从类图中提取类名
-        class_names = set(re.findall(r'class\s+(\w+)', class_diagram))
-        class_names.update(re.findall(r'class\s+([一-龥]+)', class_diagram))
+        class_names = set(_RE_CLASS_NAME.findall(class_diagram))
+        class_names.update(_RE_CLASS_NAME_CJK.findall(class_diagram))
         class_names_lower = {c.lower() for c in class_names}
 
         if not class_names:
@@ -336,11 +347,11 @@ class ConsistencyChecker:
             return
 
         # 从状态图中提取被引用的类名（state关键字后的名称）
-        state_refs = set(re.findall(r'state\s+"?(\w+)"?', state_diagram))
-        state_refs.update(re.findall(r'state\s+([一-龥]+)', state_diagram))
+        state_refs = set(_RE_STATE_NAME.findall(state_diagram))
+        state_refs.update(_RE_STATE_NAME_CJK.findall(state_diagram))
         # 也从箭头定义中提取状态名（如 待借阅 --> 已借阅）
-        state_refs.update(re.findall(r'(\S+)\s*-->', state_diagram))
-        state_refs.update(re.findall(r'-->\s*(\S+)', state_diagram))
+        state_refs.update(_RE_ARROW_LEFT.findall(state_diagram))
+        state_refs.update(_RE_ARROW_RIGHT.findall(state_diagram))
         # 过滤掉Mermaid关键字和特殊标记
         state_refs = {s for s in state_refs if s not in _MERMAID_KEYWORDS and len(s) > 1}
 

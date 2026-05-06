@@ -147,6 +147,7 @@ _RE_STATE_QUOTED = re.compile(r'state\s+"([^"]+)"')
 _RE_STATE_UNQUOTED = re.compile(r'state\s+(?!"[\s])(\S+)')
 _RE_ARROW_LEFT = re.compile(r'(\S+)\s*-->')
 _RE_ARROW_RIGHT = re.compile(r'-->\s*(\S+)')
+_RE_CORE_NOUNS = re.compile(r'[一-鿿]{2,4}')
 
 
 def _fuzzy_match_function(func_name: str, result_functions: list[str], result_text: str) -> bool:
@@ -225,7 +226,7 @@ def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
         return True
 
     # 6. 核心名词匹配（提取2-4字的名词片段）
-    core_nouns = re.findall(r'[一-鿿]{2,4}', expected)
+    core_nouns = _RE_CORE_NOUNS.findall(expected)
     core_nouns = [n for n in core_nouns if n not in ("系统", "时应", "提示", "后不")]
     if len(core_nouns) >= 2:
         noun_matched = sum(1 for n in core_nouns if n in target_text)
