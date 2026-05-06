@@ -1686,6 +1686,21 @@ class TestConsistencyChecker:
         assert result.score < 1.0
         assert len(result.checks) > 0
 
+    def test_check_all_non_dict_input(self):
+        """非dict输入不会崩溃"""
+        result = self.checker.check_all("not a dict", "design", {}, "tests")
+        assert isinstance(result.score, float)
+
+    def test_check_individual_methods_non_dict(self):
+        """单独调用_check_*方法传入非dict不崩溃"""
+        from governance.consistency_checker import ConsistencyResult
+        for method_name in ("_check_requirement_to_design", "_check_entities_in_diagram", "_check_constraints_in_design"):
+            method = getattr(self.checker, method_name)
+            result = ConsistencyResult()
+            method([1, 2, 3], "some text", result)
+            # 非dict输入不会崩溃，返回有效的check结果
+            assert isinstance(result.checks[-1]["score"], float)
+
     def test_entities_in_diagram(self):
         """实体在类图中存在"""
         req = {"entities": [{"name": "User"}, {"name": "Book"}]}
