@@ -380,6 +380,11 @@ class TaskOrchestrator:
 
             except _AbortSignal:
                 record.end_time = time.time()
+                record.status = "aborted"
+                self.stage_records.append(record)
+                self.trace.log_stage_end(
+                    stage_name, record.status, record.duration
+                )
                 raise  # 终止信号传播到外层
             except Exception as e:
                 logger.error(f"阶段 {stage_name} 异常: {e}", exc_info=True)
@@ -459,6 +464,12 @@ class TaskOrchestrator:
                     if ctx_key:
                         self.context.set(ctx_key, output)
             except _AbortSignal:
+                record.end_time = time.time()
+                record.status = "aborted"
+                self.stage_records[-1] = record
+                self.trace.log_stage_end(
+                    stage_name, record.status, record.duration
+                )
                 raise
             except _RegenerateSignal:
                 # 嵌套的regenerate信号，继续外层循环处理
@@ -471,7 +482,10 @@ class TaskOrchestrator:
                 )
                 self.trace.log_gate_decision(stage_name, "halt", f"重新生成异常: {e}")
             record.end_time = time.time()
-            self.stage_records[-1] = record
+            if self.stage_records:
+                self.stage_records[-1] = record
+            else:
+                self.stage_records.append(record)
             # 清除反馈，避免下次循环重复使用
             human_feedback = ""
             self._pending_human_feedback = ""

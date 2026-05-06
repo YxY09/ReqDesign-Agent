@@ -266,7 +266,7 @@ class TestReviewAgentLLMException:
         assert "syntax_check" in result
 
     def test_review_llm_exception_with_invalid_diagram(self):
-        """LLM失败+语法错误时分数仍为0"""
+        """LLM失败+语法错误时分数仍为0，且语法检查结果存在"""
         mock_llm = MagicMock()
         mock_llm.generate_json.side_effect = TimeoutError("超时")
         agent = ReviewAgent(mock_llm, max_retries=1)
@@ -279,6 +279,10 @@ class TestReviewAgentLLMException:
 
         assert result["overall_score"] == 0
         assert result["overall_pass"] is False
+        # 语法检查应存在且标记为无效
+        assert "syntax_check" in result
+        assert len(result["syntax_check"]) > 0
+        assert any(not s["valid"] for s in result["syntax_check"])
 
 
 if __name__ == "__main__":

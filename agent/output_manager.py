@@ -18,10 +18,10 @@ def _sanitize_filename(name: str) -> str:
     """清理文件名，防止路径穿越"""
     if not name or not name.strip():
         raise ValueError("文件名不能为空")
+    # 移除 ..（在路径分隔符替换之前，否则 "../" 会变成 ".._" 而不被匹配）
+    name = name.replace("..", "_")
     # 移除路径分隔符
     name = name.replace("/", "_").replace("\\", "_")
-    # 移除 ..
-    name = name.replace("..", "_")
     # 如果不匹配白名单，强制清理
     if not _SAFE_NAME_RE.match(name):
         name = re.sub(r'[^\w一-鿿\-\.]', '_', name)

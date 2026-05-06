@@ -2357,7 +2357,7 @@ class TestOrchestratorRunStage:
         assert record.status in ("failed", "success")
 
     def test_abort_signal_propagates_from_stage(self):
-        """_AbortSignal从stage_fn内部抛出时应传播到调用者"""
+        """_AbortSignal从stage_fn内部抛出时应传播到调用者，且record被正确记录"""
         from governance.orchestrator import _AbortSignal
         orch = self._make_orchestrator()
         orch.context.set("full_text", "text")
@@ -2367,9 +2367,10 @@ class TestOrchestratorRunStage:
 
         with pytest.raises(_AbortSignal):
             orch._run_stage("requirement_analysis", stage_fn)
-        # 信号异常导致record未被append到stage_records（因为append在while循环之后）
-        # 但end_time应在except块中被设置
-        assert len(orch.stage_records) == 0
+        # abort时record应被append，status为aborted，end_time已设置
+        assert len(orch.stage_records) == 1
+        assert orch.stage_records[0].status == "aborted"
+        assert orch.stage_records[0].end_time > 0
 
 
 # ========== Human checkpoint on all stages ==========
