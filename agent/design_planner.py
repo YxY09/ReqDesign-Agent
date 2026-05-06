@@ -56,6 +56,8 @@ class DesignPlanner:
 
         # 检查功能覆盖
         functions = requirement_json.get("functions", [])
+        if not isinstance(functions, list):
+            functions = []
         for func in functions:
             if isinstance(func, dict):
                 func_id = func.get("id", "")
@@ -73,6 +75,8 @@ class DesignPlanner:
 
         # 检查实体覆盖（大小写不敏感）
         entities = requirement_json.get("entities", [])
+        if not isinstance(entities, list):
+            entities = []
         design_lower = design_text.lower()
         for entity in entities:
             if isinstance(entity, dict):

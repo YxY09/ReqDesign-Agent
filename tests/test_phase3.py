@@ -65,6 +65,15 @@ class TestDesignPlannerValidation:
         coverage_warnings = [w for w in warnings if "未在设计中体现" in w]
         assert len(coverage_warnings) == 0
 
+    def test_validate_functions_not_list(self):
+        """functions为非list类型时不应崩溃"""
+        design = "## 模块划分\n\n## 核心类\n\n## 数据流"
+        req = {"functions": "not_a_list", "entities": "also_not_a_list"}
+        warnings = self.planner.validate_design(design, req)
+        # 不应有功能/实体覆盖的警告（因为类型不对，静默跳过）
+        coverage_warnings = [w for w in warnings if "未在设计中体现" in w]
+        assert len(coverage_warnings) == 0
+
 
 class TestDesignPlannerGenerate:
     """测试DesignPlanner.generate_design（mock LLM）"""

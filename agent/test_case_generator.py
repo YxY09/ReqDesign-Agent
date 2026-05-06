@@ -82,6 +82,8 @@ class TestCaseGenerator:
 
         # 检查功能覆盖（大小写不敏感）
         functions = requirement_json.get("functions", [])
+        if not isinstance(functions, list):
+            functions = []
         for func in functions:
             if isinstance(func, dict):
                 func_name = func.get("name", "")

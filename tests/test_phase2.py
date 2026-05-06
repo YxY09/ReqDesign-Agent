@@ -1,6 +1,7 @@
 """Phase 2 测试：输入处理与需求分析"""
 
 import json
+import os
 import pytest
 
 from agent.input_loader import InputLoader
@@ -86,6 +87,15 @@ class TestInputLoader:
         """传入目录路径时抛出ValueError"""
         with pytest.raises(ValueError, match="目录"):
             self.loader.load(str(tmp_path))
+
+    def test_load_raises_on_symlink(self, tmp_path):
+        """传入符号链接时抛出ValueError"""
+        real = tmp_path / "real.md"
+        real.write_text("content", encoding="utf-8")
+        link = tmp_path / "link.md"
+        os.symlink(str(real), str(link))
+        with pytest.raises(ValueError, match="符号链接"):
+            self.loader.load(str(link))
 
     def test_load_content_exceeds_max_chars(self, tmp_path):
         """内容超过MAX_CHARS限制时抛出ValueError"""

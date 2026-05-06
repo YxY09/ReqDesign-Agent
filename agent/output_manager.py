@@ -43,7 +43,9 @@ class OutputManager:
         safe_name = _sanitize_filename(filename)
         path = os.path.join(self.output_dir, safe_name)
         # 二次校验：确保路径在输出目录内（使用realpath防止符号链接逃逸）
-        if not os.path.realpath(path).startswith(self.output_dir):
+        real_path = os.path.realpath(path)
+        prefix = self.output_dir.rstrip(os.sep) + os.sep
+        if real_path != self.output_dir and not real_path.startswith(prefix):
             logger.error(f"路径穿越拒绝: {filename}")
             raise ValueError(f"不安全的文件名: {filename}")
         try:
@@ -58,7 +60,9 @@ class OutputManager:
         """写入JSON文件"""
         safe_name = _sanitize_filename(filename)
         path = os.path.join(self.output_dir, safe_name)
-        if not os.path.realpath(path).startswith(self.output_dir):
+        real_path = os.path.realpath(path)
+        prefix = self.output_dir.rstrip(os.sep) + os.sep
+        if real_path != self.output_dir and not real_path.startswith(prefix):
             logger.error(f"路径穿越拒绝: {filename}")
             raise ValueError(f"不安全的文件名: {filename}")
         try:
