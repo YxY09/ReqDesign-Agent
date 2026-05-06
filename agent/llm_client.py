@@ -80,6 +80,8 @@ class LLMClient:
                 if not resp.choices:
                     raise ValueError("LLM返回空响应（可能被内容过滤器拦截）")
                 result = resp.choices[0].message.content
+                if result is None:
+                    raise ValueError("LLM返回空内容（可能被内容过滤器拦截或拒绝回答）")
             elif self.provider == "anthropic":
                 # Anthropic需要将system消息分离（多个system消息合并）
                 system_parts = []
@@ -105,6 +107,8 @@ class LLMClient:
                 if not resp.content:
                     raise ValueError("LLM返回空响应（可能被内容过滤器拦截）")
                 result = resp.content[0].text
+                if result is None:
+                    raise ValueError("LLM返回空内容（可能被内容过滤器拦截或拒绝回答）")
             else:
                 raise ValueError(f"不支持的provider: {self.provider}")
 

@@ -194,7 +194,7 @@ class TaskOrchestrator:
             })
         except Exception as e:
             logger.error(f"一致性检查失败: {e}", exc_info=True)
-            results["consistency"] = {"score": 0, "errors": [str(e)], "warnings": [], "checks": []}
+            results["consistency"] = {"score": 0.0, "errors": [str(e)], "warnings": [], "checks": []}
 
         # Stage 6: 审查与修复
         self.llm.set_stage("review_agent")
@@ -213,6 +213,10 @@ class TaskOrchestrator:
                 if w not in record.validation_result.warnings:
                     record.validation_result.warnings.append(w)
         results["review"] = review_result
+        # 更新图表为审查修复后的版本
+        repaired_diagrams = self.context.get("diagrams")
+        if repaired_diagrams:
+            results["diagrams"] = repaired_diagrams
 
         # 生成审查报告
         review_report = ""
@@ -437,7 +441,10 @@ class TaskOrchestrator:
                 record.validation_result = vr
                 # 运行门控评估决定最终状态
                 decision = self.gate.evaluate(
-                    stage_name, vr, 0, self.config.retry.max_retries, 0
+                    stage_name, vr,
+                    retry_count=0,
+                    max_retries=self.config.retry.max_retries,
+                    repair_count=0,
                 )
                 self.trace.log_gate_decision(stage_name, decision.value)
                 record.status = "success" if decision == GateDecision.PROCEED else "failed"
@@ -654,6 +661,9 @@ class TaskOrchestrator:
     def _stage_analysis(self, record: StageRecord) -> tuple[dict, list]:
         """需求分析，返回(output, agent_warnings)"""
         text = self.context.get("full_text") or ""
+        feedback = self.context.get("_human_feedback") or ""
+        if feedback:
+            text = f"[用户修改建议] {feedback}\n\n{text}"
         req_json = self.requirement_analyzer.analyze(text)
         warnings = self.requirement_analyzer.validate_result(req_json)
         if warnings:
@@ -663,6 +673,9 @@ class TaskOrchestrator:
     def _stage_design(self, record: StageRecord) -> tuple[str, list]:
         """设计规划，返回(output, agent_warnings)"""
         req_json = self.context.get("requirement_json") or {}
+        feedback = self.context.get("_human_feedback") or ""
+        if feedback:
+            req_json = {**req_json, "_user_feedback": feedback}
         design = self.design_planner.generate_design(req_json)
         warnings = self.design_planner.validate_design(design, req_json)
         if warnings:
@@ -673,12 +686,18 @@ class TaskOrchestrator:
         """图生成"""
         req_json = self.context.get("requirement_json") or {}
         design = self.context.get("design_text") or ""
+        feedback = self.context.get("_human_feedback") or ""
+        if feedback:
+            design = f"[用户修改建议] {feedback}\n\n{design}"
         return self.diagram_generator.generate_all(req_json, design)
 
     def _stage_test_cases(self, record: StageRecord) -> tuple[str, list]:
         """测试用例生成，返回(output, agent_warnings)"""
         req_json = self.context.get("requirement_json") or {}
         design = self.context.get("design_text") or ""
+        feedback = self.context.get("_human_feedback") or ""
+        if feedback:
+            design = f"[用户修改建议] {feedback}\n\n{design}"
         cases = self.test_case_generator.generate(req_json, design)
         warnings = self.test_case_generator.validate_test_cases(cases, req_json)
         if warnings:
