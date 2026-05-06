@@ -1389,13 +1389,14 @@ class TestHumanCheckpointAbortModify:
             orch._check_human_checkpoint("test_stage", {"test_stage": {}})
 
     def test_modify_logs_feedback(self):
-        """modify操作应记录反馈"""
+        """modify操作应记录反馈并返回'modify'"""
         from governance.orchestrator import TaskOrchestrator
 
         orch = TaskOrchestrator.__new__(TaskOrchestrator)
         orch.context = ContextController()
         orch.checkpoint = HumanCheckpoint(checkpoint_stages=["test_stage"], interactive=False)
         orch.trace = TraceLogger()
+        orch._pending_human_feedback = ""
 
         from governance.models import HumanDecision, HumanAction
 
@@ -1406,12 +1407,16 @@ class TestHumanCheckpointAbortModify:
 
         orch.checkpoint.pause = mock_modify_pause
 
-        # 不应抛出异常
-        orch._check_human_checkpoint("test_stage", {"test_stage": {}})
+        # 应返回"modify"而非抛出异常
+        result = orch._check_human_checkpoint("test_stage", {"test_stage": {}})
+        assert result == "modify"
 
         # 验证决策已记录
         assert len(orch.checkpoint.decisions) == 1
         assert orch.checkpoint.decisions[0].feedback == "请修改类图"
+
+        # 验证反馈已暂存
+        assert orch._pending_human_feedback == "请修改类图"
 
 
 # ========== Integration: StageGate with config ==========

@@ -372,6 +372,7 @@ class ConsistencyChecker:
 
 
 _WORD_PATTERN_CACHE: dict[str, re.Pattern] = {}
+_MAX_CACHE_SIZE = 2048
 
 
 def _word_in_text(word: str, text: str) -> bool:
@@ -386,6 +387,9 @@ def _word_in_text(word: str, text: str) -> bool:
     pattern_key = word.lower()
     pattern = _WORD_PATTERN_CACHE.get(pattern_key)
     if pattern is None:
+        # 缓存满时清空，防止长时间运行内存泄漏
+        if len(_WORD_PATTERN_CACHE) >= _MAX_CACHE_SIZE:
+            _WORD_PATTERN_CACHE.clear()
         pattern = re.compile(
             r'(?<![a-zA-Z0-9_])' + re.escape(word) + r'(?![a-zA-Z0-9_])',
             re.IGNORECASE

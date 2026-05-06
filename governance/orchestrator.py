@@ -81,6 +81,7 @@ class TaskOrchestrator:
 
         # 阶段记录
         self.stage_records: list[StageRecord] = []
+        self._pending_human_feedback: str = ""  # 用户修改建议暂存
 
     def run_design_task(self, input_path: str, output_dir: str) -> dict:
         """治理模式下的完整设计任务"""
@@ -373,12 +374,9 @@ class TaskOrchestrator:
                     record.status = "halted"
                     break
 
-            except _RegenerateSignal:
-                record.end_time = time.time()
-                raise  # 不要捕获重新生成信号，让它传播到外层
             except _AbortSignal:
                 record.end_time = time.time()
-                raise  # 不要捕获终止信号，让它传播到外层
+                raise  # 终止信号传播到外层
             except Exception as e:
                 logger.error(f"阶段 {stage_name} 异常: {e}", exc_info=True)
                 record.status = "failed"
@@ -394,65 +392,82 @@ class TaskOrchestrator:
         )
 
         # 人工检查点（所有阶段都可配置）
-        # REGENERATE时重新执行整个阶段，最多3次
+        # REGENERATE/MODIFY时重新执行整个阶段，最多3次
         max_regenerations = 3
         regeneration_count = 0
+        human_feedback = ""  # 用户修改建议，传递给下一次生成
         while True:
             try:
-                self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
-                break
+                action = self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
             except _AbortSignal:
                 raise  # 终止信号传播到外层
             except _RegenerateSignal:
-                regeneration_count += 1
-                if regeneration_count > max_regenerations:
-                    logger.warning(f"[{stage_name}] 达到最大重新生成次数({max_regenerations})，跳过检查点")
-                    break
-                logger.info(f"[{stage_name}] 重新生成中... ({regeneration_count}/{max_regenerations})")
-                output = None
-                record = StageRecord(stage_name=stage_name)
-                record.start_time = time.time()
-                # 重新执行阶段
-                try:
-                    raw_output = stage_fn(record, *args)
-                    agent_warnings = []
-                    if isinstance(raw_output, tuple) and len(raw_output) == 2:
-                        output, agent_warnings = raw_output
-                    else:
-                        output = raw_output
-                    record.output_data = output
-                    vr = self._validate_stage_output(stage_name, output)
-                    if agent_warnings:
-                        vr.warnings.extend(agent_warnings)
-                        vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
-                    record.validation_result = vr
-                    # 运行门控评估决定最终状态
-                    decision = self.gate.evaluate(
-                        stage_name, vr, 0, self.config.retry.max_retries, 0
-                    )
-                    self.trace.log_gate_decision(stage_name, decision.value)
-                    record.status = "success" if decision == GateDecision.PROCEED else "failed"
-                    # 更新上下文，使后续阶段使用新输出（仅在成功时）
-                    if record.status == "success":
-                        ctx_key = {
-                            "requirement_analysis": "requirement_json",
-                            "design_planner": "design_text",
-                            "diagram_generator": "diagrams",
-                            "test_case_generator": "test_cases",
-                        }.get(stage_name)
-                        if ctx_key:
-                            self.context.set(ctx_key, output)
-                except (_RegenerateSignal, _AbortSignal):
-                    raise
-                except Exception as e:
-                    logger.error(f"重新生成失败: {e}", exc_info=True)
-                    record.status = "failed"
-                    record.validation_result = ValidationResult(
-                        is_valid=False, errors=[f"重新生成失败: {e}"], score=0.0
-                    )
-                    self.trace.log_gate_decision(stage_name, "halt", f"重新生成异常: {e}")
-                record.end_time = time.time()
-                self.stage_records[-1] = record
+                action = "regenerate"
+                self._pending_human_feedback = ""
+
+            if action == "continue":
+                break
+
+            # MODIFY 或 REGENERATE 都触发重新生成
+            regeneration_count += 1
+            if regeneration_count > max_regenerations:
+                logger.warning(f"[{stage_name}] 达到最大重新生成次数({max_regenerations})，跳过检查点")
+                break
+            human_feedback = self._pending_human_feedback
+            feedback_info = f" (反馈: {human_feedback[:80]})" if human_feedback else ""
+            logger.info(f"[{stage_name}] 重新生成中... ({regeneration_count}/{max_regenerations}){feedback_info}")
+            output = None
+            record = StageRecord(stage_name=stage_name)
+            record.start_time = time.time()
+            # 将用户反馈注入上下文，供stage函数使用
+            if human_feedback:
+                self.context.set("_human_feedback", human_feedback)
+            try:
+                raw_output = stage_fn(record, *args)
+                agent_warnings = []
+                if isinstance(raw_output, tuple) and len(raw_output) == 2:
+                    output, agent_warnings = raw_output
+                else:
+                    output = raw_output
+                record.output_data = output
+                vr = self._validate_stage_output(stage_name, output)
+                if agent_warnings:
+                    vr.warnings.extend(agent_warnings)
+                    vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
+                record.validation_result = vr
+                # 运行门控评估决定最终状态
+                decision = self.gate.evaluate(
+                    stage_name, vr, 0, self.config.retry.max_retries, 0
+                )
+                self.trace.log_gate_decision(stage_name, decision.value)
+                record.status = "success" if decision == GateDecision.PROCEED else "failed"
+                # 更新上下文，使后续阶段使用新输出（仅在成功时）
+                if record.status == "success":
+                    ctx_key = {
+                        "requirement_analysis": "requirement_json",
+                        "design_planner": "design_text",
+                        "diagram_generator": "diagrams",
+                        "test_case_generator": "test_cases",
+                    }.get(stage_name)
+                    if ctx_key:
+                        self.context.set(ctx_key, output)
+            except _AbortSignal:
+                raise
+            except _RegenerateSignal:
+                # 嵌套的regenerate信号，继续外层循环处理
+                continue
+            except Exception as e:
+                logger.error(f"重新生成失败: {e}", exc_info=True)
+                record.status = "failed"
+                record.validation_result = ValidationResult(
+                    is_valid=False, errors=[f"重新生成失败: {e}"], score=0.0
+                )
+                self.trace.log_gate_decision(stage_name, "halt", f"重新生成异常: {e}")
+            record.end_time = time.time()
+            self.stage_records[-1] = record
+            # 清除反馈，避免下次循环重复使用
+            human_feedback = ""
+            self._pending_human_feedback = ""
 
         # 上下文快照
         self.context.snapshot()
@@ -557,10 +572,10 @@ class TaskOrchestrator:
             stage, output, validate_fn, repair_fn
         )
 
-    def _check_human_checkpoint(self, stage: str, results: dict):
-        """检查人工检查点"""
+    def _check_human_checkpoint(self, stage: str, results: dict) -> str:
+        """检查人工检查点，返回 'continue' 或 'modify'"""
         if not self.checkpoint.is_checkpoint(stage):
-            return
+            return "continue"
 
         summary = f"阶段 {stage} 完成"
         # results的key就是stage_name（传入时已构造为{stage_name: record.output_data}）
@@ -578,10 +593,13 @@ class TaskOrchestrator:
             raise _AbortSignal(stage)
         elif decision.action.value == "modify":
             feedback = decision.feedback or ""
+            self._pending_human_feedback = feedback
             logger.info(f"[{stage}] 用户修改建议: {feedback}")
+            return "modify"
         elif decision.action.value == "regenerate":
             logger.info(f"[{stage}] 用户要求重新生成，将重新执行该阶段")
             raise _RegenerateSignal(stage)
+        return "continue"
 
     def _lightweight_review(self, req_json: dict) -> dict:
         """需求分析后轻量审查（纯规则，不调用LLM）"""
