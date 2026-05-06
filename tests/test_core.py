@@ -271,24 +271,17 @@ class TestLogger:
 class TestLLMClientInit:
     """测试LLMClient初始化"""
 
-    def test_missing_api_key_raises(self):
+    def test_missing_api_key_raises(self, monkeypatch):
         """未设置API密钥时抛出ValueError"""
         from agent.llm_client import LLMClient
-        import os
         # 确保环境变量中没有key
-        old_key = os.environ.pop("TESTPROV_API_KEY", None)
-        old_key2 = os.environ.pop("OPENAI_API_KEY", None)
-        try:
-            config = AgentConfig()
-            config.llm.provider = "testprov"
-            config.llm.api_key = ""
-            with pytest.raises(ValueError, match="未设置API密钥"):
-                LLMClient(config)
-        finally:
-            if old_key is not None:
-                os.environ["TESTPROV_API_KEY"] = old_key
-            if old_key2 is not None:
-                os.environ["OPENAI_API_KEY"] = old_key2
+        monkeypatch.delenv("TESTPROV_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        config = AgentConfig()
+        config.llm.provider = "testprov"
+        config.llm.api_key = ""
+        with pytest.raises(ValueError, match="未设置API密钥"):
+            LLMClient(config)
 
     def test_unsupported_provider_raises(self):
         """不支持的provider抛出ValueError"""
