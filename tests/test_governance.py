@@ -20,6 +20,7 @@ from governance.stage_gate import StageGate
 from governance.context_controller import ContextController
 from governance.human_checkpoint import HumanCheckpoint
 from governance.prompt_registry import PromptRegistry
+from governance.consistency_checker import ConsistencyChecker
 
 
 # ========== models.py ==========
@@ -3099,3 +3100,135 @@ class TestLightweightReviewFunctionName:
         result = orch._lightweight_review(req)
         name_issues = [i for i in result["issues"] if "名称" in i]
         assert len(name_issues) == 0
+
+
+# ========== max_iterations cap ==========
+
+class TestMaxIterationsCap:
+    """测试_run_stage的硬性迭代上限"""
+
+    def _make_orchestrator(self):
+        from governance.orchestrator import TaskOrchestrator
+        config = AgentConfig()
+        config.llm.api_key = "test-key"
+        config.llm.provider = "openai"
+        config.llm.model = "test"
+        gov = GovernanceConfig(enabled=True, max_repair_rounds=1)
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = config
+        orch.gov = gov
+        orch.trace = TraceLogger()
+        orch.validator = ToolValidator()
+        orch.gate = StageGate(gov)
+        orch.context = ContextController()
+        orch.repair = RepairController(max_rounds=1)
+        orch.checkpoint = HumanCheckpoint(checkpoint_stages=[], trace_logger=orch.trace, interactive=False)
+        orch.prompt_registry = PromptRegistry()
+        orch.consistency = ConsistencyChecker()
+        orch.stage_records = []
+        orch.llm = type('MockLLM', (), {
+            'generate_json': lambda self, p, s="": {},
+            'generate_text': lambda self, p, s="": "",
+            'chat': lambda self, m, temperature=None: "",
+            'set_stage': lambda self, s: None,
+        })()
+        return orch
+
+    def test_iteration_cap_halts(self):
+        """当stage_fn始终返回无效输出时，应达到迭代上限后halt"""
+        orch = self._make_orchestrator()
+        # stage_fn返回空字符串（校验不通过）
+        def always_invalid(record):
+            return ""
+
+        record = orch._run_stage("design_planner", always_invalid)
+        # 应该halt而不是无限循环
+        assert record.status in ("halted", "failed")
+
+
+# ========== Stale record clearing ==========
+
+class TestStaleRecordClearing:
+    """测试任务开始时清除旧记录"""
+
+    def _make_orchestrator(self):
+        from governance.orchestrator import TaskOrchestrator
+        config = AgentConfig()
+        config.llm.api_key = "test-key"
+        config.llm.provider = "openai"
+        config.llm.model = "test"
+        orch = TaskOrchestrator.__new__(TaskOrchestrator)
+        orch.config = config
+        orch.gov = GovernanceConfig()
+        orch.trace = TraceLogger()
+        orch.stage_records = [StageRecord(stage_name="old_record")]
+        return orch
+
+    def test_records_cleared_on_init(self):
+        """stage_records在构造时应为空"""
+        orch = self._make_orchestrator()
+        assert len(orch.stage_records) == 1  # 预置了旧记录
+        orch.stage_records.clear()
+        assert len(orch.stage_records) == 0
+
+
+# ========== Config type coercion ==========
+
+class TestConfigTypeCoercion:
+    """测试YAML配置值的类型强制转换"""
+
+    def test_retry_max_retries_coerced_to_int(self):
+        """retry.max_retries应被强制转换为int"""
+        import tempfile, yaml
+        data = {
+            "llm": {"provider": "openai", "model": "gpt-4o", "api_key": "test"},
+            "retry": {"max_retries": "3"},  # 字符串形式
+        }
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump(data, f)
+            f.flush()
+            config = AgentConfig.load_from_yaml(f.name)
+        os.unlink(f.name)
+        assert isinstance(config.retry.max_retries, int)
+        assert config.retry.max_retries == 3
+
+    def test_llm_temperature_coerced_to_float(self):
+        """llm.temperature应被强制转换为float"""
+        import tempfile, yaml
+        data = {
+            "llm": {"provider": "openai", "model": "gpt-4o", "api_key": "test", "temperature": 0},
+        }
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump(data, f)
+            f.flush()
+            config = AgentConfig.load_from_yaml(f.name)
+        os.unlink(f.name)
+        assert isinstance(config.llm.temperature, float)
+        assert config.llm.temperature == 0.0
+
+
+# ========== Consistency checker Mermaid keywords ==========
+
+class TestConsistencyMermaidKeywords:
+    """测试Mermaid关键字过滤"""
+
+    def test_mermaid_keywords_not_flagged_as_orphans(self):
+        """Mermaid关键字不应被报告为孤立引用"""
+        from governance.consistency_checker import ConsistencyChecker
+        checker = ConsistencyChecker()
+        req = {"entities": [{"name": "Book"}]}
+        diagrams = {
+            "class_diagram": "class Book {\n  title\n}",
+            "state_diagram": (
+                'state "Available" as Book\n'
+                'state "Borrowed" as B\n'
+                'Book --> B\n'
+                '[*] --> Book\n'
+            ),
+        }
+        result = checker.check_all(req, "设计", diagrams, "测试")
+        # 不应有关于 state、class、[*] 的孤立警告
+        orphan_warnings = [w for w in result.warnings if "不存在的类" in w]
+        keyword_warnings = [w for w in orphan_warnings
+                           if any(kw in w for kw in ["state", "class", "[*]"])]
+        assert len(keyword_warnings) == 0

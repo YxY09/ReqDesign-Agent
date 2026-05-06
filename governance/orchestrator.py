@@ -428,6 +428,7 @@ class TaskOrchestrator:
                     decision = self.gate.evaluate(
                         stage_name, vr, 0, self.config.retry.max_retries, 0
                     )
+                    self.trace.log_gate_decision(stage_name, decision.value)
                     record.status = "success" if decision == GateDecision.PROCEED else "failed"
                     # 更新上下文，使后续阶段使用新输出（仅在成功时）
                     if record.status == "success":

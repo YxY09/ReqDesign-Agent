@@ -12,6 +12,13 @@ _RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；的时了后]')
 _RE_HEADER_FIND = re.compile(r'#{1,3}\s+(.+)')
 _RE_HEADER_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
 
+# Mermaid关键字集合（用于过滤状态图中的非实体引用）
+_MERMAID_KEYWORDS = frozenset({
+    "[*]", "state", "class", "note", "end", "start",
+    "participant", "actor", "as", "left", "right", "of",
+    "section", "choice", "fork", "join", "activate", "deactivate",
+})
+
 
 @dataclass
 class ConsistencyResult:
@@ -335,7 +342,6 @@ class ConsistencyChecker:
         state_refs.update(re.findall(r'(\S+)\s*-->', state_diagram))
         state_refs.update(re.findall(r'-->\s*(\S+)', state_diagram))
         # 过滤掉Mermaid关键字和特殊标记
-        _MERMAID_KEYWORDS = {"[*]", "state", "class", "note", "end", "start"}
         state_refs = {s for s in state_refs if s not in _MERMAID_KEYWORDS and len(s) > 1}
 
         # 反向检查：状态图引用的类应在类图中定义

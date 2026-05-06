@@ -72,18 +72,22 @@ class AgentConfig:
                     except (TypeError, ValueError):
                         pass  # 保留原值，validate()会报错
                     setattr(config.llm, k, v)
-        if "retry" in data and isinstance(data["retry"], dict):
-            for k, v in data["retry"].items():
-                if hasattr(config.retry, k):
-                    setattr(config.retry, k, v)
-        if "output" in data and isinstance(data["output"], dict):
-            for k, v in data["output"].items():
-                if hasattr(config.output, k):
-                    setattr(config.output, k, v)
-        if "logging" in data and isinstance(data["logging"], dict):
-            for k, v in data["logging"].items():
-                if hasattr(config.logging, k):
-                    setattr(config.logging, k, v)
+        for section_name in ("retry", "output", "logging"):
+            section_data = data.get(section_name)
+            if not isinstance(section_data, dict):
+                continue
+            section_obj = getattr(config, section_name)
+            for k, v in section_data.items():
+                if hasattr(section_obj, k):
+                    field_type = type(getattr(section_obj, k))
+                    try:
+                        if field_type is float and v is not None:
+                            v = float(v)
+                        elif field_type is int and v is not None:
+                            v = int(v)
+                    except (TypeError, ValueError):
+                        pass
+                    setattr(section_obj, k, v)
         errors = config.validate()
         if errors:
             logger.warning(f"配置验证警告: {errors}")
