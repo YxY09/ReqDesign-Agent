@@ -60,6 +60,10 @@ def setup_logger(
     date_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     log_file = os.path.join(log_dir, f"reqdesign_{date_str}_{os.getpid()}.log")
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    try:
+        os.chmod(log_file, 0o600)
+    except OSError:
+        pass  # Windows等不支持chmod的平台
     file_handler.setFormatter(formatter)
     file_handler._reqdesign_handler = True
     logger.addHandler(file_handler)
