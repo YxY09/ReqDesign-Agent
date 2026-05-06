@@ -2199,7 +2199,6 @@ class TestOrchestratorRunStage:
 
         # Mock checkpoint: 第一次REGENERATE，第二次CONTINUE
         from governance.models import HumanDecision, HumanAction
-        from governance.orchestrator import _RegenerateSignal
         decisions = [
             HumanDecision(stage="requirement_analysis", action=HumanAction.REGENERATE),
             HumanDecision(stage="requirement_analysis", action=HumanAction.CONTINUE),

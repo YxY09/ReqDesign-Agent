@@ -2,8 +2,6 @@
 
 import json
 import pytest
-from unittest.mock import MagicMock
-
 
 from agent.input_loader import InputLoader
 
