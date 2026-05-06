@@ -585,7 +585,7 @@ def compute_run_summary(results: list[dict]) -> dict:
 
     return {
         "passed": passed,
-        "failed": len(success) - passed,
-        "error": len(results) - len(success),
+        "failed": failed,
+        "error": error,
         "avg_scores": avg_scores,
     }

@@ -62,6 +62,15 @@ class AgentConfig:
         if "llm" in data and isinstance(data["llm"], dict):
             for k, v in data["llm"].items():
                 if hasattr(config.llm, k):
+                    # 类型强制转换：YAML可能将0.3解析为float，将120解析为int
+                    field_type = type(getattr(config.llm, k))
+                    try:
+                        if field_type is float and v is not None:
+                            v = float(v)
+                        elif field_type is int and v is not None:
+                            v = int(v)
+                    except (TypeError, ValueError):
+                        pass  # 保留原值，validate()会报错
                     setattr(config.llm, k, v)
         if "retry" in data and isinstance(data["retry"], dict):
             for k, v in data["retry"].items():

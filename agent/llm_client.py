@@ -111,7 +111,7 @@ class LLMClient:
             logger.debug(f"LLM响应长度: {len(result)} 字符")
             return result
         except Exception as e:
-            logger.error(f"LLM调用失败: {e}")
+            logger.error(f"LLM调用失败: {e}", exc_info=True)
             raise
 
     def generate_json(self, prompt: str, system: str = "") -> dict:

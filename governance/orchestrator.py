@@ -85,6 +85,8 @@ class TaskOrchestrator:
     def run_design_task(self, input_path: str, output_dir: str) -> dict:
         """治理模式下的完整设计任务"""
         logger.info("=== [Governed] 开始完整设计任务 ===")
+        self.stage_records.clear()
+        self.trace.clear()
         self.trace.log("system", "task_start", {
             "task": "design", "input": input_path, "output": output_dir
         })
@@ -229,6 +231,8 @@ class TaskOrchestrator:
     def run_analyze_task(self, input_path: str, output_dir: str) -> dict:
         """治理模式下的需求分析任务（使用治理流程）"""
         logger.info("=== [Governed] 开始需求分析任务 ===")
+        self.stage_records.clear()
+        self.trace.clear()
 
         analyze_results = {"requirement_analysis": {}}
 
@@ -290,10 +294,18 @@ class TaskOrchestrator:
         retry_count = 0
         repair_count = 0
         max_retries = self.config.retry.max_retries
+        max_repairs = self.gov.max_repair_rounds
+        max_iterations = max_retries + max_repairs + 2  # 硬性上限，防止死循环
+        iteration = 0
         output = None  # 修复后跳过stage_fn，直接校验修复结果
         agent_warnings = []
 
         while True:
+            iteration += 1
+            if iteration > max_iterations:
+                logger.error(f"[{stage_name}] 达到迭代上限({max_iterations})，强制终止")
+                record.status = "halted"
+                break
             try:
                 # 执行阶段（REPAIR后跳过，直接使用修复结果）
                 if output is None:
@@ -435,6 +447,7 @@ class TaskOrchestrator:
                     record.validation_result = ValidationResult(
                         is_valid=False, errors=[f"重新生成失败: {e}"], score=0.0
                     )
+                    self.trace.log_gate_decision(stage_name, "halt", f"重新生成异常: {e}")
                 record.end_time = time.time()
                 self.stage_records[-1] = record
 
@@ -547,9 +560,15 @@ class TaskOrchestrator:
             return
 
         summary = f"阶段 {stage} 完成"
-        preview = json.dumps(
-            results.get(stage, {}), ensure_ascii=False, indent=2
-        )[:500]
+        # results的key就是stage_name（传入时已构造为{stage_name: record.output_data}）
+        preview_data = results.get(stage, {})
+        if not preview_data and results:
+            # 回退：取第一个值
+            preview_data = next(iter(results.values()), {})
+        try:
+            preview = json.dumps(preview_data, ensure_ascii=False, indent=2)[:500]
+        except (TypeError, ValueError):
+            preview = str(preview_data)[:500]
 
         decision = self.checkpoint.pause(stage, summary, preview)
         if decision.action.value == "abort":
