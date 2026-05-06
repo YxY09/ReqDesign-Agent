@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 from datetime import datetime
 from typing import Optional
 
@@ -49,8 +50,18 @@ class OutputManager:
             logger.error(f"路径穿越拒绝: {filename}")
             raise ValueError(f"不安全的文件名: {filename}")
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
+            # 原子写入：先写临时文件，再rename（防止崩溃导致文件损坏）
+            fd, tmp_path = tempfile.mkstemp(dir=self.output_dir, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(content)
+                os.replace(tmp_path, path)
+            except BaseException:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
             logger.debug(f"已写入: {path}")
         except (OSError, IOError) as e:
             logger.error(f"写入文件失败 {path}: {e}")
@@ -66,8 +77,17 @@ class OutputManager:
             logger.error(f"路径穿越拒绝: {filename}")
             raise ValueError(f"不安全的文件名: {filename}")
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            fd, tmp_path = tempfile.mkstemp(dir=self.output_dir, suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, path)
+            except BaseException:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
             logger.debug(f"已写入: {path}")
         except (OSError, IOError) as e:
             logger.error(f"写入JSON文件失败 {path}: {e}")

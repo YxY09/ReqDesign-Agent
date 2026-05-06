@@ -467,7 +467,7 @@ class TaskOrchestrator:
                 return ValidationResult(is_valid=False, errors=["输出为空"], score=0.0)
             return self.validator.validate_json(output, stage)
         elif stage == "design_planner":
-            if not output:
+            if not output or (isinstance(output, str) and not output.strip()):
                 return ValidationResult(is_valid=False, errors=["设计文档为空"], score=0.0)
             return self.validator.validate_markdown(output, stage)
         elif stage == "diagram_generator":
@@ -489,7 +489,7 @@ class TaskOrchestrator:
                 )
             return ValidationResult(is_valid=False, errors=["输出格式错误"], score=0.0)
         elif stage == "test_case_generator":
-            if not output:
+            if not output or (isinstance(output, str) and not output.strip()):
                 return ValidationResult(is_valid=False, errors=["测试用例为空"], score=0.0)
             return self.validator.validate_markdown(output, "test_cases")
         elif stage == "review_agent":
