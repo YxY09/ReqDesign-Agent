@@ -76,7 +76,7 @@ class ConsistencyChecker:
         """需求→设计覆盖检查"""
         check = {"dimension": "需求→设计覆盖", "score": 1.0, "issues": []}
 
-        if not req or not design:
+        if not isinstance(req, dict) or not design:
             check["score"] = 0.0
             check["issues"].append("需求或设计为空")
             result.checks.append(check)
@@ -124,7 +124,7 @@ class ConsistencyChecker:
         """需求约束→设计覆盖检查"""
         check = {"dimension": "约束→设计覆盖", "score": 1.0, "issues": []}
 
-        if not req or not design:
+        if not isinstance(req, dict) or not design:
             result.checks.append(check)
             return
 
@@ -169,7 +169,7 @@ class ConsistencyChecker:
         """需求实体→类图一致性"""
         check = {"dimension": "实体→类图一致性", "score": 1.0, "issues": []}
 
-        if not req:
+        if not isinstance(req, dict):
             check["score"] = 0.0
             result.checks.append(check)
             return

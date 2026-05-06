@@ -380,7 +380,9 @@ class TaskOrchestrator:
         )
 
         # 人工检查点（所有阶段都可配置）
-        # REGENERATE时重新执行整个阶段
+        # REGENERATE时重新执行整个阶段，最多3次
+        max_regenerations = 3
+        regeneration_count = 0
         while True:
             try:
                 self._check_human_checkpoint(stage_name, {stage_name: record.output_data})
@@ -388,7 +390,11 @@ class TaskOrchestrator:
             except _AbortSignal:
                 raise  # 终止信号传播到外层
             except _RegenerateSignal:
-                logger.info(f"[{stage_name}] 重新生成中...")
+                regeneration_count += 1
+                if regeneration_count > max_regenerations:
+                    logger.warning(f"[{stage_name}] 达到最大重新生成次数({max_regenerations})，跳过检查点")
+                    break
+                logger.info(f"[{stage_name}] 重新生成中... ({regeneration_count}/{max_regenerations})")
                 output = None
                 record = StageRecord(stage_name=stage_name)
                 record.start_time = time.time()
@@ -406,9 +412,13 @@ class TaskOrchestrator:
                         vr.warnings.extend(agent_warnings)
                         vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
                     record.validation_result = vr
-                    record.status = "success" if vr.is_valid else "failed"
+                    # 运行门控评估决定最终状态
+                    decision = self.gate.evaluate(
+                        stage_name, vr, 0, self.config.retry.max_retries, 0
+                    )
+                    record.status = "success" if decision == GateDecision.PROCEED else "failed"
                     # 更新上下文，使后续阶段使用新输出（仅在成功时）
-                    if vr.is_valid:
+                    if record.status == "success":
                         ctx_key = {
                             "requirement_analysis": "requirement_json",
                             "design_planner": "design_text",
