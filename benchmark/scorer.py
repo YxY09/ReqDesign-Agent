@@ -193,7 +193,7 @@ def _fuzzy_match_function(func_name: str, result_functions: list[str], result_te
 
 def _match_constraint_or_exception(expected: str, target_text: str) -> bool:
     """匹配约束或异常：多级关键词匹配"""
-    if not expected:
+    if not expected or not target_text:
         return False
     # 1. 直接子串匹配
     if expected in target_text:

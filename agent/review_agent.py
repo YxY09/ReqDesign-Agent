@@ -70,9 +70,9 @@ class ReviewAgent:
         # 防止用户内容中的模板占位符被二次替换
         _placeholders = ("{requirement_json}", "{design_text}", "{class_diagram}", "{activity_diagram}", "{state_diagram}")
         safe_design = design_text
-        safe_class = diagrams.get("class_diagram", "")
-        safe_activity = diagrams.get("activity_diagram", "")
-        safe_state = diagrams.get("state_diagram", "")
+        safe_class = diagrams.get("class_diagram") or ""
+        safe_activity = diagrams.get("activity_diagram") or ""
+        safe_state = diagrams.get("state_diagram") or ""
         for ph in _placeholders:
             safe_design = safe_design.replace(ph, "")
             safe_class = safe_class.replace(ph, "")
