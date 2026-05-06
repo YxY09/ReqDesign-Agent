@@ -706,6 +706,20 @@ class TestOrchestratorValidation:
         assert not vr.is_valid
         assert vr.score == 0.0
 
+    def test_validate_design_whitespace_only(self):
+        """空白字符串应被视为空"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("design_planner", "   \n\t  ")
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
+    def test_validate_test_cases_whitespace_only(self):
+        """空白字符串应被视为空"""
+        orch = self._make_orchestrator()
+        vr = orch._validate_stage_output("test_case_generator", "   \n\t  ")
+        assert not vr.is_valid
+        assert vr.score == 0.0
+
     def test_validate_design_none(self):
         orch = self._make_orchestrator()
         vr = orch._validate_stage_output("design_planner", None)

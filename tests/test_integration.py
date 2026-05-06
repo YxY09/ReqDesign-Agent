@@ -815,6 +815,24 @@ class TestOutputManagerEdgeCases:
         mgr._generate_summary(None)
         assert (tmp_path / "summary_report.md").exists()
 
+    def test_write_file_atomic(self, tmp_path):
+        """验证原子写入：文件内容完整"""
+        from agent.output_manager import OutputManager
+        mgr = OutputManager(str(tmp_path))
+        content = "测试内容\n第二行\n"
+        mgr._write_file("test.txt", content)
+        assert (tmp_path / "test.txt").read_text(encoding="utf-8") == content
+
+    def test_write_json_atomic(self, tmp_path):
+        """验证原子写入JSON：文件内容完整"""
+        from agent.output_manager import OutputManager
+        mgr = OutputManager(str(tmp_path))
+        data = {"key": "值", "nested": {"a": 1}}
+        mgr._write_json("test.json", data)
+        import json
+        result = json.loads((tmp_path / "test.json").read_text(encoding="utf-8"))
+        assert result == data
+
 
 class TestTraceLoggerEdgeCases:
     """测试追踪日志边界情况"""
