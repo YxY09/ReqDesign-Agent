@@ -56,7 +56,7 @@ class TestRequirementCoverage:
         result = {"actors": [], "functions": [], "entities": [], "constraints": [], "exceptions": []}
         gold = {"expected_actors": [], "expected_functions": [], "expected_entities": [], "expected_constraints": [], "expected_exceptions": []}
         score = score_requirement_coverage(result, gold)
-        assert score == 100.0
+        assert score == 0.0
 
     def test_none_values_in_result(self):
         """result dict中字段值为None时不崩溃"""

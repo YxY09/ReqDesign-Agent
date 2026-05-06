@@ -22,9 +22,9 @@ ENTITY_NAME_MAP = {
     "课程": ["Course"],
     "成绩": ["Grade", "Score"],
     "选课记录": ["Enrollment", "CourseSelection", "Selection"],
-    "员工": ["Employee", "Staff", "Worker", "用户"],
+    "员工": ["Employee", "Staff", "Worker"],
     "会议室": ["MeetingRoom", "Room"],
-    "预约记录": ["Reservation", "Booking", "Appointment", "预约"],
+    "预约记录": ["Reservation", "Booking", "Appointment"],
     "设备": ["Equipment", "Device", "Facility"],
     "顾客": ["Customer", "Client"],
     "商家": ["Merchant", "Seller", "Shop"],
@@ -36,7 +36,7 @@ ENTITY_NAME_MAP = {
     "挂号": ["Registration"],
     "医生": ["Doctor"],
     "病人": ["Patient"],
-    "患者": ["Patient", "病人"],
+    "患者": ["Patient"],
     "号源": ["Source", "NumberSource"],
     "就诊记录": ["VisitRecord", "MedicalRecord"],
     "预约": ["Appointment", "Reservation"],
@@ -296,8 +296,8 @@ def score_requirement_coverage(result: dict, gold: dict) -> float:
             covered_points += 1
 
     if total_points == 0:
-        logger.warning("需求覆盖率: gold label无预期项，返回100（空标注）")
-        return 100.0
+        logger.warning("需求覆盖率: gold label无预期项，返回0（空标注）")
+        return 0.0
 
     score = (covered_points / total_points) * 100
     logger.info(f"需求覆盖率: {covered_points}/{total_points} = {score:.1f}%")

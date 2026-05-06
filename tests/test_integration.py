@@ -306,7 +306,7 @@ def foo():
         assert _fuzzy_match_entity("图书", "图书信息")
         # 中英文匹配
         assert _fuzzy_match_entity("图书", "Book")
-        assert _fuzzy_match_entity("员工", "用户")
+        assert _fuzzy_match_entity("员工", "Employee")
         # 不匹配
         assert not _fuzzy_match_entity("图书", "课程")
 
