@@ -166,7 +166,7 @@ class MermaidValidator:
                 escape_next = True
                 i += 1
                 continue
-            if ch in ('"', "'") and not in_string:
+            if ch == '"' and not in_string:
                 in_string = True
                 string_char = ch
                 i += 1

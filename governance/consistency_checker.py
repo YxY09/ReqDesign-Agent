@@ -10,10 +10,10 @@ logger = logging.getLogger("reqdesign")
 _RE_CJK = re.compile(r'[一-鿿]')
 _RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；的时了后]')
 _RE_HEADER_FIND = re.compile(r'#{1,3}\s+(.+)')
-_RE_HEADER_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
+_RE_HEADER_WORDS = re.compile(r'[一-鿿a-zA-Z]{2,}')
 # 活动图节点提取
 _RE_ACTIVITY_NODE_CONTENT = re.compile(r'\w+[\[\(>{]([^}\]\)]+)')
-_RE_ACTIVITY_NODE_WORDS = re.compile(r'[一-龥a-zA-Z]{2,}')
+_RE_ACTIVITY_NODE_WORDS = re.compile(r'[一-鿿a-zA-Z]{2,}')
 _RE_ACTIVITY_NODE_ID = re.compile(r'(?:-->|---)\s*(\w+)')
 # 类图/状态图类名提取
 _RE_CLASS_NAME = re.compile(r'class\s+(\w+)')

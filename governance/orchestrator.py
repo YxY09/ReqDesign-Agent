@@ -445,9 +445,10 @@ class TaskOrchestrator:
                     vr.score = max(0.0, vr.score - 0.05 * len(agent_warnings))
                 record.validation_result = vr
                 # 运行门控评估决定最终状态
+                # retry_count=max_retries 防止gate返回RETRY（再生循环不支持重试）
                 decision = self.gate.evaluate(
                     stage_name, vr,
-                    retry_count=0,
+                    retry_count=self.config.retry.max_retries,
                     max_retries=self.config.retry.max_retries,
                     repair_count=0,
                 )

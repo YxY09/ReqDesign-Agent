@@ -63,9 +63,9 @@ def _fuzzy_match_entity(entity_name: str, target: str) -> bool:
         if en_name in target:
             return True
 
-    # 反向查找：entity_name是英文名，检查target是否包含对应中文名
-    cn_match = _EN_TO_CN.get(entity_name.lower())
-    if cn_match and cn_match in target:
+    # 反向查找：entity_name是英文名，检查target是否包含任意对应中文名
+    cn_matches = _EN_TO_CN.get(entity_name.lower(), [])
+    if any(cn in target for cn in cn_matches):
         return True
 
     return False
@@ -133,11 +133,11 @@ FUNCTION_SYNONYMS = {
     "挂号管理": ["管理挂号"],
 }
 
-# 反向查找：英文名 → 中文名（用于O(1)模糊匹配）
-_EN_TO_CN: dict[str, str] = {}
+# 反向查找：英文名 → 中文名列表（用于O(1)模糊匹配）
+_EN_TO_CN: dict[str, list[str]] = {}
 for _cn, _en_list in ENTITY_NAME_MAP.items():
     for _en in _en_list:
-        _EN_TO_CN[_en.lower()] = _cn
+        _EN_TO_CN.setdefault(_en.lower(), []).append(_cn)
 
 # 预编译热路径正则
 _RE_CONSTRAINT_SPLIT = re.compile(r'[，,、;；（）()\s的时了后]')
