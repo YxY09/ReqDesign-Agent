@@ -374,8 +374,10 @@ class TaskOrchestrator:
                     break
 
             except _RegenerateSignal:
+                record.end_time = time.time()
                 raise  # 不要捕获重新生成信号，让它传播到外层
             except _AbortSignal:
+                record.end_time = time.time()
                 raise  # 不要捕获终止信号，让它传播到外层
             except Exception as e:
                 logger.error(f"阶段 {stage_name} 异常: {e}", exc_info=True)
