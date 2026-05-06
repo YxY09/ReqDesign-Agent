@@ -1,6 +1,7 @@
 """集成测试：验证完整工作流（mock LLM调用）"""
 
 import json
+import os
 import pytest
 from unittest.mock import MagicMock
 
@@ -877,6 +878,57 @@ class TestRepairControllerEdgeCases:
         )
         assert output == "original"
         assert records == []
+
+
+class TestAtomicWriteFailure:
+    """测试原子写入失败时的临时文件清理"""
+
+    def test_write_file_cleanup_on_failure(self, tmp_path):
+        """os.replace失败时临时文件应被清理"""
+        import unittest.mock as mock
+        from agent.output_manager import OutputManager
+        mgr = OutputManager(str(tmp_path))
+        with mock.patch("os.replace", side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
+                mgr._write_file("test.md", "content")
+        # 临时文件应被清理
+        tmp_files = [f for f in os.listdir(str(tmp_path)) if f.endswith(".tmp")]
+        assert len(tmp_files) == 0
+
+    def test_write_json_cleanup_on_failure(self, tmp_path):
+        """JSON原子写入失败时临时文件应被清理"""
+        import unittest.mock as mock
+        from agent.output_manager import OutputManager
+        mgr = OutputManager(str(tmp_path))
+        with mock.patch("os.replace", side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
+                mgr._write_json("test.json", {"key": "value"})
+        tmp_files = [f for f in os.listdir(str(tmp_path)) if f.endswith(".tmp")]
+        assert len(tmp_files) == 0
+
+
+class TestCleanupOldLogs:
+    """测试旧日志清理"""
+
+    def test_cleanup_removes_excess_files(self, tmp_path):
+        """超过max_files的旧日志应被删除"""
+        from agent.logger import _cleanup_old_logs
+        log_dir = str(tmp_path)
+        for i in range(25):
+            (tmp_path / f"reqdesign_{i:03d}.log").touch()
+        _cleanup_old_logs(log_dir, max_files=20)
+        remaining = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+        assert len(remaining) == 20
+
+    def test_cleanup_preserves_when_under_limit(self, tmp_path):
+        """未超过max_files时不应删除任何文件"""
+        from agent.logger import _cleanup_old_logs
+        log_dir = str(tmp_path)
+        for i in range(5):
+            (tmp_path / f"reqdesign_{i:03d}.log").touch()
+        _cleanup_old_logs(log_dir, max_files=20)
+        remaining = [f for f in os.listdir(log_dir) if f.endswith(".log")]
+        assert len(remaining) == 5
 
 
 if __name__ == "__main__":

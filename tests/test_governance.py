@@ -1913,6 +1913,32 @@ class TestConsistencyChecker:
         assert len(activity_checks) == 1
         assert activity_checks[0]["score"] < 1.0
 
+    def test_constraints_in_design_missing_detected(self):
+        """约束→设计覆盖检查：缺失约束应被检测"""
+        req = {
+            "actors": ["user"],
+            "functions": [{"name": "登录"}],
+            "entities": [{"name": "User"}],
+            "constraints": [
+                {"description": "密码长度不能少于8位"},
+                {"description": "会话超时30分钟"},
+            ],
+        }
+        design = "# 设计\n\n用户密码验证模块"  # 提到密码但未提到会话超时
+        result = self.checker.check_all(req, design, {}, "测试")
+        constraint_checks = [c for c in result.checks if c.get("dimension") == "约束→设计覆盖"]
+        assert len(constraint_checks) == 1
+        assert constraint_checks[0]["score"] < 1.0
+
+    def test_design_to_test_empty_headers(self):
+        """设计文档无标题时应返回score=1.0（无检查项）"""
+        req = {"actors": ["user"], "functions": [], "entities": []}
+        design = "没有标题的纯文本内容"
+        result = self.checker.check_all(req, design, {}, "测试")
+        design_test_checks = [c for c in result.checks if c.get("dimension") == "设计→测试覆盖"]
+        assert len(design_test_checks) == 1
+        assert design_test_checks[0]["score"] == 1.0
+
 
 # ========== Lightweight Review ==========
 
@@ -2324,6 +2350,21 @@ class TestOrchestratorRunStage:
         record = orch._run_stage("requirement_analysis", stage_fn)
         # 重新生成失败，但checkpoint仍然CONTINUE
         assert record.status in ("failed", "success")
+
+    def test_abort_signal_propagates_from_stage(self):
+        """_AbortSignal从stage_fn内部抛出时应传播到调用者"""
+        from governance.orchestrator import _AbortSignal
+        orch = self._make_orchestrator()
+        orch.context.set("full_text", "text")
+
+        def stage_fn(record):
+            raise _AbortSignal("requirement_analysis")
+
+        with pytest.raises(_AbortSignal):
+            orch._run_stage("requirement_analysis", stage_fn)
+        # 信号异常导致record未被append到stage_records（因为append在while循环之后）
+        # 但end_time应在except块中被设置
+        assert len(orch.stage_records) == 0
 
 
 # ========== Human checkpoint on all stages ==========

@@ -200,6 +200,17 @@ class TestStateDiagram:
         score = score_state_diagram(diagrams, gold)
         assert score >= 50  # has [*] and -->
 
+    def test_two_state_diagram(self):
+        """恰好2个状态（含[*]）应得15分"""
+        # [*] (len=2) + Pending (len=7) = 2 states after filter → 15 points
+        diagrams = {
+            "state_diagram": "stateDiagram-v2\n    [*] --> Pending\n    Pending --> A"
+        }
+        gold = {"expected_processes": []}
+        score = score_state_diagram(diagrams, gold)
+        # [*] gives 30, --> gives 20, 2 states gives 15, no gold gives 25 = 90
+        assert score == 90.0
+
 
 class TestRunSummary:
     def test_all_success(self):
