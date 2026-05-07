@@ -199,9 +199,6 @@ class TestParseArgs:
         assert args.output == "outputs/"
         assert args.config == "config.yaml"
         assert args.log_level == "INFO"
-        assert args.enable_governance is False
-        assert args.mode == "standard"
-        assert args.enable_trace is False
         assert args.human_checkpoints == []
         assert args.benchmark is False
 
@@ -210,14 +207,12 @@ class TestParseArgs:
         args = parse_args()
         assert args.task == "analyze"
 
-    def test_governance_mode(self, monkeypatch):
+    def test_human_checkpoints(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", [
-            "main", "-i", "req.md", "--enable-governance",
-            "--enable-trace", "--human-checkpoints", "requirement_analysis", "diagram_generation"
+            "main", "-i", "req.md",
+            "--human-checkpoints", "requirement_analysis", "diagram_generation"
         ])
         args = parse_args()
-        assert args.enable_governance is True
-        assert args.enable_trace is True
         assert args.human_checkpoints == ["requirement_analysis", "diagram_generation"]
 
     def test_benchmark_flag(self, monkeypatch):
@@ -235,11 +230,6 @@ class TestParseArgs:
         monkeypatch.setattr(sys, "argv", ["main", "-i", "test.md", "--max-retry", "5"])
         args = parse_args()
         assert args.max_retry == 5
-
-    def test_mode_governed(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["main", "-i", "test.md", "--mode", "governed"])
-        args = parse_args()
-        assert args.mode == "governed"
 
 
 class TestLogger:

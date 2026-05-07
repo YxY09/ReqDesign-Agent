@@ -2430,13 +2430,11 @@ class TestNoWorkflowController:
         assert "TaskOrchestrator" in content
         assert "WorkflowController" not in content
 
-    def test_standard_mode_uses_orchestrator(self):
-        """标准模式使用TaskOrchestrator"""
+    def test_main_uses_orchestrator(self):
+        """设计/分析模式使用TaskOrchestrator"""
         with open(os.path.join(PROJECT_ROOT, "agent", "main.py"), "r") as f:
             content = f.read()
         assert "TaskOrchestrator" in content
-        # 标准模式也用orchestrator
-        assert "orchestrator = TaskOrchestrator(config)" in content
 
 
 # ========== Edge cases ==========

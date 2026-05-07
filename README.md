@@ -163,19 +163,16 @@ outputs/demo/
 
 ## 治理框架（Governance Framework）
 
-系统内置可选的治理框架，提供阶段门控、全链路追踪、修复控制、人工检查点等能力。
+系统内置治理框架，默认启用。提供阶段门控、全链路追踪、修复控制、人工检查点等能力。
 
 ### 启用方式
 
 ```bash
-# 治理模式运行
-python -m agent.main --task design --enable-governance --input requirements.md --output outputs/governed
-
-# 启用追踪
-python -m agent.main --task design --enable-governance --enable-trace --input requirements.md --output outputs/governed
+# 运行设计任务（默认启用治理）
+python -m agent.main --task design --input requirements.md --output outputs/demo
 
 # 指定人工检查点
-python -m agent.main --task design --enable-governance --human-checkpoints requirement_analysis diagram_generation --input requirements.md --output outputs/governed
+python -m agent.main --task design --human-checkpoints requirement_analysis diagram_generation --input requirements.md --output outputs/demo
 
 # Benchmark评估模式
 python -m agent.main --benchmark --input benchmark/cases --output outputs/benchmark
