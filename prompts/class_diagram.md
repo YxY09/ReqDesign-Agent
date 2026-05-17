@@ -14,41 +14,49 @@
 
 ## 输出要求
 
-只输出Mermaid classDiagram代码，不要输出其他任何内容。
+只输出Mermaid classDiagram代码，不要输出其他任何内容。不要用JSON包裹。
 
 格式要求：
 1. 第一行必须是 `classDiagram`
 2. 使用标准的Mermaid classDiagram语法
-3. **类名使用中文**，与需求分析中的实体名称保持一致（如：用户、图书、订单、会议室等）
-4. 包含类之间的关系（继承、组合、依赖、关联）
-5. 每个类包含关键属性和方法
-6. 覆盖需求中识别出的所有核心实体
-7. 方法名可以使用英文或中文
-8. 关系应标明基数（如 "1" --> "*", "*" --> "1"）
+3. **类名使用英文 PascalCase**（如 User, Book, Order, Product, Payment），与系统设计中的类名保持一致
+4. 属性名使用英文 camelCase（如 userId, userName, orderId）
+5. 方法名使用英文 camelCase（如 register(), login(), createOrder()）
+6. 包含类之间的关系（继承、组合、依赖、关联）
+7. 每个类包含关键属性和方法（至少2个属性、2个方法）
+8. 覆盖需求中识别出的所有核心实体
+9. 关系应标明基数（如 "1" --> "*", "*" --> "1"）
+10. **必须输出完整的类图代码**，所有类定义必须闭合（包含完整的属性和方法），不要中途截断
+11. 不要新增需求中未识别的核心领域类；如果设计里存在辅助服务类，不要把它们画成业务实体
+12. 如果需求实体与设计类名存在语义别名，只保留一个统一命名，不要同时画出多个近义类
 
 示例格式：
 ```mermaid
 classDiagram
-    class 用户 {
-        -int 用户ID
-        -String 用户名
-        -String 邮箱
-        +注册()
-        +登录()
+    class User {
+        -int userId
+        -String userName
+        -String email
+        -String role
+        +register()
+        +login()
     }
-    class 图书 {
-        -int 图书ID
-        -String 书名
-        -String 作者
-        +获取信息()
+    class Product {
+        -int productId
+        -String productName
+        -Decimal price
+        -int stockQuantity
+        +checkStock()
+        +updatePrice()
     }
-    class 借阅记录 {
-        -int 记录ID
-        -Date 借阅日期
-        -Date 应还日期
-        +借阅()
-        +归还()
+    class Order {
+        -int orderId
+        -String status
+        -Decimal totalAmount
+        -DateTime createTime
+        +createOrder()
+        +cancelOrder()
     }
-    用户 "1" --> "*" 借阅记录 : 借阅
-    图书 "1" --> "*" 借阅记录 : 被借
+    User "1" --> "*" Order : places
+    Product "1" --> "*" Order : included_in
 ```

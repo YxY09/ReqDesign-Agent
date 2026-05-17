@@ -69,6 +69,21 @@
 }
 ```
 
+## 命名规范（必须严格遵守）
+
+所有 `name` 字段必须使用**英文 PascalCase**，`description` 字段用中文描述。这是为了确保多次分析结果合并时能正确去重。
+
+示例：
+```json
+{
+  "actors": [{"name": "Student", "description": "在校学生"}],
+  "functions": [{"name": "BorrowBook", "description": "借阅图书"}],
+  "entities": [{"name": "BorrowRecord", "description": "借阅记录"}]
+}
+```
+
+**禁止**在 name 字段中使用中文。即使需求文档原文是中文，name 也必须转成英文。
+
 注意：
 1. 只输出JSON，不要输出其他内容
 2. 如果需求文档中没有提到某个字段的内容，使用空数组[]
