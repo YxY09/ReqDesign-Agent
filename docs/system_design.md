@@ -9,29 +9,29 @@
 │  │  CLI 命令行   │  │ VSCode 插件  │  │  Web API     │  │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  │
 ├─────────┴──────────────────┴──────────────────┴─────────┤
-│                    治理框架层（可选）                      │
+│                    治理框架层                             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │TaskOrch  │ │ StageGate│ │TraceLogger│ │  Repair  │  │
-│  │estrator  │ │          │ │          │ │Controller │  │
+│  │  Repair  │ │  Tool    │ │  Trace   │ │Evaluate  │  │
+│  │Controller│ │Validator │ │  Logger  │ │ Manager  │  │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │Context   │ │  Tool    │ │  Human   │ │  Prompt  │  │
-│  │Controller│ │Validator │ │Checkpoint│ │ Registry │  │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+│  ┌──────────┐ ┌──────────┐                             │
+│  │Consistency│ │ Memory   │                             │
+│  │ Checker  │ │  Store   │                             │
+│  └──────────┘ └──────────┘                             │
 ├─────────────────────────────────────────────────────────┤
-│                    智能体编排层                           │
+│                    消息驱动编排层                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │TaskOrchestr  │  │ ContextCtrl  │  │ RetryManager │  │
-│  │ator(统一入口) │  │              │  │              │  │
-│  └──────┬───────┘  └──────────────┘  └──────────────┘  │
+│  │ Coordinator  │  │  TaskMailbox │  │  Steering    │  │
+│  │   Agent      │  │  (消息总线)   │  │   Policy     │  │
+│  └──────┬───────┘  └──────┬───────┘  └──────────────┘  │
 ├─────────┴───────────────────────────────────────────────┤
-│                    核心智能体层                           │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│  │ 需求分析 │ │ 设计规划 │ │ 图生成   │ │ 测试生成 │  │
-│  │ Agent    │ │ Agent    │ │ Agent    │ │ Agent    │  │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘  │
+│                    多 Agent 层                           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐               │
+│  │ Planner  │ │Generator │ │Evaluator │               │
+│  │  Agent   │ │  Agent   │ │  Agent   │               │
+│  └──────────┘ └──────────┘ └──────────┘               │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │              审查与修复 Agent                      │  │
+│  │          Worker Session（进程/线程隔离）           │  │
 │  └──────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────┤
 │                    工具与数据层                           │
@@ -47,27 +47,28 @@
 | 模块 | 职责 | 对应文件 |
 |------|------|----------|
 | 用户交互层 | CLI命令解析、IDE集成 | main.py |
-| 任务编排 | 任务编排、流程控制（标准+治理模式） | governance/orchestrator.py |
+| 消息驱动运行时 | Coordinator 决策循环 + Worker 生命周期 | agent/runtime.py |
+| Worker Session | 会话状态机、序列化、生命周期 | agent/session.py |
+| 消息总线 | TaskMessage/TaskNotification 投递 | agent/messaging.py |
+| Coordinator | LLM 驱动的下一步决策 | agents/coordinator.py |
+| Planner | plan（初始规划）+ replan（动态调整） | agents/planner.py |
+| Generator | 产物生成 + 自检 + 自修正循环 | agents/generator.py |
+| Evaluator | 规则校验 + LLM 语义审查 | agents/evaluator.py |
+| 执行后端 | ThreadBackend + ProcessBackend（长生命周期） | execution/backend.py, execution/process_backend.py |
+| 驾驭策略 | 自修正轮数、审查阈值、策略预设 | agent/steering.py |
+| 进展追踪 | 拒绝计数、停滞检测、评分趋势 | agent/progress.py |
+| 记忆系统 | 文件存储 + LLM 相关性检索 + prompt 注入 | agent/memory/store.py |
+| 项目宪法 | ReqDesign.md 加载与 prompt 注入 | agent/constitution.py |
 | 输入处理 | 读取、清洗需求文档 | input_loader.py |
-| 需求分析 | 抽取角色/功能/实体/约束 | requirement_analyzer.py |
-| 设计规划 | 生成模块划分、核心类 | design_planner.py |
-| 图模型生成 | 生成Mermaid类图/活动图/状态图 | diagram_generator.py |
-| 测试用例生成 | 生成测试用例草案 | test_case_generator.py |
-| 审查与修复 | 质量检查、自动修复 | review_agent.py |
-| Mermaid校验 | 图语法检查 | mermaid_validator.py |
-| 重试管理 | 失败重试、历史记录 | retry_manager.py |
 | 输出管理 | 文件写入、报告生成 | output_manager.py |
+| 重试管理 | 失败重试、历史记录 | retry_manager.py |
 | LLM客户端 | 统一API调用 | llm_client.py |
-| **治理框架** | | **governance/** |
-| 任务编排器 | 治理模式任务编排 | orchestrator.py |
-| 阶段门控 | 阶段校验与决策 | stage_gate.py |
-| 上下文控制 | 阶段间上下文管理 | context_controller.py |
-| Prompt注册 | Prompt版本化管理 | prompt_registry.py |
+| **Agent 支撑工具** | | **governance/** |
 | 工具校验 | JSON/Mermaid/Markdown校验 | tool_validator.py |
 | 修复控制 | 多轮修复策略 | repair_controller.py |
-| 人工检查点 | 关键节点人工确认 | human_checkpoint.py |
 | 全链路追踪 | LLM调用/阶段追踪 | trace_logger.py |
 | 评估管理 | Benchmark与趋势分析 | evaluation_manager.py |
+| 一致性检查 | 跨产物一致性检查 | consistency_checker.py |
 | 配置管理 | 配置加载、验证 | config.py |
 | 日志系统 | 日志记录 | logger.py |
 
@@ -80,45 +81,40 @@ requirements.md
 InputLoader.load()  ← 编码容错、大小限制、代码围栏感知
     │
     ▼ (标准化需求文本)
-RequirementAnalyzer.analyze()  ← 自动重试、类型规范化、prompt注入防护
+PlannerAgent.plan()  ← LLM 将需求分解为 ExecutionPlan（任务图）
     │
-    ▼ (需求JSON)
-DesignPlanner.generate_design()  ← 大小写不敏感验证
+    ▼ (ExecutionPlan: [analyze, design, diagrams, tests, ...])
+Coordinator 决策循环:
     │
-    ▼ (系统设计说明)
-DiagramGenerator.generate_all()  ← 优先mermaid代码块提取
+    ├── spawn → GeneratorSession.run() → Artifact
+    │       └── self-check → self-correct 循环（最多 N 轮）
     │
-    ├──▶ class_diagram.mmd
-    ├──▶ activity_diagram.mmd
-    └──▶ state_diagram.mmd
+    ├── spawn → EvaluatorSession.run() → Verdict (passed/rejected)
+    │       ├── passed: 记录记忆，Coordinator 继续下一个任务
+    │       └── rejected: Coordinator 决定 continue / replan / finish
     │
-    ▼ (Mermaid代码)
-TestCaseGenerator.generate()
+    ├── continue → 同一 GeneratorSession 接收 fix_instructions，修复产物
+    │       └── 复用进程内 intermediate_state（长生命周期 ProcessBackend）
     │
-    ▼ (测试用例)
-ReviewAgent.review_and_repair()  ← 多轮修复验证
+    ├── replan → PlannerAgent.replan() → PlanMutation（增量调整任务图）
     │
-    ├──▶ 修复后的图文件
-    └──▶ review_result.json
-    │
-    ▼
-OutputManager.save_all()  ← 路径穿越防护
-    │
-    ▼
-输出目录/
-├── requirement_analysis.json
-├── requirement_analysis.md
-├── system_design.md
-├── class_diagram.mmd
-├── activity_diagram.mmd
-├── state_diagram.mmd
-├── test_cases.md
-├── review_report.md
-├── review_result.json
-└── summary_report.md
+    └── finish → OutputManager.save_all()
+            │
+            ▼
+        输出目录/
+        ├── requirement_analysis.json
+        ├── requirement_analysis.md
+        ├── system_design.md
+        ├── class_diagram.mmd
+        ├── activity_diagram.mmd
+        ├── state_diagram.mmd
+        ├── test_cases.md
+        ├── review_report.md
+        ├── review_result.json
+        └── summary_report.md
 ```
 
-注意：每个阶段都有try/except降级处理，单个阶段失败不阻塞后续阶段。
+Coordinator 在每个决策点重新评估全部状态（已完成/失败/挂起任务、评分趋势、停滞检测），自主选择最优动作。MemoryStore 在 evaluator verdict 后写 checkpoint，后续 agent 调用自动获取相关历史经验。
 
 ## 4. 核心类/接口设计
 
@@ -192,16 +188,15 @@ Mermaid语法校验工具。
 | review_and_repair(req, design, diagrams) | 审查并自动修复 |
 | generate_report(review_result) | 生成审查报告 |
 
-### 4.8 TaskOrchestrator
+### 4.8 AgentRuntime
 
-统一任务编排器（标准模式+治理模式）。
+统一 Agent 运行时，负责状态初始化、规划、工具执行、完成判定、追踪和结束保存。
 
 | 方法 | 说明 |
 |------|------|
-| run_analyze_task(input, output) | 运行需求分析任务（带门控/追踪） |
-| run_design_task(input, output) | 运行完整设计任务（带门控/追踪/一致性检查） |
-| _run_stage(name, fn, *args) | 执行单阶段（RETRY循环+多轮REPAIR+人工检查点） |
-| _lightweight_review(req_json) | 需求分析后轻量审查（纯规则） |
+| run(goal, input_path, output_dir) | 执行 Agent 主循环 |
+| _run_loop(state) | Observe/Plan/Act/Validate 循环 |
+| _force_save(state) | 结束时保存已有产物 |
 
 ### 4.9 RetryManager
 
@@ -223,3 +218,5 @@ Mermaid语法校验工具。
 | 配置 | YAML | 人类可读，支持嵌套结构 |
 | 测试 | pytest | 流行、功能强大 |
 | IDE集成 | VSCode插件 | 轻量，直接调用CLI |
+
+

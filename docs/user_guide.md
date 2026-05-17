@@ -31,7 +31,7 @@ npm install -g @mermaid-js/mermaid-cli
 llm:
   provider: openai      # 可选: openai, anthropic, deepseek, qwen
   model: gpt-4o         # 模型名称
-  api_key: "your-key"   # API密钥
+  api_key: ""           # 留空时从环境变量或本地 .env 读取
   temperature: 0.3      # 温度参数
   max_tokens: 8192      # 最大token数
 ```
@@ -50,14 +50,14 @@ export QWEN_API_KEY="your-key"
 ### 2.1 基本用法
 
 ```bash
-python -m agent.main --task <任务类型> --input <输入文件> --output <输出目录>
+python -m reqdesign.main --goal <任务类型> --input <输入文件> --output <输出目录>
 ```
 
 ### 2.2 参数说明
 
 | 参数 | 缩写 | 说明 | 默认值 |
 |------|------|------|--------|
-| --task | | 任务类型: analyze 或 design | design |
+| --goal | | 任务类型: analyze 或 design | design |
 | --input | -i | 输入需求文档路径 | (必填) |
 | --output | -o | 输出目录 | outputs/ |
 | --config | -c | 配置文件路径 | config.yaml |
@@ -70,16 +70,16 @@ python -m agent.main --task <任务类型> --input <输入文件> --output <输�
 
 ```bash
 # 完整设计任务
-python -m agent.main --task design --input examples/requirements.md --output outputs/demo
+python -m reqdesign.main --goal design --input examples/requirements.md --output outputs/demo
 
 # 仅需求分析
-python -m agent.main --task analyze --input requirements.md --output outputs/analyze
+python -m reqdesign.main --goal analyze --input requirements.md --output outputs/analyze
 
 # 使用DeepSeek模型
-python -m agent.main --task design --input requirements.md --output outputs/demo --provider deepseek --model deepseek-chat
+python -m reqdesign.main --goal design --input requirements.md --output outputs/demo --provider deepseek --model deepseek-chat
 
 # 调试模式
-python -m agent.main --task design --input requirements.md --output outputs/demo --log-level DEBUG
+python -m reqdesign.main --goal design --input requirements.md --output outputs/demo --log-level DEBUG
 ```
 
 ## 3. VSCode集成
@@ -124,7 +124,7 @@ python -m agent.main --task design --input requirements.md --output outputs/demo
 **执行**:
 
 ```bash
-python -m agent.main --task design \
+python -m reqdesign.main --goal design \
   --input examples/library/requirements.md \
   --output outputs/library
 ```
@@ -159,7 +159,7 @@ outputs/library/
 **执行**:
 
 ```bash
-python -m agent.main --task design \
+python -m reqdesign.main --goal design \
   --input examples/mall/requirements.md \
   --output outputs/mall
 ```
@@ -197,7 +197,7 @@ cat benchmark/results/benchmark_report.md
 
 ### Q: API密钥如何配置？
 
-在 `config.yaml` 中设置 `api_key`，或设置对应的环境变量。
+推荐在 `.env` 中设置对应环境变量，例如 `DEEPSEEK_API_KEY=...`；`config.yaml` 中的 `api_key` 保持为空。
 
 ### Q: 如何切换模型？
 
@@ -213,3 +213,4 @@ cat benchmark/results/benchmark_report.md
 ### Q: 如何查看详细日志？
 
 使用 `--log-level DEBUG` 参数运行，日志会保存在 `logs/` 目录下。
+

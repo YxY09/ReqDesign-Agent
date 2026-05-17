@@ -72,7 +72,7 @@ LLM输出可能因token限制被截断。`LLMClient._try_complete_json()` 实现
 ### 3.1 确定性流程 + LLM推理 + 工具校验
 
 系统采用混合架构：
-- **确定性流程**：`TaskOrchestrator` 控制任务顺序、文件读写、校验与重试
+- **确定性流程**：`AgentRuntime` 控制任务顺序、文件读写、校验与重试
 - **LLM推理**：各Agent负责语义理解和设计生成
 - **工具校验**：`MermaidValidator` 执行语法检查
 
@@ -110,7 +110,7 @@ InputLoader → RequirementAnalyzer → DesignPlanner → DiagramGenerator
 
 ### 4.3 工作流阶段降级
 
-`TaskOrchestrator.run_design_task()` 中每个阶段（设计规划、图生成、测试用例、审查）通过 `_run_stage` 执行，内部有异常捕获。单个阶段失败不会阻塞整个流水线，后续阶段继续执行，输出中该阶段为空。这保证了即使LLM在某一阶段返回异常，用户仍能获得其他阶段的输出。
+`AgentRuntime.run()` 中每个阶段（设计规划、图生成、测试用例、审查）通过 `_run_loop` 执行，内部有异常捕获。单个阶段失败不会阻塞整个流水线，后续阶段继续执行，输出中该阶段为空。这保证了即使LLM在某一阶段返回异常，用户仍能获得其他阶段的输出。
 
 ### 4.4 LLM响应健壮性
 
@@ -145,21 +145,22 @@ InputLoader → RequirementAnalyzer → DesignPlanner → DiagramGenerator
 - `mmdc` (mermaid-cli)：用于Mermaid图渲染和高级语法校验
 - `pandoc`：用于Markdown转PDF（文档生成）
 
-## 6. 治理框架
+## 6. Agent 驾驭策略
 
 ### 6.1 设计理念
 
-治理框架采用"可选叠加"架构：不修改现有Agent代码，通过适配器/装饰器模式在流水线各阶段注入治理逻辑。默认不启用，通过 `--enable-governance` CLI参数开启。
+驾驭策略是 Agent 主循环的一部分，不再通过旧流水线适配器叠加。`AgentRuntime` 负责 Observe/Plan/Act/Validate，`ControlPlane` 在执行前拦截不符合策略的动作，`CompletionChecker` 在结束前兜底验证目标是否真正完成。
 
-### 6.2 阶段门控（StageGate）
+### 6.2 执行前控制（ControlPlane）
 
-每个阶段执行后，StageGate根据校验结果决定下一步：
-- **PROCEED**：校验通过，进入下一阶段
-- **RETRY**：可恢复错误（如空响应、超时），**实际重新执行stage_fn**（循环回到阶段开头）
-- **REPAIR**：不可恢复错误，触发LLM修复流程，修复后重新校验并再次门控
-- **HALT**：分数过低或达到修复上限，终止流水线
+ControlPlane 在每次工具执行前检查策略边界：
+- 最大步数是否已经达到
+- 依赖产物是否齐备
+- 当前策略是否允许重复生成
+- 当前策略是否允许覆盖已有产物
+- 低质量 review 是否需要停止或路由到修复工具
 
-`_run_stage` 实现为while循环状态机：RETRY分支递增retry_count并continue重新执行，REPAIR分支调用修复后重新校验并再次评估门控，支持多轮修复直到PROCEED或HALT。Agent自校验warnings（如requirement_analyzer.validate_result返回的警告）被合并到ValidationResult中，每个warning降低score 0.05。
+工具执行后的重试、修复和产物契约校验由 `ToolExecutor` 处理；是否可以最终结束由 `CompletionChecker` 再检查一次，避免 planner 误判完成。
 
 ### 6.3 全链路追踪（TraceLogger）
 
@@ -179,13 +180,9 @@ TracingLLMClient透明包装LLMClient，捕获每次LLM调用的：
 3. 最多N轮修复（可配置），每轮记录 error → action → result
 4. 超过轮次标记为失败，不阻塞后续阶段
 
-### 6.5 人工检查点（HumanCheckpoint）
+### 6.5 人工确认边界（require_human_review）
 
-在配置的阶段暂停，输出当前结果摘要，等待人工决策。`_run_stage` 末尾统一调用检查点，因此**所有阶段**都可配置为检查点（不仅限于requirement_analysis）。决策选项：
-- **CONTINUE**：继续执行
-- **MODIFY**：提供修改建议后继续
-- **REGENERATE**：重新生成当前阶段输出
-- **ABORT**：终止流水线
+交互式审批模块已经移除。当前实现把人工确认作为完成条件的一部分：当 `steering.require_human_review=true` 时，`CompletionChecker` 会要求 `AgentState.human_approved=true` 后才允许任务完成；工具不能通过 `apply_updates` 私自写入该字段。
 
 ### 6.6 Prompt注册（PromptRegistry）
 
@@ -228,9 +225,9 @@ benchmark评分体系新增状态图完整性指标（权重5%），检查状态
 
 `LLMClient` 在初始化时检测API密钥缺失，立即抛出 `ValueError` 并给出明确的配置提示，而非延迟到运行时产生不透明的SDK错误。
 
-### 7.4 统一入口（TaskOrchestrator）
+### 7.4 统一入口（AgentRuntime）
 
-`WorkflowController` 已移除，所有模式（标准/治理）统一使用 `TaskOrchestrator`。治理功能通过 `GovernanceConfig` 控制开关：标准模式使用默认配置，治理模式可通过CLI参数启用追踪、人工检查点等增强功能。`StageRecord.to_dict()` 保存完整数据，`to_summary()` 提供截断版本用于治理报告。
+历史编排入口均已移除，执行入口统一为 `AgentRuntime`。策略能力由 `steering` 配置控制，包括最大步数、重试/修复轮次、质量阈值、是否允许重复生成、是否允许覆盖产物以及是否要求人工确认。
 
 ### 7.5 并行图生成
 
@@ -244,4 +241,6 @@ benchmark评分体系新增状态图完整性指标（权重5%），检查状态
 2. 自主实现更容易在课程报告中说明技术细节
 3. 减少外部依赖，降低环境配置复杂度
 
-如需使用框架，可将 `TaskOrchestrator` 替换为LangGraph实现，Agent接口保持不变。
+如需使用框架，可将 `AgentRuntime` 替换为LangGraph实现，Agent接口保持不变。
+
+

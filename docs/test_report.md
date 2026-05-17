@@ -15,40 +15,34 @@
 | 模块 | 测试文件 | 测试用例数 | 通过数 |
 |------|----------|------------|--------|
 | 配置管理/CLI | test_core.py | 45 | 45 |
-| 输入处理 | test_phase2.py | 19 | 19 |
+| 输入处理与需求分析 | test_phase2.py | 19 | 19 |
 | 设计规划 | test_phase3.py | 8 | 8 |
 | Mermaid校验/图生成 | test_phase4.py | 32 | 32 |
-| 测试用例验证 | test_phase5.py | 9 | 9 |
+| 测试用例生成 | test_phase5.py | 9 | 9 |
 | 重试/审查/修复 | test_phase6.py | 18 | 18 |
-| 输出管理 | test_phase7.py | 10 | 10 |
 | 基准评分/评估 | test_benchmark.py | 56 | 56 |
 | **治理框架** | **test_governance.py** | **212** | **212** |
 | **集成测试** | **test_integration.py** | **86** | **86** |
-| **总计** | | **495** | **495** |
+| **总计** | | **485** | **485** |
 
 ### 2.2 治理框架测试详情（test_governance.py，50个测试类，212个用例）
 
-**数据模型与枚举（8类，21用例）**
+**数据模型（4类）**
 
 | 测试类 | 用例数 | 覆盖内容 |
 |--------|--------|----------|
 | TestValidationResult | 4 | 数据模型创建、序列化 |
 | TestRepairRecord | 2 | 修复记录创建、序列化 |
-| TestHumanDecision | 3 | 人工决策创建、序列化 |
 | TestTraceEntry | 2 | 追踪条目创建、序列化 |
 | TestStageRecord | 3 | 阶段记录时长、序列化 |
-| TestGateDecision | 2 | 门控决策枚举 |
-| TestHumanAction | 1 | 人工操作枚举 |
-| TestModelsEdgeCases | 4 | 分数截断、修复记录序列化、所有Action/GateDecision值 |
+| TestModelsEdgeCases | 4 | 分数截断、修复记录序列化、边界值 |
 
 **配置（4类，13用例）**
 
 | 测试类 | 用例数 | 覆盖内容 |
 |--------|--------|----------|
-| TestGovernanceConfig | 4 | 治理配置加载 |
 | TestAgentConfigRaw | 3 | AgentConfig原始配置存储 |
-| TestGovernanceConfigIntegration | 3 | 完整/部分/空配置集成 |
-| TestStageGateIntegration | 2 | HALT阈值从配置读取 |
+| TestControlPlaneIntegration | 2 | 停止阈值从配置读取 |
 
 **核心模块（8类，52用例）**
 
@@ -58,9 +52,8 @@
 | TestTracingLLMClient | 7 | LLM客户端追踪包装 |
 | TestToolValidator | 15 | JSON/Mermaid/Markdown校验 |
 | TestRepairController | 4 | 修复策略、异常处理 |
-| TestStageGate | 5 | 门控决策逻辑（PROCEED/RETRY/REPAIR/HALT） |
+| TestControlPlane | 5 | Agent 执行前策略约束和质量路由 |
 | TestContextController | 6 | 上下文管理、阶段过滤、get_for_stage |
-| TestHumanCheckpoint | 4 | 检查点暂停/继续 |
 | TestPromptRegistry | 8 | Prompt注册、版本管理、扫描 |
 
 **一致性与审查（3类，29用例）**
@@ -75,18 +68,11 @@
 
 | 测试类 | 用例数 | 覆盖内容 |
 |--------|--------|----------|
-| TestOrchestratorImport | 1 | 模块导入 |
-| TestOrchestratorValidation | 20 | 所有阶段输出校验（valid/None/empty/boundary） |
-| TestOrchestratorRunStage | 9 | _run_stage真实重试、修复、warnings合并、REGENERATE |
-| TestOrchestratorContextOnFailure | 1 | 失败时上下文设置 |
-| TestOrchestratorGenerateReportError | 1 | 审查报告生成异常处理 |
-| TestOrchestratorAnalyzeTask | 1 | run_analyze_task完整流程 |
-| TestOrchestratorDesignTask | 9 | run_design_task完整6阶段流程 |
-| TestOrchestratorExportGovernanceReport | 1 | 治理报告导出 |
-| TestTryRepair | 3 | _try_repair dict/text路径、长输出截断 |
-| TestHaltPath | 2 | HALT状态确认、修复仍失败后HALT |
-| TestRegenerateContextUpdate | 1 | REGENERATE后上下文更新 |
-| TestGovernanceReportMixedStatuses | 1 | 混合状态计数 |
+| TestAgentRuntime | 主要流程 | AgentRuntime Observe/Plan/Act/Validate 主循环 |
+| TestCompletionChecker | 完成判定 | analyze/design 目标的缺失产物与质量问题 |
+| TestControlPlane | 驾驭策略 | 重复生成、覆盖产物、质量路由 |
+| TestToolExecutor | 工具执行 | 依赖检查、产物契约、重试、修复和状态更新 |
+| TestArtifactContract | 产物契约 | 动态阈值、结构校验和保存边界 |
 | TestFinallyBlockErrors | 2 | finally块异常不阻塞 |
 | TestConsistencyErrorsInReview | 2 | 一致性错误合并到审查门控 |
 
@@ -95,17 +81,13 @@
 | 测试类 | 用例数 | 覆盖内容 |
 |--------|--------|----------|
 | TestStageRecordSummary | 5 | StageRecord完整/截断序列化、from_dict兼容 |
-| TestGateRetryRepairLoop | 4 | RETRY/REPAIR循环门控 |
 | TestRepairRecordHistory | 2 | 修复记录累积、序列化 |
-| TestGovernanceReport | 1 | 治理报告使用to_summary |
 
-**检查点与集成（6类，16用例）**
+**Agent 集成（4类）**
 
 | 测试类 | 用例数 | 覆盖内容 |
 |--------|--------|----------|
-| TestHumanCheckpointAllStages | 3 | 全阶段人工检查点 |
-| TestHumanCheckpointAbortModify | 2 | abort/modify路径 |
-| TestMaxRetriesToRepair | 1 | 重试耗尽后进入REPAIR |
+| TestMaxRetriesToRepair | 1 | 重试耗尽后进入修复 |
 | TestNoWorkflowController | 4 | WorkflowController已移除验证 |
 | TestValidationEdgeCases | 4 | 校验边界场景 |
 | TestRepairControllerEdgeCases | 3 | max_rounds=0/-1边界 |
@@ -178,7 +160,7 @@
 | TC-N-004 | 图生成 | 输入需求和设计 | 生成3个Mermaid图，语法校验通过 |
 | TC-N-005 | 测试用例生成 | 输入需求和设计 | 生成测试用例表格 |
 | TC-N-006 | 完整流程 | 输入需求文档 | 生成所有输出文件，审查通过 |
-| TC-N-007 | 治理模式流程 | 输入需求文档+--enable-governance | 生成输出+治理报告+追踪文件 |
+| TC-N-007 | Agent 策略流程 | 输入需求文档+steering配置 | 生成输出+追踪文件+完成状态 |
 | TC-N-008 | 一致性检查 | 生成完整设计产物 | 跨产物一致性检查执行并输出结果 |
 
 ### 4.2 异常场景
@@ -192,7 +174,7 @@
 | TC-E-005 | JSON解析失败 | LLM返回非法JSON | 尝试截断补全，失败则重试 |
 | TC-E-006 | 编码异常 | 输入GBK编码文件 | 自动识别编码并读取 |
 | TC-E-007 | 文件过大 | 输入超过512KB文件 | 抛出ValueError |
-| TC-E-008 | 阶段失败 | 模拟阶段函数抛异常 | _run_stage捕获异常，status=failed，不阻塞后续 |
+| TC-E-008 | 阶段失败 | 模拟阶段函数抛异常 | _run_loop捕获异常，status=failed，不阻塞后续 |
 
 ### 4.3 边界场景
 
@@ -205,9 +187,9 @@
 | TC-B-005 | 路径穿越攻击 | 文件名含../../ | 被sanitize_filename拦截 |
 | TC-B-006 | 空YAML配置 | 加载空配置文件 | 返回默认配置 |
 | TC-B-007 | LLM返回非数组字段 | actors字段为字符串 | 自动规范化为数组 |
-| TC-B-008 | RETRY循环 | stage_fn第一次返回无效数据 | RETRY后重新执行stage_fn |
-| TC-B-009 | 多轮REPAIR | 校验持续失败 | 多轮修复直到PROCEED或HALT |
-| TC-B-010 | Agent warnings合并 | stage_fn返回(output, warnings) | warnings合并到gate决策 |
+| TC-B-008 | 重试循环 | 工具第一次返回无效数据 | 重试后重新执行工具 |
+| TC-B-009 | 多轮修复 | 校验持续失败 | 多轮修复后记录错误或继续 |
+| TC-B-010 | Agent warnings合并 | 工具返回 warnings | warnings合并到工具历史 |
 
 ## 5. 局限性说明
 
@@ -219,3 +201,4 @@
 6. **Prompt注入**：已做基本防护（移除模板变量），但无法完全防御复杂的prompt注入攻击
 7. **编码支持**：自动尝试UTF-8/GBK/Latin-1，其他编码可能失败
 8. **一致性检查基于关键词匹配**：不依赖LLM，准确率有限，短实体名可能误匹配
+
