@@ -45,9 +45,11 @@ export class PlanningTool extends BaseTool {
 
   async plan(requirementText: string, goal = "design"): Promise<ExecutionPlan> {
     if (!requirementText?.trim()) {
+      this.logger.warn("plan: 需求文本为空，返回空计划");
       return createExecutionPlan({ tasks: [], goal, reasoning: "需求文本为空" });
     }
 
+    this.logger.info(`plan: 开始规划，目标=${goal}，需求长度=${requirementText.length}`);
     const system = await this._getSystemPrompt(requirementText.slice(0, 200));
     const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal);
 
@@ -56,7 +58,9 @@ export class PlanningTool extends BaseTool {
       if (this.llm) this.llm.streamTag = "[Planner]";
       const response = await this.llm!.generateJson(userPrompt, system);
       plan = this._parseResponse(response as Record<string, unknown>, goal);
+      this.logger.info(`plan: 规划完成，共 ${plan.tasks.length} 个任务，reasoning=${plan.reasoning?.slice(0, 80)}`);
     } catch (e) {
+      this.logger.warn(`plan: LLM 规划失败，使用 fallback: ${e instanceof Error ? e.message : String(e)}`);
       plan = PlanningTool._fallbackPlan(requirementText, goal);
     }
 
@@ -72,6 +76,7 @@ export class PlanningTool extends BaseTool {
     artifactSummary: Record<string, unknown> | null,
     replanReason: string,
   ): Promise<PlanMutation> {
+    this.logger.info(`replan: 开始重新规划，原因=${replanReason.slice(0, 80)}，已完成=${completedTaskIds.length}，失败=${failedTaskIds.length}`);
     const system = await this._getReplanPrompt(replanReason.slice(0, 200));
     const userPrompt = PlanningTool._buildReplanUserPrompt(
       requirementText, currentPlan, completedTaskIds, failedTaskIds,
@@ -83,7 +88,9 @@ export class PlanningTool extends BaseTool {
       if (this.llm) this.llm.streamTag = "[Planner:replan]";
       const response = await this.llm!.generateJson(userPrompt, system);
       mutation = this._parseReplanResponse(response as Record<string, unknown>);
+      this.logger.info(`replan: 重新规划完成，add=${mutation.addTasks?.length ?? 0}，update=${mutation.updateTasks?.length ?? 0}，drop=${mutation.dropTaskIds?.length ?? 0}`);
     } catch (e) {
+      this.logger.warn(`replan: LLM 重规划失败，使用 fallback: ${e instanceof Error ? e.message : String(e)}`);
       mutation = PlanningTool._fallbackReplan(currentPlan, failedTaskIds, replanReason);
     }
 

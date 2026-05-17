@@ -5,6 +5,7 @@
 import type { LLMClient } from "../llmClient.js";
 import { buildSystemPrompt } from "../promptBuilder.js";
 import { loadPrompt } from "../promptLoader.js";
+import { setupLogger, type Logger } from "../logger.js";
 
 export abstract class BaseTool {
   llm: LLMClient | null;
@@ -14,6 +15,15 @@ export abstract class BaseTool {
 
   constructor(llm: LLMClient | null) {
     this.llm = llm;
+  }
+
+  /** Lazy logger — initialised on first use to avoid constructor ordering issues. */
+  private _loggerInstance: Logger | null = null;
+  protected get logger(): Logger {
+    if (!this._loggerInstance) {
+      this._loggerInstance = setupLogger(`reqdesign.${this.name}`);
+    }
+    return this._loggerInstance;
   }
 
   /** Agent name (for logging/display). */

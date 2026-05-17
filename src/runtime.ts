@@ -1,11 +1,11 @@
-import { mkdirSync, createWriteStream, type WriteStream } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { AgentConfig } from "./config.js";
 import { ConstitutionLoader, setConstitution } from "./constitution.js";
 import { DependencyProvider, WorkerFactory } from "./execution/factory.js";
 import { ThreadBackend } from "./execution/backend.js";
 import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
-import { setupLogger, type Logger } from "./logger.js";
+import { setupLogger, initSharedLog, type Logger } from "./logger.js";
 import {
   TaskMailbox,
   createTaskMessage,
@@ -156,16 +156,10 @@ export class MultiAgentRuntime {
     sessionId: string;
   } | null = null;
   private readonly inflight = new Map<string, InflightWorker>();
-  /** Run log file stream (written to outputDir/run.log). */
-  private runLogStream: WriteStream | null = null;
 
   constructor(config: AgentConfig, executionBackend?: string | null) {
     this.config = config;
-    this.logger = setupLogger(
-      "reqdesign.runtime",
-      config.logging.level,
-      config.logging.logDir,
-    );
+    this.logger = setupLogger("reqdesign.runtime", config.logging.level);
     this.trace = new TraceLogger();
     this.llm = new LLMClient(config);
 
@@ -251,10 +245,14 @@ export class MultiAgentRuntime {
     state.startTime = Date.now() / 1000;
 
     // Open run log
+    // Open unified log file in logs/ directory
     try {
-      mkdirSync(outputDir, { recursive: true });
-      this.runLogStream = createWriteStream(`${outputDir}/run.log`, { flags: "w", encoding: "utf-8" });
-      this.runLogStream.write(`[${new Date().toISOString()}] runtime started for ${goal}\n`);
+      const logDir = this.config.logging.logDir || "logs";
+      mkdirSync(logDir, { recursive: true });
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      initSharedLog(`${logDir}/reqdesign_${ts}.log`, this.config.logging.level);
     } catch { /* non-fatal */ }
     this.emitRuntimeEvent("run_started", `runtime started for ${goal}`, {
       goal,
@@ -436,7 +434,7 @@ export class MultiAgentRuntime {
       this.eventSink = null;
 
       // Close run log
-      try { this.runLogStream?.end(); } catch { /* noop */ }
+      // run log closed by main.ts at process exit
     }
   }
 
@@ -1363,10 +1361,13 @@ export class MultiAgentRuntime {
     message: string,
     extras: Partial<WorkflowEvent> = {},
   ): void {
-    if (this.runLogStream) {
-      const ts = new Date().toISOString().replace("T", " ").replace(/\..+Z$/, "");
-      this.runLogStream.write(`[${ts}] ${kind} | ${message}\n`);
+    // Log to unified log file — debug for high-frequency noise, info for the rest
+    if (kind === "worker_heartbeat" || kind === "llm_chunk") {
+      this.logger.debug(`${kind} | ${message}`);
+    } else {
+      this.logger.info(`${kind} | ${message}`);
     }
+    // Also emit as WorkflowEvent for console display
     if (!this.eventSink) return;
     this.eventSink(
       createWorkflowEvent({

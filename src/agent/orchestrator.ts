@@ -58,6 +58,7 @@ export class AgentOrchestrator extends BaseTool {
 
     const guarded = this.policyGuard.validate(strategy, snapshot);
     const action = this.actionCompiler.compile(guarded, snapshot);
+    this.logger.info(`decide: strategy=${strategy.strategy}，action=${action.action}，reason=${strategy.reason?.slice(0, 80)}`);
     state.lastAction = action.action;
     state.lastDecisionCount = curr;
 
@@ -74,8 +75,11 @@ export class AgentOrchestrator extends BaseTool {
       });
     }
     try {
-      return await this.strategyBrain.decide(snapshot);
+      const result = await this.strategyBrain.decide(snapshot);
+      this.logger.info(`decide: LLM strategy=${result.strategy}，confidence=${result.confidence}`);
+      return result;
     } catch (exc) {
+      this.logger.warn(`decide: LLM 策略决策失败: ${exc instanceof Error ? exc.message : String(exc)}`);
       return createStrategyDecision({
         strategy: "pause_for_user",
         reason:

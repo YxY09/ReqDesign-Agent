@@ -23,7 +23,7 @@ import {
 // Logger
 // ---------------------------------------------------------------------------
 
-import { setupLogger, Logger } from "../src/logger.js";
+import { setupLogger, initSharedLog, closeSharedLog, Logger } from "../src/logger.js";
 
 // ---------------------------------------------------------------------------
 // LLMClient — we only test the internal JSON helpers, so we import the module
@@ -297,39 +297,43 @@ llm:
 
 describe("Logger", () => {
   let tmpLogDir: string;
+  let tmpLogFile: string;
 
   beforeEach(() => {
     tmpLogDir = join(makeTmp("reqdesign-test-logs-"), "logs");
+    tmpLogFile = join(tmpLogDir, "test.log");
+  });
+
+  afterEach(() => {
+    closeSharedLog();
   });
 
   it("creates a logger with DEBUG level", () => {
-    const logger = setupLogger("test_debug", "DEBUG", tmpLogDir);
+    initSharedLog(tmpLogFile, "DEBUG");
+    const logger = setupLogger("test_debug", "DEBUG");
     expect(logger.level).toBe("DEBUG");
     expect(logger.name).toBe("test_debug");
     logger.close();
   });
 
-  it("creates a log file in the specified directory", async () => {
-    const logger = setupLogger("test_file_create", "INFO", tmpLogDir);
+  it("creates a log file via initSharedLog", async () => {
+    initSharedLog(tmpLogFile, "INFO");
+    const logger = setupLogger("test_file_create", "INFO");
     logger.info("hello test");
     logger.close();
 
-    // Wait for the WriteStream to flush and close
     await new Promise((r) => setTimeout(r, 100));
 
-    const { readdirSync } = require("node:fs");
-    const files = readdirSync(tmpLogDir).filter(
-      (f: string) => f.startsWith("reqdesign_") && f.endsWith(".log"),
-    );
-    expect(files.length).toBeGreaterThanOrEqual(1);
+    const { existsSync } = require("node:fs");
+    expect(existsSync(tmpLogFile)).toBe(true);
   });
 
-  it("replaces logger when same name is reused", () => {
-    const logger1 = setupLogger("test_replace", "INFO", tmpLogDir);
-    const logger2 = setupLogger("test_replace", "DEBUG", tmpLogDir);
-    // setupLogger replaces the old instance with a new one
-    expect(logger2).not.toBe(logger1);
-    expect(logger2.level).toBe("DEBUG");
+  it("returns same logger for same name", () => {
+    initSharedLog(tmpLogFile, "INFO");
+    const logger1 = setupLogger("test_replace", "INFO");
+    const logger2 = setupLogger("test_replace", "INFO");
+    // Same instance returned
+    expect(logger2).toBe(logger1);
     logger2.close();
   });
 });

@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import { existsSync } from "node:fs";
 import { AgentConfig } from "./config.js";
-import { setConsoleLoggingEnabled, setupLogger } from "./logger.js";
+import { setConsoleLoggingEnabled, setupLogger, closeSharedLog } from "./logger.js";
 import { MultiAgentRuntime } from "./runtime.js";
 import { BenchmarkRunner } from "./benchmark/runBenchmark.js";
 import { TerminalChatApp } from "./tui/chatApp.js";
@@ -146,9 +146,10 @@ async function main(): Promise<void> {
   if (!state.persisted && state.runStatus === "failed") {
     process.exitCode = 1;
   }
+  closeSharedLog();
 }
 
 main().catch((error: unknown) => {
   process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
   process.exitCode = 1;
-});
+}).finally(() => closeSharedLog());

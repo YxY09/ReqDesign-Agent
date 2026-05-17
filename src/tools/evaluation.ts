@@ -37,6 +37,7 @@ export class EvaluationTool extends BaseTool {
     isDirectMode = false,
     evaluatedTaskIds?: string[],
   ): Promise<Verdict> {
+    this.logger.info(`evaluate: 开始评审，goal=${goal}，directMode=${isDirectMode}`);
     const snapshots = artifactSnapshots ?? EvaluationTool._buildAggregateSnapshots(
       requirementJson, designText, diagrams, testCases,
     );
@@ -60,6 +61,7 @@ export class EvaluationTool extends BaseTool {
     // 1. Rule check
     const ruleIssues = this._ruleCheckSnapshots(snapshots, isDirectMode, requirementJson);
     issues.push(...ruleIssues);
+    this.logger.info(`evaluate: 规则检查发现 ${ruleIssues.length} 个问题`);
 
     // 2. LLM review
     let llmIssues: Issue[];
@@ -81,6 +83,7 @@ export class EvaluationTool extends BaseTool {
     // 3. Decide pass/fail
     const blockers = issues.filter((i) => i.severity === "blocker");
     const passed = blockers.length === 0;
+    this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，majors=${issues.filter((i) => i.severity === "major").length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
 
     // 4. Build fix tasks
     const fixes = passed ? [] : EvaluationTool._buildFixes(issues);

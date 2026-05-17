@@ -25,6 +25,7 @@ export class RepairTool extends BaseTool {
     fixInstructions: Array<Record<string, unknown>>,
     context: Record<string, unknown>,
   ): Promise<unknown | null> {
+    this.logger.info(`repair: 开始修复 task=${task.id}, type=${task.type}，修复指令=${fixInstructions.length}条`);
     const system = await this._loadRepairPrompt(task);
     const userPrompt = this._buildRepairPrompt(task, currentContent, fixInstructions, context);
 
@@ -37,7 +38,8 @@ export class RepairTool extends BaseTool {
         const response = await this.llm!.generateJson(userPrompt, system);
         content = this._parseResponse(response as Record<string, unknown>, task);
       }
-    } catch {
+    } catch (e) {
+      this.logger.error(`repair: task=${task.id} 修复失败: ${e instanceof Error ? e.message : String(e)}`);
       content = null;
     }
 
@@ -46,10 +48,16 @@ export class RepairTool extends BaseTool {
       const origLen = String(currentContent).length;
       const newLen = String(content).length;
       if (origLen > 0 && newLen < origLen * 0.5) {
+        this.logger.warn(`repair: 修复结果过短（${newLen} < ${Math.round(origLen * 0.5)}），丢弃`);
         content = null;
       }
     }
 
+    if (content != null) {
+      this.logger.info(`repair: task=${task.id} 修复成功`);
+    } else {
+      this.logger.warn(`repair: task=${task.id} 修复返回空结果`);
+    }
     return content;
   }
 

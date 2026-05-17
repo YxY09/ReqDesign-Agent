@@ -7,6 +7,7 @@ import { createArtifact, createTask, type Artifact, type ExecutionPlan, type Tas
 import type { TaskMessage, TaskNotification } from "../messaging.js";
 import { SessionContext, WorkerSession } from "../session.js";
 import { isRecord } from "../utils/isRecord.js";
+import { setupLogger, type Logger } from "../logger.js";
 
 function normalizeFixInstructions(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return [];
@@ -15,6 +16,7 @@ function normalizeFixInstructions(value: unknown): Array<Record<string, unknown>
 
 export class GenerationSession extends WorkerSession {
   private readonly agent: GenerationTool;
+  private readonly logger: Logger = setupLogger("reqdesign.GenerationSession");
 
   constructor(
     sessionId: string,
@@ -35,9 +37,11 @@ export class GenerationSession extends WorkerSession {
   async run(message: TaskMessage): Promise<TaskNotification> {
     this.state.messageCount += 1;
     this.markHeartbeat();
+    this.logger.info(`run: task=${this.context.taskId}，message=${message.type}，msgCount=${this.state.messageCount}`);
 
     if (message.type === "stop") {
       this.state.finished = true;
+      this.logger.info(`run: task=${this.context.taskId} 收到停止指令`);
       return this._makeNotification("cancelled", {
         summary: "session stopped by coordinator",
       });
@@ -191,6 +195,7 @@ export class GenerationSession extends WorkerSession {
 
 export class EvaluationSession extends WorkerSession {
   private readonly agent: EvaluationTool;
+  private readonly logger: Logger = setupLogger("reqdesign.EvaluationSession");
 
   constructor(
     sessionId: string,
@@ -211,6 +216,7 @@ export class EvaluationSession extends WorkerSession {
   async run(message: TaskMessage): Promise<TaskNotification> {
     this.state.messageCount += 1;
     this.markHeartbeat();
+    this.logger.info(`run: evaluator，message=${message.type}，scope=${this.context.evaluateScope?.join(",") ?? "all"}`);
 
     if (message.type === "stop") {
       this.state.finished = true;
@@ -274,6 +280,7 @@ export class EvaluationSession extends WorkerSession {
 
 export class PlanningSession extends WorkerSession {
   private readonly agent: PlanningTool;
+  private readonly logger: Logger = setupLogger("reqdesign.PlanningSession");
 
   constructor(
     sessionId: string,
@@ -294,6 +301,7 @@ export class PlanningSession extends WorkerSession {
   async run(message: TaskMessage): Promise<TaskNotification> {
     this.state.messageCount += 1;
     this.markHeartbeat();
+    this.logger.info(`run: planner，message=${message.type}`);
 
     if (message.type === "stop") {
       this.state.finished = true;
@@ -309,6 +317,7 @@ export class PlanningSession extends WorkerSession {
     const plan = await this.agent.plan(this.context.requirementText, this.context.goal);
     this.markHeartbeat();
     this.state.intermediateState.last_plan = plan;
+    this.logger.info(`run: 规划完成，${plan.tasks.length} 个任务`);
 
     return this._makeNotification(plan.tasks.length > 0 ? "completed" : "failed", {
       summary: `planned ${plan.tasks.length} tasks`,

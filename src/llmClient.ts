@@ -110,7 +110,7 @@ export class LLMClient {
     this.maxTokens = config.llm.maxTokens;
     this.timeout = config.llm.timeout;
 
-    this._logger = setupLogger("reqdesign", config.logging.level, config.logging.logDir);
+    this._logger = setupLogger("reqdesign.llm", config.logging.level);
 
     const apiKey = config.getApiKey();
     if (!apiKey) {

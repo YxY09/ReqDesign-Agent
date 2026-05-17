@@ -31,6 +31,7 @@ export class GenerationTool extends BaseTool {
 
   async execute(task: Task, context: Record<string, unknown>): Promise<Artifact> {
     const t0 = performance.now();
+    this.logger.info(`execute: 开始生成 task=${task.id}, type=${task.type}, desc=${task.description?.slice(0, 60)}`);
 
     try {
       const content = await this._generate(task, context);
@@ -41,6 +42,12 @@ export class GenerationTool extends BaseTool {
       const issues = GenerationTool._ruleCheck(task, content, context);
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
+
+      if (passed) {
+        this.logger.info(`execute: task=${task.id} 生成完成，耗时=${elapsed.toFixed(1)}s，自检通过`);
+      } else {
+        this.logger.warn(`execute: task=${task.id} 生成完成，耗时=${elapsed.toFixed(1)}s，自检发现 ${issues.length} 个问题`);
+      }
 
       return createArtifact({
         taskId: task.id,
@@ -55,6 +62,7 @@ export class GenerationTool extends BaseTool {
     } catch (e: unknown) {
       const elapsed = (performance.now() - t0) / 1000;
       const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`execute: task=${task.id} 生成异常，耗时=${elapsed.toFixed(1)}s: ${msg}`);
       return createArtifact({
         taskId: task.id,
         type: task.type,

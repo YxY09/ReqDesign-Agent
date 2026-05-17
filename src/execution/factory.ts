@@ -6,8 +6,10 @@ import { GenerationTool } from "../tools/generation.js";
 import { PlanningTool } from "../tools/planning.js";
 import { EvaluationSession, GenerationSession, PlanningSession } from "../tools/sessions.js";
 import { SessionContext, SessionDescriptor, type WorkerSession } from "../session.js";
+import { setupLogger, type Logger } from "../logger.js";
 
 export class DependencyProvider {
+  private readonly logger: Logger = setupLogger("reqdesign.DependencyProvider");
   llm: LLMClient | null;
   mailbox: TaskMailbox;
   plannerTool: PlanningTool | null;
@@ -33,6 +35,7 @@ export class DependencyProvider {
     if (this.plannerTool === null) this.plannerTool = new PlanningTool(this.llm);
     if (this.generatorTool === null) this.generatorTool = new GenerationTool(this.llm);
     if (this.evaluatorTool === null) this.evaluatorTool = new EvaluationTool(this.llm);
+    this.logger.info("ensureTools: tools initialized");
   }
 }
 
