@@ -7,17 +7,17 @@
 
 import { describe, it, expect } from "vitest";
 
-import { EvaluatorAgent } from "../src/agents/evaluator.js";
-import { CoordinatorAgent } from "../src/agents/coordinator.js";
-import { createIssue, createTask, createExecutionPlan, createArtifact } from "../src/agents/types.js";
+import { EvaluationTool } from "../src/tools/evaluation.js";
+import { AgentOrchestrator } from "../src/agent/orchestrator.js";
+import { createIssue, createTask, createExecutionPlan, createArtifact } from "../src/agent/types.js";
 import { WorkflowState } from "../src/state.js";
 import { TaskMailbox, createTaskNotification } from "../src/messaging.js";
 
 // ---------------------------------------------------------------------------
-// EvaluatorAgent scope classification tests
+// EvaluationTool scope classification tests
 // ---------------------------------------------------------------------------
 
-describe("EvaluatorAgent._classifyIssueScope", () => {
+describe("EvaluationTool._classifyIssueScope", () => {
   it("classifies an analyze blocker as systemic", () => {
     const issue = createIssue({
       severity: "blocker",
@@ -25,7 +25,7 @@ describe("EvaluatorAgent._classifyIssueScope", () => {
       targetTaskType: "analyze",
       description: "missing all functions",
     });
-    const scope = EvaluatorAgent._classifyIssueScope(issue);
+    const scope = EvaluationTool._classifyIssueScope(issue);
     expect(scope).toBe("systemic");
   });
 
@@ -37,7 +37,7 @@ describe("EvaluatorAgent._classifyIssueScope", () => {
       targetField: "design_text",
       description: "formatting issue",
     });
-    const scope = EvaluatorAgent._classifyIssueScope(issue);
+    const scope = EvaluationTool._classifyIssueScope(issue);
     expect(scope).toBe("local");
   });
 
@@ -49,7 +49,7 @@ describe("EvaluatorAgent._classifyIssueScope", () => {
       targetField: "requirement_json.actors",
       description: "缺少 actors field导致设计不完整",
     });
-    const scope = EvaluatorAgent._classifyIssueScope(issue);
+    const scope = EvaluationTool._classifyIssueScope(issue);
     expect(scope).toBe("upstream");
   });
 
@@ -69,7 +69,7 @@ describe("EvaluatorAgent._classifyIssueScope", () => {
       }),
     ];
     for (const issue of issues) {
-      EvaluatorAgent._classifyIssueScope(issue);
+      EvaluationTool._classifyIssueScope(issue);
     }
     expect(issues[0].scope).toBe("systemic");
     expect(issues[1].scope).toBe("local");
@@ -80,9 +80,9 @@ describe("EvaluatorAgent._classifyIssueScope", () => {
 // Coordinator routing tests
 // ---------------------------------------------------------------------------
 
-describe("CoordinatorAgent routing via decide()", () => {
+describe("AgentOrchestrator routing via decide()", () => {
   it("finishes when no requirement and no artifacts are loaded", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     // No requirementText set → requirementLoaded = false
     const mailbox = new TaskMailbox();
@@ -92,7 +92,7 @@ describe("CoordinatorAgent routing via decide()", () => {
   });
 
   it("routes to spawn when exactly one task is ready", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.requirementText = "Some requirement";
     state.plan = createExecutionPlan({
@@ -109,7 +109,7 @@ describe("CoordinatorAgent routing via decide()", () => {
   });
 
   it("routes to finish when output is saved", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.requirementText = "Some requirement";
     state.plan = createExecutionPlan({
@@ -130,7 +130,7 @@ describe("CoordinatorAgent routing via decide()", () => {
   });
 
   it("routes to spawn when plan still has ready pending tasks", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.requirementText = "Some requirement";
     state.plan = createExecutionPlan({

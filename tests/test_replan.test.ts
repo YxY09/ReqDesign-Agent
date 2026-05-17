@@ -17,9 +17,9 @@ import {
   createExecutionPlan,
   createPlanMutation,
   createIssue,
-} from "../src/agents/types.js";
-import { CoordinatorAgent } from "../src/agents/coordinator.js";
-import { PlannerAgent } from "../src/agents/planner.js";
+} from "../src/agent/types.js";
+import { AgentOrchestrator } from "../src/agent/orchestrator.js";
+import { PlanningTool } from "../src/tools/planning.js";
 import { TaskMailbox, type TaskNotification } from "../src/messaging.js";
 import {
   SessionContext,
@@ -161,7 +161,7 @@ describe("Plan mutation", () => {
 
 describe("Coordinator replan fallback", () => {
   it("should choose replan when a task is stalled after repeated rejections", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("analyze-1", "analyze")]);
 
@@ -188,7 +188,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should handle globally stalled state", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
 
@@ -201,7 +201,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should handle task with high rejection streak", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
 
@@ -227,7 +227,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should handle exhausted replan budget", async () => {
-    const coordinator = new CoordinatorAgent(null);
+    const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
     state.progress.planRevisionCount = 3; // at max
@@ -268,7 +268,7 @@ describe("Planner replan", () => {
       reorder_edges: {},
     });
 
-    const planner = new PlannerAgent(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
+    const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
 
     const currentPlan = makePlan([
       makeTask("analyze-1", "analyze", "original analyze"),
@@ -297,7 +297,7 @@ describe("Planner replan", () => {
 
   it("_parseResponse should add all analyze deps to design", () => {
     const fakeLLM = new FakeLLM({});
-    const planner = new PlannerAgent(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
+    const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
 
     const plan = planner._parseResponse(
       {
@@ -330,7 +330,7 @@ describe("Planner replan", () => {
       throw new Error("LLM unavailable");
     };
 
-    const planner = new PlannerAgent(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
+    const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
 
     const currentPlan = makePlan([
       makeTask("analyze-1", "analyze", "analyze"),

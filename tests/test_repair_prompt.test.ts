@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { RepairAgent } from "../src/agents/repair.js";
-import { createTask } from "../src/agents/types.js";
+import { RepairTool } from "../src/tools/repair.js";
+import { createTask } from "../src/agent/types.js";
 
 function designRepairLlm() {
   return {
@@ -9,10 +9,10 @@ function designRepairLlm() {
   } as any;
 }
 
-describe("RepairAgent prompt building", () => {
+describe("RepairTool prompt building", () => {
   it("adds a holistic closure hint for design repairs", async () => {
     const llm = designRepairLlm();
-    const agent = new RepairAgent(llm);
+    const agent = new RepairTool(llm);
     const task = createTask({
       id: "design-1",
       type: "design",

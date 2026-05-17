@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createArtifact, createIssue, createVerdict } from "../src/agents/types.js";
+import { createArtifact, createIssue, createVerdict } from "../src/agent/types.js";
 import { WorkflowState } from "../src/state.js";
 
 describe("WorkflowState subdomain views", () => {

@@ -144,7 +144,7 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 
 ## context_hints 编写指南
 
-context_hints 帮助 GeneratorAgent 理解任务侧重点：
+context_hints 帮助 GenerationTool 理解任务侧重点：
 
 - `focus_areas`: 需要特别关注的领域（如"权限控制"、"缓存策略"、"事务管理"）
 - `suggested_classes`: 建议的核心类名列表
@@ -153,7 +153,7 @@ context_hints 帮助 GeneratorAgent 理解任务侧重点：
 
 **不要写的 context_hints**：
 - 不要复述 task.description 已有的内容
-- 不要加入过度细节（GeneratorAgent 会自己补充）
+- 不要加入过度细节（GenerationTool 会自己补充）
 - 不要为空字典 {}（要么有值，要么省略该字段）
 
 ## 质量标准

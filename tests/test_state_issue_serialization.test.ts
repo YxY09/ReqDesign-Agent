@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { WorkflowState } from "../src/state.js";
-import { createIssue, createVerdict } from "../src/agents/types.js";
+import { createIssue, createVerdict } from "../src/agent/types.js";
 
 describe("WorkflowState verdict serialization", () => {
   it("addVerdict serializes target task type into reviewResult", () => {

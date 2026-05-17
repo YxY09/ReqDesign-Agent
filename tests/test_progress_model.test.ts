@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import { ProgressSnapshot } from "../src/progress.js";
-import { createArtifact, createVerdict } from "../src/agents/types.js";
+import { createArtifact, createVerdict } from "../src/agent/types.js";
 import { WorkflowState } from "../src/state.js";
 
 // ---------------------------------------------------------------------------

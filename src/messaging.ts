@@ -13,7 +13,7 @@ import type {
   Verdict,
   ExecutionPlan,
   PlanMutation,
-} from "./agents/types.js";
+} from "./agent/types.js";
 
 // ---------------------------------------------------------------------------
 // Literal union types

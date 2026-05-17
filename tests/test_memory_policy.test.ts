@@ -20,7 +20,7 @@ import {
   createIssue,
   createRuntimeAction,
   createArtifact,
-} from "../src/agents/types.js";
+} from "../src/agent/types.js";
 import {
   extractEvaluatorInsight,
   extractCoordinatorDecision,

@@ -26,11 +26,11 @@ import { RunSummaryBuilder } from "./orchestration/runSummary.js";
 import { OutputManager } from "./outputManager.js";
 import { SessionContext, SessionRegistry } from "./session.js";
 import { WorkflowState } from "./state.js";
-import { CoordinatorAgent } from "./agents/coordinator.js";
-import { EvaluatorAgent } from "./agents/evaluator.js";
-import { GeneratorAgent } from "./agents/generator.js";
+import { AgentOrchestrator } from "./agent/orchestrator.js";
+import { EvaluationTool } from "./tools/evaluation.js";
+import { GenerationTool } from "./tools/generation.js";
 import { AnalyzeMerger } from "./generators/merge.js";
-import { PlannerAgent } from "./agents/planner.js";
+import { PlanningTool } from "./tools/planning.js";
 import {
   createExecutionPlan,
   createTask,
@@ -40,7 +40,7 @@ import {
   type RuntimeAction,
   type Task,
   type Verdict,
-} from "./agents/types.js";
+} from "./agent/types.js";
 import { InputLoader } from "./inputLoader.js";
 import { TraceLogger } from "./governance/traceLogger.js";
 import {
@@ -130,10 +130,10 @@ export class MultiAgentRuntime {
   readonly config: AgentConfig;
   readonly mailbox: TaskMailbox;
   readonly sessions: SessionRegistry;
-  readonly coordinator: CoordinatorAgent;
-  readonly plannerAgent: PlannerAgent;
-  readonly generatorAgent: GeneratorAgent;
-  readonly evaluatorAgent: EvaluatorAgent;
+  readonly coordinator: AgentOrchestrator;
+  readonly plannerTool: PlanningTool;
+  readonly generatorTool: GenerationTool;
+  readonly evaluatorTool: EvaluationTool;
   private readonly analyzeMerger: AnalyzeMerger;
   readonly inputLoader: typeof InputLoader;
   readonly trace: TraceLogger;
@@ -181,10 +181,10 @@ export class MultiAgentRuntime {
 
     this.mailbox = new TaskMailbox();
     this.sessions = new SessionRegistry();
-    this.coordinator = new CoordinatorAgent(this.llm);
-    this.plannerAgent = new PlannerAgent(this.llm);
-    this.generatorAgent = new GeneratorAgent(this.llm);
-    this.evaluatorAgent = new EvaluatorAgent(this.llm);
+    this.coordinator = new AgentOrchestrator(this.llm);
+    this.plannerTool = new PlanningTool(this.llm);
+    this.generatorTool = new GenerationTool(this.llm);
+    this.evaluatorTool = new EvaluationTool(this.llm);
     this.analyzeMerger = new AnalyzeMerger(this.llm);
     this.inputLoader = InputLoader;
 
@@ -204,9 +204,9 @@ export class MultiAgentRuntime {
     const deps = new DependencyProvider({
       llm: this.llm,
       mailbox: this.mailbox,
-      plannerAgent: this.plannerAgent,
-      generatorAgent: this.generatorAgent,
-      evaluatorAgent: this.evaluatorAgent,
+      plannerTool: this.plannerTool,
+      generatorTool: this.generatorTool,
+      evaluatorTool: this.evaluatorTool,
     });
     this.factory = new WorkerFactory(deps);
     this.backend = new ThreadBackend({

@@ -13,7 +13,7 @@ import {
   SessionDescriptor,
   WorkerSession,
 } from "../src/session.js";
-import { createArtifact, type Artifact } from "../src/agents/types.js";
+import { createArtifact, type Artifact } from "../src/agent/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers — stub sessions

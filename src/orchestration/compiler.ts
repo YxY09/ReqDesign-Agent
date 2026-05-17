@@ -4,7 +4,7 @@
  * Ported from reqdesign/orchestration/compiler.py.
  */
 
-import { createRuntimeAction, type RuntimeAction } from "../agents/types.js";
+import { createRuntimeAction, type RuntimeAction } from "../agent/types.js";
 import type { OrchestratorSnapshot } from "./snapshot.js";
 import type { StrategyDecision } from "./strategy.js";
 

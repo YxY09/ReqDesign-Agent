@@ -42,7 +42,7 @@ export interface LLMClient {
  * append text directly.  `done()` emits a final newline when at least one
  * chunk was printed.
  *
- * @param tag - Label shown before the streamed text (e.g. `"[PlannerAgent]"`).
+ * @param tag - Label shown before the streamed text (e.g. `"[PlanningTool]"`).
  * @returns A {@link StreamPrinter} with `onChunk` and `done` callbacks.
  */
 export function makeStreamPrinter(tag: string): StreamPrinter {

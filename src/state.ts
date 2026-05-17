@@ -18,7 +18,7 @@ import {
   type Verdict,
   createExecutionPlan,
   createTask,
-} from "./agents/types.js";
+} from "./agent/types.js";
 import { ProgressSnapshot } from "./progress.js";
 
 // ---------------------------------------------------------------------------

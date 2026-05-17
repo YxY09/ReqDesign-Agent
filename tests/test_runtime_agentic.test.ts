@@ -18,7 +18,7 @@ import {
   createTask,
   createExecutionPlan,
   createIssue,
-} from "../src/agents/types.js";
+} from "../src/agent/types.js";
 
 // ---------------------------------------------------------------------------
 // Mailbox

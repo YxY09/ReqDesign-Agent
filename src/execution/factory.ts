@@ -1,83 +1,83 @@
 import type { LLMClient } from "../llmClient.js";
 import type { TaskNotification } from "../messaging.js";
 import { TaskMailbox } from "../messaging.js";
-import { EvaluatorAgent } from "../agents/evaluator.js";
-import { GeneratorAgent } from "../agents/generator.js";
-import { PlannerAgent } from "../agents/planner.js";
-import { EvaluatorSession, GeneratorSession, PlannerSession } from "../agents/sessions.js";
+import { EvaluationTool } from "../tools/evaluation.js";
+import { GenerationTool } from "../tools/generation.js";
+import { PlanningTool } from "../tools/planning.js";
+import { EvaluationSession, GenerationSession, PlanningSession } from "../tools/sessions.js";
 import { SessionContext, SessionDescriptor, type WorkerSession } from "../session.js";
 
 export class DependencyProvider {
   llm: LLMClient | null;
   mailbox: TaskMailbox;
-  plannerAgent: PlannerAgent | null;
-  generatorAgent: GeneratorAgent | null;
-  evaluatorAgent: EvaluatorAgent | null;
+  plannerTool: PlanningTool | null;
+  generatorTool: GenerationTool | null;
+  evaluatorTool: EvaluationTool | null;
 
   constructor(options?: {
     llm?: LLMClient | null;
     mailbox?: TaskMailbox;
-    plannerAgent?: PlannerAgent | null;
-    generatorAgent?: GeneratorAgent | null;
-    evaluatorAgent?: EvaluatorAgent | null;
+    plannerTool?: PlanningTool | null;
+    generatorTool?: GenerationTool | null;
+    evaluatorTool?: EvaluationTool | null;
   }) {
     this.llm = options?.llm ?? null;
     this.mailbox = options?.mailbox ?? new TaskMailbox();
-    this.plannerAgent = options?.plannerAgent ?? null;
-    this.generatorAgent = options?.generatorAgent ?? null;
-    this.evaluatorAgent = options?.evaluatorAgent ?? null;
+    this.plannerTool = options?.plannerTool ?? null;
+    this.generatorTool = options?.generatorTool ?? null;
+    this.evaluatorTool = options?.evaluatorTool ?? null;
   }
 
-  ensureAgents(): void {
+  ensureTools(): void {
     if (this.llm === null) return;
-    if (this.plannerAgent === null) this.plannerAgent = new PlannerAgent(this.llm);
-    if (this.generatorAgent === null) this.generatorAgent = new GeneratorAgent(this.llm);
-    if (this.evaluatorAgent === null) this.evaluatorAgent = new EvaluatorAgent(this.llm);
+    if (this.plannerTool === null) this.plannerTool = new PlanningTool(this.llm);
+    if (this.generatorTool === null) this.generatorTool = new GenerationTool(this.llm);
+    if (this.evaluatorTool === null) this.evaluatorTool = new EvaluationTool(this.llm);
   }
 }
 
 export class WorkerFactory {
   constructor(private readonly deps: DependencyProvider) {}
 
-  createPlannerSession(sessionId: string, context: SessionContext): PlannerSession {
-    this.deps.ensureAgents();
-    if (!this.deps.plannerAgent) {
-      throw new Error("PlannerAgent dependency is unavailable");
+  createPlannerSession(sessionId: string, context: SessionContext): PlanningSession {
+    this.deps.ensureTools();
+    if (!this.deps.plannerTool) {
+      throw new Error("PlanningTool dependency is unavailable");
     }
-    return new PlannerSession(
+    return new PlanningSession(
       sessionId,
       context,
       this.deps.mailbox as { sendNotification: (notif: TaskNotification) => void },
       this.deps.llm,
-      this.deps.plannerAgent,
+      this.deps.plannerTool,
     );
   }
 
-  createGeneratorSession(sessionId: string, context: SessionContext): GeneratorSession {
-    this.deps.ensureAgents();
-    if (!this.deps.generatorAgent) {
-      throw new Error("GeneratorAgent dependency is unavailable");
+  createGeneratorSession(sessionId: string, context: SessionContext): GenerationSession {
+    this.deps.ensureTools();
+    if (!this.deps.generatorTool) {
+      throw new Error("GenerationTool dependency is unavailable");
     }
-    return new GeneratorSession(
+    return new GenerationSession(
       sessionId,
       context,
       this.deps.mailbox as { sendNotification: (notif: TaskNotification) => void },
       this.deps.llm,
-      this.deps.generatorAgent,
+      this.deps.generatorTool,
     );
   }
 
-  createEvaluatorSession(sessionId: string, context: SessionContext): EvaluatorSession {
-    this.deps.ensureAgents();
-    if (!this.deps.evaluatorAgent) {
-      throw new Error("EvaluatorAgent dependency is unavailable");
+  createEvaluatorSession(sessionId: string, context: SessionContext): EvaluationSession {
+    this.deps.ensureTools();
+    if (!this.deps.evaluatorTool) {
+      throw new Error("EvaluationTool dependency is unavailable");
     }
-    return new EvaluatorSession(
+    return new EvaluationSession(
       sessionId,
       context,
       this.deps.mailbox as { sendNotification: (notif: TaskNotification) => void },
       this.deps.llm,
-      this.deps.evaluatorAgent,
+      this.deps.evaluatorTool,
     );
   }
 

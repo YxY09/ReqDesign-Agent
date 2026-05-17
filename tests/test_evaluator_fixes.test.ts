@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { EvaluatorAgent } from "../src/agents/evaluator.js";
-import { createIssue } from "../src/agents/types.js";
-import type { Issue } from "../src/agents/types.js";
+import { EvaluationTool } from "../src/tools/evaluation.js";
+import { createIssue } from "../src/agent/types.js";
+import type { Issue } from "../src/agent/types.js";
 
 // ---------------------------------------------------------------------------
 // Mock LLM stubs
@@ -52,7 +52,7 @@ function failingLlm() {
 // Tests: _buildFixes — fix-task mapping
 // ---------------------------------------------------------------------------
 
-describe("EvaluatorAgent._buildFixes", () => {
+describe("EvaluationTool._buildFixes", () => {
   it("prefers explicit targetTaskType", () => {
     const issues: Issue[] = [
       createIssue({
@@ -65,7 +65,7 @@ describe("EvaluatorAgent._buildFixes", () => {
       }),
     ];
 
-    const fixes = EvaluatorAgent._buildFixes(issues);
+    const fixes = EvaluationTool._buildFixes(issues);
 
     expect(fixes).toHaveLength(1);
     expect(fixes[0].type).toBe("diagrams");
@@ -85,7 +85,7 @@ describe("EvaluatorAgent._buildFixes", () => {
       }),
     ];
 
-    const fixes = EvaluatorAgent._buildFixes(issues);
+    const fixes = EvaluationTool._buildFixes(issues);
 
     expect(fixes).toHaveLength(1);
     expect(fixes[0].type).toBe("design");
@@ -97,9 +97,9 @@ describe("EvaluatorAgent._buildFixes", () => {
 // Tests: scoped snapshots
 // ---------------------------------------------------------------------------
 
-describe("EvaluatorAgent evaluate — scoped snapshots", () => {
+describe("EvaluationTool evaluate — scoped snapshots", () => {
   it("keeps exact task_id in evaluated_revisions", async () => {
-    const evaluator = new EvaluatorAgent(noopLlm());
+    const evaluator = new EvaluationTool(noopLlm());
 
     const verdict = await evaluator.evaluate(
       "simple requirement",
@@ -137,7 +137,7 @@ describe("EvaluatorAgent evaluate — scoped snapshots", () => {
   });
 
   it("filters sibling diagram fields not present in snapshot", async () => {
-    const evaluator = new EvaluatorAgent(siblingLeakLlm());
+    const evaluator = new EvaluationTool(siblingLeakLlm());
 
     const verdict = await evaluator.evaluate(
       "simple requirement",
@@ -168,9 +168,9 @@ describe("EvaluatorAgent evaluate — scoped snapshots", () => {
 // Tests: direct mode detection
 // ---------------------------------------------------------------------------
 
-describe("EvaluatorAgent evaluate — direct mode detection", () => {
+describe("EvaluationTool evaluate — direct mode detection", () => {
   it("analyze snapshot is not auto-detected as direct mode", async () => {
-    const evaluator = new EvaluatorAgent(noopLlm());
+    const evaluator = new EvaluationTool(noopLlm());
     const seen: Record<string, unknown> = {};
 
     // Override private _llmReviewSnapshots to capture isDirectMode argument
@@ -214,9 +214,9 @@ describe("EvaluatorAgent evaluate — direct mode detection", () => {
 // Tests: LLM failure handling
 // ---------------------------------------------------------------------------
 
-describe("EvaluatorAgent evaluate — LLM failure", () => {
+describe("EvaluationTool evaluate — LLM failure", () => {
   it("propagates LLM error instead of silently passing", async () => {
-    const evaluator = new EvaluatorAgent(failingLlm());
+    const evaluator = new EvaluationTool(failingLlm());
 
     await expect(
       evaluator.evaluate(
