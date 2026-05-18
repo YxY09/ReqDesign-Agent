@@ -7,6 +7,9 @@
 import type { WorkflowState } from "../state.js";
 import type { TaskMailbox } from "../messaging.js";
 
+// Re-export for convenience
+export { ConvergenceTracker } from "./convergence.js";
+
 // ---------------------------------------------------------------------------
 // OrchestratorSnapshot
 // ---------------------------------------------------------------------------
@@ -45,6 +48,12 @@ export interface OrchestratorSnapshot {
   majorPendingTaskIds: string[];
   globallyStalled: boolean;
   recentErrors: string[];
+
+  /** Computed: convergence state from evaluation history. */
+  convergenceStalled: boolean;
+  convergenceStalledFingerprints: string[];
+  convergenceTrend: string;
+  convergenceRoundCount: number;
 
   /** Computed: all plan tasks are completed. */
   planAllCompleted: boolean;
@@ -169,6 +178,10 @@ export class StateReader {
       majorPendingTaskIds: state.getMajorPendingTaskIds(),
       globallyStalled: state.progress.isGloballyStalled(3),
       recentErrors: executionState.errors.slice(-5),
+      convergenceStalled: state.convergence.isStalled(),
+      convergenceStalledFingerprints: state.convergence.stalledFingerprints(),
+      convergenceTrend: state.convergence.trend(),
+      convergenceRoundCount: state.convergence.roundCount,
       planAllCompleted:
         planTaskIds.length > 0 &&
         completedPlanTasks.length === planTaskIds.length,

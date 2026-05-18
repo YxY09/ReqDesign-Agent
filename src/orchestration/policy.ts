@@ -139,7 +139,15 @@ export class DeterministicPolicy {
       });
     }
 
-    // 5) Final review major issues — try repair per-task
+    // 5) Convergence stall — same issues persist across rounds
+    if (snapshot.convergenceStalled && snapshot.convergenceRoundCount >= 3) {
+      return createStrategyDecision({
+        strategy: "pause_for_user",
+        reason: `convergence stalled: ${snapshot.convergenceStalledFingerprints.length} issue(s) unchanged across ${snapshot.convergenceRoundCount} rounds`,
+      });
+    }
+
+    // 6) Final review major issues — try repair per-task
     if (
       snapshot.finalReviewCurrent &&
       snapshot.majorPendingTaskIds.length > 0
@@ -182,7 +190,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 6) Current final review rejected but there is no safe automatic repair.
+    // 7) Current final review rejected but there is no safe automatic repair.
     if (snapshot.finalReviewCurrent && !snapshot.finalReviewPassed) {
       return createStrategyDecision({
         strategy: "pause_for_user",
@@ -190,7 +198,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 7) Outputs already saved → finish
+    // 8) Outputs already saved → finish
     if (snapshot.outputSaved) {
       return createStrategyDecision({
         strategy: "finish",
@@ -198,7 +206,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 8) Work is still running → wait
+    // 9) Work is still running → wait
     if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
       return createStrategyDecision({
         strategy: "wait_for_running",
@@ -206,7 +214,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 9) No plan yet → delegate initial routing to LLM (StrategyBrain)
+    // 10) No plan yet → delegate initial routing to LLM (StrategyBrain)
     if (
       !snapshot.planReady &&
       snapshot.requirementLoaded &&
@@ -222,7 +230,7 @@ export class DeterministicPolicy {
       return null;
     }
 
-    // 10) Ready tasks waiting → advance them
+    // 11) Ready tasks waiting → advance them
     if (snapshot.readyTasks.length > 0) {
       return createStrategyDecision({
         strategy: "advance_ready_work",
@@ -231,7 +239,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 11) Final review is ready
+    // 12) Final review is ready
     if (this.guard.canRunFinalReview(snapshot)) {
       return createStrategyDecision({
         strategy: "run_final_review",
@@ -239,7 +247,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 12) Opportunistic review
+    // 13) Opportunistic review
     const reviewPlan = this.reviewScheduler.nextScope(snapshot);
     if (reviewPlan.hasScope) {
       return createStrategyDecision({
@@ -249,7 +257,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 13) Quality + save gates passed
+    // 14) Quality + save gates passed
     if (this.guard.canSave(snapshot)) {
       return createStrategyDecision({
         strategy: "save_outputs",
@@ -257,7 +265,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 14) Nothing loaded → finish
+    // 15) Nothing loaded → finish
     if (!snapshot.requirementLoaded && !snapshot.hasArtifacts) {
       return createStrategyDecision({
         strategy: "finish",

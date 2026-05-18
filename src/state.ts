@@ -20,6 +20,7 @@ import {
   createTask,
 } from "./agent/types.js";
 import { ProgressSnapshot } from "./progress.js";
+import { ConvergenceTracker } from "./orchestration/convergence.js";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -94,6 +95,9 @@ export class WorkflowState {
 
   // --- Evaluator verdicts (history) --------------------------------------
   verdicts: Verdict[] = [];
+
+  // --- Convergence tracking ---------------------------------------------
+  convergence = new ConvergenceTracker(3);
 
   // --- Notification history -----------------------------------------------
   notifications: Record<string, unknown>[] = [];
@@ -613,6 +617,16 @@ export class WorkflowState {
     }
 
     reviewState.verdicts.push(verdict);
+
+    // Update convergence tracker with latest evaluation issues
+    if (verdict.issues.length > 0) {
+      this.convergence.addRound({
+        issues: verdict.issues.map((issue) => ({
+          fingerprint: ConvergenceTracker.fingerprint(issue.description),
+          severity: issue.severity,
+        })),
+      });
+    }
 
     this.reviewResult = {
       passed: verdict.passed,
