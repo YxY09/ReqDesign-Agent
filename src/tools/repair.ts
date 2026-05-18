@@ -6,6 +6,7 @@
 import type { LLMClient } from "../llmClient.js";
 import { SystemDesigner } from "../generators/design.js";
 import { BaseTool } from "./base.js";
+import { ArtifactPatcher, type PatchOp } from "./artifactPatcher.js";
 import type { Task } from "../agent/types.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,12 +32,14 @@ export class RepairTool extends BaseTool {
 
     let content: unknown = null;
     try {
-      if (task.type === "design" || task.type === "tests" || task.type === "diagrams") {
-        const text = await this.llm!.generateText(userPrompt, system);
-        content = RepairTool._wrapDiagramText(task, text);
-      } else {
+      if (task.type === "analyze") {
+        // analyze: full rewrite (structured JSON data, not suitable for patching)
         const response = await this.llm!.generateJson(userPrompt, system);
         content = this._parseResponse(response as Record<string, unknown>, task);
+      } else {
+        // design/diagrams/tests: patch mode
+        const text = await this.llm!.generateText(userPrompt, system);
+        content = this._applyPatchResponse(task, currentContent, text);
       }
     } catch (e) {
       this.logger.error(`repair: task=${task.id} 修复失败: ${e instanceof Error ? e.message : String(e)}`);
@@ -45,10 +48,10 @@ export class RepairTool extends BaseTool {
 
     // Guard: reject output < 50% of original
     if (content != null && currentContent != null) {
-      const origLen = String(currentContent).length;
-      const newLen = String(content).length;
-      if (origLen > 0 && newLen < origLen * 0.5) {
-        this.logger.warn(`repair: 修复结果过短（${newLen} < ${Math.round(origLen * 0.5)}），丢弃`);
+      const origStr = task.type === "diagrams" ? JSON.stringify(currentContent) : String(currentContent);
+      const newStr = task.type === "diagrams" ? JSON.stringify(content) : String(content);
+      if (origStr.length > 0 && newStr.length < origStr.length * 0.5) {
+        this.logger.warn(`repair: 修复结果过短（${newStr.length} < ${Math.round(origStr.length * 0.5)}），丢弃`);
         content = null;
       }
     }
@@ -59,6 +62,73 @@ export class RepairTool extends BaseTool {
       this.logger.warn(`repair: task=${task.id} 修复返回空结果`);
     }
     return content;
+  }
+
+  // ------------------------------------------------------------------
+  // Patch mode
+  // ------------------------------------------------------------------
+
+  private _applyPatchResponse(
+    task: Task,
+    currentContent: unknown,
+    llmText: string,
+  ): unknown | null {
+    // Try to parse LLM output as JSON with patches array
+    let parsed: Record<string, unknown>;
+    try {
+      // Strip markdown code fences if present
+      let cleanText = llmText.trim();
+      if (cleanText.startsWith("```")) {
+        const firstNl = cleanText.indexOf("\n");
+        const lastFence = cleanText.lastIndexOf("```");
+        if (firstNl >= 0 && lastFence > firstNl) {
+          cleanText = cleanText.slice(firstNl + 1, lastFence).trim();
+        }
+      }
+      parsed = JSON.parse(cleanText);
+    } catch {
+      this.logger.warn(`repair: task=${task.id} LLM输出不是有效JSON，fallback到完整替换`);
+      return RepairTool._wrapDiagramText(task, llmText);
+    }
+
+    const patchesRaw = parsed.patches;
+    if (!Array.isArray(patchesRaw) || patchesRaw.length === 0) {
+      this.logger.warn(`repair: task=${task.id} LLM未返回有效的patches数组，fallback到完整替换`);
+      // Maybe the LLM returned the full content directly
+      if (typeof parsed.content === "string") {
+        return task.type === "diagrams"
+          ? RepairTool._wrapDiagramText(task, parsed.content)
+          : parsed.content;
+      }
+      return RepairTool._wrapDiagramText(task, llmText);
+    }
+
+    const patches: PatchOp[] = patchesRaw
+      .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
+      .map((p) => ({
+        op: String(p.op ?? "replace_section") as PatchOp["op"],
+        section: String(p.section ?? ""),
+        content: typeof p.content === "string" ? p.content : String(p.content ?? ""),
+      }))
+      .filter((p) => p.section && p.content !== undefined);
+
+    if (patches.length === 0) {
+      this.logger.warn(`repair: task=${task.id} 解析后无有效patches`);
+      return null;
+    }
+
+    const sections = ArtifactPatcher.parseSections(currentContent, task.type);
+    const patchedText = ArtifactPatcher.applyPatches(sections, patches);
+
+    if (task.type === "diagrams") {
+      return ArtifactPatcher.reconstruct(
+        ArtifactPatcher.parseSections(patchedText, task.type),
+        task.type,
+      );
+    }
+
+    this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
+    return patchedText;
   }
 
   // ------------------------------------------------------------------
@@ -88,6 +158,15 @@ export class RepairTool extends BaseTool {
     if (reqText) sections.push(`## 原始需求\n${reqText}`);
 
     sections.push(`## Evaluator 发现的问题\n${RepairTool._formatIssues(fixInstructions)}`);
+
+    // For patch-mode tasks, show section listing and current content
+    if (task.type !== "analyze") {
+      const parsedSections = ArtifactPatcher.parseSections(currentContent, task.type);
+      if (parsedSections.length > 1) {
+        sections.push(`## 产物章节列表\n以下是当前产物的章节，修复时用 section 字段引用这些名称：\n${ArtifactPatcher.sectionListing(parsedSections)}`);
+      }
+    }
+
     sections.push(`## 当前产物\n${RepairTool._formatContent(currentContent)}`);
 
     const aux = RepairTool._formatAuxContext(context);
@@ -104,13 +183,6 @@ export class RepairTool extends BaseTool {
         ? SystemDesigner.validateDesign(designText, requirementJson)
         : [];
 
-      sections.push(
-        "## 设计修复模式\n" +
-          "- 这是一份系统设计文档修复，不是单句补丁。\n" +
-          "- 如果问题表现为实体缺失、章节缺失、模块映射不完整或命名不一致，应按 requirement_json 做一次全局闭环。\n" +
-          "- 保留正确内容，但允许重写受影响章节，优先一次性补齐所有已知缺口。",
-      );
-
       if (designWarnings.length > 0) {
         sections.push(
           `## 当前设计全量校验结果\n${designWarnings.map((item, index) => `${index + 1}. ${item}`).join("\n")}`,
@@ -119,20 +191,18 @@ export class RepairTool extends BaseTool {
     }
 
     let fmtNote: string;
-    if (task.type === "design" || task.type === "tests") {
-      fmtNote = "- 直接输出修复后的完整 Markdown 文本，**不要用 JSON 包裹**";
-    } else if (task.type === "diagrams") {
-      fmtNote = "- 直接输出修复后的完整 Mermaid 文本，**不要用 JSON 包裹，不要用 markdown 代码块包裹**";
-    } else {
+    if (task.type === "analyze") {
       fmtNote = '- 严格输出 JSON 格式：{"content": <修复后的完整产物>}';
+    } else {
+      fmtNote = '- 输出 JSON 格式的 patches 数组，每个 patch 指定要修改的章节名称和替换内容\n- 不要重写未出问题的章节';
     }
-    const repairRules = task.type === "design"
-      ? "- 默认保留所有未被指出问题的正确内容\n- 对于设计不全、覆盖不全、命名不一致类问题，按全局闭环修复，不要只补单点"
-      : "- 只修复上述问题中指出的部分\n- 保留所有未被指出问题的正确内容";
-    sections.push(`## 修复要求\n根据 Evaluator 发现的问题，精准修复当前产物。\n\n**要求**：\n${repairRules}\n- 输出修复后的**完整**产物（绝对不要截断或省略）\n${fmtNote}`);
+    const repairRules = task.type === "analyze"
+      ? "- 输出修复后的完整产物"
+      : "- 只修复上述问题中指出的章节\n- 保留所有未被指出问题的正确内容";
+    sections.push(`## 修复要求\n根据 Evaluator 发现的问题，精准修复当前产物。\n\n**要求**：\n${repairRules}\n${fmtNote}`);
 
     if (task.type === "diagrams" && diagramKind) {
-      sections.push(`\n## 硬性约束\n本任务仅负责 ${diagramKind}，直接输出该图表的 Mermaid 代码。`);
+      sections.push(`\n## 硬性约束\n本任务仅负责 ${diagramKind}，section 字段填 \`${diagramKind}\`。`);
     }
 
     return sections.join("\n\n");
