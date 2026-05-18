@@ -1,5 +1,4 @@
 import process from "node:process";
-import { writeToSharedLog } from "./logger.js";
 
 export type WorkflowEventScope = "runtime" | "benchmark" | "llm";
 
@@ -99,10 +98,11 @@ export class ConsoleWorkflowStreamer {
     this.streamBuffers.delete(tag);
   }
 
-  private writeTranscript(tag: string, content: string): void {
+  private writeTranscript(_tag: string, content: string): void {
     const trimmed = content.trimEnd();
     if (!trimmed) return;
-    writeToSharedLog(`[stream ${tag}]\n${trimmed}`);
+    // LLM output is now captured by TracingLLMClient in llm_trace.json.
+    // No longer write raw LLM output to the main log file.
   }
 
   private streamTag(event: WorkflowEvent): string {
