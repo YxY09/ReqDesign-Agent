@@ -704,6 +704,11 @@ export class WorkflowState {
     if (!taskId) return;
     const executionState = this.executionState;
     executionState.taskStatuses[taskId] = status;
+
+    // Track planner failures for budget guards
+    if (taskId === "planner" && status === "failed") {
+      this.recordPlannerFailure();
+    }
     if (sessionId) {
       executionState.taskSessions[taskId] = sessionId;
     }
