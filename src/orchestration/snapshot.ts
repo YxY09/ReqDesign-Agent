@@ -21,6 +21,7 @@ export interface OrchestratorSnapshot {
   planTaskTypesById: Record<string, string>;
   readyTasks: string[];
   runningTasks: string[];
+  failedTasks: string[];
   completedPlanTasks: string[];
   artifactTaskIds: string[];
   artifactTypesByTask: Record<string, string>;
@@ -64,9 +65,7 @@ export class StateReader {
     const artifactsState = state.artifactsState;
     const executionState = state.executionState;
     const reviewState = state.reviewState;
-    const currentRevisions: Record<string, number> = {
-      ...artifactsState.artifactRevisionsByTask,
-    };
+    const currentRevisions = StateReader._finalReviewRevisions(state);
     const finalCurrent =
       Object.keys(currentRevisions).length > 0 &&
       reviewState.finalReviewDone &&
@@ -142,6 +141,9 @@ export class StateReader {
       planTaskTypesById,
       readyTasks: state.getReadyTaskIds(),
       runningTasks: state.getRunningTaskIds(),
+      failedTasks: state.getFailedTaskIds().filter((taskId) =>
+        planTaskIds.includes(taskId),
+      ),
       completedPlanTasks,
       artifactTaskIds: Object.keys(artifactsState.artifacts).sort(),
       artifactTypesByTask,
@@ -172,5 +174,25 @@ export class StateReader {
         completedPlanTasks.length === planTaskIds.length,
       hasArtifacts: Object.keys(artifactsState.artifacts).length > 0,
     };
+  }
+
+  private static _finalReviewRevisions(state: WorkflowState): Record<string, number> {
+    const revisions: Record<string, number> = {};
+    for (const [taskId, snapshot] of Object.entries(state.finalArtifactSnapshots())) {
+      revisions[taskId] = Number(snapshot.revision ?? 0);
+      const sourceRevisions = snapshot.sourceRevisions;
+      if (
+        sourceRevisions &&
+        typeof sourceRevisions === "object" &&
+        !Array.isArray(sourceRevisions)
+      ) {
+        for (const [sourceTaskId, sourceRevision] of Object.entries(
+          sourceRevisions as Record<string, unknown>,
+        )) {
+          revisions[sourceTaskId] = Number(sourceRevision ?? 0);
+        }
+      }
+    }
+    return revisions;
   }
 }

@@ -34,6 +34,8 @@
    - **优先** add_tasks 来补充修复步骤，而非 update completed 任务
    - 新增任务的 id 不能与现有 id 冲突
    - **新增任务的 type 只能是 analyze / design / diagrams / tests（这四个，不能编造）**
+   - 如果新增或重跑 `analyze`，必须同时规划下游同步任务：design 依赖该 analyze，diagrams/tests 依赖新的 design。禁止让 diagrams/tests 与新的 analyze 并行执行。
+   - 如果剩余问题只是设计/图/测试局部不一致，不要新增 analyze；优先修复下游产物，避免后期改动 requirement_json 引入新的全局不一致。
 
 ## 输出格式
 
@@ -79,6 +81,7 @@
 3. **drop_task_ids**: 不能 drop completed 状态的任务
 4. **reorder_edges**: 修改依赖关系用这个字段，不要用 update_tasks 改 depends_on
 5. **依赖无环**: 修改后的任务图必须是无环有向图（DAG）
+6. **上游变更传播**: 新增 analyze 任务会改变 requirement_json，所有后续 design/diagrams/tests 修复任务必须直接或间接依赖该 analyze 的结果
 
 ## 质量标准
 

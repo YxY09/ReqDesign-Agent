@@ -75,7 +75,13 @@ export class PolicyGuard {
         (decision.affectedTaskIds.length > 0
           ? decision.affectedTaskIds[0]
           : "");
-      if (target && this.budget.shouldRegenerate(snapshot, target)) {
+      if (
+        target &&
+        ((snapshot.failedTasks.includes(target) &&
+          (snapshot.regenerateCountsByTask[target] ?? 0) <
+            this.budget.maxRegeneratePerTask) ||
+          this.budget.shouldRegenerate(snapshot, target))
+      ) {
         decision.targetTaskId = target;
         decision.affectedTaskIds = [target];
         return decision;

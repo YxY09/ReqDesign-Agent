@@ -20,6 +20,7 @@ export type ActionType =
   | "stop"
   | "inspect"
   | "save"
+  | "pause"
   | "finish"
   | "replan";
 

@@ -48,7 +48,45 @@ export class DeterministicPolicy {
       });
     }
 
-    // 2) Rejected artifacts — repair, regenerate, or replan
+    // 2) Failed plan tasks — regenerate the concrete failed task before
+    // replanning broader downstream work.
+    if (snapshot.failedTasks.length > 0) {
+      const target = snapshot.failedTasks.find(
+        (taskId) => !isTaskRunning(snapshot, taskId),
+      );
+      if (!target) {
+        return createStrategyDecision({
+          strategy: "wait_for_running",
+          targetTaskId: snapshot.failedTasks[0],
+          reason: `${snapshot.failedTasks[0]} is already running`,
+        });
+      }
+      if (
+        (snapshot.regenerateCountsByTask[target] ?? 0) >=
+        this.budget.maxRegeneratePerTask
+      ) {
+        if (this.guard.canReplan(snapshot)) {
+          return createStrategyDecision({
+            strategy: "escalate_to_replan",
+            targetTaskId: target,
+            reason: `${target} failed after regeneration budget was exhausted`,
+          });
+        }
+        return createStrategyDecision({
+          strategy: "pause_for_user",
+          targetTaskId: target,
+          reason: `${target} failed and regeneration/replan budget is exhausted`,
+        });
+      }
+      return createStrategyDecision({
+        strategy: "regenerate_downstream",
+        targetTaskId: target,
+        affectedTaskIds: [target],
+        reason: `${target} failed; regenerate the failed task before changing the plan`,
+      });
+    }
+
+    // 3) Rejected artifacts — repair, regenerate, or replan
     if (snapshot.rejectedArtifacts.length > 0) {
       const target = snapshot.rejectedArtifacts.find(
         (taskId) => !isTaskRunning(snapshot, taskId),
@@ -93,7 +131,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 3) Globally stalled and replan is available
+    // 4) Globally stalled and replan is available
     if (snapshot.globallyStalled && this.guard.canReplan(snapshot)) {
       return createStrategyDecision({
         strategy: "escalate_to_replan",
@@ -101,7 +139,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 4) Final review major issues — try repair per-task
+    // 5) Final review major issues — try repair per-task
     if (
       snapshot.finalReviewCurrent &&
       snapshot.majorPendingTaskIds.length > 0
@@ -124,6 +162,12 @@ export class DeterministicPolicy {
           reason: `final review repair is already running for ${runningTarget}`,
         });
       }
+      if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
+        return createStrategyDecision({
+          strategy: "wait_for_running",
+          reason: "final review major issues remain, but workflow work is still running",
+        });
+      }
       if (this.guard.canReplan(snapshot)) {
         return createStrategyDecision({
           strategy: "escalate_to_replan",
@@ -138,7 +182,15 @@ export class DeterministicPolicy {
       });
     }
 
-    // 5) Outputs already saved → finish
+    // 6) Current final review rejected but there is no safe automatic repair.
+    if (snapshot.finalReviewCurrent && !snapshot.finalReviewPassed) {
+      return createStrategyDecision({
+        strategy: "pause_for_user",
+        reason: "final review rejected and no automatic repair target remains",
+      });
+    }
+
+    // 7) Outputs already saved → finish
     if (snapshot.outputSaved) {
       return createStrategyDecision({
         strategy: "finish",
@@ -146,7 +198,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 6) Work is still running → wait
+    // 8) Work is still running → wait
     if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
       return createStrategyDecision({
         strategy: "wait_for_running",
@@ -154,7 +206,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 7) No plan yet → delegate initial routing to LLM (StrategyBrain)
+    // 9) No plan yet → delegate initial routing to LLM (StrategyBrain)
     if (
       !snapshot.planReady &&
       snapshot.requirementLoaded &&
@@ -170,7 +222,7 @@ export class DeterministicPolicy {
       return null;
     }
 
-    // 8) Ready tasks waiting → advance them
+    // 10) Ready tasks waiting → advance them
     if (snapshot.readyTasks.length > 0) {
       return createStrategyDecision({
         strategy: "advance_ready_work",
@@ -179,7 +231,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 9) Final review is ready
+    // 11) Final review is ready
     if (this.guard.canRunFinalReview(snapshot)) {
       return createStrategyDecision({
         strategy: "run_final_review",
@@ -187,7 +239,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 10) Opportunistic review
+    // 12) Opportunistic review
     const reviewPlan = this.reviewScheduler.nextScope(snapshot);
     if (reviewPlan.hasScope) {
       return createStrategyDecision({
@@ -197,7 +249,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 11) Quality + save gates passed
+    // 13) Quality + save gates passed
     if (this.guard.canSave(snapshot)) {
       return createStrategyDecision({
         strategy: "save_outputs",
@@ -205,7 +257,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 12) Nothing loaded → finish
+    // 14) Nothing loaded → finish
     if (!snapshot.requirementLoaded && !snapshot.hasArtifacts) {
       return createStrategyDecision({
         strategy: "finish",

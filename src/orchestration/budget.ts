@@ -24,6 +24,7 @@ export class BudgetManager {
   maxSaveFailures: number;
   maxFinalMajorIssues: number;
   maxFinalMajorRepairPerTask: number;
+  minRuntimeRemainingForNewWorkSeconds: number;
 
   constructor(config?: OrchestrationConfig) {
     const c = config ?? new OrchestrationConfig();
@@ -39,6 +40,8 @@ export class BudgetManager {
     this.maxSaveFailures = c.maxSaveFailures;
     this.maxFinalMajorIssues = c.maxFinalMajorIssues;
     this.maxFinalMajorRepairPerTask = c.maxFinalMajorRepairPerTask;
+    this.minRuntimeRemainingForNewWorkSeconds =
+      c.minRuntimeRemainingForNewWorkSeconds;
   }
 
   runtimeDeadline(startTime: number): number {
@@ -47,6 +50,33 @@ export class BudgetManager {
 
   runtimeExhausted(startTime: number, now?: number): boolean {
     return (now ?? Date.now() / 1000) >= this.runtimeDeadline(startTime);
+  }
+
+  runtimeRemainingSeconds(startTime: number, now?: number): number {
+    return Math.max(0, this.runtimeDeadline(startTime) - (now ?? Date.now() / 1000));
+  }
+
+  hasRuntimeBudgetForNewWork(startTime: number, now?: number): boolean {
+    return (
+      this.runtimeRemainingSeconds(startTime, now) >=
+      this.minRuntimeRemainingForNewWorkSeconds
+    );
+  }
+
+  minRuntimeForTaskType(taskType: string): number {
+    if (taskType === "analyze") return 600;
+    if (taskType === "design") return 360;
+    if (taskType === "diagrams" || taskType === "tests") return 240;
+    return this.minRuntimeRemainingForNewWorkSeconds;
+  }
+
+  hasRuntimeBudgetForTaskType(
+    startTime: number,
+    taskType: string,
+    now?: number,
+  ): boolean {
+    return this.runtimeRemainingSeconds(startTime, now) >=
+      this.minRuntimeForTaskType(taskType);
   }
 
   decisionExhausted(decisionCount: number): boolean {
@@ -95,6 +125,9 @@ export class BudgetManager {
     return (
       snapshot.planReady &&
       !snapshot.isDirectMode &&
+      snapshot.runningTasks.length === 0 &&
+      !snapshot.evaluatorRunning &&
+      snapshot.plannerFailures < this.maxPlannerFailures &&
       snapshot.planRevisionCount < this.maxReplanCount
     );
   }

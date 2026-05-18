@@ -11,6 +11,8 @@ import {
 } from "../src/agent/types.js";
 import type { LLMClient } from "../src/llmClient.js";
 import { getMemory, MemoryStore, setMemory } from "../src/memory/store.js";
+import { BudgetManager } from "../src/orchestration/budget.js";
+import { OrchestrationConfig } from "../src/orchestration/config.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -34,6 +36,26 @@ function createMockLLM(
 
 function makeMailbox(): TaskMailbox {
   return new TaskMailbox();
+}
+
+function finalReviewRevisions(state: WorkflowState): Record<string, number> {
+  const revisions: Record<string, number> = {};
+  for (const [taskId, snapshot] of Object.entries(state.finalArtifactSnapshots())) {
+    revisions[taskId] = Number(snapshot.revision ?? 0);
+    const sourceRevisions = snapshot.sourceRevisions;
+    if (
+      sourceRevisions &&
+      typeof sourceRevisions === "object" &&
+      !Array.isArray(sourceRevisions)
+    ) {
+      for (const [sourceTaskId, sourceRevision] of Object.entries(
+        sourceRevisions as Record<string, unknown>,
+      )) {
+        revisions[sourceTaskId] = Number(sourceRevision ?? 0);
+      }
+    }
+  }
+  return revisions;
 }
 
 describe("AgentOrchestrator decisions", () => {
@@ -141,8 +163,8 @@ describe("AgentOrchestrator decisions", () => {
 
     const decision = await coordinator.decide(state, makeMailbox());
 
-    // No LLM → DeterministicPolicy returns null → resolveNonDeterministic → pause
-    expect(decision.action).toBe("finish");
+    // No LLM -> DeterministicPolicy returns null -> resolveNonDeterministic -> pause
+    expect(decision.action).toBe("pause");
   });
 
   // -----------------------------------------------------------------------
@@ -259,6 +281,59 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.taskId).toBe("design-1");
   });
 
+  it("does not rerun final review after a rejected final-output snapshot", async () => {
+    const coordinator = new AgentOrchestrator(null);
+    const state = new WorkflowState();
+    state.requirementText = "requirement";
+    state.plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-1", type: "analyze", description: "analysis" }),
+        createTask({ id: "design-2", type: "design", description: "design", dependsOn: ["analyze-1"] }),
+        createTask({ id: "diagrams-state", type: "diagrams", description: "state diagram", dependsOn: ["design-2"] }),
+        createTask({ id: "tests-2", type: "tests", description: "tests", dependsOn: ["design-2"] }),
+      ],
+    });
+    state.addArtifact(createArtifact({
+      taskId: "analyze-1",
+      type: "analyze",
+      content: { actors: [], functions: [], entities: [] },
+    }));
+    state.addArtifact(createArtifact({ taskId: "design-2", type: "design", content: "design" }));
+    state.addArtifact(createArtifact({
+      taskId: "diagrams-state",
+      type: "diagrams",
+      content: { state_diagram: "stateDiagram-v2\n[*] --> A" },
+    }));
+    state.addArtifact(createArtifact({
+      taskId: "tests-2",
+      type: "tests",
+      content: JSON.stringify({ test_cases: [] }),
+    }));
+    for (const task of state.plan.tasks) state.markTaskStatus(task.id, "completed");
+
+    state.addVerdict(createVerdict({
+      passed: false,
+      issues: [
+        createIssue({
+          severity: "major",
+          scope: "local",
+          targetTaskId: "design-2",
+          targetTaskType: "design",
+          targetField: "design_text",
+          description: "missing promotion API",
+          suggestion: "add promotion API",
+        }),
+      ],
+      evaluatedTaskIds: ["analyze-final", "design-2", "diagrams-final", "tests-2"],
+      evaluatedRevisions: finalReviewRevisions(state),
+      isFinalReview: true,
+    }));
+
+    const decision = await coordinator.decide(state, makeMailbox());
+    expect(decision.action).toBe("repair");
+    expect(decision.taskId).toBe("design-2");
+  });
+
   it("does not repair final-review major issues in analyze artifacts", async () => {
     const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
@@ -290,8 +365,8 @@ describe("AgentOrchestrator decisions", () => {
             suggestion: "replan analysis scope",
           }),
         ],
-        evaluatedTaskIds: ["analyze-1"],
-        evaluatedRevisions: { "analyze-1": 1 },
+        evaluatedTaskIds: ["analyze-final"],
+        evaluatedRevisions: finalReviewRevisions(state),
         isFinalReview: true,
       }),
     );
@@ -336,6 +411,46 @@ describe("AgentOrchestrator decisions", () => {
 
     const decision = await coordinator.decide(state, makeMailbox());
     expect(decision.action).toBe("replan");
+  });
+
+  it("does not replan final-review major issues while planner is already running", async () => {
+    const coordinator = new AgentOrchestrator(null);
+    const state = new WorkflowState();
+    state.requirementText = "requirement";
+    state.plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "design-1", type: "design", description: "design" }),
+      ],
+    });
+    state.addArtifact(
+      createArtifact({ taskId: "design-1", type: "design", content: "design" }),
+    );
+    state.markTaskStatus("design-1", "completed");
+    state.markTaskStatus("planner", "running");
+    state.recordRepairAttempt("design-1");
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        issues: [
+          createIssue({
+            severity: "major",
+            scope: "local",
+            targetTaskId: "design-1",
+            targetTaskType: "design",
+            targetField: "design_text",
+            description: "still missing response format",
+            suggestion: "add response format",
+          }),
+        ],
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        isFinalReview: true,
+      }),
+    );
+
+    const decision = await coordinator.decide(state, makeMailbox());
+    expect(decision.action).toBe("inspect");
+    expect(decision.reason).toContain("still running");
   });
 
   it("waits when the rejected repair target is already running", async () => {
@@ -458,6 +573,23 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.taskId).toBe("diagrams-class");
   });
 
+  it("regenerates a failed concrete plan task before replanning downstream work", async () => {
+    const coordinator = new AgentOrchestrator(null);
+    const state = new WorkflowState();
+    state.requirementText = "requirement";
+    state.plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "design-3", type: "design", description: "repair design" }),
+      ],
+    });
+    state.markTaskStatus("design-3", "failed");
+
+    const decision = await coordinator.decide(state, makeMailbox());
+
+    expect(decision.action).toBe("regenerate");
+    expect(decision.taskId).toBe("design-3");
+  });
+
   // -----------------------------------------------------------------------
   // 8. Replan priority — new ready tasks take priority over old rejected
   // -----------------------------------------------------------------------
@@ -546,5 +678,37 @@ describe("AgentOrchestrator decisions", () => {
     const decision = await coordinator.decide(state, makeMailbox());
 
     expect(decision.action).toBe("finish");
+  });
+});
+
+describe("BudgetManager runtime guard", () => {
+  it("blocks new work when remaining runtime is below the configured reserve", () => {
+    const config = new OrchestrationConfig();
+    config.maxRuntimeSeconds = 1800;
+    config.minRuntimeRemainingForNewWorkSeconds = 180;
+    const budget = new BudgetManager(config);
+
+    expect(budget.hasRuntimeBudgetForNewWork(0, 1619)).toBe(true);
+    expect(budget.hasRuntimeBudgetForNewWork(0, 1620)).toBe(true);
+    expect(budget.hasRuntimeBudgetForNewWork(0, 1621)).toBe(false);
+  });
+
+  it("parses the new-work reserve from raw orchestration config", () => {
+    const config = OrchestrationConfig.fromRaw({
+      min_runtime_remaining_for_new_work_seconds: 240,
+    });
+
+    expect(config.minRuntimeRemainingForNewWorkSeconds).toBe(240);
+  });
+
+  it("requires a larger runtime reserve for upstream analyze work", () => {
+    const config = new OrchestrationConfig();
+    config.maxRuntimeSeconds = 1800;
+    const budget = new BudgetManager(config);
+
+    expect(budget.hasRuntimeBudgetForTaskType(0, "analyze", 1199)).toBe(true);
+    expect(budget.hasRuntimeBudgetForTaskType(0, "analyze", 1201)).toBe(false);
+    expect(budget.hasRuntimeBudgetForTaskType(0, "diagrams", 1559)).toBe(true);
+    expect(budget.hasRuntimeBudgetForTaskType(0, "diagrams", 1561)).toBe(false);
   });
 });

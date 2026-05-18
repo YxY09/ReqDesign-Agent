@@ -1,7 +1,7 @@
 /**
  * 日志配置模块 — provides a custom Logger with dual output (console + file).
  *
- * All loggers within a run share a single log file via a shared WriteStream.
+ * All loggers within a run share a single log file path.
  * The log file is created in the logs/ directory via initSharedLog().
  *
  * @module logger
@@ -49,22 +49,20 @@ function formatMessage(
 // ---------------------------------------------------------------------------
 
 export class Logger {
-  private readonly _fileStream: fs.WriteStream | null;
-
   constructor(
     public readonly name: string,
     public level: LogLevel,
-    fileStream: fs.WriteStream | null,
-  ) {
-    this._fileStream = fileStream;
-  }
+  ) {}
 
   debug(message: string): void { this._emit("DEBUG", message); }
   info(message: string): void { this._emit("INFO", message); }
   warn(message: string): void { this._emit("WARN", message); }
   error(message: string): void { this._emit("ERROR", message); }
 
-  close(): void { this._fileStream?.end(); }
+  close(): void {
+    // Logger instances are lightweight handles over the shared log file.
+    // Closing one logger must not close logging for the whole process.
+  }
 
   private _emit(level: LogLevel, message: string): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[this.level]) return;
@@ -79,9 +77,12 @@ export class Logger {
       }
     }
 
-    // Guard against closed stream
-    if (this._fileStream && !this._fileStream.destroyed && !this._fileStream.writableEnded) {
-      this._fileStream.write(line + "\n");
+    if (_sharedLogFilePath) {
+      try {
+        fs.appendFileSync(_sharedLogFilePath, line + "\n", { encoding: "utf8" });
+      } catch {
+        // Logging must never fail the main workflow.
+      }
     }
   }
 }
@@ -91,7 +92,7 @@ export class Logger {
 // ---------------------------------------------------------------------------
 
 const _loggers = new Map<string, Logger>();
-let _sharedStream: fs.WriteStream | null = null;
+let _sharedLogFilePath: string | null = null;
 let _globalLevel: LogLevel = "INFO";
 
 /**
@@ -102,31 +103,31 @@ export function initSharedLog(
   filePath: string,
   level: string = "INFO",
 ): void {
-  if (_sharedStream && !_sharedStream.destroyed) {
-    _sharedStream.end();
-  }
-
   _globalLevel = level.toUpperCase() as LogLevel;
 
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
 
-  _sharedStream = fs.createWriteStream(filePath, {
-    encoding: "utf-8",
-    flags: "w",
-  });
-
-  // Re-bind all existing loggers to the new stream
-  for (const [name, old] of _loggers) {
-    _loggers.set(name, new Logger(old.name, old.level, _sharedStream));
-  }
+  fs.writeFileSync(filePath, "", { encoding: "utf8", flag: "w" });
+  _sharedLogFilePath = filePath;
 }
 
 /** Close the shared log stream. Safe to call multiple times. */
 export function closeSharedLog(): void {
-  if (_sharedStream && !_sharedStream.destroyed) {
-    _sharedStream.end();
-    _sharedStream = null;
+  _sharedLogFilePath = null;
+}
+
+/**
+ * Write a raw line directly to the shared log file (no timestamp/level prefix).
+ * Used by workflow events, streaming chunks, and final summaries that bypass
+ * the Logger class but should still appear in the log file.
+ */
+export function writeToSharedLog(line: string): void {
+  if (!_sharedLogFilePath) return;
+  try {
+    fs.appendFileSync(_sharedLogFilePath, line + "\n", { encoding: "utf8" });
+  } catch {
+    // Never let logging fail the main workflow.
   }
 }
 
@@ -143,7 +144,7 @@ export function setupLogger(
   }
 
   const resolvedLevel = (level?.toUpperCase() as LogLevel) ?? _globalLevel;
-  const logger = new Logger(name, resolvedLevel, _sharedStream);
+  const logger = new Logger(name, resolvedLevel);
   _loggers.set(name, logger);
   return logger;
 }

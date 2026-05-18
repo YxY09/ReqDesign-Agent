@@ -137,6 +137,12 @@ describe("MermaidValidator", () => {
 // ═══════════════════════════════════════════════════════
 
 describe("DiagramGenerator._extractMermaid", () => {
+  it("removes HTML line break tags from extracted Mermaid", () => {
+    const result = DiagramGenerator._extractMermaid("```mermaid\nflowchart TD\nA[创建订单<br/>校验库存] --> B[支付]\n```");
+    expect(result).toContain("创建订单 / 校验库存");
+    expect(result).not.toMatch(/<br\s*\/?>/i);
+  });
+
   it("extracts from mermaid code block", () => {
     const raw = "这是类图：\n```mermaid\nclassDiagram\n    class A\n```\n结束";
     const result = DiagramGenerator._extractMermaid(raw);

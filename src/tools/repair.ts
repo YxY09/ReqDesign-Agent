@@ -209,6 +209,16 @@ export class RepairTool extends BaseTool {
     }
 
     if (content !== undefined && task.type === "diagrams") {
+      if (typeof content === "object" && content !== null && !Array.isArray(content)) {
+        const maybeWrapped = content as Record<string, unknown>;
+        if (
+          typeof maybeWrapped.diagrams === "object" &&
+          maybeWrapped.diagrams !== null &&
+          !Array.isArray(maybeWrapped.diagrams)
+        ) {
+          content = maybeWrapped.diagrams;
+        }
+      }
       const hints = (task.contextHints ?? {}) as Record<string, unknown>;
       let diagramKind = String(hints.diagram_kind ?? "").trim();
       if (!diagramKind) diagramKind = RepairTool._inferDiagramKind(task, String(content));
@@ -230,8 +240,10 @@ export class RepairTool extends BaseTool {
   static _inferContent(response: Record<string, unknown>, task: Task): unknown {
     if (task.type === "analyze" && "actors" in response) return response;
     if (task.type === "diagrams" && ("class_diagram" in response || "activity_diagram" in response || "state_diagram" in response)) return response;
+    if (task.type === "diagrams" && typeof response.diagrams === "object" && response.diagrams !== null) return response.diagrams;
     if (task.type === "design" && typeof response.system_design === "string") return response.system_design;
     if (task.type === "tests" && typeof response.test_cases === "string") return response.test_cases;
+    if (task.type === "tests" && Array.isArray(response.test_cases)) return JSON.stringify({ test_cases: response.test_cases }, null, 2);
     if (Object.keys(response).length === 1) {
       const val = Object.values(response)[0];
       if (typeof val === "object" || typeof val === "string") return val;

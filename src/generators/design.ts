@@ -72,8 +72,112 @@ function extractClassNames(designText: string): string[] {
   return [...classNames];
 }
 
+function extractCoreClassSection(designText: string): string {
+  const headingRe = /^#{2,}\s*.*核心类.*$/gim;
+  const match = headingRe.exec(designText);
+  if (!match) return "";
+  const start = match.index + match[0].length;
+  const rest = designText.slice(start);
+  const nextHeading = rest.search(/^#{2,}\s+/m);
+  return nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
+}
+
+function extractCoreClassTableNames(designText: string): string[] {
+  const names = new Set<string>();
+  const section = extractCoreClassSection(designText);
+  if (!section.trim()) return [];
+
+  for (const line of section.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) continue;
+    if (/^\|\s*-+/.test(trimmed)) continue;
+    if (/类名|Class/i.test(trimmed)) continue;
+
+    const cells = trimmed
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim().replace(/^`|`$/g, ""));
+    const first = cells[0] ?? "";
+    const name = first.match(/^I?[A-Z][A-Za-z0-9_]*$/)?.[0];
+    if (name) names.add(name);
+  }
+  return [...names];
+}
+
+function extractClassDiagramSections(designText: string): string[] {
+  const sections: string[] = [];
+  const fenceRe = /```(?:mermaid)?\s*([\s\S]*?)```/g;
+  let fence: RegExpExecArray | null;
+  while ((fence = fenceRe.exec(designText)) !== null) {
+    if (fence[1].includes("classDiagram")) sections.push(fence[1]);
+  }
+  if (sections.length === 0 && designText.includes("classDiagram")) {
+    sections.push(designText);
+  }
+  return sections;
+}
+
+function extractReferencedClassNames(designText: string): string[] {
+  const refs = new Set<string>();
+  const classDiagramText = extractClassDiagramSections(designText).join("\n");
+  if (!classDiagramText.trim()) return [];
+
+  const relationRe = /^\s*([A-Za-z_]\w*)\s+(?:"[^"]*"\s+)?(?:<?--|-->|--|o--|\*--|\.\.>)\s+(?:"[^"]*"\s+)?([A-Za-z_]\w*)/gm;
+  let relation: RegExpExecArray | null;
+  while ((relation = relationRe.exec(classDiagramText)) !== null) {
+    refs.add(relation[1]);
+    refs.add(relation[2]);
+  }
+
+  const genericRe = /(?:List|Set|Array|Collection|Map)~([A-Za-z_]\w*)~/g;
+  let generic: RegExpExecArray | null;
+  while ((generic = genericRe.exec(classDiagramText)) !== null) {
+    refs.add(generic[1]);
+  }
+  return [...refs];
+}
+
 function isHelperClassName(name: string): boolean {
   return HELPER_CLASS_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
+
+function containsToken(text: string, token: string): boolean {
+  const trimmed = token.trim();
+  if (!trimmed) return false;
+  if (/^[A-Za-z]\d+$/.test(trimmed)) {
+    return new RegExp(`\\b${trimmed}\\b`).test(text);
+  }
+  return text.includes(trimmed);
+}
+
+function itemId(item: unknown): string {
+  if (typeof item === "object" && item !== null) {
+    return String((item as Record<string, unknown>).id ?? "").trim();
+  }
+  return "";
+}
+
+function collectIds(items: unknown): string[] {
+  if (!Array.isArray(items)) return [];
+  return items.map(itemId).filter(Boolean);
+}
+
+function extractRequirementIds(designText: string, prefixes: string[]): string[] {
+  const prefixGroup = prefixes.map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const idRe = new RegExp(`\\b(?:${prefixGroup})\\d{3,}\\b`, "g");
+  return [...new Set(designText.match(idRe) ?? [])];
+}
+
+function formatContractList(items: unknown, fields: string[]): string[] {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => {
+    if (typeof item !== "object" || item === null) return String(item);
+    const record = item as Record<string, unknown>;
+    return fields
+      .map((field) => String(record[field] ?? "").trim())
+      .filter(Boolean)
+      .join(" | ");
+  }).filter(Boolean);
 }
 
 export class SystemDesigner {
@@ -101,10 +205,46 @@ export class SystemDesigner {
     reqStr = reqStr.replace(/\{requirement_json\}/g, "").replace(/\{design_text\}/g, "");
     const safeText = (requirementText || "").replace(/\{requirement_text\}/g, "");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
-    prompt = prompt.replace(/\{requirement_text\}/g, safeText);
+    prompt = prompt.replace(
+      /\{requirement_text\}/g,
+      `${SystemDesigner.buildDesignContract(requirementJson)}\n\n${safeText}`,
+    );
 
     const result = await this.llm.generateText(prompt, systemPrompt ?? "");
     return result;
+  }
+
+  static buildDesignContract(requirementJson: Record<string, unknown>): string {
+    const functions = formatContractList(
+      requirementJson.functions,
+      ["id", "name", "description"],
+    );
+    const entities = formatContractList(
+      requirementJson.entities,
+      ["name", "description"],
+    );
+    const constraints = formatContractList(
+      requirementJson.constraints,
+      ["id", "description"],
+    );
+    const exceptions = formatContractList(
+      requirementJson.exceptions,
+      ["id", "description", "trigger", "handling"],
+    );
+
+    return [
+      "## 设计合同（硬性约束，必须逐项遵守）",
+      "以下清单是设计阶段唯一可信的 ID 和核心领域类来源。不要新增、改名或重新编号。",
+      functions.length > 0 ? `### 功能 ID 清单\n${functions.map((item) => `- ${item}`).join("\n")}` : "",
+      entities.length > 0 ? `### 允许的核心领域类\n${entities.map((item) => `- ${item}`).join("\n")}` : "",
+      constraints.length > 0 ? `### 约束 ID 清单\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
+      exceptions.length > 0 ? `### 异常 ID 清单\n${exceptions.map((item) => `- ${item}`).join("\n")}` : "",
+      "### 输出前自检",
+      "- 模块划分必须覆盖全部功能 ID，且每个 ID 所在模块语义必须匹配功能名称和描述。",
+      "- 核心类/接口设计里的核心领域类必须来自“允许的核心领域类”清单，大小写完全一致。",
+      "- 异常处理设计必须使用异常 ID 清单中的原始编号，例如 X001 就必须写 X001，不能改成 E001。",
+      "- 约束处理设计必须使用约束 ID 清单中的原始编号。",
+    ].filter(Boolean).join("\n\n");
   }
 
   static validateDesign(designText: string, requirementJson: Record<string, unknown>): string[] {
@@ -126,7 +266,19 @@ export class SystemDesigner {
       }
     }
 
-    const declaredClassNames = extractClassNames(designText);
+    const declaredClassNames = [
+      ...new Set([
+        ...extractClassNames(designText),
+        ...extractCoreClassTableNames(designText),
+      ]),
+    ];
+    const declaredClassNameSet = new Set(declaredClassNames);
+    const undefinedRefs = extractReferencedClassNames(designText)
+      .filter((name) => !declaredClassNameSet.has(name));
+    if (undefinedRefs.length > 0) {
+      warnings.push(`类图引用了未定义的类: ${[...new Set(undefinedRefs)].join(", ")}`);
+    }
+
     const normalizedClassNames = new Set(
       declaredClassNames.map(normalizeDomainName).filter(Boolean),
     );
@@ -140,10 +292,39 @@ export class SystemDesigner {
         const fid = typeof func === "object" && func !== null
           ? (func as Record<string, unknown>).id
           : "";
-        if (name && !designText.includes(String(name))) {
+        const hasName = name ? containsToken(designText, String(name)) : false;
+        const hasId = fid ? containsToken(designText, String(fid)) : false;
+        if (name && !hasName && !hasId) {
           const label = fid || name;
           warnings.push(`功能 ${label} 未在设计中体现`);
         }
+      }
+    }
+
+    const constraintIds = collectIds(requirementJson["constraints"]);
+    if (constraintIds.length > 0) {
+      for (const id of constraintIds) {
+        if (!containsToken(designText, id)) {
+          warnings.push(`约束 ${id} 未在设计中体现`);
+        }
+      }
+    }
+
+    const exceptionIds = collectIds(requirementJson["exceptions"]);
+    if (exceptionIds.length > 0) {
+      for (const id of exceptionIds) {
+        if (!containsToken(designText, id)) {
+          warnings.push(`异常 ${id} 未在设计中体现`);
+        }
+      }
+      const allowed = new Set(exceptionIds);
+      const observed = extractRequirementIds(designText, ["E", "X"]);
+      const undefinedExceptionIds = observed.filter((id) => {
+        if (!/^E\d{3,}$|^X\d{3,}$/.test(id)) return false;
+        return !allowed.has(id);
+      });
+      if (undefinedExceptionIds.length > 0) {
+        warnings.push(`设计引用了未定义的异常 ID: ${undefinedExceptionIds.join(", ")}`);
       }
     }
 
