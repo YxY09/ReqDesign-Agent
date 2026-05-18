@@ -93,6 +93,7 @@ export class TraceLogger {
       input_messages: messages.length,
       input_chars: inputChars,
       output_chars: outputChars,
+      output_text: outputChars <= 50000 ? result : result.slice(0, 50000),
       duration_seconds: Math.round(duration * 1000) / 1000,
     });
   }

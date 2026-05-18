@@ -19,6 +19,29 @@ import { setupLogger, type Logger } from "./logger.js";
 /** Streaming callback — invoked for each text fragment received from the LLM. */
 export type OnChunk = (text: string) => void;
 
+/** Structured record of a completed LLM call, emitted via trace sink. */
+export interface LlmCallInfo {
+  tag: string;
+  provider: string;
+  model: string;
+  /** Total wall-clock time in milliseconds. */
+  durationMs: number;
+  /** Number of messages sent. */
+  inputMessageCount: number;
+  /** Characters in the concatenated prompt. */
+  inputChars: number;
+  /** First 2000 chars of the last user message. */
+  promptPreview: string;
+  /** Full assistant response text. */
+  responseText: string;
+  /** Characters in the response. */
+  responseChars: number;
+  /** Token usage (may be undefined for some providers). */
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 export interface LlmStreamEvent {
   kind: "start" | "chunk" | "end";
   tag: string;
@@ -98,6 +121,9 @@ export class LLMClient {
   private _streamTag = "";
   private _streamListener: ((event: LlmStreamEvent) => void) | null = null;
 
+  /** Trace sink — set by runtime to record every LLM call into TraceLogger. */
+  private _traceSink: ((info: LlmCallInfo) => void) | null = null;
+
   // -----------------------------------------------------------------------
   // Construction
   // -----------------------------------------------------------------------
@@ -141,6 +167,11 @@ export class LLMClient {
     this._streamListener = listener ?? null;
   }
 
+  /** Set the trace sink to record every completed LLM call. */
+  setTraceSink(sink: ((info: LlmCallInfo) => void) | null): void {
+    this._traceSink = sink;
+  }
+
   // -----------------------------------------------------------------------
   // Public API — chat
   // -----------------------------------------------------------------------
@@ -161,6 +192,7 @@ export class LLMClient {
     temperature?: number,
     onChunk?: OnChunk,
   ): Promise<string> {
+    const startTime = Date.now();
     const streamTag = this._streamTag;
     const chunkHandler = this._buildChunkHandler(onChunk, streamTag);
     const shouldStream = chunkHandler !== undefined;
@@ -183,39 +215,47 @@ export class LLMClient {
       );
     }
 
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    const promptPreview = lastUserMsg
+      ? lastUserMsg.content.slice(0, 2000)
+      : "";
+    const inputChars = messages.reduce((total, message) => total + Array.from(message.content).length, 0);
+
     try {
+      let resultText: string;
+      let usage: LlmTokenUsage | undefined;
+
       if (OPENAI_COMPAT_PROVIDERS.has(this.provider)) {
         if (shouldStream) {
           const response = await this._chatStreamOpenai(messages, temperature, chunkHandler);
-          if (emitMetadata) {
-            this._emitStreamEvent(streamTag, "end", {
-              responseChars: Array.from(response.text).length,
-              ...response.usage,
-            });
-            this._logger.info(
-              `[LLMClient] Request completed: tag=${streamTag}, chars=${Array.from(response.text).length}, tokens=${response.usage?.totalTokens ?? "unknown"}`,
-            );
-          }
-          return response.text;
+          resultText = response.text;
+          usage = response.usage;
+        } else {
+          resultText = await this._chatOpenai(messages, temperature);
         }
-        return this._chatOpenai(messages, temperature);
-      }
-
-      if (this.provider === "anthropic") {
+      } else if (this.provider === "anthropic") {
         const response = await this._chatAnthropic(messages, temperature, chunkHandler);
-        if (emitMetadata) {
-          this._emitStreamEvent(streamTag, "end", {
-            responseChars: Array.from(response.text).length,
-            ...response.usage,
-          });
-          this._logger.info(
-            `[LLMClient] Request completed: tag=${streamTag}, chars=${Array.from(response.text).length}, tokens=${response.usage?.totalTokens ?? "unknown"}`,
-          );
-        }
-        return response.text;
+        resultText = response.text;
+        usage = response.usage;
+      } else {
+        throw new Error(`[LLMClient] Unsupported provider: ${this.provider}`);
       }
 
-      throw new Error(`[LLMClient] Unsupported provider: ${this.provider}`);
+      // Emit stream metadata for TUI / runtime event system
+      if (emitMetadata) {
+        this._emitStreamEvent(streamTag, "end", {
+          responseChars: Array.from(resultText).length,
+          ...usage,
+        });
+        this._logger.info(
+          `[LLMClient] Request completed: tag=${streamTag}, chars=${Array.from(resultText).length}, tokens=${usage?.totalTokens ?? "unknown"}`,
+        );
+      }
+
+      // Emit structured trace record
+      this._emitTrace(streamTag, messages, inputChars, promptPreview, resultText, Date.now() - startTime, usage);
+
+      return resultText;
     } catch (error) {
       if (emitMetadata) {
         const message = error instanceof Error ? error.message : String(error);
@@ -270,6 +310,40 @@ export class LLMClient {
   ): Promise<string> {
     const messages = buildMessages(prompt, system);
     return this.chat(messages, undefined, onChunk);
+  }
+
+  // -----------------------------------------------------------------------
+  // Private — trace emission
+  // -----------------------------------------------------------------------
+
+  private _emitTrace(
+    tag: string,
+    messages: ChatMessage[],
+    inputChars: number,
+    promptPreview: string,
+    responseText: string,
+    durationMs: number,
+    usage?: LlmTokenUsage,
+  ): void {
+    if (!this._traceSink) return;
+    try {
+      this._traceSink({
+        tag,
+        provider: this.provider,
+        model: this.model,
+        durationMs,
+        inputMessageCount: messages.length,
+        inputChars,
+        promptPreview,
+        responseText,
+        responseChars: Array.from(responseText).length,
+        promptTokens: usage?.promptTokens,
+        completionTokens: usage?.completionTokens,
+        totalTokens: usage?.totalTokens,
+      });
+    } catch {
+      // Trace emission must never fail the main workflow.
+    }
   }
 
   // -----------------------------------------------------------------------

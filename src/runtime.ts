@@ -162,6 +162,13 @@ export class MultiAgentRuntime {
     this.logger = setupLogger("reqdesign.runtime", config.logging.level);
     this.trace = new TraceLogger();
     this.llm = new LLMClient(config);
+    this.llm.setTraceSink((info) => this.trace.logLlmCall(
+      info.tag || "llm",
+      "chat",
+      [{ role: "user", content: info.promptPreview }],
+      info.responseText,
+      info.durationMs / 1000,
+    ));
 
     const projectRoot = resolve(process.cwd());
     const constitution = new ConstitutionLoader([
