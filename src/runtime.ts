@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import type { AgentConfig } from "./config.js";
 import { ConstitutionLoader, setConstitution } from "./constitution.js";
 import { DependencyProvider, WorkerFactory } from "./execution/factory.js";
@@ -249,6 +249,10 @@ export class MultiAgentRuntime {
     state.goal = goal;
     state.inputPath = inputPath;
     state.outputDir = outputDir;
+
+    // Set up real-time trace persistence
+    const traceDir = join(outputDir, "traces");
+    this.trace.setPersistPath(join(traceDir, "llm_trace.json"));
     state.startTime = Date.now() / 1000;
 
     // Open run log

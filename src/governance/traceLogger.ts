@@ -45,10 +45,16 @@ export class TraceLogger {
   entries: TraceEntryData[] = [];
   outputDir: string;
   private readonly _logger: Logger;
+  private _persistPath: string = "";
 
   constructor(outputDir = "") {
     this.outputDir = outputDir;
     this._logger = setupLogger("reqdesign.trace");
+  }
+
+  /** Set the file path for auto-flush. Once set, every log() call writes to disk. */
+  setPersistPath(path: string): void {
+    this._persistPath = path;
   }
 
   /** Record a trace entry. */
@@ -70,6 +76,11 @@ export class TraceLogger {
     this._logger.debug(
       `[Trace] ${stage}/${eventType}: ${summarizeData(data)}`,
     );
+
+    // Auto-flush to disk if persist path is set
+    if (this._persistPath) {
+      this._flushToDisk();
+    }
   }
 
   /** Record an LLM call. */
@@ -220,6 +231,25 @@ export class TraceLogger {
     }
 
     return jsonStr;
+  }
+
+  // -------------------------------------------------------------------
+  // Persistence
+  // -------------------------------------------------------------------
+
+  /** Write current trace to disk (called automatically when persistPath is set). */
+  private _flushToDisk(): void {
+    try {
+      const data = {
+        summary: this.getSummary(),
+        entries: this.entries,
+      };
+      const jsonStr = JSON.stringify(data, null, 2);
+      mkdirSync(dirname(this._persistPath), { recursive: true });
+      writeFileSync(this._persistPath, jsonStr, { encoding: "utf8" });
+    } catch {
+      // Trace flush must never fail the main workflow
+    }
   }
 
   /** Clear all trace entries. */
