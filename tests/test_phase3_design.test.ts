@@ -209,16 +209,13 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
   });
 });
 
-describe("GenerationTool self-correction", () => {
-  it("repairs generated content only when self-check issues decrease", async () => {
+describe("GenerationTool self-check (no auto-repair)", () => {
+  it("records self-check issues without attempting auto-repair", async () => {
     const badDesign =
       "## 模块划分\n\n| 模块 | 对应功能 |\n|---|---|\n| 用户模块 | F001 |\n\n## 核心类\n\nOrder类。\n\n## 数据流\n\n请求处理流程。";
-    const fixedDesign =
-      "## 模块划分\n\n| 模块 | 对应功能 |\n|---|---|\n| 用户模块 | F001 |\n\n## 核心类\n\nUser类。\n\n## 数据流\n\n请求处理流程。";
     const llm = {
       generateText: vi.fn()
-        .mockResolvedValueOnce(badDesign)
-        .mockResolvedValueOnce(fixedDesign),
+        .mockResolvedValueOnce(badDesign),
       generateJson: vi.fn(),
       _streamTag: "",
       get streamTag() { return this._streamTag; },
@@ -235,8 +232,11 @@ describe("GenerationTool self-correction", () => {
       },
     );
 
-    expect(artifact.selfCheckPassed).toBe(true);
-    expect(artifact.selfCorrectRounds).toBe(1);
-    expect(artifact.content).toBe(fixedDesign);
+    // Self-check finds issues but does NOT auto-repair
+    expect(artifact.selfCheckPassed).toBe(false);
+    expect(artifact.selfCorrectRounds).toBe(0);
+    expect(artifact.content).toBe(badDesign);
+    // LLM called only once (generation), NOT twice (generation + repair)
+    expect(llm.generateText).toHaveBeenCalledTimes(1);
   });
 });

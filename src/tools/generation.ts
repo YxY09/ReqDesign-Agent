@@ -11,11 +11,8 @@ import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
 import { TestCaseGenerator } from "../generators/tests.js";
-import { RepairTool } from "./repair.js";
 
 export class GenerationTool extends BaseTool {
-  private static readonly MAX_SELF_CORRECT_ROUNDS = 1;
-
   private _systemPrompt: string | null = null;
   private _analyzer: RequirementAnalyzer | null = null;
   private _designer: SystemDesigner | null = null;
@@ -44,19 +41,9 @@ export class GenerationTool extends BaseTool {
 
       let issues = GenerationTool._ruleCheck(task, content, context);
       let selfCorrectRounds = 0;
-      if (issues.length > 0) {
-        const corrected = await this._selfCorrectIfImproved(
-          task,
-          content,
-          issues,
-          context,
-        );
-        if (corrected) {
-          content = corrected.content;
-          issues = corrected.issues;
-          selfCorrectRounds = corrected.rounds;
-        }
-      }
+      // Self-check issues are recorded but NOT auto-repaired.
+      // Self-repair had 100% failure rate (6/6 in test runs) — wastes LLM calls.
+      // Downstream evaluator handles these issues.
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
 
@@ -150,55 +137,6 @@ export class GenerationTool extends BaseTool {
       hints,
     );
     return this._getDesigner().generateDesign(reqJson, requirementText, systemPrompt);
-  }
-
-  private async _selfCorrectIfImproved(
-    task: Task,
-    content: unknown,
-    issues: string[],
-    context: Record<string, unknown>,
-  ): Promise<{ content: unknown; issues: string[]; rounds: number } | null> {
-    if (!this.llm) return null;
-    if (!["design", "diagrams", "tests"].includes(task.type)) return null;
-
-    let bestContent = content;
-    let bestIssues = issues;
-    let rounds = 0;
-
-    for (let i = 0; i < GenerationTool.MAX_SELF_CORRECT_ROUNDS; i++) {
-      const repairAgent = new RepairTool(this.llm);
-      const repaired = await repairAgent.repair(
-        task,
-        bestContent,
-        bestIssues.map((issue) => ({
-          severity: "major",
-          target_field: GenerationTool._targetFieldForTask(task.type),
-          description: issue,
-          suggestion: "修复该自检问题，并保持其余正确内容不变",
-        })),
-        context,
-      );
-      if (repaired === null || repaired === undefined) break;
-
-      const nextIssues = GenerationTool._ruleCheck(task, repaired, context);
-      if (nextIssues.length >= bestIssues.length) {
-        this.logger.warn(
-          `execute: task=${task.id} 自修正未收敛（${bestIssues.length} -> ${nextIssues.length}），保留原产物`,
-        );
-        break;
-      }
-
-      bestContent = repaired;
-      bestIssues = nextIssues;
-      rounds += 1;
-      this.logger.info(
-        `execute: task=${task.id} 自修正收敛（${issues.length} -> ${bestIssues.length}）`,
-      );
-      if (bestIssues.length === 0) break;
-    }
-
-    if (rounds === 0) return null;
-    return { content: bestContent, issues: bestIssues, rounds };
   }
 
   private async _generateDiagrams(
@@ -325,13 +263,6 @@ export class GenerationTool extends BaseTool {
     }
 
     return issues;
-  }
-
-  private static _targetFieldForTask(taskType: Task["type"]): string {
-    if (taskType === "design") return "design_text";
-    if (taskType === "diagrams") return "diagrams";
-    if (taskType === "tests") return "test_cases";
-    return "requirement_json";
   }
 
   private static _diagramKindForTask(
