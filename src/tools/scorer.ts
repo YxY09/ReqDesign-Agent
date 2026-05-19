@@ -51,10 +51,10 @@ export class OutputScorer {
     //    mentioned in the original requirement?
     const reqText = String(requirementText ?? "").toLowerCase();
     let reqEntityHits = 0;
-    const reqEntityPatterns: Array<{ keywords: string[]; name: string }> = [
+    const reqEntityPatterns: Array<{ keywords: string[]; name: string; aliases?: string[] }> = [
       { keywords: ["支付", "付款", "payment", "pay"], name: "Payment" },
       { keywords: ["库存", "inventory", "stock"], name: "Inventory" },
-      { keywords: ["物流", "配送", "发货", "shipment", "logistics"], name: "Shipment" },
+      { keywords: ["物流", "配送", "发货", "shipment", "logistics"], name: "Shipment", aliases: ["Logistics"] },
       { keywords: ["评价", "评论", "review", "comment", "rating"], name: "Review" },
       { keywords: ["优惠券", "coupon"], name: "Coupon" },
       { keywords: ["促销", "活动", "promotion", "满减", "秒杀"], name: "Promotion" },
@@ -71,7 +71,8 @@ export class OutputScorer {
       if (!textMatches) continue;
       reqEntityTotal++;
       const captured = entityNameSet.has(pattern.name.toLowerCase()) ||
-        entityNames.some((n) => n.toLowerCase().includes(pattern.name.toLowerCase()));
+        entityNames.some((n) => n.toLowerCase().includes(pattern.name.toLowerCase())) ||
+        !!(pattern.aliases && pattern.aliases.some((a) => entityNameSet.has(a.toLowerCase())));
       if (captured) {
         reqEntityHits++;
       } else {

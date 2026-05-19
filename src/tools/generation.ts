@@ -513,7 +513,7 @@ export class GenerationTool extends BaseTool {
     );
 
     // Common business object patterns to check
-    const patterns: Array<{ keywords: string[]; entityName: string; description: string; attributes: Array<{ name: string; type: string; description: string }> }> = [
+    const patterns: Array<{ keywords: string[]; entityName: string; description: string; attributes: Array<{ name: string; type: string; description: string }>; aliases?: string[] }> = [
       {
         keywords: ["支付", "付款", "payment", "pay"],
         entityName: "Payment",
@@ -539,6 +539,7 @@ export class GenerationTool extends BaseTool {
         keywords: ["物流", "配送", "发货", "shipment", "logistics", "delivery"],
         entityName: "Shipment",
         description: "物流/发货记录",
+        aliases: ["Logistics"],
         attributes: [
           { name: "shipmentId", type: "Long", description: "发货单ID" },
           { name: "orderId", type: "Long", description: "关联订单ID" },
@@ -614,11 +615,13 @@ export class GenerationTool extends BaseTool {
       );
       if (nameMatches) continue;
 
-      // Also check if an entity with similar attributes already exists
+      // Also check if an entity with similar attributes already exists (or aliases)
+      const allAccepted = [pattern.entityName, ...(pattern.aliases ?? [])];
       const hasSimilar = entities.some((e) => {
         const eName = String(e.name ?? "").toLowerCase();
-        return eName.includes(pattern.entityName.toLowerCase()) ||
-               pattern.entityName.toLowerCase().includes(eName);
+        return allAccepted.some((accepted) =>
+          eName.includes(accepted.toLowerCase()) || accepted.toLowerCase().includes(eName),
+        );
       });
       if (hasSimilar) continue;
 
