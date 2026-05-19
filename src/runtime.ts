@@ -6,6 +6,7 @@ import { DependencyProvider, WorkerFactory } from "./execution/factory.js";
 import { ThreadBackend } from "./execution/backend.js";
 import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
+import { OutputScorer } from "./tools/scorer.js";
 import {
   TaskMailbox,
   createTaskMessage,
@@ -1252,6 +1253,23 @@ export class MultiAgentRuntime {
         status: "completed",
         data: this.snapshotState(state),
       });
+
+      // Score output quality
+      try {
+        const score = OutputScorer.score(
+          state.requirementJson as Record<string, unknown>,
+          state.designText ?? "",
+          state.diagrams as Record<string, unknown>,
+          state.testCases ?? "",
+          state.requirementJson as Record<string, unknown>,
+        );
+        this.logger.info("\n" + OutputScorer.format(score));
+        manager.saveTraceJson("quality_score.json", score as unknown as Record<string, unknown>);
+      } catch (scoringError: unknown) {
+        this.logger.warn(
+          "quality scoring failed: " + (scoringError instanceof Error ? scoringError.message : String(scoringError)),
+        );
+      }
     } catch (error: unknown) {
       this.logger.warn(
         `trace export failed: ${error instanceof Error ? error.message : String(error)}`,
