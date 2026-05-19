@@ -667,6 +667,12 @@ export class MultiAgentRuntime {
     if (state.taskStatus("evaluator") === "running") {
       return false;
     }
+    // Build previous issues from last verdict for incremental review
+    const lastVerdict = state.latestVerdict;
+    const previousIssues = lastVerdict?.issues?.map((i) => ({
+      severity: i.severity,
+      description: `${i.description} (task: ${i.targetTaskId}, field: ${i.targetField})`,
+    })) ?? [];
     const context = new SessionContext({
       taskId: "evaluator",
       taskType: "evaluator",
@@ -683,6 +689,7 @@ export class MultiAgentRuntime {
       ),
       isDirectMode: state.isDirectMode,
       evaluateScope: [...evaluateScope],
+      previousIssues,
     });
     const message = createTaskMessage({
       type: "spawn",

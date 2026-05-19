@@ -36,6 +36,7 @@ export class EvaluationTool extends BaseTool {
     goal = "design",
     isDirectMode = false,
     evaluatedTaskIds?: string[],
+    previousIssues?: Array<{ severity: string; description: string; location?: string }>,
   ): Promise<Verdict> {
     this.logger.info(`evaluate: 开始评审，goal=${goal}，directMode=${isDirectMode}`);
     const snapshots = artifactSnapshots ?? EvaluationTool._buildAggregateSnapshots(
@@ -70,7 +71,7 @@ export class EvaluationTool extends BaseTool {
       this.logger.info("evaluate: 跳过 analyze 分片的 LLM 语义评审，仅保留规则检查");
       llmIssues = [];
     } else if (Object.keys(snapshots).length > 0) {
-      const [li] = await this._llmReviewSnapshots(requirementText, snapshots, isDirectMode, reviewMode);
+      const [li] = await this._llmReviewSnapshots(requirementText, snapshots, isDirectMode, reviewMode, previousIssues);
       llmIssues = li;
     } else if (goal.toLowerCase().includes("analyze")) {
       llmIssues = await this._llmReviewAnalyze(requirementText, requirementJson);
@@ -569,6 +570,7 @@ export class EvaluationTool extends BaseTool {
     snapshots: Record<string, Record<string, unknown>>,
     isDirectMode: boolean,
     reviewMode: string,
+    previousIssues?: Array<{ severity: string; description: string; location?: string }>,
   ): Promise<[Issue[], number | null]> {
     const presentTypes = [...new Set(
       Object.values(snapshots)
@@ -585,6 +587,14 @@ export class EvaluationTool extends BaseTool {
     const sections: string[] = [];
     if (requirementText) {
       sections.push(`## 原始需求\n${(requirementText ?? "").slice(0, reqLimit)}`);
+    }
+
+    // Inject previous evaluation issues for incremental review
+    if (previousIssues && previousIssues.length > 0) {
+      const issueLines = previousIssues
+        .map((issue, idx) => `${idx + 1}. [${issue.severity}] ${issue.description}${issue.location ? ` (${issue.location})` : ""}`)
+        .join("\n");
+      sections.push(`## 上一轮审查结果\n以下是上一轮审查发现的问题。请重点关注：\n1. 这些问题是否已被修复\n2. 是否有新引入的问题\n3. 保持与上轮相同的审查标准\n\n${issueLines}`);
     }
 
     for (const [taskId, snapshot] of Object.entries(snapshots)) {

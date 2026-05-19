@@ -254,6 +254,8 @@ export class EvaluationSession extends WorkerSession {
     const evaluatedTaskIds = this.context.evaluateScope.length > 0
       ? [...this.context.evaluateScope]
       : undefined;
+    // Build previous issues from context for incremental review
+    const previousIssues = this.context.previousIssues as Array<{ severity: string; description: string; location?: string }> | undefined;
     const verdict = await this.agent.evaluate(
       this.context.requirementText,
       this.context.requirementJson,
@@ -265,6 +267,7 @@ export class EvaluationSession extends WorkerSession {
       this.context.goal,
       this.context.isDirectMode,
       evaluatedTaskIds,
+      previousIssues,
     );
     verdict.isFinalReview = evaluatedTaskIds === undefined;
 

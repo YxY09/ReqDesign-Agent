@@ -56,6 +56,7 @@
 - 核心领域类必须严格来自 `requirement_json.entities[].name`，大小写必须完全一致。
 - 不要把 `OrderItem`、`Payment`、`SKU/Sku` 等未出现在 `entities` 中的概念提升为核心领域类；如确实需要，只能作为某个实体的属性或实现细节说明。
 - 如果实体属性里包含列表或嵌套对象，优先作为属性描述，不要自动拆成新核心实体。
+- **角色实体合并**：如果角色（如 Customer、Merchant、Admin、WarehouseManager）仅仅是 User 的身份标签，只有 id 和 status 属性而没有独立的业务属性和行为，不要将它们列为独立的核心类。应该在 User 类中用 role 字段（如 roles: String[] 或 role: String）来表示。只有当角色有独立于 User 的专属属性（如商家有店铺、仓库管理员有所属仓库）时，才单独建类。
 
 ### 5. 数据流说明
 描述系统中主要数据的流转过程，包括：
