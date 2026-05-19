@@ -25,6 +25,7 @@ export class InputLoader {
     ".md",
     ".txt",
     ".json",
+    ".xml",
   ]);
   static readonly MAX_FILE_SIZE = 512 * 1024; // 512KB
   static readonly MAX_CHARS = 100_000;
