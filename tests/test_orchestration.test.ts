@@ -539,7 +539,7 @@ describe("AgentOrchestrator decisions", () => {
   // 6. Final review invalidated by new artifact revision
   // -----------------------------------------------------------------------
 
-  it("invalidates final review when artifact is revised", () => {
+  it("preserves final review state when artifact is revised (repair flow)", () => {
     const state = new WorkflowState();
     state.addArtifact(
       createArtifact({ taskId: "design-1", type: "design", content: "v1" }),
@@ -555,13 +555,15 @@ describe("AgentOrchestrator decisions", () => {
 
     expect(state.finalReviewDone).toBe(true);
 
-    // Adding a new artifact revision resets final review
+    // Repair adds a new artifact revision — should NOT reset final review
+    // (otherwise orchestrator skips repair and re-triggers evaluation)
     state.addArtifact(
       createArtifact({ taskId: "design-1", type: "design", content: "v2" }),
     );
 
-    expect(state.finalReviewDone).toBe(false);
-    expect(state.finalReviewPassed).toBe(false);
+    expect(state.finalReviewDone).toBe(true);
+    expect(state.finalReviewPassed).toBe(true);
+    // qualityStatus is reset to unknown when artifacts change
     expect(state.qualityStatus).toBe("unknown");
   });
 

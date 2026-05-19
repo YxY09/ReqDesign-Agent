@@ -147,7 +147,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 6) Final review rejected — no safe repair targets (e.g., all issues are analyze-only)
+    // 6) Final review rejected — no safe repair targets
     if (
       snapshot.finalReviewCurrent &&
       !snapshot.finalReviewPassed &&
@@ -163,10 +163,9 @@ export class DeterministicPolicy {
     }
 
     // 7) Final review major issues — try repair per-task
-    if (
-      snapshot.finalReviewCurrent &&
-      snapshot.majorPendingTaskIds.length > 0
-    ) {
+    // Fire even if finalReviewCurrent is false: if evaluator found major issues,
+    // we should attempt repair before re-running evaluation.
+    if (snapshot.majorPendingTaskIds.length > 0) {
       const target = this._selectFinalMajorRepairTarget(snapshot);
       if (target) {
         return createStrategyDecision({
@@ -319,11 +318,14 @@ export class DeterministicPolicy {
     );
     if (majorIssues.length === 0) return false;
 
-    return majorIssues.every((issue) => {
+    // Allow repair if at least one major issue is local (repairable).
+    // Upstream/systemic issues are skipped — they require replan, not repair.
+    const hasLocalIssue = majorIssues.some((issue) => {
       const scope = String(issue["scope"] ?? "");
       if (scope === "upstream" || scope === "systemic") return false;
       const targetType = String(issue["target_task_type"] ?? "");
       return !targetType || !taskType || targetType === taskType;
     });
+    return hasLocalIssue;
   }
 }

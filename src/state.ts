@@ -449,7 +449,6 @@ export class WorkflowState {
   /** Add an artifact, sync aggregate fields, and track progress. */
   addArtifact(artifact: Artifact): void {
     const artifactsState = this.artifactsState;
-    const reviewState = this.reviewState;
 
     const revision = (artifactsState.artifactRevisionsByTask[artifact.taskId] ?? 0) + 1;
     artifact.revision = revision;
@@ -457,9 +456,8 @@ export class WorkflowState {
     artifactsState.artifacts[artifact.taskId] = artifact;
     this.latestArtifactTaskByType[artifact.type] = artifact.taskId;
     this._syncAggregate(artifact);
-    reviewState.finalReviewDone = false;
-    reviewState.finalReviewPassed = false;
-    reviewState.finalReviewRevisions = {};
+    // Note: do NOT reset finalReviewDone here — repair adds artifacts which
+    // is part of the review-repair cycle. Only clearReviewContext resets it.
     this.qualityStatus = "unknown";
     // Track progress: compare with previous content
     this.progress.recordArtifact(artifact.taskId, artifact.content);
