@@ -5,10 +5,9 @@
 
 export interface ScoreReport {
   entityCoverage: number;        // 0-1: fraction of analysis entities present in design
-  requirementEntityHit: number;  // 0-1: fraction of requirement-text business objects captured as entities
   functionIdCoverage: number;    // 0-1: fraction of Fxxx IDs covered
   constraintIdCoverage: number;  // 0-1: fraction of Cxxx IDs covered
-  exceptionIdCoverage: number;   // 0-1: fraction of Xxx IDs covered
+  exceptionIdCoverage: number;   // 0-1: fraction of Exxx IDs covered
   namingConsistency: number;     // 0-1: entity names consistent across artifacts
   testTypeBalance: number;       // 0-1: has normal + error + boundary tests
   overall: number;               // weighted average
@@ -25,7 +24,7 @@ export class OutputScorer {
     diagrams: Record<string, unknown>,
     testCases: string,
     requirementJson: Record<string, unknown>,
-    requirementText?: string,
+    _requirementText?: string,
   ): ScoreReport {
     const details: string[] = [];
     const d = designText ?? "";
@@ -47,41 +46,7 @@ export class OutputScorer {
     }
     const entityCoverage = entityNames.length > 0 ? entityHits / entityNames.length : 1;
 
-    // 2. Requirement-text entity completeness: did the analysis capture business objects
-    //    mentioned in the original requirement?
-    const reqText = String(requirementText ?? "").toLowerCase();
-    let reqEntityHits = 0;
-    const reqEntityPatterns: Array<{ keywords: string[]; name: string; aliases?: string[] }> = [
-      { keywords: ["支付", "付款", "payment", "pay"], name: "Payment" },
-      { keywords: ["库存", "inventory", "stock"], name: "Inventory" },
-      { keywords: ["物流", "配送", "发货", "shipment", "logistics"], name: "Shipment", aliases: ["Logistics"] },
-      { keywords: ["评价", "评论", "review", "comment", "rating"], name: "Review" },
-      { keywords: ["优惠券", "coupon"], name: "Coupon" },
-      { keywords: ["促销", "活动", "promotion", "满减", "秒杀"], name: "Promotion" },
-      { keywords: ["购物车", "cart"], name: "Cart" },
-      { keywords: ["sku", "规格", "库存单位"], name: "Sku" },
-      { keywords: ["订单", "order"], name: "Order" },
-      { keywords: ["商品", "product"], name: "Product" },
-      { keywords: ["用户", "user", "会员"], name: "User" },
-    ];
-    let reqEntityTotal = 0;
-    const entityNameSet = new Set(entityNames.map((n) => n.toLowerCase()));
-    for (const pattern of reqEntityPatterns) {
-      const textMatches = pattern.keywords.some((kw) => reqText.includes(kw.toLowerCase()));
-      if (!textMatches) continue;
-      reqEntityTotal++;
-      const captured = entityNameSet.has(pattern.name.toLowerCase()) ||
-        entityNames.some((n) => n.toLowerCase().includes(pattern.name.toLowerCase())) ||
-        !!(pattern.aliases && pattern.aliases.some((a) => entityNameSet.has(a.toLowerCase())));
-      if (captured) {
-        reqEntityHits++;
-      } else {
-        details.push(`原始需求提到 '${pattern.name}' 但需求分析未识别为实体`);
-      }
-    }
-    const requirementEntityHit = reqEntityTotal > 0 ? reqEntityHits / reqEntityTotal : 1;
-
-    // 3. Function ID coverage
+    // 2. Function ID coverage
     const functions = (Array.isArray(requirementJson.functions)
       ? requirementJson.functions as Array<Record<string, unknown>>
       : []);
@@ -92,7 +57,7 @@ export class OutputScorer {
     }
     const functionIdCoverage = funcIds.length > 0 ? funcHits / funcIds.length : 1;
 
-    // 4. Constraint ID coverage in tests
+    // 3. Constraint ID coverage in tests
     const constraints = (Array.isArray(requirementJson.constraints)
       ? requirementJson.constraints as Array<Record<string, unknown>>
       : []);
@@ -104,7 +69,7 @@ export class OutputScorer {
     }
     const constraintIdCoverage = constraintIds.length > 0 ? constraintHits / constraintIds.length : 1;
 
-    // 5. Exception ID coverage in tests
+    // 4. Exception ID coverage in tests
     const exceptions = (Array.isArray(requirementJson.exceptions)
       ? requirementJson.exceptions as Array<Record<string, unknown>>
       : []);
@@ -116,7 +81,7 @@ export class OutputScorer {
     }
     const exceptionIdCoverage = exceptionIds.length > 0 ? exceptionHits / exceptionIds.length : 1;
 
-    // 6. Naming consistency: check if entity names in class diagram match analysis
+    // 5. Naming consistency: check if entity names in class diagram match analysis
     const classDiagram = String((diag as Record<string, unknown>).class_diagram ?? "");
     let namingHits = 0;
     let namingTotal = 0;
@@ -132,19 +97,18 @@ export class OutputScorer {
     }
     const namingConsistency = namingTotal > 0 ? namingHits / namingTotal : 1;
 
-    // 7. Test type balance
+    // 6. Test type balance
     const hasNormal = /正常/.test(t) || /TC-N-/.test(t);
     const hasError = /异常/.test(t) || /TC-E-/.test(t);
     const hasBoundary = /边界/.test(t) || /TC-B-/.test(t);
     const balanceParts = [hasNormal, hasError, hasBoundary].filter(Boolean).length;
     const testTypeBalance = balanceParts / 3;
 
-    // Weighted overall score (7 dimensions)
+    // Weighted overall score (6 dimensions)
     const overall = (
-      entityCoverage * 0.15 +
-      requirementEntityHit * 0.15 +
-      functionIdCoverage * 0.15 +
-      constraintIdCoverage * 0.10 +
+      entityCoverage * 0.20 +
+      functionIdCoverage * 0.20 +
+      constraintIdCoverage * 0.15 +
       exceptionIdCoverage * 0.10 +
       namingConsistency * 0.20 +
       testTypeBalance * 0.15
@@ -152,7 +116,6 @@ export class OutputScorer {
 
     return {
       entityCoverage: Math.round(entityCoverage * 100) / 100,
-      requirementEntityHit: Math.round(requirementEntityHit * 100) / 100,
       functionIdCoverage: Math.round(functionIdCoverage * 100) / 100,
       constraintIdCoverage: Math.round(constraintIdCoverage * 100) / 100,
       exceptionIdCoverage: Math.round(exceptionIdCoverage * 100) / 100,
@@ -167,7 +130,6 @@ export class OutputScorer {
     const lines = [
       `=== 输出质量评分 ===`,
       `实体覆盖(设计):       ${(report.entityCoverage * 100).toFixed(0)}%`,
-      `需求文本实体命中:     ${(report.requirementEntityHit * 100).toFixed(0)}%`,
       `功能ID覆盖率:         ${(report.functionIdCoverage * 100).toFixed(0)}%`,
       `约束ID覆盖率:         ${(report.constraintIdCoverage * 100).toFixed(0)}%`,
       `异常ID覆盖率:         ${(report.exceptionIdCoverage * 100).toFixed(0)}%`,
