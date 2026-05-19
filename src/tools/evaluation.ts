@@ -391,6 +391,152 @@ export class EvaluationTool extends BaseTool {
       }
     }
 
+    // Cross-artifact entity naming consistency check
+    issues.push(...this._checkCrossArtifactNaming(snapshots, requirementJson));
+
+    // Cross-artifact constraint boundary test coverage
+    issues.push(...this._checkConstraintBoundaryCoverage(snapshots, requirementJson));
+
+    return issues;
+  }
+
+  private _checkCrossArtifactNaming(
+    snapshots: Record<string, Record<string, unknown>>,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    const issues: Issue[] = [];
+    const entities = (requirementJson.entities ?? []) as Array<Record<string, unknown>>;
+    if (entities.length === 0) return issues;
+
+    // Build canonical entity name set from requirement analysis
+    const entityNames = new Map<string, string>(); // normalized -> original
+    for (const entity of entities) {
+      const name = String(entity.name ?? "").trim();
+      if (!name || /[\u4e00-\u9fff]/.test(name)) continue;
+      const normalized = name.toLowerCase().replace(/[_\-\s]/g, "");
+      entityNames.set(normalized, name);
+    }
+    if (entityNames.size === 0) return issues;
+
+    // Check design text for renamed entities
+    for (const [taskId, snapshot] of Object.entries(snapshots)) {
+      const taskType = String(snapshot.type ?? "");
+      if (taskType !== "design") continue;
+      const content = String(snapshot.content ?? "");
+      if (!content) continue;
+
+      // Extract class names from design text (Markdown table rows)
+      const tableClassRe = /\|\s*\*\*([\w]+)\*\*\s*\|/g;
+      const designClasses = new Set<string>();
+      let m: RegExpExecArray | null;
+      while ((m = tableClassRe.exec(content)) !== null) {
+        designClasses.add(m[1]);
+      }
+
+      // Check if any requirement entity is missing and a similar name exists
+      for (const [normalized, original] of entityNames) {
+        const found = content.includes(original) ||
+          [...designClasses].some((dc) => dc.toLowerCase().replace(/[_\-\s]/g, "") === normalized);
+        if (!found) {
+          // Check if a renamed version exists (singular/plural, synonym)
+          const similarInDesign = [...designClasses].filter((dc) => {
+            const dcNorm = dc.toLowerCase().replace(/[_\-\s]/g, "");
+            // Skip if too different in length
+            if (Math.abs(dcNorm.length - normalized.length) > 4) return false;
+            // Check if one contains the other
+            return dcNorm.includes(normalized) || normalized.includes(dcNorm);
+          });
+          if (similarInDesign.length > 0) {
+            issues.push(createIssue({
+              severity: "minor",
+              targetTaskId: taskId,
+              targetTaskType: "design",
+              targetField: "design_text",
+              description: "实体命名不一致: 需求分析中为 '" + original + "'，设计中使用了 '" + similarInDesign.join("', '") + "'",
+              suggestion: "统一使用需求分析中的实体名 '" + original + "'，或在文档中说明改名原因",
+            }));
+          }
+        }
+      }
+    }
+
+    // Check class diagram entity names vs requirement entities
+    for (const [taskId, snapshot] of Object.entries(snapshots)) {
+      const taskType = String(snapshot.type ?? "");
+      if (taskType !== "diagrams") continue;
+      const content = snapshot.content;
+      if (!content || typeof content !== "object") continue;
+      const classDiagram = String((content as Record<string, unknown>).class_diagram ?? "");
+      if (!classDiagram) continue;
+
+      const classRe = /class\s+(\w+)\s*\{/g;
+      const diagramClasses = new Set<string>();
+      let dm: RegExpExecArray | null;
+      while ((dm = classRe.exec(classDiagram)) !== null) {
+        diagramClasses.add(dm[1]);
+      }
+
+      for (const [normalized, original] of entityNames) {
+        const found = diagramClasses.has(original) ||
+          [...diagramClasses].some((dc) => dc.toLowerCase().replace(/[_\-\s]/g, "") === normalized);
+        if (!found) {
+          const similar = [...diagramClasses].filter((dc) => {
+            const dcNorm = dc.toLowerCase().replace(/[_\-\s]/g, "");
+            if (Math.abs(dcNorm.length - normalized.length) > 4) return false;
+            return dcNorm.includes(normalized) || normalized.includes(dcNorm);
+          });
+          if (similar.length > 0) {
+            issues.push(createIssue({
+              severity: "minor",
+              targetTaskId: taskId,
+              targetTaskType: "diagrams",
+              targetField: "diagrams.class_diagram",
+              description: "类图实体命名不一致: 需求分析中为 '" + original + "'，类图中使用了 '" + similar.join("', '") + "'",
+              suggestion: "统一使用需求分析中的实体名 '" + original + "'",
+            }));
+          }
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  private _checkConstraintBoundaryCoverage(
+    snapshots: Record<string, Record<string, unknown>>,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    const issues: Issue[] = [];
+    const constraints = (requirementJson.constraints ?? []) as Array<Record<string, unknown>>;
+    if (constraints.length === 0) return issues;
+
+    // Find test snapshots
+    const testSnapshots = Object.entries(snapshots).filter(
+      ([, s]) => String(s.type ?? "") === "tests",
+    );
+    if (testSnapshots.length === 0) return issues;
+
+    for (const [taskId, snapshot] of testSnapshots) {
+      const content = String(snapshot.content ?? "");
+      if (!content) continue;
+
+      for (const constraint of constraints) {
+        const cid = String(constraint.id ?? "").trim();
+        if (!cid) continue;
+        // Check if this constraint ID appears in any test case
+        if (!content.includes(cid)) {
+          issues.push(createIssue({
+            severity: "major",
+            targetTaskId: taskId,
+            targetTaskType: "tests",
+            targetField: "test_cases",
+            description: `约束 ${cid} 未被测试用例覆盖`,
+            suggestion: `添加针对约束 ${cid} 的边界测试用例`,
+          }));
+        }
+      }
+    }
+
     return issues;
   }
 
