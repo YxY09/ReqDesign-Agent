@@ -51,8 +51,7 @@
 - 不要新增需求中未识别的核心领域类；如果存在辅助服务类，只能作为实现细节，不能替代或扩展业务实体
 - 模块必须映射到具体的功能 ID
 - 不同文件中的类名、模块名和实体名必须保持统一，不要出现一个概念多套命名
-- **角色实体合并**：如果角色（Customer、Merchant 等）只是 User 的身份标签，没有额外的属性和行为，不要创建独立类。在 User 类中使用 roles: String[] 或 role: String 字段表达。避免产生只有 id+status 的空壳实体。只有当角色有独立的业务属性时才单独建类。
-- **禁止实体改名**：必须使用 requirement_json.entities[].name 中的原始英文名作为类名。例如：需求分析中叫 Review 就不能改成 Evaluation，叫 Logistics 就不能改成 Shipment。输出前做一次实体名自检，逐一核对。
+- **禁止实体改名**：必须使用 requirement_json.entities[].name 中的原始英文名作为类名。例如：需求分析中叫 Review 就不能改成 Evaluation，叫 Logistics 就不能改成 Shipment。输出前做一次实体名自检，逐一核对。每个实体都必须在类图中出现，不要因为某个实体属性少就跳过或合并。
 
 ### diagrams（图表生成）
 
