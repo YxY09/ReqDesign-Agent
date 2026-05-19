@@ -441,14 +441,25 @@ export class EvaluationTool extends BaseTool {
           // Check if a renamed version exists (singular/plural, synonym)
           const similarInDesign = [...designClasses].filter((dc) => {
             const dcNorm = dc.toLowerCase().replace(/[_\-\s]/g, "");
-            // Skip if too different in length
-            if (Math.abs(dcNorm.length - normalized.length) > 4) return false;
-            // Check if one contains the other
-            return dcNorm.includes(normalized) || normalized.includes(dcNorm);
+            // Detect renames: original appears as substring of design name (suffix-based rename)
+            // e.g. Promotion -> PromotionRule, AuditLog -> OperationLog
+            if (dcNorm.includes(normalized) || normalized.includes(dcNorm)) {
+              // Same name is OK (exact match), only flag actual renames
+              return dcNorm !== normalized;
+            }
+            // Also detect near-match renames (e.g. AuditLog -> OperationLog)
+            // Check if they share a significant common suffix/prefix
+            const minLen = Math.min(dcNorm.length, normalized.length);
+            if (minLen < 3) return false;
+            let commonChars = 0;
+            for (let i = 0; i < Math.min(dcNorm.length, normalized.length); i++) {
+              if (dcNorm[i] === normalized[i]) commonChars++;
+            }
+            return commonChars / minLen >= 0.6 && Math.abs(dcNorm.length - normalized.length) <= 6;
           });
           if (similarInDesign.length > 0) {
             issues.push(createIssue({
-              severity: "minor",
+              severity: "major",
               targetTaskId: taskId,
               targetTaskType: "design",
               targetField: "design_text",
@@ -487,7 +498,7 @@ export class EvaluationTool extends BaseTool {
           });
           if (similar.length > 0) {
             issues.push(createIssue({
-              severity: "minor",
+              severity: "major",
               targetTaskId: taskId,
               targetTaskType: "diagrams",
               targetField: "diagrams.class_diagram",
