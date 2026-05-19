@@ -82,7 +82,13 @@ export class OutputScorer {
     const exceptionIdCoverage = exceptionIds.length > 0 ? exceptionHits / exceptionIds.length : 1;
 
     // 5. Naming consistency: check if entity names in class diagram match analysis
-    const classDiagram = String((diag as Record<string, unknown>).class_diagram ?? "");
+    let classDiagram = String((diag as Record<string, unknown>).class_diagram ?? "");
+    if (!classDiagram) {
+      const inner = (diag as Record<string, unknown>).diagrams as Record<string, unknown> | undefined;
+      if (inner && typeof inner.class_diagram === "string") {
+        classDiagram = inner.class_diagram;
+      }
+    }
     let namingHits = 0;
     let namingTotal = 0;
     if (classDiagram && entityNames.length > 0) {
