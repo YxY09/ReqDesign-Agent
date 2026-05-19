@@ -546,6 +546,12 @@ export class MultiAgentRuntime {
       return { didDispatch: true, breakLoop: true, skipFinalSave: true };
     }
 
+    if (decision.action === "pause") {
+      RunManager.markPaused(state);
+      this.logger.info("Workflow paused: " + (decision.reason || "user requested"));
+      return { didDispatch: true, breakLoop: true, skipFinalSave: true };
+    }
+
     return { didDispatch: false, breakLoop: false, skipFinalSave: false };
   }
 
@@ -639,6 +645,9 @@ export class MultiAgentRuntime {
       sessionId: "",
       replanContext: decision.replanContext,
       cause: decision.reason,
+      payload: messageType === "replan" && state.plan
+        ? { current_plan: state.plan }
+        : undefined,
     });
     return this.submitWorker(
       state,
