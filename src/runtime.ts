@@ -1262,6 +1262,7 @@ export class MultiAgentRuntime {
           state.diagrams as Record<string, unknown>,
           state.testCases ?? "",
           state.requirementJson as Record<string, unknown>,
+          state.requirementText,
         );
         this.logger.info("\n" + OutputScorer.format(score));
         manager.saveTraceJson("quality_score.json", score as unknown as Record<string, unknown>);

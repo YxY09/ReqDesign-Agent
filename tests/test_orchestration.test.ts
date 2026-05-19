@@ -375,7 +375,7 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.action).toBe("replan");
   });
 
-  it("does not repeat final-review major repair after one attempt", async () => {
+  it("escalates to replan after exhausting final review repair budget", async () => {
     const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.requirementText = "requirement";
@@ -388,6 +388,9 @@ describe("AgentOrchestrator decisions", () => {
       createArtifact({ taskId: "design-1", type: "design", content: "design" }),
     );
     state.markTaskStatus("design-1", "completed");
+    // Exhaust repair budget (maxFinalMajorRepairPerTask = 3)
+    state.recordRepairAttempt("design-1");
+    state.recordRepairAttempt("design-1");
     state.recordRepairAttempt("design-1");
     state.addVerdict(
       createVerdict({
@@ -413,7 +416,46 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.action).toBe("replan");
   });
 
-  it("does not replan final-review major issues while planner is already running", async () => {
+  it("allows final-review repair within budget (before exhaustion)", async () => {
+    const coordinator = new AgentOrchestrator(null);
+    const state = new WorkflowState();
+    state.requirementText = "requirement";
+    state.plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "design-1", type: "design", description: "design" }),
+      ],
+    });
+    state.addArtifact(
+      createArtifact({ taskId: "design-1", type: "design", content: "design" }),
+    );
+    state.markTaskStatus("design-1", "completed");
+    // Only 1 repair attempt (budget allows 3)
+    state.recordRepairAttempt("design-1");
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        issues: [
+          createIssue({
+            severity: "major",
+            scope: "local",
+            targetTaskId: "design-1",
+            targetTaskType: "design",
+            targetField: "design_text",
+            description: "still missing response format",
+            suggestion: "add response format",
+          }),
+        ],
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        isFinalReview: true,
+      }),
+    );
+
+    const decision = await coordinator.decide(state, makeMailbox());
+    expect(decision.action).toBe("repair");
+  });
+
+  it("escalates past final-review major issues when repair budget exhausted and planner running", async () => {
     const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.requirementText = "requirement";
@@ -427,6 +469,9 @@ describe("AgentOrchestrator decisions", () => {
     );
     state.markTaskStatus("design-1", "completed");
     state.markTaskStatus("planner", "running");
+    // Exhaust repair budget
+    state.recordRepairAttempt("design-1");
+    state.recordRepairAttempt("design-1");
     state.recordRepairAttempt("design-1");
     state.addVerdict(
       createVerdict({

@@ -31,7 +31,7 @@ export class OrchestrationConfig {
   maxEvaluatorTimeouts = 3;
   maxSaveFailures = 3;
   maxFinalMajorIssues = 3;
-  maxFinalMajorRepairPerTask = 1;
+  maxFinalMajorRepairPerTask = 3;
   maxConcurrentEvaluators = 2;
   minRuntimeRemainingForNewWorkSeconds = 120;
 
