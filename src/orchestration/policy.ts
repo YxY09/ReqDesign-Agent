@@ -147,7 +147,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 6) Final review rejected — no safe repair targets (e.g., all issues are analyze-only)
+    // 6) Final review rejected — no safe repair targets
     if (
       snapshot.finalReviewCurrent &&
       !snapshot.finalReviewPassed &&

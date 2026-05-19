@@ -89,7 +89,7 @@ describe("WorkflowState subdomain views", () => {
     expect(state.reviewState.acceptedRevisionsByTask).toBe(state.acceptedRevisionsByTask);
   });
 
-  it("resets final review flags through review subdomain on addArtifact", () => {
+  it("preserves final review state on addArtifact (repair should not reset review)", () => {
     const state = new WorkflowState();
     const reviewState = state.reviewState;
 
@@ -105,12 +105,15 @@ describe("WorkflowState subdomain views", () => {
       }),
     );
 
-    expect(reviewState.finalReviewDone).toBe(false);
-    expect(reviewState.finalReviewPassed).toBe(false);
-    expect(reviewState.finalReviewRevisions).toEqual({});
-    expect(state.finalReviewDone).toBe(false);
-    expect(state.finalReviewPassed).toBe(false);
-    expect(state.finalReviewRevisions).toEqual({});
+    // Repair adding an artifact should NOT reset the final review state.
+    // Resetting finalReviewDone on every addArtifact causes the orchestrator
+    // to skip repair and re-trigger evaluation instead.
+    expect(reviewState.finalReviewDone).toBe(true);
+    expect(reviewState.finalReviewPassed).toBe(true);
+    expect(reviewState.finalReviewRevisions).toEqual({ "design-1": 2 });
+    expect(state.finalReviewDone).toBe(true);
+    expect(state.finalReviewPassed).toBe(true);
+    expect(state.finalReviewRevisions).toEqual({ "design-1": 2 });
     expect(state.finalReviewRevisions).toBe(reviewState.finalReviewRevisions);
   });
 
