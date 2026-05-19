@@ -456,8 +456,8 @@ export class WorkflowState {
     artifactsState.artifacts[artifact.taskId] = artifact;
     this.latestArtifactTaskByType[artifact.type] = artifact.taskId;
     this._syncAggregate(artifact);
-    // Clear major pending for this task — its artifact has changed, needs re-evaluation
-    this.reviewState.majorPendingTaskIds.delete(artifact.taskId);
+    // Clear all major pending — artifacts changed, need fresh evaluation
+    this.reviewState.majorPendingTaskIds.clear();
     // Note: do NOT reset finalReviewDone here — repair adds artifacts which
     // is part of the review-repair cycle. Only clearReviewContext resets it.
     this.qualityStatus = "unknown";
