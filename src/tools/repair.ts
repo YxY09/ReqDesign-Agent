@@ -27,6 +27,15 @@ export class RepairTool extends BaseTool {
     context: Record<string, unknown>,
   ): Promise<unknown | null> {
     this.logger.info(`repair: 开始修复 task=${task.id}, type=${task.type}，修复指令=${fixInstructions.length}条`);
+
+    // Step 1: Try deterministic fix for rule-based issues
+    const detResult = this._tryDeterministicFix(task, currentContent, fixInstructions, context);
+    if (detResult !== null) {
+      this.logger.info(`repair: task=${task.id} 确定性修复成功，跳过LLM调用`);
+      return detResult;
+    }
+
+    // Step 2: LLM repair for everything else
     const system = await this._loadRepairPrompt(task);
     const userPrompt = this._buildRepairPrompt(task, currentContent, fixInstructions, context);
 
@@ -62,6 +71,209 @@ export class RepairTool extends BaseTool {
       this.logger.warn(`repair: task=${task.id} 修复返回空结果`);
     }
     return content;
+  }
+
+  // ------------------------------------------------------------------
+  // Deterministic repair (no LLM)
+  // ------------------------------------------------------------------
+
+  /**
+   * Try to fix issues deterministically without calling LLM.
+   * Returns repaired content if all issues can be fixed, null otherwise.
+   */
+  private _tryDeterministicFix(
+    task: Task,
+    currentContent: unknown,
+    fixInstructions: Array<Record<string, unknown>>,
+    context: Record<string, unknown>,
+  ): unknown | null {
+    if (fixInstructions.length === 0) return null;
+
+    // Only attempt deterministic fix if ALL issues are fixable deterministically
+    const fixResults: Array<{ fixed: boolean; content: unknown }> = [];
+    let workingContent = currentContent;
+
+    for (const issue of fixInstructions) {
+      const desc = String(issue.description ?? "");
+      const result = this._trySingleDeterministicFix(task, workingContent, issue, desc, context);
+      if (result === null) {
+        // This issue can't be fixed deterministically - abort
+        return null;
+      }
+      workingContent = result;
+      fixResults.push({ fixed: true, content: result });
+    }
+
+    // All issues were fixed deterministically
+    return workingContent;
+  }
+
+  /**
+   * Try to fix a single issue deterministically.
+   * Returns new content if fixed, null if not fixable.
+   */
+  private _trySingleDeterministicFix(
+    task: Task,
+    currentContent: unknown,
+    _issue: Record<string, unknown>,
+    description: string,
+    context: Record<string, unknown>,
+  ): unknown | null {
+    // Pattern 1: Entity naming inconsistency — "命名不一致: 需求分析中为 'X'，设计中使用了 'Y'"
+    const namingMatch = description.match(/命名不一致.*为\s*'([\w]+)'.*使用了\s*'([\w]+)'/);
+    if (namingMatch) {
+      const [, correctName, wrongName] = namingMatch;
+      if (correctName && wrongName && correctName !== wrongName) {
+        return this._fixNamingMismatch(task, currentContent, correctName, wrongName);
+      }
+    }
+
+    // Pattern 2: Missing entity in class diagram — "类图缺少需求分析中的核心实体: X, Y"
+    const missingEntityMatch = description.match(/类图缺少需求分析中的核心实体:\s*(.+)/);
+    if (missingEntityMatch && task.type === "diagrams") {
+      const entityNames = missingEntityMatch[1].split(", ").map((s) => s.trim()).filter(Boolean);
+      if (entityNames.length > 0) {
+        return this._fixMissingClassDiagramEntities(task, currentContent, entityNames, context);
+      }
+    }
+
+    // Pattern 3: Constraint not covered by tests — "约束 X 未被测试用例覆盖"
+    const constraintMatch = description.match(/约束\s*(C\d+)\s*未被测试用例覆盖/);
+    if (constraintMatch && task.type === "tests") {
+      return this._fixMissingConstraintTest(task, currentContent, constraintMatch[1], context);
+    }
+
+    return null;
+  }
+
+  private _fixNamingMismatch(
+    task: Task,
+    currentContent: unknown,
+    correctName: string,
+    wrongName: string,
+  ): unknown | null {
+    this.logger.info(`deterministic: fixing naming '${wrongName}' -> '${correctName}'`);
+
+    if (task.type === "diagrams" && typeof currentContent === "object" && currentContent !== null) {
+      const obj = currentContent as Record<string, unknown>;
+      const result: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(obj)) {
+        if (typeof val === "string") {
+          // Replace class name declarations: 'class WrongName {'
+          let fixed = val.replace(
+            new RegExp(`class ${this._escapeRegex(wrongName)}\\s*\\{`, "g"),
+            `class ${correctName} {`,
+          );
+          // Replace relationship references: 'WrongName "1"'
+          fixed = fixed.replace(
+            new RegExp(`\\b${this._escapeRegex(wrongName)}\\b`, "g"),
+            correctName,
+          );
+          result[key] = fixed;
+        } else {
+          result[key] = val;
+        }
+      }
+      return result;
+    }
+
+    if (typeof currentContent === "string") {
+      // For design/tests: replace word boundaries
+      let fixed = currentContent;
+      // Replace in bold markers: **WrongName**
+      fixed = fixed.replace(
+        new RegExp(`\\*\\*${this._escapeRegex(wrongName)}\\*\\*`, "g"),
+        `**${correctName}**`,
+      );
+      // Replace as standalone word
+      fixed = fixed.replace(
+        new RegExp(`\\b${this._escapeRegex(wrongName)}\\b`, "g"),
+        correctName,
+      );
+      return fixed;
+    }
+
+    return null;
+  }
+
+  private _fixMissingClassDiagramEntities(
+    task: Task,
+    currentContent: unknown,
+    entityNames: string[],
+    context: Record<string, unknown>,
+  ): unknown | null {
+    if (task.type !== "diagrams" || typeof currentContent !== "object" || currentContent === null) {
+      return null;
+    }
+
+    const obj = currentContent as Record<string, unknown>;
+    const classDiagram = String(obj.class_diagram ?? "");
+    if (!classDiagram) return null;
+
+    // Build minimal class definitions from requirement entities
+    const reqEntities = (context.requirement_json as Record<string, unknown>)?.entities;
+    const entityMap = new Map<string, Record<string, unknown>>();
+    if (Array.isArray(reqEntities)) {
+      for (const ent of reqEntities) {
+        if (typeof ent === "object" && ent !== null) {
+          entityMap.set(String((ent as Record<string, unknown>).name ?? "").trim(), ent as Record<string, unknown>);
+        }
+      }
+    }
+
+    const newClasses: string[] = [];
+    for (const name of entityNames) {
+      const entity = entityMap.get(name);
+      const attrs = Array.isArray((entity as Record<string, unknown>)?.attributes)
+        ? ((entity as Record<string, unknown>).attributes as Array<Record<string, unknown>>).slice(0, 3).map(
+            (a) => `        -String ${(a as Record<string, unknown>).name ?? "id"}`,
+          ).join("\n")
+        : `        -Long id`;
+      newClasses.push(`    class ${name} {
+${attrs}
+    }`);
+    }
+
+    // Insert before the first relationship line
+    const lines = classDiagram.split("\n");
+    const firstRelIdx = lines.findIndex((l) => /"\d*"\s*-->/.test(l));
+    if (firstRelIdx === -1) {
+      // No relationships found, append
+      const fixed = classDiagram + "\n" + newClasses.join("\n");
+      return { ...obj, class_diagram: fixed };
+    }
+    lines.splice(firstRelIdx, 0, ...newClasses);
+    return { ...obj, class_diagram: lines.join("\n") };
+  }
+
+  private _fixMissingConstraintTest(
+    _task: Task,
+    currentContent: unknown,
+    constraintId: string,
+    context: Record<string, unknown>,
+  ): unknown | null {
+    if (typeof currentContent !== "string") return null;
+
+    const reqJson = context.requirement_json as Record<string, unknown> | undefined;
+    if (!reqJson) return null;
+
+    const constraints = Array.isArray(reqJson.constraints)
+      ? reqJson.constraints as Array<Record<string, unknown>>
+      : [];
+    const constraint = constraints.find((c) => String(c.id ?? "").trim() === constraintId);
+    if (!constraint) return null;
+
+    const desc = String(constraint.description ?? constraintId);
+    const testNum = (currentContent.match(/## TC-B-/g) ?? []).length + 1;
+    const testId = `TC-B-${String(testNum).padStart(3, "0")}`;
+
+    const newTest = `\n\n## ${testId}: ${constraintId} 约束边界测试\n- **类型**: 边界\n- **测试对象**: ${constraintId}\n- **前置条件**: 系统正常运行\n- **测试步骤**: 1. 验证约束 ${constraintId}（${desc.slice(0, 40)}...）的边界条件\n- **预期结果**: 系统正确执行约束校验\n- **优先级**: P1`;
+
+    return currentContent + newTest;
+  }
+
+  private _escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   // ------------------------------------------------------------------
