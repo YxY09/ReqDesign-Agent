@@ -21,6 +21,7 @@ import {
 } from "./agent/types.js";
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/convergence.js";
+import { RequirementNormalizer } from "./tools/normalizer.js";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -483,7 +484,8 @@ export class WorkflowState {
     if (!key || content === null || content === undefined) return;
 
     if (key === "requirement_json" && typeof content === "object" && !Array.isArray(content)) {
-      artifactsState.requirementJson = this._rebuildRequirementAggregate();
+      const raw = this._rebuildRequirementAggregate();
+      artifactsState.requirementJson = RequirementNormalizer.normalize(raw);
     } else if (key === "design_text" && typeof content === "string") {
       if (content) {
         artifactsState.designText = content;

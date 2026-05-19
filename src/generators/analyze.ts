@@ -4,6 +4,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { RequirementNormalizer } from "../tools/normalizer.js";
 
 export class RequirementAnalyzer {
   static readonly REQUIRED_FIELDS = ["actors", "functions", "entities"];
@@ -42,6 +43,7 @@ export class RequirementAnalyzer {
     let result = await this._generateWithRetry(prompt, systemPrompt ?? "", maxRetries);
     result = RequirementAnalyzer._unwrapContentResult(result);
     result = RequirementAnalyzer._normalizeResult(result);
+    result = RequirementNormalizer.normalize(result);
 
     return result;
   }
@@ -158,7 +160,7 @@ export class RequirementAnalyzer {
     }
     RequirementAnalyzer._normalizeFunctions(result);
     RequirementAnalyzer._normalizeEntities(result);
-    RequirementAnalyzer._ensureActorEntities(result);
+    // Actor→entity enforcement removed; RequirementNormalizer handles role merging
     return result;
   }
 
@@ -206,38 +208,6 @@ export class RequirementAnalyzer {
         }
         return RequirementAnalyzer._parseAttributeString(String(attr));
       });
-    }
-  }
-
-  private static _ensureActorEntities(result: Record<string, unknown>): void {
-    const actors = Array.isArray(result.actors) ? result.actors : [];
-    if (!Array.isArray(result.entities)) result.entities = [];
-    const entities = result.entities as unknown[];
-    const existing = new Set(
-      entities
-        .filter((ent): ent is Record<string, unknown> => typeof ent === "object" && ent !== null && !Array.isArray(ent))
-        .map((ent) => String(ent.name ?? "").trim().toLowerCase())
-        .filter(Boolean),
-    );
-
-    for (const actor of actors) {
-      const name = typeof actor === "object" && actor !== null
-        ? String((actor as Record<string, unknown>).name ?? "").trim()
-        : String(actor ?? "").trim();
-      if (!name || existing.has(name.toLowerCase())) continue;
-      const description = typeof actor === "object" && actor !== null
-        ? String((actor as Record<string, unknown>).description ?? `${name} 角色实体`).trim()
-        : `${name} 角色实体`;
-      entities.push({
-        name,
-        description,
-        attributes: [
-          { name: "id", type: "Long", description: `${name} 唯一标识` },
-          { name: "status", type: "String", description: `${name} 状态` },
-        ],
-        relationships: [],
-      });
-      existing.add(name.toLowerCase());
     }
   }
 

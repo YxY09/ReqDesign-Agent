@@ -461,14 +461,16 @@ describe("MermaidValidator", () => {
 // ===========================================================================
 
 describe("RequirementAnalyzer normalization", () => {
-  it("adds actor entities when the model only returned actors", () => {
+  it("normalizer does not create shell actor entities", () => {
     const normalized = RequirementAnalyzer._normalizeResult({
       actors: [{ name: "Merchant", description: "商家" }],
       functions: [],
       entities: [],
     });
 
-    expect((normalized.entities as Array<Record<string, unknown>>).some((entity) => entity.name === "Merchant")).toBe(true);
+    // Merchant should NOT be auto-added as entity (old _ensureActorEntities removed)
+    const entities = normalized.entities as Array<Record<string, unknown>>;
+    expect(entities.some((entity) => entity.name === "Merchant")).toBe(false);
   });
 });
 

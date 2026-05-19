@@ -7,6 +7,7 @@ import { ThreadBackend } from "./execution/backend.js";
 import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
 import { OutputScorer } from "./tools/scorer.js";
+import { RequirementNormalizer } from "./tools/normalizer.js";
 import {
   TaskMailbox,
   createTaskMessage,
@@ -1017,7 +1018,7 @@ export class MultiAgentRuntime {
         artifacts,
         state.requirementText ?? "",
       );
-      state.requirementJson = merged;
+      state.requirementJson = RequirementNormalizer.normalize(merged);
 
       // Persist merged result to disk
       const outputManager = new (this.outputManagerClass)(state.outputDir);
