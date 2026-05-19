@@ -19,7 +19,7 @@ export interface EvaluationRound {
   issues: IssueFingerprint[];
 }
 
-export type Trend = "improving" | "stable" | "worsening" | "unknown";
+export type Trend = "decreasing" | "flat" | "increasing" | "unknown";
 
 // ---------------------------------------------------------------------------
 // ConvergenceTracker
@@ -51,7 +51,9 @@ export class ConvergenceTracker {
   /** Check if the system is stalled (same issues not improving). */
   isStalled(): boolean {
     if (this.rounds.length < this.stallThreshold) return false;
-    return this.stalledFingerprints().length > 0;
+    if (this.stalledFingerprints().length === 0) return false;
+    if (this.trend() === "decreasing") return false;
+    return true;
   }
 
   /** Get fingerprints that have persisted across all recent threshold rounds. */
@@ -70,17 +72,22 @@ export class ConvergenceTracker {
     return persisted;
   }
 
-  /** Determine the trend of issue counts. */
+  /** Determine the trend of issue counts over the last 3 rounds. */
   trend(): Trend {
     if (this.rounds.length < 2) return "unknown";
 
-    const counts = this.rounds.map((r) => r.issues.length);
-    const last = counts[counts.length - 1];
-    const prev = counts[counts.length - 2];
+    const counts = this.rounds.slice(-3).map((r) => r.issues.length);
 
-    if (last < prev) return "improving";
-    if (last > prev) return "worsening";
-    return "stable";
+    const strictlyDecreasing = counts.every(
+      (c, i) => i === 0 || c < counts[i - 1],
+    );
+    const strictlyIncreasing = counts.every(
+      (c, i) => i === 0 || c > counts[i - 1],
+    );
+
+    if (strictlyDecreasing) return "decreasing";
+    if (strictlyIncreasing) return "increasing";
+    return "flat";
   }
 
   /** Number of major issues in the latest round. */

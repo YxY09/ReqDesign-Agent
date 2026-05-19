@@ -67,7 +67,7 @@ describe("ConvergenceTracker", () => {
     expect(fp1).not.toBe(fp2);
   });
 
-  it("reports improving trend correctly", () => {
+  it("reports decreasing trend correctly", () => {
     const tracker = new ConvergenceTracker(3);
     tracker.addRound({
       issues: [
@@ -78,10 +78,10 @@ describe("ConvergenceTracker", () => {
     tracker.addRound({
       issues: [{ fingerprint: "A", severity: "major" }],
     });
-    expect(tracker.trend()).toBe("improving");
+    expect(tracker.trend()).toBe("decreasing");
   });
 
-  it("reports worsening trend correctly", () => {
+  it("reports increasing trend correctly", () => {
     const tracker = new ConvergenceTracker(3);
     tracker.addRound({
       issues: [{ fingerprint: "A", severity: "major" }],
@@ -92,10 +92,10 @@ describe("ConvergenceTracker", () => {
         { fingerprint: "B", severity: "major" },
       ],
     });
-    expect(tracker.trend()).toBe("worsening");
+    expect(tracker.trend()).toBe("increasing");
   });
 
-  it("reports stable trend correctly", () => {
+  it("reports flat trend correctly", () => {
     const tracker = new ConvergenceTracker(3);
     tracker.addRound({
       issues: [{ fingerprint: "A", severity: "major" }],
@@ -103,7 +103,7 @@ describe("ConvergenceTracker", () => {
     tracker.addRound({
       issues: [{ fingerprint: "A", severity: "major" }],
     });
-    expect(tracker.trend()).toBe("stable");
+    expect(tracker.trend()).toBe("flat");
   });
 
   it("handles empty rounds", () => {
@@ -132,6 +132,91 @@ describe("ConvergenceTracker", () => {
     tracker.reset();
     expect(tracker.roundCount).toBe(0);
     expect(tracker.isStalled()).toBe(false);
+  });
+
+  it("should NOT stall when issue count is decreasing despite persistent fingerprints", () => {
+    const tracker = new ConvergenceTracker(3);
+    // 5 issues
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+        { fingerprint: "D", severity: "major" },
+        { fingerprint: "E", severity: "major" },
+      ],
+    });
+    // 4 issues — A, B, C persist
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+        { fingerprint: "F", severity: "major" },
+      ],
+    });
+    // 3 issues — A, B, C persist
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+      ],
+    });
+    expect(tracker.stalledFingerprints()).toContain("A");
+    expect(tracker.stalledFingerprints()).toContain("B");
+    expect(tracker.stalledFingerprints()).toContain("C");
+    expect(tracker.trend()).toBe("decreasing");
+    expect(tracker.isStalled()).toBe(false);
+  });
+
+  it("should stall when issue count is flat AND fingerprints persist", () => {
+    const tracker = new ConvergenceTracker(3);
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+      ],
+    });
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+      ],
+    });
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+      ],
+    });
+    expect(tracker.trend()).toBe("flat");
+    expect(tracker.isStalled()).toBe(true);
+  });
+
+  it("should stall when issue count is increasing", () => {
+    const tracker = new ConvergenceTracker(3);
+    tracker.addRound({
+      issues: [{ fingerprint: "A", severity: "major" }],
+    });
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+      ],
+    });
+    tracker.addRound({
+      issues: [
+        { fingerprint: "A", severity: "major" },
+        { fingerprint: "B", severity: "major" },
+        { fingerprint: "C", severity: "major" },
+      ],
+    });
+    expect(tracker.trend()).toBe("increasing");
+    expect(tracker.isStalled()).toBe(true);
   });
 
   it("roundCount returns number of rounds added", () => {
