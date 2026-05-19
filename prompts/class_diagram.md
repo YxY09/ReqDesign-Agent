@@ -31,6 +31,7 @@
 12. 如果需求实体与设计类名存在语义别名，只保留一个统一命名，不要同时画出多个近义类
 14. **类名必须与需求分析 requirement_json.entities 中的实体名完全一致**，禁止改名（如 Logistics 不能改成 Shipment，Cart 不能改成 CartItem）。如果设计文档使用了不同的名称，以需求分析为准。如需补充分析遗漏的类，必须来源于原始需求文本
 15. 类图的属性和关系应与设计文档中核心类的描述对齐，保持语义一致
+16. **输出前自检**：逐一核对 `requirement_json.entities[].name` 列表，确认每个实体在类图中都有对应类且名字完全一致。如果发现改名（如 WarehouseAdmin 变成了 WarehouseKeeper），立即改回原始名
 
 示例格式：
 ```mermaid

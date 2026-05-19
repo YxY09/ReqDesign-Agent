@@ -1112,7 +1112,7 @@ export class MultiAgentRuntime {
     ) {
       manager.saveSystemDesign(artifact.content);
     } else if (artifact.type === "diagrams" && isRecord(artifact.content)) {
-      manager.saveDiagrams(artifact.content);
+      manager.saveDiagrams(state.diagrams);
     } else if (
       artifact.type === "tests" &&
       typeof artifact.content === "string"
