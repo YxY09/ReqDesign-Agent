@@ -23,6 +23,7 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { Logger, setupLogger } from "./logger.js";
+import { TestCaseGenerator } from "./generators/tests.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -164,6 +165,7 @@ export class OutputManager {
   /** Save Mermaid diagrams → diagrams/ */
   saveDiagrams(diagrams: Record<string, unknown>): void {
     const diagramsObj = diagrams || {};
+    this._writeJson("diagrams.json", { diagrams: diagramsObj }, SUBDIR_DIAGRAMS);
     let saved = 0;
     for (const [name, content] of Object.entries(diagramsObj)) {
       if (content && String(content).trim()) {
@@ -178,7 +180,13 @@ export class OutputManager {
 
   /** Save test cases → tests/ */
   saveTestCases(testCases: string): void {
-    this._writeFile("test_cases.md", testCases || "", SUBDIR_TESTS);
+    const structured = TestCaseGenerator.parseStructuredTestCases(testCases || "");
+    if (structured) {
+      this._writeJson("test_cases.json", { test_cases: structured }, SUBDIR_TESTS);
+      this._writeFile("test_cases.md", TestCaseGenerator.renderStructuredTestCasesMarkdown(testCases), SUBDIR_TESTS);
+    } else {
+      this._writeFile("test_cases.md", testCases || "", SUBDIR_TESTS);
+    }
     this._logger.info(`测试用例已保存 → ${SUBDIR_TESTS}/`);
   }
 
@@ -198,13 +206,20 @@ export class OutputManager {
       this._writeFile("system_design.md", content, taskDir);
     } else if (taskType === "diagrams" && typeof content === "object" && content !== null) {
       const diagramsObj = content as Record<string, unknown>;
+      this._writeJson("diagrams.json", { diagrams: diagramsObj }, taskDir);
       for (const [name, mmdContent] of Object.entries(diagramsObj)) {
         if (mmdContent && String(mmdContent).trim()) {
           this._writeFile(`${name}.mmd`, String(mmdContent), taskDir);
         }
       }
     } else if (taskType === "tests" && typeof content === "string") {
-      this._writeFile("test_cases.md", content, taskDir);
+      const structured = TestCaseGenerator.parseStructuredTestCases(content);
+      if (structured) {
+        this._writeJson("test_cases.json", { test_cases: structured }, taskDir);
+        this._writeFile("test_cases.md", TestCaseGenerator.renderStructuredTestCasesMarkdown(content), taskDir);
+      } else {
+        this._writeFile("test_cases.md", content, taskDir);
+      }
     }
     this._logger.info(`per-task save: ${taskId} → ${taskDir}/`);
   }
@@ -338,7 +353,16 @@ export class OutputManager {
           const obj = e as Record<string, unknown>;
           const attrs = escapeMdCell(
             Array.isArray(obj["attributes"])
-              ? obj["attributes"].map(String).join(", ")
+              ? obj["attributes"].map((attr) => {
+                if (typeof attr === "object" && attr !== null) {
+                  const rec = attr as Record<string, unknown>;
+                  const name = String(rec["name"] ?? "").trim();
+                  const type = String(rec["type"] ?? "").trim();
+                  const desc = String(rec["description"] ?? "").trim();
+                  return `${name}${type ? `: ${type}` : ""}${desc ? ` - ${desc}` : ""}`;
+                }
+                return String(attr);
+              }).join(", ")
               : "",
           );
           lines.push(

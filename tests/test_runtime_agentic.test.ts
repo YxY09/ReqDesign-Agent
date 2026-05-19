@@ -416,6 +416,23 @@ describe("WorkflowState — artifacts", () => {
     expect(Object.keys(snap)).toEqual(["t1"]);
     expect(snap["t1"].content).toBe("hello");
   });
+
+  it("final artifact snapshots use aggregate analysis and latest single-output artifacts", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "analyze-1", type: "analyze", content: { actors: ["A"], functions: [{ id: "F001" }] } }));
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "old design" }));
+    state.addArtifact(createArtifact({ taskId: "design-2", type: "design", content: "new design" }));
+    state.addArtifact(createArtifact({ taskId: "tests-1", type: "tests", content: "old tests" }));
+    state.addArtifact(createArtifact({ taskId: "tests-2", type: "tests", content: "new tests" }));
+
+    const snap = state.finalArtifactSnapshots();
+
+    expect(snap["analyze-final"].content).toEqual({ actors: ["A"], functions: [{ id: "F001" }] });
+    expect(snap["design-1"]).toBeUndefined();
+    expect(snap["design-2"].content).toBe("new design");
+    expect(snap["tests-1"]).toBeUndefined();
+    expect(snap["tests-2"].content).toBe("new tests");
+  });
 });
 
 // ---------------------------------------------------------------------------

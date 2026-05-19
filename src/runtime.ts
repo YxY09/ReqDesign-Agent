@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import type { AgentConfig } from "./config.js";
 import { ConstitutionLoader, setConstitution } from "./constitution.js";
 import { DependencyProvider, WorkerFactory } from "./execution/factory.js";
@@ -162,6 +162,13 @@ export class MultiAgentRuntime {
     this.logger = setupLogger("reqdesign.runtime", config.logging.level);
     this.trace = new TraceLogger();
     this.llm = new LLMClient(config);
+    this.llm.setTraceSink((info) => this.trace.logLlmCall(
+      info.tag || "llm",
+      "chat",
+      [{ role: "user", content: info.promptPreview }],
+      info.responseText,
+      info.durationMs / 1000,
+    ));
 
     const projectRoot = resolve(process.cwd());
     const constitution = new ConstitutionLoader([
@@ -242,6 +249,10 @@ export class MultiAgentRuntime {
     state.goal = goal;
     state.inputPath = inputPath;
     state.outputDir = outputDir;
+
+    // Set up real-time trace persistence
+    const traceDir = join(outputDir, "traces");
+    this.trace.setPersistPath(join(traceDir, "llm_trace.json"));
     state.startTime = Date.now() / 1000;
 
     // Open run log
@@ -535,6 +546,12 @@ export class MultiAgentRuntime {
       return { didDispatch: true, breakLoop: true, skipFinalSave: true };
     }
 
+    if (decision.action === "pause") {
+      RunManager.markPaused(state);
+      this.logger.info("Workflow paused: " + (decision.reason || "user requested"));
+      return { didDispatch: true, breakLoop: true, skipFinalSave: true };
+    }
+
     return { didDispatch: false, breakLoop: false, skipFinalSave: false };
   }
 
@@ -628,6 +645,9 @@ export class MultiAgentRuntime {
       sessionId: "",
       replanContext: decision.replanContext,
       cause: decision.reason,
+      payload: messageType === "replan" && state.plan
+        ? { current_plan: state.plan }
+        : undefined,
     });
     return this.submitWorker(
       state,
@@ -647,6 +667,12 @@ export class MultiAgentRuntime {
     if (state.taskStatus("evaluator") === "running") {
       return false;
     }
+    // Build previous issues from last verdict for incremental review
+    const lastVerdict = state.latestVerdict;
+    const previousIssues = lastVerdict?.issues?.map((i) => ({
+      severity: i.severity,
+      description: `${i.description} (task: ${i.targetTaskId}, field: ${i.targetField})`,
+    })) ?? [];
     const context = new SessionContext({
       taskId: "evaluator",
       taskType: "evaluator",
@@ -663,6 +689,7 @@ export class MultiAgentRuntime {
       ),
       isDirectMode: state.isDirectMode,
       evaluateScope: [...evaluateScope],
+      previousIssues,
     });
     const message = createTaskMessage({
       type: "spawn",

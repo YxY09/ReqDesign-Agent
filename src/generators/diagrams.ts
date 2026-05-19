@@ -67,20 +67,27 @@ export class DiagramGenerator {
     }
     for (let i = blocks.length - 1; i >= 0; i--) {
       if (mermaidKeywords.some((kw) => blocks[i].startsWith(kw))) {
-        return blocks[i];
+        return DiagramGenerator._normalizeMermaid(blocks[i]);
       }
     }
 
     // Direct mermaid
-    if (mermaidKeywords.some((kw) => text.startsWith(kw))) return text;
+    if (mermaidKeywords.some((kw) => text.startsWith(kw))) return DiagramGenerator._normalizeMermaid(text);
 
     // Find keyword start
     for (const kw of mermaidKeywords) {
       const idx = text.indexOf(kw);
-      if (idx >= 0) return text.slice(idx).trim();
+      if (idx >= 0) return DiagramGenerator._normalizeMermaid(text.slice(idx).trim());
     }
 
-    return text;
+    return DiagramGenerator._normalizeMermaid(text);
+  }
+
+  static _normalizeMermaid(text: string): string {
+    return text
+      .replace(/<br\s*\/?>/gi, " / ")
+      .replace(/\s+$/gm, "")
+      .trim();
   }
 
   async generateClassDiagram(

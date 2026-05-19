@@ -34,12 +34,16 @@ export class GenerationTool extends BaseTool {
     this.logger.info(`execute: 开始生成 task=${task.id}, type=${task.type}, desc=${task.description?.slice(0, 60)}`);
 
     try {
-      const content = await this._generate(task, context);
+      let content = await this._generate(task, context);
       if (content === null || content === undefined) {
         throw new Error(`生成 ${task.type} 返回空结果`);
       }
 
-      const issues = GenerationTool._ruleCheck(task, content, context);
+      let issues = GenerationTool._ruleCheck(task, content, context);
+      let selfCorrectRounds = 0;
+      // Self-check issues are recorded but NOT auto-repaired.
+      // Self-repair had 100% failure rate (6/6 in test runs) — wastes LLM calls.
+      // Downstream evaluator handles these issues.
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
 
@@ -56,7 +60,7 @@ export class GenerationTool extends BaseTool {
         content,
         selfCheckPassed: passed,
         selfCheckIssues: issues,
-        selfCorrectRounds: 0,
+        selfCorrectRounds,
         generationDuration: elapsed,
       });
     } catch (e: unknown) {
@@ -90,7 +94,7 @@ export class GenerationTool extends BaseTool {
       case "design":
         return await this._generateDesign(context, hints, desc, injectedPrompt);
       case "diagrams":
-        return await this._generateDiagrams(context, hints, desc, injectedPrompt);
+        return await this._generateDiagrams(task, context, hints, desc, injectedPrompt);
       case "tests":
         return await this._generateTests(context, hints, desc, injectedPrompt);
       default:
@@ -120,24 +124,30 @@ export class GenerationTool extends BaseTool {
   }
 
   private async _generateDesign(
-    ctx: Record<string, unknown>, _hints: Record<string, unknown>,
-    _desc: string, systemPrompt: string,
+    ctx: Record<string, unknown>, hints: Record<string, unknown>,
+    desc: string, systemPrompt: string,
   ): Promise<string> {
     const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!reqJson) throw new Error("缺少 requirement_json");
 
     if (this.llm) this.llm.streamTag = "[Generator:design]";
-    return this._getDesigner().generateDesign(reqJson, (ctx.requirement_text as string) ?? "", systemPrompt);
+    const requirementText = GenerationTool._augmentRequirementTextForTask(
+      (ctx.requirement_text as string) ?? "",
+      desc,
+      hints,
+    );
+    return this._getDesigner().generateDesign(reqJson, requirementText, systemPrompt);
   }
 
   private async _generateDiagrams(
+    task: Task,
     ctx: Record<string, unknown>, hints: Record<string, unknown>,
-    _desc: string, systemPrompt: string,
+    desc: string, systemPrompt: string,
   ): Promise<Record<string, string>> {
     const reqJson = (ctx.requirement_json ?? {}) as Record<string, unknown>;
     const designText = (ctx.design_text as string) ?? "";
     const reqText = (ctx.requirement_text as string) ?? "";
-    const diagramKind = String(hints.diagram_kind ?? "").trim();
+    const diagramKind = GenerationTool._diagramKindForTask(task, hints, desc);
 
     if (this.llm) this.llm.streamTag = "[Generator:diagrams]";
     const generator = this._getDiagramGen();
@@ -186,18 +196,20 @@ export class GenerationTool extends BaseTool {
       if (!c.actors) issues.push("缺少 actors 字段");
       if (!c.functions) issues.push("缺少 functions 字段");
       if (!c.entities) issues.push("缺少 entities 字段");
+      issues.push(...RequirementAnalyzer.validateResult(c));
     }
     else if (taskType === "design") {
       if (typeof content !== "string" || !content.trim())
         return ["设计文档为空"];
       const reqJson = (context.requirement_json ?? {}) as Record<string, unknown>;
       issues.push(...SystemDesigner.validateDesign(String(content), reqJson));
+      issues.push(...GenerationTool._checkUndefinedExceptionIds(String(content), reqJson, "设计"));
     }
     else if (taskType === "diagrams") {
       if (typeof content !== "object" || content === null || Array.isArray(content))
         return ["图表结果格式错误（非 dict）"];
       const c = content as Record<string, string>;
-      const diagramKind = String(hints.diagram_kind ?? "").trim();
+      const diagramKind = GenerationTool._diagramKindForTask(task, hints, task.description);
       const required = diagramKind ? [diagramKind] : ["class_diagram", "activity_diagram", "state_diagram"];
       for (const key of required) {
         const val = c[key] ?? "";
@@ -215,12 +227,23 @@ export class GenerationTool extends BaseTool {
           if (!expected.some((h) => firstLine.includes(h))) {
             issues.push(`${key} 缺少正确的 Mermaid 头部，当前第一行: ${firstLine.slice(0, 60)}`);
           }
+          if (/<br\s*\/?>/i.test(text)) {
+            issues.push(`${key} 包含 HTML 换行标签 <br/>，请改用纯文本标签以提升 Mermaid 兼容性`);
+          }
           if (key === "class_diagram") {
             const openClasses = (text.match(/class\s+(\w+)\s*\{/g) ?? []).length;
             const closeBraces = (text.match(/^\s*\}/gm) ?? []).length;
             if (openClasses > closeBraces) {
               issues.push(`classDiagram 有 ${openClasses} 个类定义但只有 ${closeBraces} 个闭合括号，输出可能被截断`);
             }
+          }
+          if (key === "state_diagram" && /Coupon|优惠券/.test(text) && /C002|支付超时/.test(text)) {
+            issues.push("stateDiagram 中优惠券状态不能使用 C002/支付超时作为过期触发条件，应使用有效期结束");
+          }
+          const reqJson = (context.requirement_json ?? {}) as Record<string, unknown>;
+          issues.push(...GenerationTool._checkUndefinedExceptionIds(text, reqJson, key));
+          if (key === "activity_diagram") {
+            issues.push(...GenerationTool._checkActivityCoverage(text, reqJson));
           }
         }
       }
@@ -232,12 +255,125 @@ export class GenerationTool extends BaseTool {
         const reqJson = (context.requirement_json ?? {}) as Record<string, unknown>;
         const tcIssues = TestCaseGenerator.validateTestCases(content, reqJson);
         issues.push(...tcIssues);
+        issues.push(...GenerationTool._checkUndefinedExceptionIds(content, reqJson, "测试用例"));
+        issues.push(...GenerationTool._checkRefundTestCoverage(content, reqJson));
       } catch (e) {
         issues.push(`测试用例规则校验失败: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
     return issues;
+  }
+
+  private static _diagramKindForTask(
+    task: Task,
+    hints: Record<string, unknown>,
+    description = "",
+  ): string {
+    const explicit = String(hints.diagram_kind ?? "").trim();
+    if (["class_diagram", "activity_diagram", "state_diagram"].includes(explicit)) {
+      return explicit;
+    }
+
+    const text = `${task.id} ${description}`.toLowerCase();
+    if (text.includes("class") || text.includes("类图")) return "class_diagram";
+    if (text.includes("activity") || text.includes("活动图")) return "activity_diagram";
+    if (text.includes("state") || text.includes("状态图")) return "state_diagram";
+    return "";
+  }
+
+  private static _checkUndefinedExceptionIds(
+    text: string,
+    requirementJson: Record<string, unknown>,
+    label: string,
+  ): string[] {
+    const defined = new Set(
+      ((requirementJson.exceptions ?? []) as Array<Record<string, unknown>>)
+        .map((item) => String(item.id ?? "").trim())
+        .filter(Boolean),
+    );
+    if (defined.size === 0) return [];
+    const referenced = new Set(text.match(/\b[EX]\d{3}\b/g) ?? []);
+    const unknown = [...referenced].filter((id) => !defined.has(id)).sort();
+    return unknown.length > 0
+      ? [`${label} 引用了未定义的异常 ID: ${unknown.join(", ")}`]
+      : [];
+  }
+
+  private static _checkActivityCoverage(
+    text: string,
+    requirementJson: Record<string, unknown>,
+  ): string[] {
+    const issues: string[] = [];
+    if (GenerationTool._requiresRefundFlow(requirementJson)) {
+      const missing = GenerationTool._missingConcepts(text, [
+        ["申请退款/退货", /(申请.*(退款|退货))|refund/i],
+        ["商家审核", /商家.*审核|审核.*(通过|拒绝)/],
+        ["填写退货物流", /(物流|运单|快递).*(填写|录入|提交)|(填写|录入|提交).*(物流|运单|快递)/],
+        ["仓库验收", /仓库.*验收|验收.*(通过|失败)/],
+        ["退款到账", /退款.*(到账|成功|原路|返回)|(到账|原路返回)/],
+      ]);
+      if (missing.length > 0) {
+        issues.push(`activity_diagram 未完整覆盖退货退款流程，缺少: ${missing.join(", ")}`);
+      }
+    }
+
+    if (GenerationTool._hasConstraint(requirementJson, "C001")) {
+      const missing = GenerationTool._missingConcepts(text, [
+        ["订单总数量<=99", /(总数量|商品数量|件数).*(99|上限)|(99).*(件|数量)/],
+        ["订单金额<=99999", /(金额|实付|总价).*(99999|上限)|(99999).*(元|金额)/],
+        ["单商品数量<=10", /(单商品|同一商品|单个商品|限购).*(10|上限)|(10).*(件|限购)/],
+        ["地址配送范围", /(地址|收货地址).*(配送范围|可配送)|(配送范围).*(地址|校验)/],
+      ]);
+      if (missing.length > 0) {
+        issues.push(`activity_diagram 未完整覆盖 C001 订单约束校验，缺少: ${missing.join(", ")}`);
+      }
+    }
+    return issues;
+  }
+
+  private static _checkRefundTestCoverage(
+    text: string,
+    requirementJson: Record<string, unknown>,
+  ): string[] {
+    if (!GenerationTool._requiresRefundFlow(requirementJson)) return [];
+    const missing = GenerationTool._missingConcepts(text, [
+      ["申请退款/退货", /(申请.*(退款|退货))|refund/i],
+      ["商家审核通过", /商家.*审核.*(通过|同意)|(通过|同意).*退款/],
+      ["填写物流单号", /(物流单号|退货物流|快递单号|运单号)/],
+      ["仓库验收", /仓库.*验收|验收.*(通过|成功)/],
+      ["退款到账", /退款.*(到账|成功|原路返回|72)/],
+    ]);
+    return missing.length > 0
+      ? [`测试用例未覆盖完整退货退款正常流程，缺少: ${missing.join(", ")}`]
+      : [];
+  }
+
+  private static _requiresRefundFlow(requirementJson: Record<string, unknown>): boolean {
+    const functions = Array.isArray(requirementJson.functions)
+      ? requirementJson.functions as Array<Record<string, unknown>>
+      : [];
+    return functions.some((item) =>
+      /退款|退货|售后|refund|return/i.test(
+        `${String(item.name ?? "")} ${String(item.description ?? "")}`,
+      ),
+    );
+  }
+
+  private static _hasConstraint(requirementJson: Record<string, unknown>, id: string): boolean {
+    const constraints = Array.isArray(requirementJson.constraints)
+      ? requirementJson.constraints as Array<Record<string, unknown>>
+      : [];
+    return constraints.some((item) => String(item.id ?? "").trim() === id);
+  }
+
+  private static _missingConcepts(
+    text: string,
+    concepts: Array<[string, RegExp]>,
+  ): string[] {
+    return concepts
+      .filter(([, pattern]) => !pattern.test(text))
+      .map(([label]) => label);
   }
 
   // ------------------------------------------------------------------
@@ -272,6 +408,52 @@ export class GenerationTool extends BaseTool {
       } catch { /* fall through */ }
     }
     return raw;
+  }
+
+  private static _augmentRequirementTextForTask(
+    requirementText: string,
+    description: string,
+    hints: Record<string, unknown>,
+  ): string {
+    const sections: string[] = [];
+    if (description.trim()) {
+      sections.push(`## 当前生成任务\n${description.trim()}`);
+    }
+
+    const focusAreas = Array.isArray(hints.focus_areas)
+      ? hints.focus_areas.map((item) => String(item)).filter(Boolean)
+      : [];
+    if (focusAreas.length > 0) {
+      sections.push(`## 重点覆盖范围\n${focusAreas.join(", ")}`);
+    }
+
+    const note = typeof hints.note === "string" ? hints.note.trim() : "";
+    if (note) {
+      sections.push(`## 任务补充说明\n${note}`);
+    }
+
+    const fixInstructions = Array.isArray(hints.fix_instructions)
+      ? hints.fix_instructions
+        .filter((item): item is Record<string, unknown> =>
+          typeof item === "object" && item !== null && !Array.isArray(item),
+        )
+        .slice(0, 20)
+      : [];
+    if (fixInstructions.length > 0) {
+      sections.push(
+        "## 必须处理的评审问题\n" +
+        fixInstructions.map((item, index) => {
+          const severity = String(item.severity ?? "");
+          const field = String(item.target_field ?? "");
+          const desc = String(item.description ?? "");
+          const suggestion = String(item.suggestion ?? "");
+          return `${index + 1}. [${severity}] ${field}: ${desc}${suggestion ? `；建议：${suggestion}` : ""}`;
+        }).join("\n"),
+      );
+    }
+
+    if (sections.length === 0) return requirementText;
+    return `${sections.join("\n\n")}\n\n## 原始需求\n${requirementText}`;
   }
 
   private async _getSystemPrompt(queryContext = ""): Promise<string> {

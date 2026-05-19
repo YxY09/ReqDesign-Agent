@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import { existsSync } from "node:fs";
 import { AgentConfig } from "./config.js";
-import { setConsoleLoggingEnabled, setupLogger, closeSharedLog } from "./logger.js";
+import { setConsoleLoggingEnabled, setupLogger, closeSharedLog, writeToSharedLog } from "./logger.js";
 import { MultiAgentRuntime } from "./runtime.js";
 import { BenchmarkRunner } from "./benchmark/runBenchmark.js";
 import { TerminalChatApp } from "./tui/chatApp.js";
@@ -115,9 +115,15 @@ async function main(): Promise<void> {
     });
     streamer.close();
     const summary = (report.summary as Record<string, unknown> | undefined) ?? {};
-    process.stdout.write(`\nBenchmark complete. Output directory: ${args.output}\n`);
-    process.stdout.write(`Passed: ${String(summary.passed ?? 0)} / ${String(report.total_cases ?? 0)}\n`);
-    process.stdout.write(`Average overall: ${String((summary.avg_scores as Record<string, unknown> | undefined)?.overall ?? 0)}\n`);
+    const benchLines = [
+      `Benchmark complete. Output directory: ${args.output}`,
+      `Passed: ${String(summary.passed ?? 0)} / ${String(report.total_cases ?? 0)}`,
+      `Average overall: ${String((summary.avg_scores as Record<string, unknown> | undefined)?.overall ?? 0)}`,
+    ];
+    for (const line of benchLines) {
+      process.stdout.write(line + "\n");
+      writeToSharedLog(line);
+    }
     return;
   }
 
@@ -128,28 +134,39 @@ async function main(): Promise<void> {
   });
   streamer.close();
 
-  process.stdout.write(`\nTask finished. Output directory: ${args.output}\n`);
-  process.stdout.write(`  backend: ${runtime.executionBackendName}\n`);
-  process.stdout.write(`  artifacts: ${String(state.totalArtifacts)}\n`);
-  process.stdout.write(`  finished: ${state.finished ? "yes" : "no"}\n`);
+  const summaryLines = [
+    `Run ended. Output directory: ${args.output}`,
+    `  backend: ${runtime.executionBackendName}`,
+    `  artifacts: ${String(state.totalArtifacts)}`,
+    `  finished: ${state.finished ? "yes" : "no"}`,
+    `  run status: ${state.runStatus}`,
+    `  quality status: ${state.qualityStatus}`,
+    `  persist status: ${state.persistStatus}`,
+  ];
   if (state.latestVerdict) {
-    process.stdout.write(`  verdict: ${state.latestVerdict.passed ? "passed" : "rejected"}\n`);
-    process.stdout.write(`  review rounds: ${String(state.verdicts.length)}\n`);
+    summaryLines.push(`  verdict: ${state.latestVerdict.passed ? "passed" : "rejected"}`);
+    summaryLines.push(`  review rounds: ${String(state.verdicts.length)}`);
   }
   if (state.plan) {
-    process.stdout.write(`  planned tasks: ${String(state.plan.tasks.length)}\n`);
+    summaryLines.push(`  planned tasks: ${String(state.plan.tasks.length)}`);
   }
   if (state.errors.length > 0) {
-    process.stdout.write(`  errors: ${String(state.errors.length)}\n`);
+    summaryLines.push(`  errors: ${String(state.errors.length)}`);
+  }
+  for (const line of summaryLines) {
+    process.stdout.write(line + "\n");
+    writeToSharedLog(line);
   }
 
-  if (!state.persisted && state.runStatus === "failed") {
+  if (!state.persisted) {
     process.exitCode = 1;
   }
   closeSharedLog();
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  const msg = error instanceof Error ? error.stack ?? error.message : String(error);
+  process.stderr.write(msg + "\n");
+  writeToSharedLog(msg);
   process.exitCode = 1;
 }).finally(() => closeSharedLog());

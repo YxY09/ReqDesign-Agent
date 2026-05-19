@@ -20,7 +20,12 @@ import {
 } from "../src/agent/types.js";
 import { AgentOrchestrator } from "../src/agent/orchestrator.js";
 import { PlanningTool } from "../src/tools/planning.js";
-import { TaskMailbox, type TaskNotification } from "../src/messaging.js";
+import {
+  createTaskMessage,
+  TaskMailbox,
+  type TaskNotification,
+} from "../src/messaging.js";
+import { PlanningSession } from "../src/tools/sessions.js";
 import {
   SessionContext,
   WorkerSession,
@@ -200,6 +205,30 @@ describe("Coordinator replan fallback", () => {
     expect(decision).toBeDefined();
   });
 
+  it("should wait instead of replanning when planner is already running", async () => {
+    const coordinator = new AgentOrchestrator(null);
+    const state = new WorkflowState();
+    state.plan = makePlan([makeTask("design-1", "design")]);
+    state.progress.noProgressStreak = 4;
+    state.markTaskStatus("planner", "running");
+
+    const decision = await coordinator.decide(state, new TaskMailbox());
+    expect(decision.action).toBe("inspect");
+  });
+
+  it("should stop replanning after repeated planner failures", async () => {
+    const coordinator = new AgentOrchestrator(null);
+    const state = new WorkflowState();
+    state.plan = makePlan([makeTask("design-1", "design")]);
+    state.progress.noProgressStreak = 4;
+    state.recordPlannerFailure();
+    state.recordPlannerFailure();
+    state.recordPlannerFailure();
+
+    const decision = await coordinator.decide(state, new TaskMailbox());
+    expect(decision.action).not.toBe("replan");
+  });
+
   it("should handle task with high rejection streak", async () => {
     const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
@@ -295,6 +324,54 @@ describe("Planner replan", () => {
     expect(mutation.dropTaskIds).toContain("analyze-1");
   });
 
+  it("PlanningSession replan requires current_plan payload and uses it when provided", async () => {
+    const fakeLLM = new FakeLLM({
+      reasoning: "split failed design",
+      add_tasks: [{ id: "design-2", type: "design", description: "redo design" }],
+      drop_task_ids: ["design-1"],
+      update_tasks: [],
+      reorder_edges: {},
+    });
+    const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
+    const currentPlan = makePlan([
+      makeTask("analyze-1", "analyze"),
+      makeTask("design-1", "design", "design", ["analyze-1"]),
+    ]);
+    const session = new PlanningSession(
+      "planner-session",
+      new SessionContext({
+        taskId: "planner",
+        taskType: "planner",
+        requirementText: "test requirement",
+      }),
+      null,
+      null,
+      planner,
+    );
+
+    const missing = await session.run(createTaskMessage({
+      type: "replan",
+      taskId: "planner",
+    }));
+    expect(missing.status).toBe("failed");
+    expect(missing.error).toContain("no plan to mutate");
+
+    const completed = await session.run(createTaskMessage({
+      type: "replan",
+      taskId: "planner",
+      payload: {
+        current_plan: currentPlan,
+        completed_task_ids: ["analyze-1"],
+        failed_task_ids: ["design-1"],
+        replan_reason: "design failed",
+      },
+    }));
+    expect(completed.status).toBe("completed");
+    const mutation = completed.result as PlanMutation;
+    expect(mutation.dropTaskIds).toContain("design-1");
+    expect(mutation.addTasks[0]?.id).toBe("design-2");
+  });
+
   it("_parseResponse should add all analyze deps to design", () => {
     const fakeLLM = new FakeLLM({});
     const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
@@ -351,5 +428,62 @@ describe("Planner replan", () => {
     expect(mutation.dropTaskIds).toContain("design-1");
     expect(mutation.addTasks.length).toBeGreaterThan(0);
     expect(mutation.reasoning).toContain("fallback");
+  });
+
+  it("adds concrete remediation tasks for final aggregate activity and test issues", async () => {
+    const fakeLLM = new FakeLLM({
+      reasoning: "only fixed design, missed downstream targets",
+      add_tasks: [{ id: "design-2", type: "design", description: "redo design", depends_on: ["analyze-1"] }],
+      update_tasks: [],
+      drop_task_ids: [],
+      reorder_edges: {},
+    });
+    const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
+    const currentPlan = makePlan([
+      makeTask("analyze-1", "analyze"),
+      makeTask("design-1", "design", "design", ["analyze-1"]),
+      makeTask("diagrams-activity", "diagrams", "activity", ["design-1"]),
+      makeTask("tests-1", "tests", "tests", ["design-1"]),
+    ]);
+
+    const mutation = await planner.replan(
+      "refund requirement",
+      currentPlan,
+      ["analyze-1", "design-1", "diagrams-activity", "tests-1"],
+      [],
+      [
+        createIssue({
+          severity: "major",
+          scope: "local",
+          targetTaskId: "diagrams-final",
+          targetTaskType: "diagrams",
+          targetField: "activity_diagram",
+          description: "活动图缺少退货退款流程",
+          suggestion: "补充退货退款活动分支",
+        }),
+        createIssue({
+          severity: "major",
+          scope: "local",
+          targetTaskId: "tests-1",
+          targetTaskType: "tests",
+          targetField: "test_cases",
+          description: "测试缺少完整退货退款正常场景",
+          suggestion: "补充退款到账正常流",
+        }),
+      ],
+      {},
+      "final review rejected",
+    );
+
+    expect(mutation.addTasks.some((task) =>
+      task.type === "diagrams" &&
+      task.contextHints.diagram_kind === "activity_diagram",
+    )).toBe(true);
+    expect(mutation.addTasks.some((task) => task.type === "tests")).toBe(true);
+    const activityTask = mutation.addTasks.find((task) =>
+      task.type === "diagrams" &&
+      task.contextHints.diagram_kind === "activity_diagram",
+    );
+    expect(activityTask?.dependsOn).toContain("design-2");
   });
 });

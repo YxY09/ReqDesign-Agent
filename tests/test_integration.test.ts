@@ -15,6 +15,7 @@ import {
 import { join } from "node:path";
 
 import { InputLoader } from "../src/inputLoader.js";
+import { RequirementAnalyzer } from "../src/generators/analyze.js";
 import { DiagramGenerator } from "../src/generators/diagrams.js";
 import { MermaidValidator } from "../src/generators/mermaid.js";
 import { OutputManager } from "../src/outputManager.js";
@@ -456,6 +457,22 @@ describe("MermaidValidator", () => {
 });
 
 // ===========================================================================
+// RequirementAnalyzer
+// ===========================================================================
+
+describe("RequirementAnalyzer normalization", () => {
+  it("adds actor entities when the model only returned actors", () => {
+    const normalized = RequirementAnalyzer._normalizeResult({
+      actors: [{ name: "Merchant", description: "商家" }],
+      functions: [],
+      entities: [],
+    });
+
+    expect((normalized.entities as Array<Record<string, unknown>>).some((entity) => entity.name === "Merchant")).toBe(true);
+  });
+});
+
+// ===========================================================================
 // OutputManager
 // ===========================================================================
 
@@ -479,7 +496,30 @@ describe("OutputManager", () => {
     expect(existsSync(join(outDir, "diagrams", "class_diagram.mmd"))).toBe(true);
     expect(existsSync(join(outDir, "diagrams", "activity_diagram.mmd"))).toBe(true);
     expect(existsSync(join(outDir, "diagrams", "state_diagram.mmd"))).toBe(true);
+    expect(existsSync(join(outDir, "diagrams", "diagrams.json"))).toBe(true);
     expect(existsSync(join(outDir, "tests", "test_cases.md"))).toBe(true);
+  });
+
+  it("saves structured test cases as JSON plus Markdown", () => {
+    const outDir = join(TMP_DIR, "output_structured_tests");
+    const mgr = new OutputManager(outDir);
+    mgr.saveTestCases(JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-N-001",
+          title: "正常登录",
+          type: "正常",
+          target: "F001 登录",
+          preconditions: "用户已注册",
+          steps: ["输入账号", "输入密码"],
+          expected_result: "登录成功",
+          priority: "P0",
+        },
+      ],
+    }));
+
+    expect(existsSync(join(outDir, "tests", "test_cases.json"))).toBe(true);
+    expect(readFileSync(join(outDir, "tests", "test_cases.md"), "utf-8")).toContain("## TC-N-001");
   });
 
   it("JSON output can be read back correctly", () => {

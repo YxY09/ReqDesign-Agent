@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SystemDesigner } from "../src/generators/design.js";
+import { GenerationTool } from "../src/tools/generation.js";
+import { createTask } from "../src/agent/types.js";
 
 describe("SystemDesigner.validateDesign", () => {
   it("should warn on missing required sections", () => {
@@ -72,6 +74,28 @@ describe("SystemDesigner.validateDesign", () => {
     expect(warnings.some((w) => w.includes("Coupon"))).toBe(true);
   });
 
+  it("should warn on extra core classes listed in the core class table", () => {
+    const design =
+      "## 模块划分\n\n包含F001。\n\n## 核心类/接口设计\n\n| 类名 | 职责 |\n|------|------|\n| `Order` | 订单 |\n| `OrderItem` | 订单明细 |\n\n## 数据流\n\n请求处理流程。";
+    const req = {
+      functions: [{ id: "F001", name: "CreateOrder" }],
+      entities: [{ name: "Order", description: "订单" }],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) => w.includes("OrderItem"))).toBe(true);
+  });
+
+  it("should warn when class diagrams reference undefined classes", () => {
+    const design =
+      "## 模块划分\n\n包含F001。\n\n## 核心类\n\n```mermaid\nclassDiagram\nclass Order {\n  +List~OrderItem~ items\n}\nOrder \"1\" --> \"*\" OrderItem : contains\n```\n\n## 数据流\n\n请求处理流程。";
+    const req = {
+      functions: [{ id: "F001", name: "CreateOrder" }],
+      entities: [{ name: "Order", description: "订单" }],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) => w.includes("OrderItem"))).toBe(true);
+  });
+
   it("should have no coverage warnings when all covered", () => {
     const design =
       "## 模块划分\n\n包含F001用户登录功能。\n\n## 核心类\n\nUser类。\n\n## 数据流\n\n请求处理流程。";
@@ -84,12 +108,37 @@ describe("SystemDesigner.validateDesign", () => {
     expect(coverageWarnings.length).toBe(0);
   });
 
+  it("should treat function ID references as coverage even when English names are absent", () => {
+    const design =
+      "## 模块划分\n\n| 模块 | 对应功能 |\n|---|---|\n| 用户认证模块 | F001 |\n\n## 核心类\n\nUser类。\n\n## 数据流\n\n请求处理流程。";
+    const req = {
+      functions: [{ id: "F001", name: "UserRegistrationAndLogin" }],
+      entities: [{ name: "User", description: "用户" }],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) => w.includes("F001"))).toBe(false);
+  });
+
   it("should not crash when functions/entities are non-array", () => {
     const design = "## 模块划分\n\n## 核心类\n\n## 数据流";
     const req = { functions: "not_a_list", entities: "also_not_a_list" };
     const warnings = SystemDesigner.validateDesign(design, req);
     const coverageWarnings = warnings.filter((w) => w.includes("未在设计中体现"));
     expect(coverageWarnings.length).toBe(0);
+  });
+
+  it("should require constraints and original exception IDs to be covered", () => {
+    const design =
+      "## 模块划分\n\n包含F001。\n\n## 核心类\n\nOrder类。\n\n## 数据流\n\n请求处理流程。\n\n## 约束与异常处理设计\n\nC001 已处理。E001 支付失败处理。";
+    const req = {
+      functions: [{ id: "F001", name: "CreateOrder" }],
+      entities: [{ name: "Order", description: "订单" }],
+      constraints: [{ id: "C001", description: "订单约束" }],
+      exceptions: [{ id: "X001", description: "支付失败" }],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) => w.includes("异常 X001 未在设计中体现"))).toBe(true);
+    expect(warnings.some((w) => w.includes("未定义的异常 ID: E001"))).toBe(true);
   });
 });
 
@@ -139,5 +188,55 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     await designer.generateDesign(req, "订单创建后需要触发支付");
     const prompt: string = mockLLM.generateText.mock.calls[0][0];
     expect(prompt.includes("订单创建后需要触发支付")).toBe(true);
+  });
+
+  it("should inject a hard design contract into the prompt", async () => {
+    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const designer = new SystemDesigner(mockLLM as any);
+    const req = {
+      functions: [{ id: "F043", name: "LogsAndAudit", description: "操作日志记录" }],
+      entities: [{ name: "Order" }],
+      constraints: [{ id: "C001", description: "订单约束" }],
+      exceptions: [{ id: "X001", description: "支付失败" }],
+    };
+    await designer.generateDesign(req);
+    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    expect(prompt).toContain("设计合同");
+    expect(prompt).toContain("F043 | LogsAndAudit");
+    expect(prompt).toContain("Order");
+    expect(prompt).toContain("X001 | 支付失败");
+    expect(prompt).toContain("不能改成 E001");
+  });
+});
+
+describe("GenerationTool self-check (no auto-repair)", () => {
+  it("records self-check issues without attempting auto-repair", async () => {
+    const badDesign =
+      "## 模块划分\n\n| 模块 | 对应功能 |\n|---|---|\n| 用户模块 | F001 |\n\n## 核心类\n\nOrder类。\n\n## 数据流\n\n请求处理流程。";
+    const llm = {
+      generateText: vi.fn()
+        .mockResolvedValueOnce(badDesign),
+      generateJson: vi.fn(),
+      _streamTag: "",
+      get streamTag() { return this._streamTag; },
+      set streamTag(v: string) { this._streamTag = v; },
+    };
+    const tool = new GenerationTool(llm as any);
+    const artifact = await tool.execute(
+      createTask({ id: "design-1", type: "design", description: "生成设计" }),
+      {
+        requirement_json: {
+          functions: [{ id: "F001", name: "Login" }],
+          entities: [{ name: "User", description: "用户" }],
+        },
+      },
+    );
+
+    // Self-check finds issues but does NOT auto-repair
+    expect(artifact.selfCheckPassed).toBe(false);
+    expect(artifact.selfCorrectRounds).toBe(0);
+    expect(artifact.content).toBe(badDesign);
+    // LLM called only once (generation), NOT twice (generation + repair)
+    expect(llm.generateText).toHaveBeenCalledTimes(1);
   });
 });

@@ -94,6 +94,13 @@ export class PlanningTool extends BaseTool {
       mutation = PlanningTool._fallbackReplan(currentPlan, failedTaskIds, replanReason);
     }
 
+    mutation = PlanningTool._ensureIssueTargetedTasks(
+      mutation,
+      currentPlan,
+      completedTaskIds,
+      evaluatorIssues ?? [],
+      replanReason,
+    );
     return mutation;
   }
 
@@ -150,11 +157,15 @@ export class PlanningTool extends BaseTool {
 
     const issuesDesc = evaluatorIssues.slice(0, 20).map((iss) => ({
       severity: iss.severity,
+      scope: iss.scope,
       target_task_id: iss.targetTaskId,
+      target_task_type: iss.targetTaskType,
+      target_field: iss.targetField,
       description: iss.description.slice(0, 200),
+      suggestion: iss.suggestion.slice(0, 200),
     }));
 
-    return `## Replan Request\n\n**Reason**: ${replanReason}\n\n## Original Requirement (excerpt)\n${reqShort}\n\n## Current Plan\n\`\`\`json\n${JSON.stringify(tasksDesc, null, 2)}\n\`\`\`\n\n## Evaluator Issues\n\`\`\`json\n${JSON.stringify(issuesDesc, null, 2)}\n\`\`\`\n\n## Artifact Summary\n\`\`\`json\n${JSON.stringify(artifactSummary, null, 2)}\n\`\`\`\n\nPlease analyze the failures and produce a plan mutation.`;
+    return `## Replan Request\n\n**Reason**: ${replanReason}\n\n## Original Requirement (excerpt)\n${reqShort}\n\n## Current Plan\n\`\`\`json\n${JSON.stringify(tasksDesc, null, 2)}\n\`\`\`\n\n## Evaluator Issues\n\`\`\`json\n${JSON.stringify(issuesDesc, null, 2)}\n\`\`\`\n\n## Artifact Summary\n\`\`\`json\n${JSON.stringify(artifactSummary, null, 2)}\n\`\`\`\n\nPlease analyze the failures and produce a plan mutation. Every major/blocker local issue must have a matching add_task or update_task for its target type. For diagrams-final, use target_field to create the concrete diagram task (activity_diagram -> diagrams-activity-N, class_diagram -> diagrams-class-N, state_diagram -> diagrams-state-N). For tests issues, add a tests-N task.`;
   }
 
   // ------------------------------------------------------------------
@@ -288,6 +299,141 @@ export class PlanningTool extends BaseTool {
       dropTaskIds: dropIds,
       reasoning: `fallback replan: ${reason}`,
     });
+  }
+
+  static _ensureIssueTargetedTasks(
+    mutation: PlanMutation,
+    currentPlan: ExecutionPlan,
+    completedTaskIds: string[],
+    evaluatorIssues: Issue[],
+    reason: string,
+  ): PlanMutation {
+    const importantIssues = evaluatorIssues.filter((issue) =>
+      (issue.severity === "blocker" || issue.severity === "major") &&
+      issue.scope !== "upstream" &&
+      issue.scope !== "systemic",
+    );
+    if (importantIssues.length === 0) return mutation;
+
+    const existingIds = new Set([
+      ...currentPlan.tasks.map((task) => task.id),
+      ...mutation.addTasks.map((task) => task.id),
+    ]);
+    const added = [...mutation.addTasks];
+    const latestAnalyze = PlanningTool._latestTaskIdOfType(currentPlan, "analyze", completedTaskIds);
+    const latestExistingDesign = PlanningTool._latestTaskIdOfType(currentPlan, "design", completedTaskIds);
+    let latestDesignForDeps = [...added].reverse().find((task) => task.type === "design")?.id ??
+      latestExistingDesign;
+
+    for (const issue of importantIssues) {
+      const taskType = PlanningTool._issueTaskType(issue);
+      if (!["design", "diagrams", "tests"].includes(taskType)) continue;
+
+      const diagramKind = taskType === "diagrams"
+        ? PlanningTool._diagramKindFromIssue(issue)
+        : "";
+      if (PlanningTool._mutationAlreadyCoversIssue(added, mutation.updateTasks, taskType, diagramKind)) {
+        continue;
+      }
+
+      const prefix = taskType === "diagrams" && diagramKind
+        ? `diagrams-${diagramKind.replace("_diagram", "")}`
+        : taskType;
+      const id = PlanningTool._nextTaskId(prefix, existingIds);
+      existingIds.add(id);
+
+      const dependsOn = taskType === "design"
+        ? (latestAnalyze ? [latestAnalyze] : [])
+        : (latestDesignForDeps ? [latestDesignForDeps] : []);
+
+      const task = createTask({
+        id,
+        type: taskType as Task["type"],
+        description: `[replan:${reason.slice(0, 60)}] 修复 ${issue.targetTaskId || issue.targetField}: ${issue.description}`,
+        dependsOn,
+        contextHints: {
+          ...(diagramKind ? { diagram_kind: diagramKind } : {}),
+          source_issue_target: issue.targetTaskId,
+          source_issue_field: issue.targetField,
+          fix_instructions: [
+            issue.suggestion || issue.description,
+            issue.description,
+          ].filter(Boolean),
+        },
+      });
+      added.push(task);
+      if (task.type === "design") {
+        latestDesignForDeps = task.id;
+      }
+    }
+
+    return createPlanMutation({
+      addTasks: added,
+      updateTasks: mutation.updateTasks,
+      dropTaskIds: mutation.dropTaskIds,
+      reorderEdges: mutation.reorderEdges,
+      reasoning: mutation.reasoning
+        ? `${mutation.reasoning} | ensured issue-targeted remediation`
+        : "ensured issue-targeted remediation",
+    });
+  }
+
+  private static _issueTaskType(issue: Issue): string {
+    if (issue.targetTaskType) return issue.targetTaskType;
+    const field = issue.targetField.toLowerCase();
+    if (field.includes("diagram")) return "diagrams";
+    if (field.includes("test")) return "tests";
+    if (field.includes("design")) return "design";
+    return "";
+  }
+
+  private static _diagramKindFromIssue(issue: Issue): string {
+    const text = `${issue.targetField} ${issue.description}`.toLowerCase();
+    if (text.includes("activity") || text.includes("活动图")) return "activity_diagram";
+    if (text.includes("class") || text.includes("类图")) return "class_diagram";
+    if (text.includes("state") || text.includes("状态图")) return "state_diagram";
+    return "";
+  }
+
+  private static _mutationAlreadyCoversIssue(
+    addTasks: Task[],
+    updateTasks: Task[],
+    taskType: string,
+    diagramKind: string,
+  ): boolean {
+    const tasks = [...addTasks, ...updateTasks];
+    return tasks.some((task) => {
+      if (task.type !== taskType) return false;
+      if (taskType !== "diagrams") return true;
+      if (!diagramKind) return true;
+      const hintKind = String(task.contextHints?.diagram_kind ?? "");
+      const taskText = `${task.id} ${task.description}`.toLowerCase();
+      return hintKind === diagramKind ||
+        taskText.includes(diagramKind.replace("_diagram", "")) ||
+        (diagramKind === "activity_diagram" && taskText.includes("活动图")) ||
+        (diagramKind === "class_diagram" && taskText.includes("类图")) ||
+        (diagramKind === "state_diagram" && taskText.includes("状态图"));
+    });
+  }
+
+  private static _latestTaskIdOfType(
+    plan: ExecutionPlan,
+    type: Task["type"],
+    completedTaskIds: string[],
+  ): string {
+    const completed = new Set(completedTaskIds);
+    const candidates = plan.tasks.filter((task) => task.type === type);
+    const completedCandidates = candidates.filter((task) => completed.has(task.id));
+    const list = completedCandidates.length > 0 ? completedCandidates : candidates;
+    return list.length > 0 ? list[list.length - 1].id : "";
+  }
+
+  private static _nextTaskId(prefix: string, existingIds: Set<string>): string {
+    for (let i = 1; i < 1000; i++) {
+      const id = `${prefix}-${i}`;
+      if (!existingIds.has(id)) return id;
+    }
+    return `${prefix}-${Date.now()}`;
   }
 
   // ------------------------------------------------------------------

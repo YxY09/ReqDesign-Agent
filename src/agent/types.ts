@@ -20,6 +20,7 @@ export type ActionType =
   | "stop"
   | "inspect"
   | "save"
+  | "pause"
   | "finish"
   | "replan";
 
@@ -40,6 +41,16 @@ export interface Task {
   description: string;
   dependsOn: string[];
   contextHints: Record<string, unknown>;
+
+  /** If true, this task should only generate/patch specific sections, not full artifact. */
+  targeted?: boolean;
+  /** Evaluator issues that triggered this task (for context in targeted generation). */
+  targetIssues?: Issue[];
+  /** When targeted, describes where to patch the result. */
+  patchContext?: {
+    targetArtifactId: string;
+    targetSections?: string[];
+  };
 }
 
 /** PlanningTool output. */
@@ -116,6 +127,7 @@ export function createTask(overrides: Partial<Task> & Pick<Task, "id" | "type">)
     description: "",
     dependsOn: [],
     contextHints: {},
+    targeted: false,
     ...overrides,
   };
 }

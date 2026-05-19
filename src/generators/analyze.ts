@@ -93,6 +93,41 @@ export class RequirementAnalyzer {
       }
     }
 
+    if (Array.isArray(result.functions)) {
+      for (const func of result.functions) {
+        if (typeof func !== "object" || func === null) continue;
+        const rec = func as Record<string, unknown>;
+        const id = String(rec.id ?? rec.name ?? "unknown");
+        if (!rec.preconditions) warnings.push(`功能 ${id} 缺少 preconditions 字段`);
+        const priority = String(rec.priority ?? "");
+        if (priority && !["high", "medium", "low"].includes(priority)) {
+          warnings.push(`功能 ${id} priority 必须为 high/medium/low`);
+        }
+      }
+    }
+
+    if (Array.isArray(result.entities)) {
+      for (const ent of result.entities) {
+        if (typeof ent !== "object" || ent === null) continue;
+        const rec = ent as Record<string, unknown>;
+        const name = String(rec.name ?? "unknown");
+        if (!Array.isArray(rec.attributes) || rec.attributes.length === 0) {
+          warnings.push(`实体 ${name} 缺少 attributes`);
+        } else if (rec.attributes.some((attr) =>
+          typeof attr !== "object" ||
+          attr === null ||
+          !("name" in attr) ||
+          !("type" in attr) ||
+          !("description" in attr)
+        )) {
+          warnings.push(`实体 ${name} attributes 必须包含 name/type/description`);
+        }
+        if (!Array.isArray(rec.relationships)) {
+          warnings.push(`实体 ${name} 缺少 relationships 字段`);
+        }
+      }
+    }
+
     return warnings;
   }
 
@@ -121,6 +156,102 @@ export class RequirementAnalyzer {
         }
       }
     }
+    RequirementAnalyzer._normalizeFunctions(result);
+    RequirementAnalyzer._normalizeEntities(result);
+    RequirementAnalyzer._ensureActorEntities(result);
     return result;
+  }
+
+  private static _normalizeFunctions(result: Record<string, unknown>): void {
+    const functions = result.functions;
+    if (!Array.isArray(functions)) return;
+    for (const func of functions) {
+      if (typeof func !== "object" || func === null) continue;
+      const rec = func as Record<string, unknown>;
+      if (typeof rec.priority === "string") {
+        const p = rec.priority.trim().toLowerCase();
+        const map: Record<string, string> = {
+          "高": "high",
+          "中": "medium",
+          "低": "low",
+          "p0": "high",
+          "p1": "medium",
+          "p2": "low",
+        };
+        rec.priority = map[p] ?? p;
+      }
+      if (!rec.preconditions) rec.preconditions = "";
+    }
+  }
+
+  private static _normalizeEntities(result: Record<string, unknown>): void {
+    const entities = result.entities;
+    if (!Array.isArray(entities)) return;
+    for (const ent of entities) {
+      if (typeof ent !== "object" || ent === null) continue;
+      const rec = ent as Record<string, unknown>;
+      if (!Array.isArray(rec.relationships)) rec.relationships = [];
+      if (!Array.isArray(rec.attributes)) {
+        rec.attributes = [];
+        continue;
+      }
+      rec.attributes = rec.attributes.map((attr) => {
+        if (typeof attr === "object" && attr !== null && !Array.isArray(attr)) {
+          const obj = attr as Record<string, unknown>;
+          return {
+            name: String(obj.name ?? "").trim(),
+            type: String(obj.type ?? "String").trim() || "String",
+            description: String(obj.description ?? "").trim(),
+          };
+        }
+        return RequirementAnalyzer._parseAttributeString(String(attr));
+      });
+    }
+  }
+
+  private static _ensureActorEntities(result: Record<string, unknown>): void {
+    const actors = Array.isArray(result.actors) ? result.actors : [];
+    if (!Array.isArray(result.entities)) result.entities = [];
+    const entities = result.entities as unknown[];
+    const existing = new Set(
+      entities
+        .filter((ent): ent is Record<string, unknown> => typeof ent === "object" && ent !== null && !Array.isArray(ent))
+        .map((ent) => String(ent.name ?? "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    for (const actor of actors) {
+      const name = typeof actor === "object" && actor !== null
+        ? String((actor as Record<string, unknown>).name ?? "").trim()
+        : String(actor ?? "").trim();
+      if (!name || existing.has(name.toLowerCase())) continue;
+      const description = typeof actor === "object" && actor !== null
+        ? String((actor as Record<string, unknown>).description ?? `${name} 角色实体`).trim()
+        : `${name} 角色实体`;
+      entities.push({
+        name,
+        description,
+        attributes: [
+          { name: "id", type: "Long", description: `${name} 唯一标识` },
+          { name: "status", type: "String", description: `${name} 状态` },
+        ],
+        relationships: [],
+      });
+      existing.add(name.toLowerCase());
+    }
+  }
+
+  private static _parseAttributeString(raw: string): Record<string, string> {
+    const text = raw.trim();
+    const match = text.match(/^([^:：\\-]+)\s*[:：]\s*([^\\-]+?)\s*(?:-\s*(.*))?$/);
+    if (!match) {
+      const name = text.replace(/\s+/g, "") || "field";
+      return { name, type: "String", description: text };
+    }
+    return {
+      name: match[1].trim(),
+      type: match[2].trim() || "String",
+      description: (match[3] ?? match[1]).trim(),
+    };
   }
 }

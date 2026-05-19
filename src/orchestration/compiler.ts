@@ -114,6 +114,10 @@ export class ActionCompiler {
       return createRuntimeAction({ action: "finish", reason });
     }
 
+    if (strategy === "pause_for_user") {
+      return createRuntimeAction({ action: "pause", reason });
+    }
+
     if (strategy === "wait_for_running") {
       return createRuntimeAction({
         action: "inspect",
@@ -123,7 +127,7 @@ export class ActionCompiler {
     }
 
     return createRuntimeAction({
-      action: "finish",
+      action: "pause",
       reason: reason || "orchestrator paused",
     });
   }

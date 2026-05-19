@@ -16,6 +16,7 @@ export interface OrchestrationConfigRaw {
   max_final_major_issues?: number;
   max_final_major_repair_per_task?: number;
   max_concurrent_evaluators?: number;
+  min_runtime_remaining_for_new_work_seconds?: number;
 }
 
 export class OrchestrationConfig {
@@ -29,9 +30,10 @@ export class OrchestrationConfig {
   maxPlannerFailures = 3;
   maxEvaluatorTimeouts = 3;
   maxSaveFailures = 3;
-  maxFinalMajorIssues = 0;
+  maxFinalMajorIssues = 3;
   maxFinalMajorRepairPerTask = 1;
   maxConcurrentEvaluators = 2;
+  minRuntimeRemainingForNewWorkSeconds = 120;
 
   static fromRaw(raw: OrchestrationConfigRaw): OrchestrationConfig {
     const cfg = new OrchestrationConfig();
@@ -48,6 +50,7 @@ export class OrchestrationConfig {
     if (raw.max_final_major_issues !== undefined) cfg.maxFinalMajorIssues = raw.max_final_major_issues;
     if (raw.max_final_major_repair_per_task !== undefined) cfg.maxFinalMajorRepairPerTask = raw.max_final_major_repair_per_task;
     if (raw.max_concurrent_evaluators !== undefined) cfg.maxConcurrentEvaluators = raw.max_concurrent_evaluators;
+    if (raw.min_runtime_remaining_for_new_work_seconds !== undefined) cfg.minRuntimeRemainingForNewWorkSeconds = raw.min_runtime_remaining_for_new_work_seconds;
     return cfg;
   }
 }

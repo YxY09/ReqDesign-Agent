@@ -14,6 +14,24 @@ function normalizeFixInstructions(value: unknown): Array<Record<string, unknown>
   return value.filter((item): item is Record<string, unknown> => isRecord(item));
 }
 
+function isStrictSelfCheckFailure(artifact: Artifact): boolean {
+  if (artifact.selfCheckPassed) return false;
+  if (artifact.type === "analyze") return true;
+
+  const strictPatterns = [
+    "未在需求中识别",
+    "未定义",
+    "未被测试用例覆盖",
+    "未被测试覆盖",
+    "缺少项目宪法要求的标题格式",
+    "优先级必须使用 P0/P1/P2",
+    "引用了未定义",
+  ];
+  return artifact.selfCheckIssues.some((issue) =>
+    strictPatterns.some((pattern) => issue.includes(pattern)),
+  );
+}
+
 export class GenerationSession extends WorkerSession {
   private readonly agent: GenerationTool;
   private readonly logger: Logger = setupLogger("reqdesign.GenerationSession");
@@ -113,6 +131,14 @@ export class GenerationSession extends WorkerSession {
       return this._makeNotification("failed", {
         summary: `generation returned None for ${this.context.taskId}`,
         error: artifact.selfCheckIssues[0] ?? "unknown error",
+      });
+    }
+
+    if (isStrictSelfCheckFailure(artifact)) {
+      return this._makeNotification("failed", {
+        summary: `strict self-check failed: ${artifact.selfCheckIssues.length} issues`,
+        error: artifact.selfCheckIssues.slice(0, 5).join("; "),
+        result: artifact,
       });
     }
 
@@ -228,6 +254,8 @@ export class EvaluationSession extends WorkerSession {
     const evaluatedTaskIds = this.context.evaluateScope.length > 0
       ? [...this.context.evaluateScope]
       : undefined;
+    // Build previous issues from context for incremental review
+    const previousIssues = this.context.previousIssues as Array<{ severity: string; description: string; location?: string }> | undefined;
     const verdict = await this.agent.evaluate(
       this.context.requirementText,
       this.context.requirementJson,
@@ -239,6 +267,7 @@ export class EvaluationSession extends WorkerSession {
       this.context.goal,
       this.context.isDirectMode,
       evaluatedTaskIds,
+      previousIssues,
     );
     verdict.isFinalReview = evaluatedTaskIds === undefined;
 

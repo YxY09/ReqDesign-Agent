@@ -19,3 +19,5 @@ benchmark/results/
 .DS_Store
 node_modules/
 .vscode-test/
+Paper/
+.claude/

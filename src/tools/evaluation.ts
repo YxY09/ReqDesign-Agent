@@ -36,6 +36,7 @@ export class EvaluationTool extends BaseTool {
     goal = "design",
     isDirectMode = false,
     evaluatedTaskIds?: string[],
+    previousIssues?: Array<{ severity: string; description: string; location?: string }>,
   ): Promise<Verdict> {
     this.logger.info(`evaluate: 开始评审，goal=${goal}，directMode=${isDirectMode}`);
     const snapshots = artifactSnapshots ?? EvaluationTool._buildAggregateSnapshots(
@@ -66,8 +67,11 @@ export class EvaluationTool extends BaseTool {
     // 2. LLM review
     let llmIssues: Issue[];
     const reviewMode = EvaluationTool._selectReviewMode(snapshots, isDirectMode, goal);
-    if (Object.keys(snapshots).length > 0) {
-      const [li] = await this._llmReviewSnapshots(requirementText, snapshots, isDirectMode, reviewMode);
+    if (EvaluationTool._shouldSkipAnalyzeShardLlmReview(snapshots, goal)) {
+      this.logger.info("evaluate: 跳过 analyze 分片的 LLM 语义评审，仅保留规则检查");
+      llmIssues = [];
+    } else if (Object.keys(snapshots).length > 0) {
+      const [li] = await this._llmReviewSnapshots(requirementText, snapshots, isDirectMode, reviewMode, previousIssues);
       llmIssues = li;
     } else if (goal.toLowerCase().includes("analyze")) {
       llmIssues = await this._llmReviewAnalyze(requirementText, requirementJson);
@@ -82,8 +86,9 @@ export class EvaluationTool extends BaseTool {
 
     // 3. Decide pass/fail
     const blockers = issues.filter((i) => i.severity === "blocker");
-    const passed = blockers.length === 0;
-    this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，majors=${issues.filter((i) => i.severity === "major").length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
+    const majors = issues.filter((i) => i.severity === "major");
+    const passed = blockers.length === 0 && majors.length === 0;
+    this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，majors=${majors.length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
 
     // 4. Build fix tasks
     const fixes = passed ? [] : EvaluationTool._buildFixes(issues);
@@ -92,7 +97,13 @@ export class EvaluationTool extends BaseTool {
     const evaluatedRevisions: Record<string, number> = {};
     for (const [tid, snapshot] of Object.entries(snapshots)) {
       const revision = Number((snapshot as Record<string, unknown>).revision ?? 0);
-      if (revision > 0) evaluatedRevisions[tid] = revision;
+      evaluatedRevisions[tid] = revision;
+      const sourceRevisions = (snapshot as Record<string, unknown>).sourceRevisions;
+      if (sourceRevisions && typeof sourceRevisions === "object" && !Array.isArray(sourceRevisions)) {
+        for (const [sourceTaskId, sourceRevision] of Object.entries(sourceRevisions as Record<string, unknown>)) {
+          evaluatedRevisions[sourceTaskId] = Number(sourceRevision ?? 0);
+        }
+      }
     }
     if (Object.keys(evaluatedRevisions).length === 0 && typeof artifactSummary === "object") {
       if (evaluatedTaskIds) {
@@ -165,6 +176,19 @@ export class EvaluationTool extends BaseTool {
     if (isDirectMode) return "quick";
     if (Object.keys(snapshots).length <= 3) return "quick";
     return "deep";
+  }
+
+  static _shouldSkipAnalyzeShardLlmReview(
+    snapshots: Record<string, Record<string, unknown>>,
+    goal: string,
+  ): boolean {
+    const entries = Object.entries(snapshots);
+    if (entries.length <= 1) return false;
+    if (goal.toLowerCase().includes("analyze")) return false;
+    return entries.every(([taskId, snapshot]) => {
+      if (String(snapshot.type ?? "") !== "analyze") return false;
+      return taskId !== "analyze-final" && taskId !== "analyze-comprehensive";
+    });
   }
 
   private _allowedSnapshotFields(snapshot: Record<string, unknown>): Set<string> {
@@ -262,6 +286,15 @@ export class EvaluationTool extends BaseTool {
                 : "补充对应模块、实体或章节，并保持与需求一致",
             }));
           }
+          issues.push(
+            ...this._checkUndefinedExceptionIds(
+              taskId,
+              "design",
+              "design_text",
+              String(content),
+              requirementJson,
+            ),
+          );
         }
         continue;
       }
@@ -288,9 +321,41 @@ export class EvaluationTool extends BaseTool {
           if (exp.length > 0 && !exp.some((h) => firstLine.includes(h))) {
             issues.push(createIssue({ severity: "blocker", targetTaskId: taskId, targetTaskType: "diagrams", targetField: `diagrams.${dtype}`, description: `${dtype} 缺少正确的 Mermaid 头部`, suggestion: `在 ${dtype} 首行添加正确的 Mermaid 头部` }));
           }
+          if (/<br\s*\/?>/i.test(text)) {
+            issues.push(createIssue({
+              severity: "minor",
+              targetTaskId: taskId,
+              targetTaskType: "diagrams",
+              targetField: `diagrams.${dtype}`,
+              description: `${dtype} 包含 HTML 换行标签 <br/>，可能导致部分 Mermaid 渲染器不兼容`,
+              suggestion: "移除 HTML 标签，改用纯文本分隔符或更短节点标签",
+            }));
+          }
           if (dtype === "class_diagram" && requirementJson) {
             const entityIssues = this._checkClassDiagramEntities(taskId, text, requirementJson);
             issues.push(...entityIssues);
+          }
+          issues.push(
+            ...this._checkUndefinedExceptionIds(
+              taskId,
+              "diagrams",
+              `diagrams.${dtype}`,
+              text,
+              requirementJson,
+            ),
+          );
+          if (dtype === "activity_diagram") {
+            issues.push(...this._checkActivityDiagramCoverage(taskId, text, requirementJson));
+          }
+          if (dtype === "state_diagram" && /Coupon|优惠券/.test(text) && /C002|支付超时/.test(text)) {
+            issues.push(createIssue({
+              severity: "major",
+              targetTaskId: taskId,
+              targetTaskType: "diagrams",
+              targetField: "diagrams.state_diagram",
+              description: "状态图中优惠券过期错误使用 C002/支付超时作为触发条件",
+              suggestion: "将 Coupon/优惠券 的过期转换改为有效期结束，不要引用支付超时约束",
+            }));
           }
         }
         continue;
@@ -310,6 +375,16 @@ export class EvaluationTool extends BaseTool {
               suggestion: "补充对应功能 ID 的正常/异常/边界测试用例",
             }));
           }
+          issues.push(
+            ...this._checkUndefinedExceptionIds(
+              taskId,
+              "tests",
+              "test_cases",
+              content as string,
+              requirementJson,
+            ),
+          );
+          issues.push(...this._checkTestFlowCoverage(taskId, content as string, requirementJson));
         } catch (e) {
           issues.push(createIssue({ severity: "major", targetTaskId: taskId, targetTaskType: "tests", targetField: "test_cases", description: `测试用例规则校验失败: ${e instanceof Error ? e.message : String(e)}` }));
         }
@@ -317,6 +392,132 @@ export class EvaluationTool extends BaseTool {
     }
 
     return issues;
+  }
+
+  private _checkUndefinedExceptionIds(
+    taskId: string,
+    taskType: string,
+    targetField: string,
+    text: string,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    const defined = new Set(
+      ((requirementJson.exceptions ?? []) as Array<Record<string, unknown>>)
+        .map((item) => String(item.id ?? "").trim())
+        .filter(Boolean),
+    );
+    if (defined.size === 0) return [];
+
+    const referenced = new Set(text.match(/\b[EX]\d{3}\b/g) ?? []);
+    const unknown = [...referenced].filter((id) => !defined.has(id)).sort();
+    if (unknown.length === 0) return [];
+
+    return [createIssue({
+      severity: "major",
+      targetTaskId: taskId,
+      targetTaskType: taskType,
+      targetField,
+      description: `产物引用了未定义的异常 ID: ${unknown.join(", ")}`,
+      suggestion: `只引用 requirement_json.exceptions 中已定义的异常 ID: ${[...defined].sort().join(", ")}`,
+    })];
+  }
+
+  private _checkActivityDiagramCoverage(
+    taskId: string,
+    text: string,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    const issues: Issue[] = [];
+    if (this._requiresRefundFlow(requirementJson)) {
+      const missing = EvaluationTool._missingConcepts(text, [
+        ["申请退款/退货", /(申请.*(退款|退货))|refund/i],
+        ["商家审核", /商家.*审核|审核.*(通过|拒绝)/],
+        ["填写退货物流", /(物流|运单|快递).*(填写|录入|提交)|(填写|录入|提交).*(物流|运单|快递)/],
+        ["仓库验收", /仓库.*验收|验收.*(通过|失败)/],
+        ["退款到账", /退款.*(到账|成功|原路|返回)|(到账|原路返回)/],
+      ]);
+      if (missing.length > 0) {
+        issues.push(createIssue({
+          severity: "major",
+          targetTaskId: taskId,
+          targetTaskType: "diagrams",
+          targetField: "diagrams.activity_diagram",
+          description: `活动图未完整覆盖退货退款流程，缺少: ${missing.join(", ")}`,
+          suggestion: "补充申请退款/退货、商家审核、填写退货物流、仓库验收、退款到账的完整分支",
+        }));
+      }
+    }
+
+    if (this._hasConstraint(requirementJson, "C001")) {
+      const missing = EvaluationTool._missingConcepts(text, [
+        ["订单总数量<=99", /(总数量|商品数量|件数).*(99|上限)|(99).*(件|数量)/],
+        ["订单金额<=99999", /(金额|实付|总价).*(99999|上限)|(99999).*(元|金额)/],
+        ["单商品数量<=10", /(单商品|同一商品|单个商品|限购).*(10|上限)|(10).*(件|限购)/],
+        ["地址配送范围", /(地址|收货地址).*(配送范围|可配送)|(配送范围).*(地址|校验)/],
+      ]);
+      if (missing.length > 0) {
+        issues.push(createIssue({
+          severity: "major",
+          targetTaskId: taskId,
+          targetTaskType: "diagrams",
+          targetField: "diagrams.activity_diagram",
+          description: `活动图未完整覆盖 C001 订单约束校验，缺少: ${missing.join(", ")}`,
+          suggestion: "在提交订单前补充总数量、总金额、单商品数量、地址配送范围四类校验及失败出口",
+        }));
+      }
+    }
+    return issues;
+  }
+
+  private _checkTestFlowCoverage(
+    taskId: string,
+    text: string,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    if (!this._requiresRefundFlow(requirementJson)) return [];
+    const missing = EvaluationTool._missingConcepts(text, [
+      ["申请退款/退货", /(申请.*(退款|退货))|refund/i],
+      ["商家审核通过", /商家.*审核.*(通过|同意)|(通过|同意).*退款/],
+      ["填写物流单号", /(物流单号|退货物流|快递单号|运单号)/],
+      ["仓库验收", /仓库.*验收|验收.*(通过|成功)/],
+      ["退款到账", /退款.*(到账|成功|原路返回|72)/],
+    ]);
+    if (missing.length === 0) return [];
+    return [createIssue({
+      severity: "major",
+      targetTaskId: taskId,
+      targetTaskType: "tests",
+      targetField: "test_cases",
+      description: `测试用例未覆盖完整退货退款正常流程，缺少: ${missing.join(", ")}`,
+      suggestion: "添加从申请退款/退货、商家审核通过、填写物流单号、仓库验收通过到退款到账的完整正常场景",
+    })];
+  }
+
+  private _requiresRefundFlow(requirementJson: Record<string, unknown>): boolean {
+    const functions = Array.isArray(requirementJson.functions)
+      ? requirementJson.functions as Array<Record<string, unknown>>
+      : [];
+    return functions.some((item) =>
+      /退款|退货|售后|refund|return/i.test(
+        `${String(item.name ?? "")} ${String(item.description ?? "")}`,
+      ),
+    );
+  }
+
+  private _hasConstraint(requirementJson: Record<string, unknown>, id: string): boolean {
+    const constraints = Array.isArray(requirementJson.constraints)
+      ? requirementJson.constraints as Array<Record<string, unknown>>
+      : [];
+    return constraints.some((item) => String(item.id ?? "").trim() === id);
+  }
+
+  private static _missingConcepts(
+    text: string,
+    concepts: Array<[string, RegExp]>,
+  ): string[] {
+    return concepts
+      .filter(([, pattern]) => !pattern.test(text))
+      .map(([label]) => label);
   }
 
   private _checkClassDiagramEntities(
@@ -369,6 +570,7 @@ export class EvaluationTool extends BaseTool {
     snapshots: Record<string, Record<string, unknown>>,
     isDirectMode: boolean,
     reviewMode: string,
+    previousIssues?: Array<{ severity: string; description: string; location?: string }>,
   ): Promise<[Issue[], number | null]> {
     const presentTypes = [...new Set(
       Object.values(snapshots)
@@ -387,6 +589,14 @@ export class EvaluationTool extends BaseTool {
       sections.push(`## 原始需求\n${(requirementText ?? "").slice(0, reqLimit)}`);
     }
 
+    // Inject previous evaluation issues for incremental review
+    if (previousIssues && previousIssues.length > 0) {
+      const issueLines = previousIssues
+        .map((issue, idx) => `${idx + 1}. [${issue.severity}] ${issue.description}${issue.location ? ` (${issue.location})` : ""}`)
+        .join("\n");
+      sections.push(`## 上一轮审查结果\n以下是上一轮审查发现的问题。请重点关注：\n1. 这些问题是否已被修复\n2. 是否有新引入的问题\n3. 保持与上轮相同的审查标准\n\n${issueLines}`);
+    }
+
     for (const [taskId, snapshot] of Object.entries(snapshots)) {
       const taskType = String(snapshot.type ?? "");
       const content = snapshot.content;
@@ -394,13 +604,19 @@ export class EvaluationTool extends BaseTool {
       sections.push(`## 任务 ${taskId}\n类型: ${taskType}\n仅允许审查字段: ${allowedFields}`);
 
       if (taskType === "analyze" && typeof content === "object") {
-        sections.push("```json\n" + JSON.stringify(content, null, 2).slice(0, textLimit) + "\n```");
+        sections.push(
+          "以下是合法 JSON 评审摘要；`__review_truncated__` 表示仅为控制提示长度而省略，不能据此判定源产物缺失。\n" +
+          "```json\n" + EvaluationTool._jsonForReview(content, textLimit) + "\n```",
+        );
       } else if (taskType === "diagrams" && typeof content === "object") {
         const snippet: Record<string, string> = {};
         for (const [k, v] of Object.entries(content as Record<string, unknown>)) {
-          snippet[k] = String(v ?? "").slice(0, diagramLimit);
+          snippet[k] = EvaluationTool._truncateTextForReview(String(v ?? ""), diagramLimit);
         }
-        sections.push(JSON.stringify(snippet, null, 2).slice(0, Math.max(diagramLimit * 3, 1800)));
+        sections.push(
+          "以下是合法 JSON 评审摘要；`__review_truncated__` 表示仅为控制提示长度而省略，不能据此判定源产物缺失。\n" +
+          "```json\n" + EvaluationTool._jsonForReview({ diagrams: snippet }, Math.max(diagramLimit * 3, 1800)) + "\n```",
+        );
       } else {
         sections.push(String(content ?? "").slice(0, textLimit));
       }
@@ -456,6 +672,70 @@ export class EvaluationTool extends BaseTool {
       }));
   }
 
+  static _truncateTextForReview(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    return text.slice(0, Math.max(0, maxChars - 80)) +
+      `\n__review_truncated__: ${text.length - Math.max(0, maxChars - 80)} chars omitted`;
+  }
+
+  static _jsonForReview(value: unknown, maxChars: number): string {
+    const direct = JSON.stringify(value, null, 2);
+    if (direct.length <= maxChars) return direct;
+
+    const attempts = [
+      { maxArrayItems: 8, maxStringChars: 1200 },
+      { maxArrayItems: 4, maxStringChars: 700 },
+      { maxArrayItems: 2, maxStringChars: 350 },
+      { maxArrayItems: 1, maxStringChars: 180 },
+      { maxArrayItems: 0, maxStringChars: 120 },
+    ];
+
+    for (const limits of attempts) {
+      const summarized = EvaluationTool._summarizeForReview(value, limits, 0);
+      const json = JSON.stringify(summarized, null, 2);
+      if (json.length <= maxChars) return json;
+    }
+
+    const finalSummary = EvaluationTool._summarizeForReview(
+      value,
+      { maxArrayItems: 0, maxStringChars: 80 },
+      0,
+    );
+    return JSON.stringify(finalSummary, null, 2);
+  }
+
+  private static _summarizeForReview(
+    value: unknown,
+    limits: { maxArrayItems: number; maxStringChars: number },
+    depth: number,
+  ): unknown {
+    if (typeof value === "string") {
+      return EvaluationTool._truncateTextForReview(value, limits.maxStringChars);
+    }
+    if (typeof value !== "object" || value === null) return value;
+
+    if (Array.isArray(value)) {
+      const kept = value
+        .slice(0, limits.maxArrayItems)
+        .map((item) => EvaluationTool._summarizeForReview(item, limits, depth + 1));
+      const omitted = value.length - kept.length;
+      if (omitted > 0) {
+        kept.push({ __review_truncated__: `${omitted} array item(s) omitted; field exists in source artifact` });
+      }
+      return kept;
+    }
+
+    if (depth >= 6) {
+      return { __review_truncated__: "nested object omitted at review depth limit" };
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = EvaluationTool._summarizeForReview(item, limits, depth + 1);
+    }
+    return result;
+  }
+
   // ------------------------------------------------------------------
   // Fix task generation
   // ------------------------------------------------------------------
@@ -508,7 +788,7 @@ export class EvaluationTool extends BaseTool {
   }
 
   static _buildSummary(passed: boolean, issues: Issue[]): string {
-    if (passed) return "审查通过，无 blocker 问题。";
+    if (passed) return "审查通过，无 blocker/major 问题。";
     const blockerCount = issues.filter((i) => i.severity === "blocker").length;
     const majorCount = issues.filter((i) => i.severity === "major").length;
     const minorCount = issues.filter((i) => i.severity === "minor").length;

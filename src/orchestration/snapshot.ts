@@ -7,6 +7,9 @@
 import type { WorkflowState } from "../state.js";
 import type { TaskMailbox } from "../messaging.js";
 
+// Re-export for convenience
+export { ConvergenceTracker } from "./convergence.js";
+
 // ---------------------------------------------------------------------------
 // OrchestratorSnapshot
 // ---------------------------------------------------------------------------
@@ -21,6 +24,7 @@ export interface OrchestratorSnapshot {
   planTaskTypesById: Record<string, string>;
   readyTasks: string[];
   runningTasks: string[];
+  failedTasks: string[];
   completedPlanTasks: string[];
   artifactTaskIds: string[];
   artifactTypesByTask: Record<string, string>;
@@ -45,6 +49,12 @@ export interface OrchestratorSnapshot {
   globallyStalled: boolean;
   recentErrors: string[];
 
+  /** Computed: convergence state from evaluation history. */
+  convergenceStalled: boolean;
+  convergenceStalledFingerprints: string[];
+  convergenceTrend: string;
+  convergenceRoundCount: number;
+
   /** Computed: all plan tasks are completed. */
   planAllCompleted: boolean;
   /** Computed: at least one artifact exists. */
@@ -64,9 +74,7 @@ export class StateReader {
     const artifactsState = state.artifactsState;
     const executionState = state.executionState;
     const reviewState = state.reviewState;
-    const currentRevisions: Record<string, number> = {
-      ...artifactsState.artifactRevisionsByTask,
-    };
+    const currentRevisions = StateReader._finalReviewRevisions(state);
     const finalCurrent =
       Object.keys(currentRevisions).length > 0 &&
       reviewState.finalReviewDone &&
@@ -142,6 +150,9 @@ export class StateReader {
       planTaskTypesById,
       readyTasks: state.getReadyTaskIds(),
       runningTasks: state.getRunningTaskIds(),
+      failedTasks: state.getFailedTaskIds().filter((taskId) =>
+        planTaskIds.includes(taskId),
+      ),
       completedPlanTasks,
       artifactTaskIds: Object.keys(artifactsState.artifacts).sort(),
       artifactTypesByTask,
@@ -167,10 +178,34 @@ export class StateReader {
       majorPendingTaskIds: state.getMajorPendingTaskIds(),
       globallyStalled: state.progress.isGloballyStalled(3),
       recentErrors: executionState.errors.slice(-5),
+      convergenceStalled: state.convergence.isStalled(),
+      convergenceStalledFingerprints: state.convergence.stalledFingerprints(),
+      convergenceTrend: state.convergence.trend(),
+      convergenceRoundCount: state.convergence.roundCount,
       planAllCompleted:
         planTaskIds.length > 0 &&
         completedPlanTasks.length === planTaskIds.length,
       hasArtifacts: Object.keys(artifactsState.artifacts).length > 0,
     };
+  }
+
+  private static _finalReviewRevisions(state: WorkflowState): Record<string, number> {
+    const revisions: Record<string, number> = {};
+    for (const [taskId, snapshot] of Object.entries(state.finalArtifactSnapshots())) {
+      revisions[taskId] = Number(snapshot.revision ?? 0);
+      const sourceRevisions = snapshot.sourceRevisions;
+      if (
+        sourceRevisions &&
+        typeof sourceRevisions === "object" &&
+        !Array.isArray(sourceRevisions)
+      ) {
+        for (const [sourceTaskId, sourceRevision] of Object.entries(
+          sourceRevisions as Record<string, unknown>,
+        )) {
+          revisions[sourceTaskId] = Number(sourceRevision ?? 0);
+        }
+      }
+    }
+    return revisions;
   }
 }

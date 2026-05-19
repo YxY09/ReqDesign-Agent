@@ -1,10 +1,10 @@
 # LLM Provider Configuration (aligned with Python version)
 
 llm:
-  provider: qwen
-  model: qwen3.5-flash
-  api_key: ""
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  provider: deepseek
+  model: deepseek-v4-flash
+  api_key: "sk-370e7a96a07042b09c81d06681df318c"
+  base_url: "https://api.deepseek.com"
   temperature: 0.3
   max_tokens: 32768
   timeout: 120

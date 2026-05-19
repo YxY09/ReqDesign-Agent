@@ -20,6 +20,8 @@ import {
   createTask,
 } from "./agent/types.js";
 import { ProgressSnapshot } from "./progress.js";
+import { ConvergenceTracker } from "./orchestration/convergence.js";
+import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Task-type → aggregate-field mapping
@@ -94,6 +96,9 @@ export class WorkflowState {
   // --- Evaluator verdicts (history) --------------------------------------
   verdicts: Verdict[] = [];
 
+  // --- Convergence tracking ---------------------------------------------
+  convergence = new ConvergenceTracker(3);
+
   // --- Notification history -----------------------------------------------
   notifications: Record<string, unknown>[] = [];
 
@@ -144,6 +149,8 @@ export class WorkflowState {
   // --- Progress tracking --------------------------------------------------
   progress: ProgressSnapshot = new ProgressSnapshot();
   private _lastArtifactContents: Record<string, unknown> = {};
+  private latestArtifactTaskByType: Record<string, string> = {};
+  private diagramSourcesByKey: Record<string, string> = {};
   artifactRevisionsByTask: Record<string, number> = {};
   evaluatedRevisionsByTask: Record<string, number> = {};
   acceptedRevisionsByTask: Record<string, number> = {};
@@ -448,6 +455,7 @@ export class WorkflowState {
     artifact.revision = revision;
     artifactsState.artifactRevisionsByTask[artifact.taskId] = revision;
     artifactsState.artifacts[artifact.taskId] = artifact;
+    this.latestArtifactTaskByType[artifact.type] = artifact.taskId;
     this._syncAggregate(artifact);
     reviewState.finalReviewDone = false;
     reviewState.finalReviewPassed = false;
@@ -465,7 +473,7 @@ export class WorkflowState {
    * This preserves multi-analyze intermediate state and avoids stale data when
    * an analyze task is regenerated.
    *
-   * For other types: replaces or appends the field (single task per type typically).
+   * For other types: keeps the latest task output as the aggregate field.
    */
   private _syncAggregate(artifact: Artifact): void {
     const artifactsState = this.artifactsState;
@@ -477,20 +485,18 @@ export class WorkflowState {
     if (key === "requirement_json" && typeof content === "object" && !Array.isArray(content)) {
       artifactsState.requirementJson = this._rebuildRequirementAggregate();
     } else if (key === "design_text" && typeof content === "string") {
-      if (artifactsState.designText && content) {
-        const tag = artifact.taskId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-        artifactsState.designText = artifactsState.designText + `\n\n---\n## [${tag}]\n\n` + content;
-      } else if (content) {
+      if (content) {
         artifactsState.designText = content;
       }
     } else if (key === "diagrams" && typeof content === "object" && !Array.isArray(content)) {
       const existing: Record<string, unknown> = artifactsState.diagrams ?? {};
-      Object.assign(existing, content as Record<string, unknown>);
+      for (const [diagramKey, diagramValue] of Object.entries(content as Record<string, unknown>)) {
+        existing[diagramKey] = diagramValue;
+        this.diagramSourcesByKey[diagramKey] = artifact.taskId;
+      }
       artifactsState.diagrams = existing;
     } else if (key === "test_cases" && typeof content === "string") {
-      if (artifactsState.testCases && content) {
-        artifactsState.testCases = artifactsState.testCases + "\n\n---\n\n" + content;
-      } else if (content) {
+      if (content) {
         artifactsState.testCases = content;
       }
     }
@@ -612,6 +618,16 @@ export class WorkflowState {
 
     reviewState.verdicts.push(verdict);
 
+    // Update convergence tracker with latest evaluation issues
+    if (verdict.issues.length > 0) {
+      this.convergence.addRound({
+        issues: verdict.issues.map((issue) => ({
+          fingerprint: ConvergenceTracker.fingerprint(issue.description),
+          severity: issue.severity,
+        })),
+      });
+    }
+
     this.reviewResult = {
       passed: verdict.passed,
       isFinalReview: verdict.isFinalReview,
@@ -636,18 +652,15 @@ export class WorkflowState {
     }
 
     // Track evaluator activity
-    const blockerCount = verdict.issues.filter(
-      (i) => i.severity === "blocker",
-    ).length;
-    if (verdict.passed || blockerCount === 0) {
-      this.progress.recordScore(1.0); // no blockers = good
+    if (verdict.passed) {
+      this.progress.recordScore(1.0);
       for (const taskId of Object.keys(
         this.progress.rejectionStreakByTask,
       )) {
         this.progress.recordAcceptance(taskId);
       }
     } else {
-      this.progress.recordScore(0.0); // has blockers = not good
+      this.progress.recordScore(0.0);
     }
   }
 
@@ -668,6 +681,19 @@ export class WorkflowState {
     this.progress._counters[key] = (this.progress._counters[key] ?? 0) + 1;
   }
 
+  /** Record that a task was regenerated from scratch. */
+  recordRegenerateAttempt(taskId: string): void {
+    if (!taskId) return;
+    const key = `regenerate_count:${taskId}`;
+    this.progress._counters[key] = (this.progress._counters[key] ?? 0) + 1;
+  }
+
+  /** Record a planner failure for orchestration budget guards. */
+  recordPlannerFailure(): void {
+    const key = "planner_spawn_fail";
+    this.progress._counters[key] = (this.progress._counters[key] ?? 0) + 1;
+  }
+
   /** Record the current lifecycle status for a task. */
   markTaskStatus(
     taskId: string,
@@ -678,6 +704,11 @@ export class WorkflowState {
     if (!taskId) return;
     const executionState = this.executionState;
     executionState.taskStatuses[taskId] = status;
+
+    // Track planner failures for budget guards
+    if (taskId === "planner" && status === "failed") {
+      this.recordPlannerFailure();
+    }
     if (sessionId) {
       executionState.taskSessions[taskId] = sessionId;
     }
@@ -846,6 +877,128 @@ export class WorkflowState {
       };
     }
     return snapshots;
+  }
+
+  /** Snapshot of the effective final outputs, not every historical task artifact. */
+  finalArtifactSnapshots(): Record<string, Record<string, unknown>> {
+    const snapshots: Record<string, Record<string, unknown>> = {};
+
+    if (this.requirementJson && Object.keys(this.requirementJson).length > 0) {
+      snapshots["analyze-final"] = {
+        taskId: "analyze-final",
+        type: "analyze",
+        revision: this._contentRevision(this.requirementJson),
+        content: this.requirementJson,
+        selfCheckPassed: true,
+        selfCheckIssues: [],
+        sourceRevisions: this._sourceRevisionsForType("analyze"),
+      };
+    }
+
+    const latestDesign = this._latestArtifactOfType("design");
+    if (latestDesign) {
+      snapshots[latestDesign.taskId] = {
+        taskId: latestDesign.taskId,
+        type: latestDesign.type,
+        revision: latestDesign.revision,
+        content: latestDesign.content,
+        selfCheckPassed: latestDesign.selfCheckPassed,
+        selfCheckIssues: [...latestDesign.selfCheckIssues],
+      };
+    }
+
+    if (this.diagrams && Object.keys(this.diagrams).length > 0) {
+      snapshots["diagrams-final"] = {
+        taskId: "diagrams-final",
+        type: "diagrams",
+        revision: this._contentRevision(this.diagrams),
+        content: this.diagrams,
+        selfCheckPassed: true,
+        selfCheckIssues: [],
+        sourceTaskIds: [...new Set(Object.values(this.diagramSourcesByKey))].sort(),
+        sourceRevisions: this._sourceRevisionsForTaskIds(
+          [...new Set(Object.values(this.diagramSourcesByKey))],
+        ),
+      };
+    }
+
+    const latestTests = this._latestArtifactOfType("tests");
+    if (latestTests) {
+      snapshots[latestTests.taskId] = {
+        taskId: latestTests.taskId,
+        type: latestTests.type,
+        revision: latestTests.revision,
+        content: latestTests.content,
+        selfCheckPassed: latestTests.selfCheckPassed,
+        selfCheckIssues: [...latestTests.selfCheckIssues],
+      };
+    }
+
+    return snapshots;
+  }
+
+  private _latestArtifactOfType(type: string): Artifact | null {
+    const latestTaskId = this.latestArtifactTaskByType[type];
+    if (latestTaskId && this.artifacts[latestTaskId]) {
+      return this.artifacts[latestTaskId];
+    }
+    let latest: Artifact | null = null;
+    for (const artifact of Object.values(this.artifacts)) {
+      if (artifact.type !== type) continue;
+      latest = artifact;
+    }
+    return latest;
+  }
+
+  latestArtifactTaskIdOfType(type: string): string {
+    const latestTaskId = this.latestArtifactTaskByType[type];
+    if (latestTaskId && this.artifacts[latestTaskId]) return latestTaskId;
+    const latest = this._latestArtifactOfType(type);
+    return latest?.taskId ?? "";
+  }
+
+  diagramSourceTaskId(diagramKey: string): string {
+    const normalized = diagramKey.trim();
+    if (normalized && this.diagramSourcesByKey[normalized]) {
+      return this.diagramSourcesByKey[normalized];
+    }
+    for (const [key, taskId] of Object.entries(this.diagramSourcesByKey)) {
+      if (normalized && key.includes(normalized)) return taskId;
+    }
+    return this.latestArtifactTaskIdOfType("diagrams");
+  }
+
+  private _contentRevision(content: unknown): number {
+    const text = JSON.stringify(content, (_key, value) => {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        return Object.fromEntries(
+          Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+            a.localeCompare(b),
+          ),
+        );
+      }
+      return value;
+    });
+    const hex = createHash("sha256").update(text ?? "", "utf8").digest("hex").slice(0, 12);
+    return parseInt(hex, 16) || 1;
+  }
+
+  private _sourceRevisionsForType(type: string): Record<string, number> {
+    const revisions: Record<string, number> = {};
+    for (const artifact of Object.values(this.artifacts)) {
+      if (artifact.type !== type) continue;
+      revisions[artifact.taskId] = this.currentArtifactRevision(artifact.taskId);
+    }
+    return revisions;
+  }
+
+  private _sourceRevisionsForTaskIds(taskIds: string[]): Record<string, number> {
+    const revisions: Record<string, number> = {};
+    for (const taskId of taskIds) {
+      const revision = this.currentArtifactRevision(taskId);
+      if (revision > 0) revisions[taskId] = revision;
+    }
+    return revisions;
   }
 
   /** Current revision number for a task's artifact (0 if none). */

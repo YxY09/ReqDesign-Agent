@@ -19,6 +19,29 @@ import { setupLogger, type Logger } from "./logger.js";
 /** Streaming callback — invoked for each text fragment received from the LLM. */
 export type OnChunk = (text: string) => void;
 
+/** Structured record of a completed LLM call, emitted via trace sink. */
+export interface LlmCallInfo {
+  tag: string;
+  provider: string;
+  model: string;
+  /** Total wall-clock time in milliseconds. */
+  durationMs: number;
+  /** Number of messages sent. */
+  inputMessageCount: number;
+  /** Characters in the concatenated prompt. */
+  inputChars: number;
+  /** First 2000 chars of the last user message. */
+  promptPreview: string;
+  /** Full assistant response text. */
+  responseText: string;
+  /** Characters in the response. */
+  responseChars: number;
+  /** Token usage (may be undefined for some providers). */
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 export interface LlmStreamEvent {
   kind: "start" | "chunk" | "end";
   tag: string;
@@ -98,6 +121,9 @@ export class LLMClient {
   private _streamTag = "";
   private _streamListener: ((event: LlmStreamEvent) => void) | null = null;
 
+  /** Trace sink — set by runtime to record every LLM call into TraceLogger. */
+  private _traceSink: ((info: LlmCallInfo) => void) | null = null;
+
   // -----------------------------------------------------------------------
   // Construction
   // -----------------------------------------------------------------------
@@ -141,6 +167,11 @@ export class LLMClient {
     this._streamListener = listener ?? null;
   }
 
+  /** Set the trace sink to record every completed LLM call. */
+  setTraceSink(sink: ((info: LlmCallInfo) => void) | null): void {
+    this._traceSink = sink;
+  }
+
   // -----------------------------------------------------------------------
   // Public API — chat
   // -----------------------------------------------------------------------
@@ -161,16 +192,18 @@ export class LLMClient {
     temperature?: number,
     onChunk?: OnChunk,
   ): Promise<string> {
-    const chunkHandler = this._buildChunkHandler(onChunk);
+    const startTime = Date.now();
+    const streamTag = this._streamTag;
+    const chunkHandler = this._buildChunkHandler(onChunk, streamTag);
     const shouldStream = chunkHandler !== undefined;
-    const emitMetadata = shouldStream && this._streamListener !== null && this._streamTag.trim().length > 0;
+    const emitMetadata = shouldStream && this._streamListener !== null && streamTag.trim().length > 0;
     if (emitMetadata) {
       // Extract prompt preview: the last user message, bounded for TUI display.
       const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
       const promptPreview = lastUserMsg
         ? lastUserMsg.content.slice(0, 1200)
         : undefined;
-      this._emitStreamEvent("start", {
+      this._emitStreamEvent(streamTag, "start", {
         messageCount: messages.length,
         promptChars: messages.reduce((total, message) => total + Array.from(message.content).length, 0),
         temperature: temperature ?? this.temperature,
@@ -178,48 +211,56 @@ export class LLMClient {
         promptPreview,
       });
       this._logger.info(
-        `[LLMClient] Request started: tag=${this._streamTag}, provider=${this.provider}, model=${this.model}, messages=${messages.length}`,
+        `[LLMClient] Request started: tag=${streamTag}, provider=${this.provider}, model=${this.model}, messages=${messages.length}`,
       );
     }
 
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    const promptPreview = lastUserMsg
+      ? lastUserMsg.content.slice(0, 2000)
+      : "";
+    const inputChars = messages.reduce((total, message) => total + Array.from(message.content).length, 0);
+
     try {
+      let resultText: string;
+      let usage: LlmTokenUsage | undefined;
+
       if (OPENAI_COMPAT_PROVIDERS.has(this.provider)) {
         if (shouldStream) {
           const response = await this._chatStreamOpenai(messages, temperature, chunkHandler);
-          if (emitMetadata) {
-            this._emitStreamEvent("end", {
-              responseChars: Array.from(response.text).length,
-              ...response.usage,
-            });
-            this._logger.info(
-              `[LLMClient] Request completed: tag=${this._streamTag}, chars=${Array.from(response.text).length}, tokens=${response.usage?.totalTokens ?? "unknown"}`,
-            );
-          }
-          return response.text;
+          resultText = response.text;
+          usage = response.usage;
+        } else {
+          resultText = await this._chatOpenai(messages, temperature);
         }
-        return this._chatOpenai(messages, temperature);
-      }
-
-      if (this.provider === "anthropic") {
+      } else if (this.provider === "anthropic") {
         const response = await this._chatAnthropic(messages, temperature, chunkHandler);
-        if (emitMetadata) {
-          this._emitStreamEvent("end", {
-            responseChars: Array.from(response.text).length,
-            ...response.usage,
-          });
-          this._logger.info(
-            `[LLMClient] Request completed: tag=${this._streamTag}, chars=${Array.from(response.text).length}, tokens=${response.usage?.totalTokens ?? "unknown"}`,
-          );
-        }
-        return response.text;
+        resultText = response.text;
+        usage = response.usage;
+      } else {
+        throw new Error(`[LLMClient] Unsupported provider: ${this.provider}`);
       }
 
-      throw new Error(`[LLMClient] Unsupported provider: ${this.provider}`);
+      // Emit stream metadata for TUI / runtime event system
+      if (emitMetadata) {
+        this._emitStreamEvent(streamTag, "end", {
+          responseChars: Array.from(resultText).length,
+          ...usage,
+        });
+        this._logger.info(
+          `[LLMClient] Request completed: tag=${streamTag}, chars=${Array.from(resultText).length}, tokens=${usage?.totalTokens ?? "unknown"}`,
+        );
+      }
+
+      // Emit structured trace record
+      this._emitTrace(streamTag, messages, inputChars, promptPreview, resultText, Date.now() - startTime, usage);
+
+      return resultText;
     } catch (error) {
       if (emitMetadata) {
         const message = error instanceof Error ? error.message : String(error);
-        this._logger.error(`[LLMClient] Request failed: tag=${this._streamTag}, error=${message}`);
-        this._emitStreamEvent("end", { text: `error: ${message}` });
+        this._logger.error(`[LLMClient] Request failed: tag=${streamTag}, error=${message}`);
+        this._emitStreamEvent(streamTag, "end", { text: `error: ${message}` });
       }
       throw error;
     }
@@ -269,6 +310,40 @@ export class LLMClient {
   ): Promise<string> {
     const messages = buildMessages(prompt, system);
     return this.chat(messages, undefined, onChunk);
+  }
+
+  // -----------------------------------------------------------------------
+  // Private — trace emission
+  // -----------------------------------------------------------------------
+
+  private _emitTrace(
+    tag: string,
+    messages: ChatMessage[],
+    inputChars: number,
+    promptPreview: string,
+    responseText: string,
+    durationMs: number,
+    usage?: LlmTokenUsage,
+  ): void {
+    if (!this._traceSink) return;
+    try {
+      this._traceSink({
+        tag,
+        provider: this.provider,
+        model: this.model,
+        durationMs,
+        inputMessageCount: messages.length,
+        inputChars,
+        promptPreview,
+        responseText,
+        responseChars: Array.from(responseText).length,
+        promptTokens: usage?.promptTokens,
+        completionTokens: usage?.completionTokens,
+        totalTokens: usage?.totalTokens,
+      });
+    } catch {
+      // Trace emission must never fail the main workflow.
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -339,8 +414,8 @@ export class LLMClient {
     return content;
   }
 
-  private _buildChunkHandler(onChunk?: OnChunk): OnChunk | undefined {
-    const hasListener = this._streamListener !== null && this._streamTag.trim().length > 0;
+  private _buildChunkHandler(onChunk: OnChunk | undefined, streamTag: string): OnChunk | undefined {
+    const hasListener = this._streamListener !== null && streamTag.trim().length > 0;
     if (!onChunk && !hasListener) {
       return undefined;
     }
@@ -349,7 +424,7 @@ export class LLMClient {
       if (hasListener && this._streamListener) {
         this._streamListener({
           kind: "chunk",
-          tag: this._streamTag,
+          tag: streamTag,
           text,
           provider: this.provider,
           model: this.model,
@@ -360,13 +435,14 @@ export class LLMClient {
   }
 
   private _emitStreamEvent(
+    streamTag: string,
     kind: "start" | "end",
     extras: Partial<Omit<LlmStreamEvent, "kind" | "tag" | "provider" | "model" | "timestamp">> = {},
   ): void {
-    if (!this._streamListener || this._streamTag.trim().length === 0) return;
+    if (!this._streamListener || streamTag.trim().length === 0) return;
     this._streamListener({
       kind,
-      tag: this._streamTag,
+      tag: streamTag,
       provider: this.provider,
       model: this.model,
       timestamp: Date.now() / 1000,
@@ -569,28 +645,43 @@ function extractJsonText(raw: string): string {
 
   // 1. Try markdown code blocks first
   //    ```json\n{...}\n``` or ```\n{...}\n```
-  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n([\s\S]*?)\n\s*```/);
-  if (codeBlockMatch) {
-    return codeBlockMatch[1].trim();
+  const codeBlockMatches = [...trimmed.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n\s*```/g)];
+  for (const match of codeBlockMatches) {
+    const candidate = match[1].trim();
+    if (canParseJsonCandidate(candidate)) return candidate;
+  }
+  if (codeBlockMatches.length > 0) {
+    return codeBlockMatches[0][1].trim();
   }
 
   // 2. If the response starts with { or [, try brace matching
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     const extracted = matchBraces(trimmed);
+    if (extracted && canParseJsonCandidate(extracted)) return extracted;
     if (extracted) return extracted;
   }
 
-  // 3. Look for the first { or [ and try to extract from there
+  // 3. Scan for the first parseable balanced JSON candidate. Reasoning models
+  // often emit prose or <think> blocks containing placeholders such as
+  // `{requirement_json}` before the actual JSON object.
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch !== "{" && ch !== "[") continue;
+    const extracted = matchBraces(trimmed.slice(i));
+    if (extracted && canParseJsonCandidate(extracted)) return extracted;
+  }
+
+  // 4. Look for the first { or [ and return everything from there as a last
+  // resort so truncation repair can still run.
   const firstBrace = trimmed.search(/[{[]/);
   if (firstBrace !== -1) {
     const sub = trimmed.slice(firstBrace);
     const extracted = matchBraces(sub);
     if (extracted) return extracted;
-    // Return everything from first brace onward as a last resort
     return sub;
   }
 
-  // 4. Return as-is
+  // 5. Return as-is
   return trimmed;
 }
 
@@ -645,34 +736,81 @@ function matchBraces(text: string): string | null {
  * - Truncated JSON (attempts completion)
  */
 function parseJsonResponse(raw: string): Record<string, unknown> {
-  const jsonText = extractJsonText(raw);
+  const primary = extractJsonText(raw);
+  const candidates = [
+    primary,
+    ...extractJsonCandidates(raw).filter((candidate) => candidate !== primary),
+  ];
+  let lastError: unknown = null;
 
-  // First attempt: direct parse
+  for (const jsonText of candidates) {
+    try {
+      return JSON.parse(jsonText) as Record<string, unknown>;
+    } catch (err) {
+      lastError = err;
+    }
+
+    const cleaned = stripCommentsAndTrailingCommas(jsonText);
+    try {
+      return JSON.parse(cleaned) as Record<string, unknown>;
+    } catch (err) {
+      lastError = err;
+    }
+
+    const completed = tryCompleteJson(cleaned);
+    try {
+      return JSON.parse(completed) as Record<string, unknown>;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  const msg = lastError instanceof Error ? lastError.message : String(lastError ?? "no JSON candidate found");
+  throw new Error(
+    `[LLMClient] Failed to parse JSON response after repair attempts: ${msg}\n` +
+      `Raw (first 500 chars): ${raw.slice(0, 500)}`,
+  );
+}
+
+function canParseJsonCandidate(text: string): boolean {
   try {
-    return JSON.parse(jsonText) as Record<string, unknown>;
+    JSON.parse(text);
+    return true;
   } catch {
-    // continue to repair attempts
+    try {
+      JSON.parse(stripCommentsAndTrailingCommas(text));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function extractJsonCandidates(raw: string): string[] {
+  const trimmed = raw.trim();
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: string | null | undefined) => {
+    const candidate = value?.trim();
+    if (!candidate || seen.has(candidate)) return;
+    seen.add(candidate);
+    candidates.push(candidate);
+  };
+
+  for (const match of trimmed.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n\s*```/g)) {
+    add(match[1]);
   }
 
-  // Second attempt: strip comments and trailing commas
-  const cleaned = stripCommentsAndTrailingCommas(jsonText);
-  try {
-    return JSON.parse(cleaned) as Record<string, unknown>;
-  } catch {
-    // continue to truncation repair
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch !== "{" && ch !== "[") continue;
+    add(matchBraces(trimmed.slice(i)));
   }
 
-  // Third attempt: try to complete truncated JSON
-  const completed = tryCompleteJson(cleaned);
-  try {
-    return JSON.parse(completed) as Record<string, unknown>;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `[LLMClient] Failed to parse JSON response after repair attempts: ${msg}\n` +
-        `Raw (first 500 chars): ${raw.slice(0, 500)}`,
-    );
-  }
+  const firstBrace = trimmed.search(/[{[]/);
+  if (firstBrace !== -1) add(trimmed.slice(firstBrace));
+  add(trimmed);
+  return candidates;
 }
 
 /**

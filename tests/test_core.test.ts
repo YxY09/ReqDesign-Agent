@@ -336,6 +336,16 @@ describe("Logger", () => {
     expect(logger2).toBe(logger1);
     logger2.close();
   });
+
+  it("writes pre-initialized loggers after shared log initialization", () => {
+    const logger = setupLogger(`test_preinit_${Date.now()}`, "INFO");
+
+    initSharedLog(tmpLogFile, "INFO");
+    logger.info("preinit logger writes after init");
+
+    const { readFileSync } = require("node:fs");
+    expect(readFileSync(tmpLogFile, "utf-8")).toContain("preinit logger writes after init");
+  });
 });
 
 // ============================================================================
@@ -468,6 +478,15 @@ describe("parseJsonResponse (via generateJson mock)", () => {
     const client = makeClientWithMockChat('Here is the result:\n{"key": "value"}\nDone.');
     const parsed = await client.generateJson("test prompt");
     expect(parsed).toEqual({ key: "value" });
+  });
+
+  it("skips prose placeholders before the actual JSON object", async () => {
+    const client = makeClientWithMockChat(
+      "I will check `{requirement_json}` first.\n</think>\n\n" +
+      '{"summary":"ok","issues":[]}',
+    );
+    const parsed = await client.generateJson("test prompt");
+    expect(parsed).toEqual({ summary: "ok", issues: [] });
   });
 
   it("throws on non-object JSON (array)", async () => {

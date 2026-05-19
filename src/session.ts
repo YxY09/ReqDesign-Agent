@@ -181,6 +181,7 @@ export class SessionContext {
   isDirectMode = false;
   evaluateScope: string[] = [];
   hints: Record<string, unknown> = {};
+  previousIssues: Array<{ severity: string; description: string; location?: string }> = [];
 
   constructor(init?: Partial<SessionContext>) {
     Object.assign(this, init);
