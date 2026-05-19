@@ -163,10 +163,9 @@ export class DeterministicPolicy {
     }
 
     // 7) Final review major issues — try repair per-task
-    if (
-      snapshot.finalReviewCurrent &&
-      snapshot.majorPendingTaskIds.length > 0
-    ) {
+    // Fire even if finalReviewCurrent is false: if evaluator found major issues,
+    // we should attempt repair before re-running evaluation.
+    if (snapshot.majorPendingTaskIds.length > 0) {
       const target = this._selectFinalMajorRepairTarget(snapshot);
       if (target) {
         return createStrategyDecision({
