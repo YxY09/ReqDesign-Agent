@@ -6,6 +6,7 @@
 
 import { readFileSync, existsSync, lstatSync } from "node:fs";
 import { extname } from "node:path";
+import { parseXmlRequirement } from "./xmlParser.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,6 +82,9 @@ export class InputLoader {
 
     if (ext === ".json") {
       return InputLoader._loadJson(rawContent);
+    }
+    if (ext === ".xml") {
+      return parseXmlRequirement(filePath);
     }
     return InputLoader._loadText(rawContent);
   }
