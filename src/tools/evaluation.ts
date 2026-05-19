@@ -137,9 +137,11 @@ export class EvaluationTool extends BaseTool {
   static _classifyIssueScope(issue: Issue): Scope {
     if (issue.targetTaskType === "analyze" && issue.severity === "blocker") {
       issue.scope = "systemic";
-    } else if (issue.targetField.startsWith("requirement_json.")) {
+    } else if (issue.targetField.startsWith("requirement_json.") && issue.targetTaskType === "analyze") {
+      // Only analyze tasks with requirement_json issues are truly upstream
       issue.scope = "upstream";
     } else {
+      // Design/diagrams/tests issues referencing requirement fields are local (fixable by patching the artifact)
       issue.scope = "local";
     }
     return issue.scope;

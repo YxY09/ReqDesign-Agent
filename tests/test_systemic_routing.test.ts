@@ -41,16 +41,28 @@ describe("EvaluationTool._classifyIssueScope", () => {
     expect(scope).toBe("local");
   });
 
-  it("classifies a missing requirement field as upstream", () => {
+  it("classifies a missing requirement field as upstream for analyze tasks", () => {
+    const issue = createIssue({
+      severity: "major",
+      targetTaskId: "analyze-1",
+      targetTaskType: "analyze",
+      targetField: "requirement_json.actors",
+      description: "缺少 actors field",
+    });
+    const scope = EvaluationTool._classifyIssueScope(issue);
+    expect(scope).toBe("upstream");
+  });
+
+  it("classifies a requirement field reference as local for non-analyze tasks", () => {
     const issue = createIssue({
       severity: "major",
       targetTaskId: "design-1",
       targetTaskType: "design",
       targetField: "requirement_json.actors",
-      description: "缺少 actors field导致设计不完整",
+      description: "设计未覆盖需求中的 actors",
     });
     const scope = EvaluationTool._classifyIssueScope(issue);
-    expect(scope).toBe("upstream");
+    expect(scope).toBe("local");
   });
 
   it("sets scope in-place on the issue object", () => {

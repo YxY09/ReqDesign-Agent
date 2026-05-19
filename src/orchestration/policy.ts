@@ -319,11 +319,14 @@ export class DeterministicPolicy {
     );
     if (majorIssues.length === 0) return false;
 
-    return majorIssues.every((issue) => {
+    // Allow repair if at least one major issue is local (repairable).
+    // Upstream/systemic issues are skipped — they require replan, not repair.
+    const hasLocalIssue = majorIssues.some((issue) => {
       const scope = String(issue["scope"] ?? "");
       if (scope === "upstream" || scope === "systemic") return false;
       const targetType = String(issue["target_task_type"] ?? "");
       return !targetType || !taskType || targetType === taskType;
     });
+    return hasLocalIssue;
   }
 }
