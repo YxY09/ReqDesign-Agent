@@ -143,6 +143,15 @@ export class RepairTool extends BaseTool {
       return this._fixMissingConstraintTest(task, currentContent, constraintMatch[1], context);
     }
 
+    // Pattern 4: Ghost function ID — "功能ID不一致: ...引用了分析中不存在的功能ID: F009, F010"
+    const ghostIdMatch = description.match(/功能ID不一致.*不存在的功能ID:\s*([F\d, ]+)/);
+    if (ghostIdMatch) {
+      const ghostIds = ghostIdMatch[1].split(/,\s*/).filter((s) => /^F\d+$/.test(s.trim()));
+      if (ghostIds.length > 0) {
+        return this._fixGhostFunctionIds(task, currentContent, ghostIds, context);
+      }
+    }
+
     return null;
   }
 
@@ -244,6 +253,73 @@ ${attrs}
     }
     lines.splice(firstRelIdx, 0, ...newClasses);
     return { ...obj, class_diagram: lines.join("\n") };
+  }
+
+  /**
+   * Remove ghost function IDs from design/test content.
+   * Strategy: replace ghost Fxxx with nearest valid ID from analysis, or remove the reference.
+   */
+  private _fixGhostFunctionIds(
+    task: Task,
+    currentContent: unknown,
+    ghostIds: string[],
+    context: Record<string, unknown>,
+  ): unknown | null {
+    // Get analysis function IDs for fallback
+    const reqJson = context.requirementJson as Record<string, unknown> | undefined;
+    const functions = Array.isArray(reqJson?.functions)
+      ? (reqJson!.functions as Array<Record<string, unknown>>)
+      : [];
+    const analysisIds = functions.map(f => String(f.id ?? "").trim()).filter(id => /^F\d+$/.test(id));
+
+    this.logger.info(`deterministic: removing ghost function IDs: ${ghostIds.join(", ")}`);
+
+    if (task.type === "tests" && typeof currentContent === "string") {
+      // For test cases: remove entire test case blocks that reference ghost IDs
+      let fixed = currentContent;
+      for (const ghostId of ghostIds) {
+        // Remove test case entries like "## TC-N-xxx: ...\n- **测试对象**: F009\n..."
+        // Strategy: replace the ghost ID with a note, or remove the test case block
+        fixed = fixed.replace(
+          new RegExp(`##[^\n]*\\n(?:-[^\n]*\\n)*\\s*-\\s\\*\\*测试对象\\*\\*:\\s*[^,]*\\b${this._escapeRegex(ghostId)}\\b[^\\n]*\\n(?:-[^\n]*\\n)*`, "g"),
+          "",
+        );
+      }
+      // If nothing changed, try simple replacement
+      if (fixed === currentContent) {
+        for (const ghostId of ghostIds) {
+          fixed = fixed.replace(
+            new RegExp(`\\b${this._escapeRegex(ghostId)}\\b`, "g"),
+            analysisIds.length > 0 ? analysisIds[0] : "",
+          );
+        }
+      }
+      return fixed !== currentContent ? fixed : null;
+    }
+
+    if (task.type === "design" && typeof currentContent === "string") {
+      // For design: remove module table rows that reference ghost IDs
+      let fixed = currentContent;
+      for (const ghostId of ghostIds) {
+        // Remove table rows: | **ModuleName** | ... | F009 |
+        fixed = fixed.replace(
+          new RegExp(`\\|[^\n]*\\b${this._escapeRegex(ghostId)}\\b[^\n]*\\|\\n`, "g"),
+          "",
+        );
+      }
+      // Fallback: simple word replacement
+      if (fixed === currentContent) {
+        for (const ghostId of ghostIds) {
+          fixed = fixed.replace(
+            new RegExp(`\\b${this._escapeRegex(ghostId)}\\b`, "g"),
+            "",
+          );
+        }
+      }
+      return fixed !== currentContent ? fixed : null;
+    }
+
+    return null;
   }
 
   private _fixMissingConstraintTest(

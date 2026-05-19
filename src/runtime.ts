@@ -34,6 +34,7 @@ import { GenerationTool } from "./tools/generation.js";
 import { AnalyzeMerger } from "./generators/merge.js";
 import { PlanningTool } from "./tools/planning.js";
 import {
+  createArtifact,
   createExecutionPlan,
   createTask,
   type Artifact,
@@ -1064,6 +1065,12 @@ export class MultiAgentRuntime {
       verdict.evaluatedTaskIds = [...evaluateScope];
     }
     state.addVerdict(verdict);
+
+    // Deterministic post-evaluation fix: repair artifacts in-place for fixable issues
+    if (!verdict.passed) {
+      this._applyDeterministicFixes(state, verdict);
+    }
+
     state.markTaskStatus(
       "evaluator",
       notif.status === "rejected" ? "rejected" : "completed",
@@ -1424,6 +1431,183 @@ export class MultiAgentRuntime {
         ...extras,
       }),
     );
+  }
+
+  /**
+   * Apply deterministic fixes to artifacts based on evaluation issues.
+   * This bypasses the broken RepairTool session path by fixing directly.
+   */
+  private _applyDeterministicFixes(state: WorkflowState, verdict: Verdict): void {
+    const fixablePatterns = [
+      // Naming mismatch: "命名不一致.*为 'X'.*使用了 'Y'"
+      { re: /命名不一致.*为\s*'(\w+)'.*使用了\s*'(\w+)'/, fix: 'naming' },
+      // Ghost function ID: "功能ID不一致.*不存在的功能ID: F009, F010"
+      { re: /功能ID不一致.*不存在的功能ID:\s*([F\d,\s]+)/, fix: 'ghostId' },
+      // Missing entity in class diagram: "类图缺少需求分析中的核心实体: X, Y"
+      { re: /类图缺少需求分析中的核心实体:\s*(.+)/, fix: 'missingEntity' },
+    ];
+
+    for (const issue of verdict.issues) {
+      const desc = String(issue.description ?? "");
+      for (const pattern of fixablePatterns) {
+        const match = desc.match(pattern.re);
+        if (!match) continue;
+
+        const taskId = String(issue.targetTaskId ?? "");
+        const artifactData = state.artifactsState.artifacts[taskId];
+        if (!artifactData) continue;
+        const artifactContent = artifactData.content;
+        const artifactType = artifactData.type;
+
+        let fixed = false;
+        if (pattern.fix === 'naming') {
+          const [, correctName, wrongName] = match;
+          if (correctName && wrongName && correctName !== wrongName) {
+            fixed = this._fixArtifactNaming(state, taskId, artifactContent, artifactType, correctName, wrongName);
+          }
+        } else if (pattern.fix === 'ghostId') {
+          const ghostIds = match[1].split(/,\s*/).filter((s: string) => /^F\d+$/.test(s.trim()));
+          if (ghostIds.length > 0) {
+            fixed = this._fixArtifactGhostIds(state, taskId, artifactContent, artifactType, ghostIds);
+          }
+        } else if (pattern.fix === 'missingEntity') {
+          const entityNames = match[1].split(/,\s*/).map((s: string) => s.trim()).filter(Boolean);
+          if (entityNames.length > 0) {
+            fixed = this._fixMissingEntities(state, taskId, artifactContent, artifactType, entityNames);
+          }
+        }
+
+        if (fixed) {
+          this.logger.info(`deterministic fix applied: ${pattern.fix} for task ${taskId}`);
+        }
+      }
+    }
+  }
+
+  private _fixArtifactNaming(
+    state: WorkflowState,
+    taskId: string,
+    content: unknown,
+    artifactType: string,
+    correctName: string,
+    wrongName: string,
+  ): boolean {
+    if (artifactType === "diagrams" && typeof content === "object" && content !== null) {
+      const obj = content as Record<string, unknown>;
+      const result: Record<string, unknown> = {};
+      let changed = false;
+      for (const [key, val] of Object.entries(obj)) {
+        if (typeof val === "string") {
+          let fixed = val.replace(
+            new RegExp(`class ${this._escapeRegex(wrongName)}\\s*\\{`, "g"),
+            `class ${correctName} {`,
+          );
+          fixed = fixed.replace(
+            new RegExp(`\\b${this._escapeRegex(wrongName)}\\b`, "g"),
+            correctName,
+          );
+          if (fixed !== val) changed = true;
+          result[key] = fixed;
+        } else {
+          result[key] = val;
+        }
+      }
+      if (changed) {
+        state.addArtifact(createArtifact({ taskId, type: artifactType as "diagrams", content: result }));
+        return true;
+      }
+    }
+    if (typeof content === "string") {
+      let fixed = content.replace(
+        new RegExp(`\\*\\*${this._escapeRegex(wrongName)}\\*\\*`, "g"),
+        `**${correctName}**`,
+      );
+      fixed = fixed.replace(
+        new RegExp(`\\b${this._escapeRegex(wrongName)}\\b`, "g"),
+        correctName,
+      );
+      if (fixed !== content) {
+        state.addArtifact(createArtifact({ taskId, type: artifactType as "design", content: fixed }));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private _fixArtifactGhostIds(
+    state: WorkflowState,
+    taskId: string,
+    content: unknown,
+    artifactType: string,
+    ghostIds: string[],
+  ): boolean {
+    const str = typeof content === "string"
+      ? content
+      : JSON.stringify(content ?? "");
+
+    let fixed = str;
+    for (const ghostId of ghostIds) {
+      fixed = fixed.replace(
+        new RegExp(`\\b${this._escapeRegex(ghostId)}\\b`, "g"),
+        "",
+      );
+    }
+    if (fixed !== str) {
+      state.addArtifact(createArtifact({
+        taskId,
+        type: artifactType as "tests",
+        content: fixed,
+      }));
+      return true;
+    }
+    return false;
+  }
+
+  private _fixMissingEntities(
+    state: WorkflowState,
+    taskId: string,
+    content: unknown,
+    artifactType: string,
+    entityNames: string[],
+  ): boolean {
+    if (artifactType !== "diagrams" || typeof content !== "object" || content === null) return false;
+    const obj = content as Record<string, unknown>;
+    const classDiagram = String(obj.class_diagram ?? "");
+    if (!classDiagram) return false;
+
+    // Find entities from analysis that have attributes for generating stub class
+    const reqEntities = (state.requirementJson.entities ?? []) as Array<Record<string, unknown>>;
+    const entityMap = new Map<string, Record<string, unknown>>();
+    for (const e of reqEntities) {
+      const name = String(e.name ?? "").trim();
+      if (name) entityMap.set(name, e);
+    }
+
+    const stubs: string[] = [];
+    for (const name of entityNames) {
+      const entity = entityMap.get(name);
+      if (!entity) continue;
+      const attrs = Array.isArray(entity.attributes)
+        ? (entity.attributes as Array<Record<string, string>>)
+            .map(a => `-${String(a.type ?? "String")} ${String(a.name ?? "id")}`)
+            .slice(0, 5)
+            .join("\n        ")
+        : "-Long id";
+      stubs.push(`    class ${name} {\n        ${attrs}\n    }`);
+    }
+
+    if (stubs.length === 0) return false;
+
+    // Append stubs to class diagram
+    const fixed = classDiagram.trimEnd() + "\n" + stubs.join("\n");
+    const result = { ...obj, class_diagram: fixed };
+    state.addArtifact(createArtifact({ taskId, type: "diagrams" as const, content: result }));
+    this.logger.info(`deterministic: added ${stubs.length} missing entities to class diagram: ${entityNames.join(", ")}`);
+    return true;
+  }
+
+  private _escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   private snapshotState(state: WorkflowState): Record<string, unknown> {

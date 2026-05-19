@@ -396,8 +396,14 @@ export class EvaluationTool extends BaseTool {
     // Cross-artifact entity naming consistency check
     issues.push(...this._checkCrossArtifactNaming(snapshots, requirementJson));
 
+    // Cross-artifact function ID consistency check
+    issues.push(...this._checkFunctionIdConsistency(snapshots, requirementJson));
+
     // Cross-artifact constraint boundary test coverage
     issues.push(...this._checkConstraintBoundaryCoverage(snapshots, requirementJson));
+
+    // Cross-artifact business process coverage in activity diagram
+    issues.push(...this._checkBusinessProcessCoverage(snapshots, requirementJson));
 
     return issues;
   }
@@ -437,8 +443,8 @@ export class EvaluationTool extends BaseTool {
 
       // Check if any requirement entity is missing and a similar name exists
       for (const [normalized, original] of entityNames) {
-        const found = content.includes(original) ||
-          [...designClasses].some((dc) => dc.toLowerCase().replace(/[_\-\s]/g, "") === normalized);
+        const found = [...designClasses].some((dc) => dc.toLowerCase().replace(/[_\-\s]/g, "") === normalized) ||
+          new RegExp(`\\b${this._escapeRegex(original)}\\b`).test(content);
         if (!found) {
           // Check if a renamed version exists (singular/plural, synonym)
           const similarInDesign = [...designClasses].filter((dc) => {
@@ -509,6 +515,117 @@ export class EvaluationTool extends BaseTool {
             }));
           }
         }
+      }
+    }
+
+    return issues;
+  }
+
+  private _escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  /**
+   * Check that all function IDs referenced in design/test exist in analysis.
+   * Flags "ghost IDs" that were hallucinated by downstream tasks.
+   */
+  /**
+   * Check that activity diagram covers all business processes from analysis.
+   */
+  private _checkBusinessProcessCoverage(
+    snapshots: Record<string, Record<string, unknown>>,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    const issues: Issue[] = [];
+    const processes = (Array.isArray(requirementJson.business_processes)
+      ? requirementJson.business_processes as Array<Record<string, unknown>>
+      : []);
+    if (processes.length <= 1) return issues;
+
+    const processNames = processes.map(p => String(p.name ?? "").trim()).filter(Boolean);
+
+    // Find activity diagram snapshot
+    for (const [taskId, snapshot] of Object.entries(snapshots)) {
+      const taskType = String(snapshot.type ?? "");
+      if (taskType !== "diagrams") continue;
+      const content = snapshot.content;
+      if (!content || typeof content !== "object") continue;
+      const activityDiagram = String((content as Record<string, unknown>).activity_diagram ?? "");
+      if (!activityDiagram) continue;
+
+      // Check which process names (or recognizable keywords) appear in the activity diagram
+      const missing: string[] = [];
+      for (const name of processNames) {
+        // Extract keywords from process name (PascalCase split)
+        const keywords = name.replace(/([a-z])([A-Z])/g, "$1 $2").split(/(?=[A-Z])/).join(" ").toLowerCase().split(/\s+/);
+        const mainKeywords = keywords.filter(k => k.length > 3); // filter out short words
+
+        if (mainKeywords.length > 0) {
+          const adLower = activityDiagram.toLowerCase();
+          const anyKeywordFound = mainKeywords.some(kw => adLower.includes(kw));
+          if (!anyKeywordFound) {
+            missing.push(name);
+          }
+        }
+      }
+
+      if (missing.length > 0) {
+        issues.push(createIssue({
+          severity: "major",
+          targetTaskId: taskId,
+          targetTaskType: "diagrams",
+          targetField: "diagrams.activity_diagram",
+          description: `活动图未覆盖业务流程: ${missing.join(", ")}`,
+          suggestion: `活动图应至少包含以下业务流程的完整路径: ${missing.join(", ")}`,
+        }));
+      }
+    }
+
+    return issues;
+  }
+
+  private _checkFunctionIdConsistency(
+    snapshots: Record<string, Record<string, unknown>>,
+    requirementJson: Record<string, unknown>,
+  ): Issue[] {
+    const issues: Issue[] = [];
+    const functions = (Array.isArray(requirementJson.functions)
+      ? requirementJson.functions as Array<Record<string, unknown>>
+      : []);
+    const analysisIds = new Set(
+      functions.map(f => String(f.id ?? "").trim()).filter(id => /^F\d+$/.test(id)),
+    );
+    if (analysisIds.size === 0) return issues;
+
+    for (const [taskId, snapshot] of Object.entries(snapshots)) {
+      const taskType = String(snapshot.type ?? "");
+      // Only check design and test artifacts
+      if (taskType !== "design" && taskType !== "tests") continue;
+
+      const content = typeof snapshot.content === "string"
+        ? snapshot.content
+        : JSON.stringify(snapshot.content ?? "");
+      if (!content) continue;
+
+      // Extract all Fxxx IDs from downstream artifact
+      const idRe = /\b(F\d{1,4})\b/g;
+      const referencedIds = new Set<string>();
+      let m: RegExpExecArray | null;
+      while ((m = idRe.exec(content)) !== null) {
+        referencedIds.add(m[1]);
+      }
+
+      // Find ghost IDs
+      const ghostIds = [...referencedIds].filter(id => !analysisIds.has(id));
+      if (ghostIds.length > 0) {
+        issues.push(createIssue({
+          severity: "major",
+          targetTaskId: taskId,
+          targetTaskType: taskType,
+          targetField: taskType === "design" ? "design_text" : "test_cases",
+          description: `功能ID不一致: ${taskType === "design" ? "设计文档" : "测试用例"}中引用了分析中不存在的功能ID: ${ghostIds.join(", ")}`,
+          suggestion: `移除或替换这些ID: ${ghostIds.join(", ")}。分析中存在的功能ID: ${[...analysisIds].sort().join(", ")}`,
+        }));
       }
     }
 
