@@ -254,7 +254,7 @@ describe("RequirementNormalizer — entity splitting", () => {
     expect(rels.some(r => r.target === "OrderItem")).toBe(true);
   });
 
-  it("splits Object type into independent entity", () => {
+  it("does not split Object type (name derivation too unreliable)", () => {
     const input = {
       actors: [],
       entities: [
@@ -275,13 +275,14 @@ describe("RequirementNormalizer — entity splitting", () => {
     const entities = result.entities as Array<Record<string, unknown>>;
     const names = entities.map(e => e.name);
 
-    // Payment should be created (paymentInfo stripped of 'Info' suffix)
-    expect(names).toContain("Payment");
+    // Object types are NOT split — name derivation is too unreliable
+    expect(names).not.toContain("Payment");
+    expect(names).toEqual(["Order"]);
 
-    // Order.paymentInfo type should change to Long
+    // Order.paymentInfo type should remain Object
     const order = entities.find(e => e.name === "Order")!;
     const paymentAttr = (order.attributes as Array<Record<string, unknown>>).find(a => a.name === "paymentInfo");
-    expect(paymentAttr!.type).toBe("Long");
+    expect(paymentAttr!.type).toBe("Object");
   });
 
   it("does not split if entity already exists", () => {

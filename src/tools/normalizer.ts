@@ -295,16 +295,16 @@ export class RequirementNormalizer {
 
         let newEntityName = "";
 
-        // Pattern A: List<X> where X is a PascalCase entity name
+        // Pattern A: List<X> where X is a PascalCase entity name (LLM literally wrote the name)
         const listMatch = type.match(/^List<([A-Z][a-zA-Z0-9]+)>$/);
         if (listMatch) {
           newEntityName = listMatch[1];
         }
 
-        // Pattern B: Plain Object type — derive name from attribute
-        if (type === "Object") {
-          newEntityName = RequirementNormalizer._attrToEntityName(name);
-        }
+        // Pattern B: Plain Object type → skip. Attribute name derivation is too unreliable
+        // (e.g. paymentInfo→Payment, rules→Rules, shippingAddress→ShippingAddress).
+        // The LLM already creates most entities; we only fix the List<X> nesting case.
+        // If (type === "Object") { ... }
 
         if (!newEntityName || entityNames.has(newEntityName)) continue;
         if (RequirementNormalizer._PRIMITIVE_TYPES.has(newEntityName)) continue;
@@ -354,21 +354,6 @@ export class RequirementNormalizer {
       entityObjs.push(...newEntities);
       analysis.entities = entityObjs;
     }
-  }
-
-  /** Derive entity name from attribute name: paymentInfo → Payment, logisticsInfo → Logistics */
-  private static _attrToEntityName(attrName: string): string {
-    // Strip common suffixes
-    let base = attrName
-      .replace(/Info$/i, "")
-      .replace(/Record$/i, "")
-      .replace(/Data$/i, "")
-      .replace(/Detail$/i, "");
-    // Capitalize first letter
-    if (base.length > 0) {
-      base = base.charAt(0).toUpperCase() + base.slice(1);
-    }
-    return base || attrName;
   }
 
   private static _lowerFirst(s: string): string {
