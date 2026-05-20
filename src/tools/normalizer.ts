@@ -301,8 +301,8 @@ export class RequirementNormalizer {
           newEntityName = listMatch[1];
         }
 
-        // Pattern B: Plain Object type → skip. Attribute name derivation is too unreliable
-        // (e.g. paymentInfo→Payment, rules→Rules, shippingAddress→ShippingAddress).
+        // Pattern B: Plain Object type → skip. Attribute name→entity name
+        // derivation is too unreliable (suffix stripping creates garbage names).
         // The LLM already creates most entities; we only fix the List<X> nesting case.
         // If (type === "Object") { ... }
 

@@ -225,10 +225,10 @@ describe("RequirementNormalizer — entity splitting", () => {
       actors: [],
       entities: [
         {
-          name: "Order",
+          name: "ParentEntity",
           attributes: [
-            { name: "orderId", type: "Long", description: "订单ID" },
-            { name: "orderItems", type: "List<OrderItem>", description: "商品明细" },
+            { name: "parentId", type: "Long", description: "主键ID" },
+            { name: "childItems", type: "List<ChildItem>", description: "子项列表" },
           ],
           relationships: [],
         },
@@ -241,17 +241,17 @@ describe("RequirementNormalizer — entity splitting", () => {
     const entities = result.entities as Array<Record<string, unknown>>;
     const names = entities.map(e => e.name);
 
-    // OrderItem should be created
-    expect(names).toContain("OrderItem");
+    // ChildItem should be created from List<ChildItem>
+    expect(names).toContain("ChildItem");
 
-    // Order.orderItems type should change to List<Long>
-    const order = entities.find(e => e.name === "Order")!;
-    const orderItemsAttr = (order.attributes as Array<Record<string, unknown>>).find(a => a.name === "orderItems");
-    expect(orderItemsAttr!.type).toBe("List<Long>");
+    // ParentEntity.childItems type should change to List<Long>
+    const parent = entities.find(e => e.name === "ParentEntity")!;
+    const childAttr = (parent.attributes as Array<Record<string, unknown>>).find(a => a.name === "childItems");
+    expect(childAttr!.type).toBe("List<Long>");
 
-    // Order should have relationship to OrderItem
-    const rels = order.relationships as Array<Record<string, unknown>>;
-    expect(rels.some(r => r.target === "OrderItem")).toBe(true);
+    // ParentEntity should have relationship to ChildItem
+    const rels = parent.relationships as Array<Record<string, unknown>>;
+    expect(rels.some(r => r.target === "ChildItem")).toBe(true);
   });
 
   it("does not split Object type (name derivation too unreliable)", () => {
@@ -259,10 +259,10 @@ describe("RequirementNormalizer — entity splitting", () => {
       actors: [],
       entities: [
         {
-          name: "Order",
+          name: "ParentEntity",
           attributes: [
-            { name: "orderId", type: "Long", description: "订单ID" },
-            { name: "paymentInfo", type: "Object", description: "支付信息" },
+            { name: "parentId", type: "Long", description: "主键ID" },
+            { name: "nestedObject", type: "Object", description: "内嵌对象" },
           ],
           relationships: [],
         },
@@ -276,13 +276,13 @@ describe("RequirementNormalizer — entity splitting", () => {
     const names = entities.map(e => e.name);
 
     // Object types are NOT split — name derivation is too unreliable
-    expect(names).not.toContain("Payment");
-    expect(names).toEqual(["Order"]);
+    expect(names).not.toContain("NestedObject");
+    expect(names).toEqual(["ParentEntity"]);
 
-    // Order.paymentInfo type should remain Object
-    const order = entities.find(e => e.name === "Order")!;
-    const paymentAttr = (order.attributes as Array<Record<string, unknown>>).find(a => a.name === "paymentInfo");
-    expect(paymentAttr!.type).toBe("Object");
+    // ParentEntity.nestedObject type should remain Object
+    const parent = entities.find(e => e.name === "ParentEntity")!;
+    const objAttr = (parent.attributes as Array<Record<string, unknown>>).find(a => a.name === "nestedObject");
+    expect(objAttr!.type).toBe("Object");
   });
 
   it("does not split if entity already exists", () => {
@@ -290,15 +290,15 @@ describe("RequirementNormalizer — entity splitting", () => {
       actors: [],
       entities: [
         {
-          name: "Order",
+          name: "ParentEntity",
           attributes: [
-            { name: "orderId", type: "Long", description: "订单ID" },
-            { name: "orderItems", type: "List<OrderItem>", description: "商品明细" },
+            { name: "parentId", type: "Long", description: "主键ID" },
+            { name: "childItems", type: "List<ChildItem>", description: "子项列表" },
           ],
           relationships: [],
         },
         {
-          name: "OrderItem",
+          name: "ChildItem",
           attributes: [{ name: "id", type: "Long", description: "ID" }],
           relationships: [],
         },
@@ -311,7 +311,7 @@ describe("RequirementNormalizer — entity splitting", () => {
     const entities = result.entities as Array<Record<string, unknown>>;
     const names = entities.map(e => e.name);
 
-    // OrderItem should appear exactly once
-    expect(names.filter(n => n === "OrderItem").length).toBe(1);
+    // ChildItem should appear exactly once
+    expect(names.filter(n => n === "ChildItem").length).toBe(1);
   });
 });
