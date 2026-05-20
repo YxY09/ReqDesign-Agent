@@ -340,7 +340,6 @@ export class PolicyGuard {
       snapshot.artifactTypesByTask[target] ??
       snapshot.planTaskTypesById[target] ??
       "";
-    if (taskType === "analyze") return false;
 
     const targetIssues = snapshot.latestIssues.filter(
       (issue) => issue["target_task_id"] === target,
@@ -349,6 +348,15 @@ export class PolicyGuard {
       (issue) => issue["severity"] === "major",
     );
     if (majorIssues.length === 0) return false;
+
+    // Allow analyze repair for local issues, skip upstream/systemic.
+    if (taskType === "analyze") {
+      const hasLocal = majorIssues.some((issue) => {
+        const scope = String(issue["scope"] ?? "");
+        return scope !== "upstream" && scope !== "systemic";
+      });
+      return hasLocal;
+    }
 
     return majorIssues.every((issue) => {
       const scope = String(issue["scope"] ?? "");

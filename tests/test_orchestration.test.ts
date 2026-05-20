@@ -334,7 +334,7 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.taskId).toBe("design-2");
   });
 
-  it("does not repair final-review major issues in analyze artifacts", async () => {
+  it("routes analyze upstream issues to replan, not repair", async () => {
     const coordinator = new AgentOrchestrator(null);
     const state = new WorkflowState();
     state.requirementText = "requirement";
@@ -372,6 +372,8 @@ describe("AgentOrchestrator decisions", () => {
     );
 
     const decision = await coordinator.decide(state, makeMailbox());
+    // Upstream-scoped analyze issues should still escalate to replan,
+    // not attempt local repair.
     expect(decision.action).toBe("replan");
   });
 

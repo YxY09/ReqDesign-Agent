@@ -139,8 +139,17 @@ export class DeterministicPolicy {
       });
     }
 
-    // 5) Convergence stall — same issues persist across rounds
+    // 5) Convergence stall — same issues persist across rounds.
+    //    But if issues are trending down and below threshold, accept.
     if (snapshot.convergenceStalled && snapshot.convergenceRoundCount >= 3) {
+      const trend = snapshot.convergenceTrend ?? "flat";
+      if (trend === "decreasing" && snapshot.latestIssues.length <= 8) {
+        // Issues are declining and manageable — force accept to avoid infinite loop
+        return createStrategyDecision({
+          strategy: "finish",
+          reason: `convergence accepted despite stall: ${snapshot.latestIssues.length} issues, trend decreasing`,
+        });
+      }
       return createStrategyDecision({
         strategy: "pause_for_user",
         reason: `convergence stalled: ${snapshot.convergenceStalledFingerprints.length} issue(s) unchanged across ${snapshot.convergenceRoundCount} rounds`,
@@ -308,7 +317,6 @@ export class DeterministicPolicy {
     target: string,
   ): boolean {
     const taskType = this.budget.taskType(snapshot, target);
-    if (taskType === "analyze") return false;
 
     const targetIssues = snapshot.latestIssues.filter(
       (issue) => issue["target_task_id"] === target,
@@ -317,6 +325,15 @@ export class DeterministicPolicy {
       (issue) => issue["severity"] === "major",
     );
     if (majorIssues.length === 0) return false;
+
+    // Allow analyze repair for local issues, skip upstream/systemic.
+    if (taskType === "analyze") {
+      const hasLocal = majorIssues.some((issue) => {
+        const scope = String(issue["scope"] ?? "");
+        return scope !== "upstream" && scope !== "systemic";
+      });
+      return hasLocal;
+    }
 
     // Allow repair if at least one major issue is local (repairable).
     // Upstream/systemic issues are skipped — they require replan, not repair.

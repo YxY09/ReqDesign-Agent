@@ -214,3 +214,103 @@ describe("RequirementNormalizer", () => {
     expect(names).toContain("Block");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Entity splitting
+// ---------------------------------------------------------------------------
+
+describe("RequirementNormalizer — entity splitting", () => {
+  it("splits List<OrderItem> into independent entity", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "Order",
+          attributes: [
+            { name: "orderId", type: "Long", description: "订单ID" },
+            { name: "orderItems", type: "List<OrderItem>", description: "商品明细" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+
+    // OrderItem should be created
+    expect(names).toContain("OrderItem");
+
+    // Order.orderItems type should change to List<Long>
+    const order = entities.find(e => e.name === "Order")!;
+    const orderItemsAttr = (order.attributes as Array<Record<string, unknown>>).find(a => a.name === "orderItems");
+    expect(orderItemsAttr!.type).toBe("List<Long>");
+
+    // Order should have relationship to OrderItem
+    const rels = order.relationships as Array<Record<string, unknown>>;
+    expect(rels.some(r => r.target === "OrderItem")).toBe(true);
+  });
+
+  it("splits Object type into independent entity", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "Order",
+          attributes: [
+            { name: "orderId", type: "Long", description: "订单ID" },
+            { name: "paymentInfo", type: "Object", description: "支付信息" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+
+    // Payment should be created (paymentInfo stripped of 'Info' suffix)
+    expect(names).toContain("Payment");
+
+    // Order.paymentInfo type should change to Long
+    const order = entities.find(e => e.name === "Order")!;
+    const paymentAttr = (order.attributes as Array<Record<string, unknown>>).find(a => a.name === "paymentInfo");
+    expect(paymentAttr!.type).toBe("Long");
+  });
+
+  it("does not split if entity already exists", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "Order",
+          attributes: [
+            { name: "orderId", type: "Long", description: "订单ID" },
+            { name: "orderItems", type: "List<OrderItem>", description: "商品明细" },
+          ],
+          relationships: [],
+        },
+        {
+          name: "OrderItem",
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+
+    // OrderItem should appear exactly once
+    expect(names.filter(n => n === "OrderItem").length).toBe(1);
+  });
+});

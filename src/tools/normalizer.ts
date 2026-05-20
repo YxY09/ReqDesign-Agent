@@ -14,6 +14,7 @@ export class RequirementNormalizer {
     RequirementNormalizer._canonicalizeActorNames(analysis);
     RequirementNormalizer._normalizeAcronyms(analysis);
     RequirementNormalizer._dedupConstraints(analysis);
+    RequirementNormalizer._splitNestedEntities(analysis);
     RequirementNormalizer._ensureUserRole(analysis);
 
     return analysis;
@@ -250,6 +251,122 @@ export class RequirementNormalizer {
         roleAttr.description = `角色: ${allRoles.join("、")}`;
       }
     }
+  }
+
+  // ------------------------------------------------------------------
+  // 6. Split nested Object/List entities into independent entities
+  // ------------------------------------------------------------------
+  /**
+   * The most common LLM failure mode: writing entity-like attributes as
+   * Object or List<X> instead of creating independent entities.
+   * This scanner detects those and promotes them to top-level entities.
+   *
+   * Patterns detected:
+   *   type === "Object"       → new entity (name derived from attribute)
+   *   type is "List<X>"       → new entity X (only if X is PascalCase)
+   *   type is "String" but name looks like entity ref → skip (too many false positives)
+   */
+  private static _splitNestedEntities(analysis: Record<string, unknown>): void {
+    const entities = RequirementNormalizer._getEntities(analysis);
+    if (!entities || entities.length === 0) return;
+
+    const entityObjs = entities as Record<string, unknown>[];
+    const entityNames = new Set(entityObjs.map(e => String(e.name ?? "").trim()).filter(Boolean));
+    const newEntities: Record<string, unknown>[] = [];
+
+    for (const entity of entityObjs) {
+      const attrs = Array.isArray(entity.attributes)
+        ? (entity.attributes as Record<string, unknown>[])
+        : [];
+      if (attrs.length === 0) continue;
+
+      const replacements: Array<{ attr: Record<string, unknown>; newEntityName: string }> = [];
+
+      for (const attr of attrs) {
+        const type = String(attr.type ?? "").trim();
+        const name = String(attr.name ?? "").trim();
+        if (!name) continue;
+
+        let newEntityName = "";
+
+        // Pattern A: List<X> where X is a PascalCase entity name
+        const listMatch = type.match(/^List<([A-Z][a-zA-Z0-9]+)>$/);
+        if (listMatch) {
+          newEntityName = listMatch[1];
+        }
+
+        // Pattern B: Plain Object type — derive name from attribute
+        if (type === "Object") {
+          newEntityName = RequirementNormalizer._attrToEntityName(name);
+        }
+
+        if (!newEntityName || entityNames.has(newEntityName)) continue;
+        if (newEntities.some(e => e.name === newEntityName)) continue;
+
+        replacements.push({ attr, newEntityName });
+        entityNames.add(newEntityName);
+      }
+
+      // Apply replacements and create new entities
+      for (const { attr, newEntityName } of replacements) {
+        const type = String(attr.type ?? "").trim();
+        const isList = type.startsWith("List<");
+
+        // Change attribute type to Long reference
+        attr.type = isList ? "List<Long>" : "Long";
+        attr.description = String(attr.description ?? "") + ` → 关联实体 ${newEntityName}`;
+
+        // Create stub entity
+        const parentName = String(entity.name ?? "");
+        newEntities.push({
+          name: newEntityName,
+          description: `${parentName}的${newEntityName}`,
+          attributes: [
+            { name: "id", type: "Long", description: `${newEntityName}唯一标识` },
+            { name: `${RequirementNormalizer._lowerFirst(parentName)}Id`, type: "Long", description: `所属${parentName}ID` },
+          ],
+          relationships: [
+            { target: parentName, type: "many-to-one", description: `${newEntityName}属于${parentName}` },
+          ],
+        });
+
+        // Add relationship from parent to new entity
+        const rels = Array.isArray(entity.relationships)
+          ? (entity.relationships as Record<string, unknown>[])
+          : [];
+        rels.push({
+          target: newEntityName,
+          type: isList ? "one-to-many" : "one-to-one",
+          description: `${parentName}拥有${newEntityName}`,
+        });
+        entity.relationships = rels;
+      }
+    }
+
+    if (newEntities.length > 0) {
+      entityObjs.push(...newEntities);
+      analysis.entities = entityObjs;
+    }
+  }
+
+  /** Derive entity name from attribute name: paymentInfo → Payment, logisticsInfo → Logistics */
+  private static _attrToEntityName(attrName: string): string {
+    // Strip common suffixes
+    let base = attrName
+      .replace(/Info$/i, "")
+      .replace(/Record$/i, "")
+      .replace(/Data$/i, "")
+      .replace(/Detail$/i, "");
+    // Capitalize first letter
+    if (base.length > 0) {
+      base = base.charAt(0).toUpperCase() + base.slice(1);
+    }
+    return base || attrName;
+  }
+
+  private static _lowerFirst(s: string): string {
+    if (s.length === 0) return s;
+    return s.charAt(0).toLowerCase() + s.slice(1);
   }
 
   // ------------------------------------------------------------------
