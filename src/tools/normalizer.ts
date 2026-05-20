@@ -4,6 +4,12 @@
  */
 
 export class RequirementNormalizer {
+  /** Standard types that should never become entity names. */
+  private static readonly _PRIMITIVE_TYPES: Set<string> = new Set([
+    "String", "Integer", "Int", "Long", "Double", "Float",
+    "Boolean", "Decimal", "BigDecimal", "DateTime", "Date",
+    "Object", "List", "Map", "Set", "Array", "UUID",
+  ]);
   /**
    * Normalize an analyze result in-place and return it.
    */
@@ -301,6 +307,7 @@ export class RequirementNormalizer {
         }
 
         if (!newEntityName || entityNames.has(newEntityName)) continue;
+        if (RequirementNormalizer._PRIMITIVE_TYPES.has(newEntityName)) continue;
         if (newEntities.some(e => e.name === newEntityName)) continue;
 
         replacements.push({ attr, newEntityName });
