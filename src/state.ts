@@ -22,6 +22,7 @@ import {
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/convergence.js";
 import { RequirementNormalizer } from "./tools/normalizer.js";
+import { PostGenerationValidator } from "./tools/validator.js";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -457,6 +458,19 @@ export class WorkflowState {
     artifactsState.artifacts[artifact.taskId] = artifact;
     this.latestArtifactTaskByType[artifact.type] = artifact.taskId;
     this._syncAggregate(artifact);
+
+    // Post-generation validation: clean ghost IDs, extra classes, renames.
+    // Runs on design/diagrams/tests artifacts that reference analysis data.
+    const cleaned = PostGenerationValidator.validate(
+      artifactsState.requirementJson,
+      artifact.type,
+      artifact.content,
+    );
+    if (cleaned !== null) {
+      artifact.content = cleaned;
+      artifactsState.artifacts[artifact.taskId] = artifact;
+      this._syncAggregate(artifact);
+    }
     // Clear all major pending — artifacts changed, need fresh evaluation
     this.reviewState.majorPendingTaskIds.clear();
     // Note: do NOT reset finalReviewDone here — repair adds artifacts which
