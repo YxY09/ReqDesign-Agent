@@ -107,9 +107,13 @@ export class PostGenerationValidator {
           candidates.push(entityName);
         }
       }
-      // Only rename if exactly one unambiguous candidate
+      // Only rename if exactly one unambiguous candidate AND target doesn't exist
       if (candidates.length === 1) {
         const entityName = candidates[0];
+        // Don't rename if target already exists in diagram (would create duplicate)
+        if (existingClasses.has(entityName)) {
+          continue;
+        }
         fixed = fixed.split(className).join(entityName);
         existingClasses.delete(className);
         existingClasses.set(entityName, entityName);
@@ -121,13 +125,16 @@ export class PostGenerationValidator {
     const analysisSet = new Set(entities);
     for (const [className] of existingClasses) {
       if (!analysisSet.has(className)) {
-        // Check if this class is a substring match with any analysis entity
-        // This catches cases like "Registry" vs "XmlRegistry" (partial match)
-        const isAlias = entities.some(e =>
-          e.toLowerCase().includes(className.toLowerCase()) ||
-          className.toLowerCase().includes(e.toLowerCase()),
-        );
-        if (!isAlias) {
+        // Check if this class is a substring alias for an analysis entity.
+        // If the alias target already has a class in the diagram, remove this
+        // duplicate. Otherwise keep it (it might be a legitimate rename candidate).
+        const aliasMatch = entities.find(e => {
+          const en = e.toLowerCase();
+          const cn = className.toLowerCase();
+          return (en.includes(cn) && en !== cn) || (cn.includes(en) && cn !== en);
+        });
+        const shouldRemove = !aliasMatch || existingClasses.has(aliasMatch);
+        if (shouldRemove) {
           // Remove the class definition block
           const blockRe = new RegExp(
             `\\s*class\\s+${PostGenerationValidator._escapeRx(className)}\\s*\\{` +
