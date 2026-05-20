@@ -150,6 +150,14 @@ export class DeterministicPolicy {
           reason: `convergence accepted despite stall: ${snapshot.latestIssues.length} issues, trend decreasing`,
         });
       }
+      // Also accept if non-increasing + low count — evaluator is strict,
+      // don't waste tokens on cosmetic issues that can't be resolved.
+      if (trend !== "increasing" && snapshot.latestIssues.length <= 10) {
+        return createStrategyDecision({
+          strategy: "finish",
+          reason: `convergence accepted: ${snapshot.latestIssues.length} issues, trend ${trend}, low enough`,
+        });
+      }
       return createStrategyDecision({
         strategy: "pause_for_user",
         reason: `convergence stalled: ${snapshot.convergenceStalledFingerprints.length} issue(s) unchanged across ${snapshot.convergenceRoundCount} rounds`,
