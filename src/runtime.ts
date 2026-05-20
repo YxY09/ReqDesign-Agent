@@ -8,6 +8,7 @@ import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
 import { OutputScorer } from "./tools/scorer.js";
 import { RequirementNormalizer } from "./tools/normalizer.js";
+import { PostGenerationValidator } from "./tools/validator.js";
 import {
   TaskMailbox,
   createTaskMessage,
@@ -967,6 +968,19 @@ export class MultiAgentRuntime {
       state.recordRepairAttempt(taskId);
     }
     state.addArtifact(artifact);
+
+    // Post-generation validation: clean extra classes, ghost IDs, renames.
+    // Must run AFTER addArtifact so requirementJson is available.
+    const cleaned = PostGenerationValidator.validate(
+      state.requirementJson,
+      artifact.type,
+      artifact.content,
+    );
+    if (cleaned !== null) {
+      artifact.content = cleaned;
+      state.addArtifact(artifact);
+    }
+
     state.markTaskStatus(taskId, "completed", notif.sessionId);
 
     // If this is an analyze task, check if ALL analyze tasks are done.
