@@ -96,17 +96,24 @@ export class PostGenerationValidator {
         continue; // exact match, correct
       }
       // Check each analysis entity to see if className is a rename
+      const candidates: string[] = [];
       for (const entityName of entities) {
         const entNorm = entityName.toLowerCase().replace(/[_\-\s]/g, "");
         if (classNorm === entNorm) continue;
-        if (classNorm.includes(entNorm) && classNorm.length > entNorm.length) {
-          // className is a superset of entityName → rename back
-          fixed = fixed.split(className).join(entityName);
-          existingClasses.delete(className);
-          existingClasses.set(entityName, entityName);
-          changed = true;
-          break;
+        // Superset: ShippingAddress contains Address
+        // Subset: Registry is part of XmlRegistry
+        if ((classNorm.includes(entNorm) && classNorm.length > entNorm.length) ||
+            (entNorm.includes(classNorm) && entNorm.length > classNorm.length)) {
+          candidates.push(entityName);
         }
+      }
+      // Only rename if exactly one unambiguous candidate
+      if (candidates.length === 1) {
+        const entityName = candidates[0];
+        fixed = fixed.split(className).join(entityName);
+        existingClasses.delete(className);
+        existingClasses.set(entityName, entityName);
+        changed = true;
       }
     }
 
