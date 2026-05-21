@@ -607,8 +607,9 @@ describe("Scorer", () => {
     });
 
     it("matches Chinese to English equivalents", () => {
-      expect(fuzzyMatchEntity("图书", "Book")).toBe(true);
-      expect(fuzzyMatchEntity("员工", "Employee")).toBe(true);
+      const entityMap = { 图书: ["Book"], 员工: ["Employee"] };
+      expect(fuzzyMatchEntity("图书", "Book", entityMap)).toBe(true);
+      expect(fuzzyMatchEntity("员工", "Employee", entityMap)).toBe(true);
     });
 
     it("does not match unrelated entities", () => {
@@ -625,7 +626,8 @@ describe("Scorer", () => {
     });
 
     it("matches by keyword overlap", () => {
-      expect(fuzzyMatchFunction("用户登录", resultFuncs, resultText)).toBe(true);
+      // "图书与借阅" splits into ["图书", "借阅"] — both keywords in text
+      expect(fuzzyMatchFunction("图书与借阅", resultFuncs, resultText)).toBe(true);
     });
 
     it("matches by synonym", () => {
