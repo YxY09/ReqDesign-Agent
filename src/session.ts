@@ -282,7 +282,18 @@ export class SessionDescriptor {
   status = "idle";
 
   constructor(init?: Partial<SessionDescriptor>) {
-    Object.assign(this, init);
+    if (init) {
+      this.sessionId = init.sessionId ?? "";
+      this.workerType = init.workerType ?? "";
+      this.resumeCount = init.resumeCount ?? 0;
+      this.currentSequence = init.currentSequence ?? 0;
+      this.messageCount = init.messageCount ?? 0;
+      this.notificationCount = init.notificationCount ?? 0;
+      this.status = init.status ?? "idle";
+      // Deep copy reference-type fields to prevent shared mutation
+      this.context = init.context ? structuredClone(init.context) : {};
+      this.intermediateState = init.intermediateState ? structuredClone(init.intermediateState) : {};
+    }
   }
 
   toDict(): Record<string, unknown> {
@@ -290,15 +301,17 @@ export class SessionDescriptor {
   }
 
   static fromDict(data: Record<string, unknown>): SessionDescriptor {
+    const contextRaw = isRecord(data.context) ? data.context : isRecord(data.context_json) ? data.context_json : {};
+    const intermediateRaw = isRecord(data.intermediateState)
+      ? data.intermediateState
+      : isRecord(data.intermediate_state)
+        ? data.intermediate_state
+        : {};
     return new SessionDescriptor({
       sessionId: String(data.sessionId ?? data.session_id ?? ""),
       workerType: String(data.workerType ?? data.worker_type ?? ""),
-      context: isRecord(data.context) ? data.context : {},
-      intermediateState: isRecord(data.intermediateState)
-        ? data.intermediateState
-        : isRecord(data.intermediate_state)
-          ? data.intermediate_state
-          : {},
+      context: structuredClone(contextRaw) as Record<string, unknown>,
+      intermediateState: structuredClone(intermediateRaw) as Record<string, unknown>,
       resumeCount: Number(data.resumeCount ?? data.resume_count ?? 0),
       currentSequence: Number(data.currentSequence ?? data.current_sequence ?? 0),
       messageCount: Number(data.messageCount ?? data.message_count ?? 0),
@@ -388,7 +401,9 @@ export abstract class WorkerSession {
     this.state.messageCount = descriptor.messageCount;
     this.state.notificationCount = descriptor.notificationCount;
     this.state.status = descriptor.status;
-    this.state.intermediateState = this._deserializeIntermediateState(descriptor.intermediateState);
+    // Deep clone to prevent shared reference mutation
+    const clonedIntermediate = structuredClone(descriptor.intermediateState);
+    this.state.intermediateState = this._deserializeIntermediateState(clonedIntermediate);
   }
 
   protected _serializeIntermediateState(): Record<string, unknown> {

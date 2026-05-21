@@ -53,6 +53,13 @@ export class GenerationTool extends BaseTool {
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
 
+      // Schema guard: if ruleCheck found critical structural issues (returned array
+      // from ruleCheck, not empty), ensure content is at least not null/undefined
+      // so downstream won't crash on missing fields.
+      if (!passed && content !== null && content !== undefined) {
+        content = GenerationTool._patchMissingFields(task, content, issues);
+      }
+
       if (passed) {
         this.logger.info(`execute: task=${task.id} 生成完成，耗时=${elapsed.toFixed(1)}s，自检通过`);
       } else {
@@ -187,6 +194,28 @@ export class GenerationTool extends BaseTool {
   // ------------------------------------------------------------------
   // 规则自检（零 LLM 成本）
   // ------------------------------------------------------------------
+
+  /**
+   * Patch missing expected fields in structured content (analyze type) so
+   * downstream consumers don't crash on missing properties even when
+   * ruleCheck flags issues.
+   */
+  static _patchMissingFields(
+    task: Task,
+    content: unknown,
+    issues: string[],
+  ): unknown {
+    if (task.type !== "analyze") return content;
+    if (typeof content !== "object" || content === null || Array.isArray(content)) return content;
+    const c = content as Record<string, unknown>;
+    const patched = { ...c };
+    for (const field of ["actors", "functions", "entities", "constraints", "exceptions", "non_functional_requirements", "business_processes"] as const) {
+      if (patched[field] === undefined || patched[field] === null) {
+        patched[field] = [];
+      }
+    }
+    return patched;
+  }
 
   static _ruleCheck(task: Task, content: unknown, context: Record<string, unknown>): string[] {
     const issues: string[] = [];

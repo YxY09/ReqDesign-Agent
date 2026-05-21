@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// Status union types
+// ---------------------------------------------------------------------------
+
+/** Valid run status values for WorkflowState. */
+export type RunStatus = "running" | "completed" | "partial" | "failed" | "paused";
+
+/** Valid quality status values for WorkflowState. */
+export type QualityStatus = "unknown" | "passed" | "rejected";
+
+/** Valid persist status values for WorkflowState. */
+export type PersistStatus = "not_saved" | "final_saved" | "partial_saved";
+
 /**
  * Workflow state for the message-driven multi-agent runtime.
  *
@@ -111,11 +124,11 @@ export class WorkflowState {
   finished: boolean = false;
   persisted: boolean = false;
   /** running | completed | partial | failed | paused */
-  runStatus: string = "running";
+  runStatus: RunStatus = "running";
   /** unknown | passed | rejected */
-  qualityStatus: string = "unknown";
+  qualityStatus: QualityStatus = "unknown";
   /** not_saved | final_saved | partial_saved */
-  persistStatus: string = "not_saved";
+  persistStatus: PersistStatus = "not_saved";
   runSummary: Record<string, unknown> = {};
   errors: string[] = [];
   /** Incremented each main-loop decision; guards re-decide loops. */
@@ -323,7 +336,7 @@ export class WorkflowState {
       "runStatus",
       () => this.runStatus,
       (value) => {
-        this.runStatus = value as string;
+        this.runStatus = value as RunStatus;
       },
     );
     this._linkStateViewProperty(
@@ -1148,7 +1161,7 @@ export class WorkflowState {
   }
 
   /** Set the final quality status. Prefer this over direct assignment. */
-  setQualityStatus(status: string): void {
+  setQualityStatus(status: QualityStatus): void {
     this.qualityStatus = status;
   }
 
