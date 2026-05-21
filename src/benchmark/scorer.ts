@@ -324,13 +324,7 @@ export interface BenchmarkCaseResult {
   case_name: string;
   status: string;
   passed?: boolean;
-  requirement_coverage?: number;
-  diagram_syntax?: number;
-  entity_accuracy?: number;
-  process_completeness?: number;
-  state_diagram?: number;
-  consistency?: number;
-  overall?: number;
+  scores?: Record<string, number>;
   error?: string;
 }
 
@@ -354,7 +348,7 @@ export function computeRunSummary(results: BenchmarkCaseResult[]): Record<string
   ];
   const avgScores: Record<string, number> = {};
   for (const metric of metrics) {
-    const values = success.map((item) => (item as Record<string, unknown>)[metric] as number ?? 0);
+    const values = success.map((item) => item.scores?.[metric] ?? 0);
     avgScores[metric] = values.length > 0
       ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10
       : 0;
