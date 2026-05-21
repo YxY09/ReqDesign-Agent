@@ -13,8 +13,6 @@ import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 
 export class EvaluationTool extends BaseTool {
-  private _systemPrompt: string | null = null;
-
   constructor(llm: LLMClient) {
     super(llm);
   }
@@ -854,7 +852,7 @@ export class EvaluationTool extends BaseTool {
         .filter(Boolean),
     )];
     const artifactTypes = presentTypes.length > 0 ? presentTypes.join(", ") : "scoped";
-    const system = await this._getSystemPrompt(`review ${reviewMode} ${artifactTypes}`);
+    const system = await this._getSystemPrompt("evaluator.md", "", `review ${reviewMode} ${artifactTypes}`);
 
     const reqLimit = reviewMode === "quick" ? 800 : 2000;
     const textLimit = reviewMode === "quick" ? 10000 : 16000;
@@ -912,7 +910,7 @@ export class EvaluationTool extends BaseTool {
     }
 
     if (this.llm) this.llm.streamTag = `[Evaluator:${reviewMode}]`;
-    const response = await this.llm!.generateJson(userPrompt, system);
+    const response = await this.llm.generateJson(userPrompt, system);
     const issues = EvaluationTool._parseLlmIssues(response as Record<string, unknown>);
     return [issues, null];
   }
@@ -921,13 +919,13 @@ export class EvaluationTool extends BaseTool {
     requirementText: string,
     requirementJson: Record<string, unknown>,
   ): Promise<Issue[]> {
-    const system = await this._getSystemPrompt("analyze:" + (requirementText ?? "").slice(0, 150));
+    const system = await this._getSystemPrompt("evaluator.md", "", "analyze:" + (requirementText ?? "").slice(0, 150));
     const reqTextShort = (requirementText ?? "").slice(0, 2000);
     const reqJsonStr = JSON.stringify(requirementJson ?? {}, null, 2).slice(0, 3000);
     const userPrompt = `## 原始需求\n${reqTextShort}\n\n## 需求分析结果\n\`\`\`json\n${reqJsonStr}\n\`\`\`\n\n请审查需求分析结果的完整性和准确性，输出 JSON 裁决。`;
 
-    if (this.llm) this.llm.streamTag = "[Evaluator:analyze]";
-    const response = await this.llm!.generateJson(userPrompt, system);
+    this.llm.streamTag = "[Evaluator:analyze]";
+    const response = await this.llm.generateJson(userPrompt, system);
     return EvaluationTool._parseLlmIssues(response as Record<string, unknown>);
   }
 
@@ -1071,16 +1069,4 @@ export class EvaluationTool extends BaseTool {
     return `审查未通过。发现 ${issues.length} 个问题（blocker: ${blockerCount}, major: ${majorCount}, minor: ${minorCount}）。`;
   }
 
-  // ------------------------------------------------------------------
-  // Prompt
-  // ------------------------------------------------------------------
-
-  private async _getSystemPrompt(queryContext = ""): Promise<string> {
-    if (this._systemPrompt === null || queryContext) {
-      const prompt = await this._loadPromptWithConstitution("evaluator.md", "", queryContext);
-      if (!queryContext) this._systemPrompt = prompt;
-      return prompt;
-    }
-    return this._systemPrompt;
-  }
 }

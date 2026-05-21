@@ -29,8 +29,6 @@ function mergeDeps(existing: string[], required: string[]): string[] {
 }
 
 export class PlanningTool extends BaseTool {
-  private _systemPrompt: string | null = null;
-
   constructor(llm: LLMClient) {
     super(llm);
   }
@@ -50,13 +48,13 @@ export class PlanningTool extends BaseTool {
     }
 
     this.logger.info(`plan: 开始规划，目标=${goal}，需求长度=${requirementText.length}`);
-    const system = await this._getSystemPrompt(requirementText.slice(0, 200));
+    const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
     const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal);
 
     let plan: ExecutionPlan;
     try {
-      if (this.llm) this.llm.streamTag = "[Planner]";
-      const response = await this.llm!.generateJson(userPrompt, system);
+      this.llm.streamTag = "[Planner]";
+      const response = await this.llm.generateJson(userPrompt, system);
       plan = this._parseResponse(response as Record<string, unknown>, goal);
       this.logger.info(`plan: 规划完成，共 ${plan.tasks.length} 个任务，reasoning=${plan.reasoning?.slice(0, 80)}`);
     } catch (e) {
@@ -85,8 +83,8 @@ export class PlanningTool extends BaseTool {
 
     let mutation: PlanMutation;
     try {
-      if (this.llm) this.llm.streamTag = "[Planner:replan]";
-      const response = await this.llm!.generateJson(userPrompt, system);
+      this.llm.streamTag = "[Planner:replan]";
+      const response = await this.llm.generateJson(userPrompt, system);
       mutation = this._parseReplanResponse(response as Record<string, unknown>);
       this.logger.info(`replan: 重新规划完成，add=${mutation.addTasks?.length ?? 0}，update=${mutation.updateTasks?.length ?? 0}，drop=${mutation.dropTaskIds?.length ?? 0}`);
     } catch (e) {
@@ -107,15 +105,6 @@ export class PlanningTool extends BaseTool {
   // ------------------------------------------------------------------
   // Prompt building
   // ------------------------------------------------------------------
-
-  private async _getSystemPrompt(queryContext = ""): Promise<string> {
-    if (this._systemPrompt === null || queryContext) {
-      const prompt = await this._loadPromptWithConstitution("planner.md", "", queryContext);
-      if (!queryContext) this._systemPrompt = prompt;
-      return prompt;
-    }
-    return this._systemPrompt;
-  }
 
   private async _getReplanPrompt(queryContext = ""): Promise<string> {
     return await this._loadPromptWithConstitution("planner_replan.md", "", queryContext);

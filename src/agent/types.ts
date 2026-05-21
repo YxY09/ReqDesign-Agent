@@ -8,6 +8,9 @@
 // Literal union types
 // ---------------------------------------------------------------------------
 
+/** Kinds of worker agents in the multi-agent system. */
+export type WorkerKind = "planner" | "generator" | "evaluator";
+
 /** Kinds of tasks the planner can emit. */
 export type TaskType = "analyze" | "design" | "diagrams" | "tests";
 

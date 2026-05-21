@@ -7,17 +7,25 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { BaseGenerator } from "./base.js";
 
-export class AnalyzeMerger {
-  private llm: LLMClient;
+export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private promptTemplate: string;
 
   constructor(llm: LLMClient) {
-    this.llm = llm;
+    super(llm);
     this.promptTemplate = loadPrompt(
       "merge_analysis.md",
       "请合并以下多份需求分析结果：\n\n{analyze_results}",
     );
+  }
+
+  async generate(
+    artifacts: Array<{ taskId: string; content: Record<string, unknown> }>,
+    requirementText: string,
+    systemPrompt?: string,
+  ): Promise<Record<string, unknown>> {
+    return this.merge(artifacts, requirementText, systemPrompt);
   }
 
   async merge(
@@ -42,9 +50,11 @@ export class AnalyzeMerger {
       })
       .join("\n\n");
 
-    let prompt = this.promptTemplate.replace(/\{analyze_results\}/g, resultsStr);
-    const safeText = (requirementText || "").replace(/\{requirement_text\}/g, "");
-    prompt = prompt.replace(/\{requirement_text\}/g, safeText);
+    const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
+    let prompt = this.buildPrompt(this.promptTemplate, {
+      analyze_results: resultsStr,
+      requirement_text: safeText,
+    });
 
     const result = await this.llm.generateJson(prompt, systemPrompt ?? "");
 
@@ -52,14 +62,6 @@ export class AnalyzeMerger {
       throw new Error("merge 返回了非字典类型");
     }
 
-    return AnalyzeMerger._unwrapContent(result);
-  }
-
-  static _unwrapContent(result: Record<string, unknown>): Record<string, unknown> {
-    const content = result["content"];
-    if (typeof content === "object" && content !== null && !Array.isArray(content)) {
-      return content as Record<string, unknown>;
-    }
-    return result;
+    return BaseGenerator.unwrapContent(result);
   }
 }

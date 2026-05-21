@@ -6,6 +6,7 @@ import { DependencyProvider, WorkerFactory } from "./execution/factory.js";
 import { ThreadBackend } from "./execution/backend.js";
 import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
+import { isRecord } from "./utils/isRecord.js";
 import { OutputScorer } from "./tools/scorer.js";
 import { RequirementNormalizer } from "./tools/normalizer.js";
 import { PostGenerationValidator } from "./tools/validator.js";
@@ -43,6 +44,7 @@ import {
   type RuntimeAction,
   type Task,
   type Verdict,
+  type WorkerKind,
 } from "./agent/types.js";
 import { InputLoader } from "./inputLoader.js";
 import { TraceLogger } from "./governance/traceLogger.js";
@@ -56,10 +58,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolvePromise) => {
     setTimeout(resolvePromise, ms);
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function asPlainNotification(notif: TaskNotification): Record<string, unknown> {
@@ -78,8 +76,6 @@ function asPlainNotification(notif: TaskNotification): Record<string, unknown> {
     terminal: notif.terminal,
   };
 }
-
-type WorkerKind = "planner" | "generator" | "evaluator";
 
 interface InflightWorker {
   sessionId: string;

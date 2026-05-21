@@ -13,7 +13,6 @@ import { DiagramGenerator } from "../generators/diagrams.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 
 export class GenerationTool extends BaseTool {
-  private _systemPrompt: string | null = null;
   private _analyzer: RequirementAnalyzer | null = null;
   private _designer: SystemDesigner | null = null;
   private _diagramGen: DiagramGenerator | null = null;
@@ -87,7 +86,7 @@ export class GenerationTool extends BaseTool {
     const hints = (task.contextHints ?? {}) as Record<string, unknown>;
     const desc = task.description ?? "";
     const queryCtx = `${task.type}: ${desc.slice(0, 200)}`;
-    const injectedPrompt = await this._getSystemPrompt(queryCtx);
+    const injectedPrompt = await this._getSystemPrompt("generator.md", "", queryCtx);
 
     switch (task.type) {
       case "analyze":
@@ -457,32 +456,23 @@ export class GenerationTool extends BaseTool {
     return `${sections.join("\n\n")}\n\n## 原始需求\n${requirementText}`;
   }
 
-  private async _getSystemPrompt(queryContext = ""): Promise<string> {
-    if (this._systemPrompt === null || queryContext) {
-      const prompt = await this._loadPromptWithConstitution("generator.md", "", queryContext);
-      if (!queryContext) this._systemPrompt = prompt;
-      return prompt;
-    }
-    return this._systemPrompt;
-  }
-
   private _getAnalyzer(): RequirementAnalyzer {
-    if (!this._analyzer) this._analyzer = new RequirementAnalyzer(this.llm!);
+    if (!this._analyzer) this._analyzer = new RequirementAnalyzer(this.llm);
     return this._analyzer;
   }
 
   private _getDesigner(): SystemDesigner {
-    if (!this._designer) this._designer = new SystemDesigner(this.llm!);
+    if (!this._designer) this._designer = new SystemDesigner(this.llm);
     return this._designer;
   }
 
   private _getDiagramGen(): DiagramGenerator {
-    if (!this._diagramGen) this._diagramGen = new DiagramGenerator(this.llm!);
+    if (!this._diagramGen) this._diagramGen = new DiagramGenerator(this.llm);
     return this._diagramGen;
   }
 
   private _getTestGen(): TestCaseGenerator {
-    if (!this._testGen) this._testGen = new TestCaseGenerator(this.llm!);
+    if (!this._testGen) this._testGen = new TestCaseGenerator(this.llm);
     return this._testGen;
   }
 }

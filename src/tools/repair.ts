@@ -8,10 +8,7 @@ import { SystemDesigner } from "../generators/design.js";
 import { BaseTool } from "./base.js";
 import { ArtifactPatcher, type PatchOp } from "./artifactPatcher.js";
 import type { Task } from "../agent/types.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { isRecord } from "../utils/isRecord.js";
 
 export class RepairTool extends BaseTool {
   constructor(llm: LLMClient) {
@@ -43,11 +40,11 @@ export class RepairTool extends BaseTool {
     try {
       if (task.type === "analyze") {
         // analyze: full rewrite (structured JSON data, not suitable for patching)
-        const response = await this.llm!.generateJson(userPrompt, system);
+        const response = await this.llm.generateJson(userPrompt, system);
         content = this._parseResponse(response as Record<string, unknown>, task);
       } else {
         // design/diagrams/tests: patch mode
-        const text = await this.llm!.generateText(userPrompt, system);
+        const text = await this.llm.generateText(userPrompt, system);
         content = this._applyPatchResponse(task, currentContent, text);
       }
     } catch (e) {

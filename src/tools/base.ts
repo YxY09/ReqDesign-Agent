@@ -8,12 +8,13 @@ import { loadPrompt } from "../promptLoader.js";
 import { setupLogger, type Logger } from "../logger.js";
 
 export abstract class BaseTool {
-  llm: LLMClient | null;
+  llm: LLMClient;
 
   /** Session-level prompt cache: avoids re-reading files every call. */
   protected _promptCache: Map<string, string> = new Map();
+  private _systemPromptCache: Map<string, string> = new Map();
 
-  constructor(llm: LLMClient | null) {
+  constructor(llm: LLMClient) {
     this.llm = llm;
   }
 
@@ -79,8 +80,24 @@ export abstract class BaseTool {
     return prompt;
   }
 
+  /** Unified system prompt loading with caching. */
+  protected async _getSystemPrompt(
+    filename: string,
+    fallback: string,
+    queryContext = "",
+  ): Promise<string> {
+    const cacheKey = `${filename}:${queryContext.slice(0, 50)}`;
+    const cached = this._systemPromptCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const prompt = await this._loadPromptWithConstitution(filename, fallback, queryContext);
+    this._systemPromptCache.set(cacheKey, prompt);
+    return prompt;
+  }
+
   /** Invalidate prompt cache (called after memory updates). */
   invalidatePromptCache(): void {
     this._promptCache.clear();
+    this._systemPromptCache.clear();
   }
 }
