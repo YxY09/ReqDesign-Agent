@@ -27,6 +27,7 @@ export const MAX_RELEVANT_MEMORIES = 5;
 export const FRONTMATTER_SCAN_LINES = 30;
 export const MAX_MEMORY_FILES = 200;
 export const MAX_TOPIC_BYTES = 12_000;
+export const MAX_MEMORY_AGE_DAYS = 90;
 
 /** Maps agent type to the memory file they consult. */
 export const AGENT_TYPE_MAP: Record<string, string> = {

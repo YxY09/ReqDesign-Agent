@@ -21,6 +21,7 @@ import {
   MAX_INDEX_BYTES,
   MAX_MEMORY_FILES,
   MAX_RELEVANT_MEMORIES,
+  MAX_MEMORY_AGE_DAYS,
   MEMORY_TYPE_LABELS,
   type MemoryType,
   type MemoryEntry,
@@ -35,6 +36,7 @@ import {
   extractDescription,
   formatRelevantMemories,
   headersForAgent,
+  memoryAgeDays,
   truncateIndex,
   truncateTopicFile,
 } from "./helpers.js";
@@ -384,6 +386,10 @@ export class MemoryStore {
         }
 
         if (status === "deprecated") {
+          continue;
+        }
+
+        if (mtime > 0 && memoryAgeDays(mtime * 1000) > MAX_MEMORY_AGE_DAYS) {
           continue;
         }
 

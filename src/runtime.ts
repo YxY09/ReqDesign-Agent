@@ -282,7 +282,7 @@ export class MultiAgentRuntime {
       });
 
       if (goal === "analyze") {
-        state.plan = createExecutionPlan({
+        state.setPlan(createExecutionPlan({
           goal: "analyze",
           reasoning: "analyze mode bootstrap",
           tasks: [
@@ -292,7 +292,7 @@ export class MultiAgentRuntime {
               description: "提取角色、功能、实体、约束等结构化信息",
             }),
           ],
-        });
+        }));
       }
 
       let consecutiveNoAction = 0;
@@ -919,7 +919,7 @@ export class MultiAgentRuntime {
         return;
       }
     } else if (isExecutionPlanResult(notif.result)) {
-      state.plan = notif.result;
+      state.setPlan(notif.result);
     } else {
       state.markTaskStatus("planner", "failed", notif.sessionId, {
         error: "planner returned invalid result",
@@ -1044,7 +1044,7 @@ export class MultiAgentRuntime {
         artifacts,
         state.requirementText ?? "",
       );
-      state.requirementJson = RequirementNormalizer.normalize(merged);
+      state.setRequirementJson(RequirementNormalizer.normalize(merged));
 
       // Persist merged result to disk
       const outputManager = new (this.outputManagerClass)(state.outputDir);
@@ -1206,7 +1206,7 @@ export class MultiAgentRuntime {
       for (const issue of consistencyIssues) {
         state.errors.push(`output consistency failed: ${issue}`);
       }
-      state.qualityStatus = "rejected";
+      state.setQualityStatus("rejected");
       state.finalReviewPassed = false;
       return false;
     }

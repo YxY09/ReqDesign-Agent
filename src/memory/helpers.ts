@@ -196,8 +196,13 @@ export function formatSingleMemory(
 // ---------------------------------------------------------------------------
 
 /** Return the age of a memory in whole days. */
-export function memoryAgeDays(lastModified: string): number {
-  const ms = Date.parse(lastModified);
+export function memoryAgeDays(lastModified: number | string): number {
+  let ms: number;
+  if (typeof lastModified === "number") {
+    ms = lastModified;
+  } else {
+    ms = Date.parse(lastModified);
+  }
   if (!Number.isFinite(ms)) return 0;
   return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000));
 }

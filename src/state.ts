@@ -1125,6 +1125,34 @@ export class WorkflowState {
   // ------------------------------------------------------------------
 
   /**
+   * Set (or replace) the execution plan.
+   *
+   * Initialises lifecycle task statuses for every task in the new plan
+   * whose status is not already tracked, defaulting to {@code "pending"}.
+   *
+   * Prefer this over direct {@code state.plan = ...} assignment so that
+   * task statuses stay in sync with the plan.
+   */
+  setPlan(plan: ExecutionPlan): void {
+    this.plan = plan;
+    for (const task of plan.tasks) {
+      if (!this.taskStatuses[task.id]) {
+        this.taskStatuses[task.id] = "pending";
+      }
+    }
+  }
+
+  /** Set the merged requirement JSON. Prefer this over direct assignment. */
+  setRequirementJson(json: Record<string, unknown>): void {
+    this.requirementJson = json;
+  }
+
+  /** Set the final quality status. Prefer this over direct assignment. */
+  setQualityStatus(status: string): void {
+    this.qualityStatus = status;
+  }
+
+  /**
    * Apply a {@link PlanMutation} to the current plan.
    *
    * Validates:
