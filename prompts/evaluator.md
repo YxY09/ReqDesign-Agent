@@ -78,8 +78,8 @@
       "target_task_id": "design-1",
       "target_task_type": "design",
       "target_field": "design_text",
-      "description": "设计未覆盖订单取消流程的补偿逻辑",
-      "suggestion": "补充订单取消后的补偿与回滚处理"
+      "description": "设计未覆盖交易取消流程的补偿逻辑",
+      "suggestion": "补充交易取消后的补偿与回滚处理"
     }
   ]
 }
