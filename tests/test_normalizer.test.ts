@@ -96,6 +96,68 @@ describe("RequirementNormalizer", () => {
     expect(actors[0].name).toBe("Customer");
   });
 
+  it("deduplicates string-array actors case-insensitively", () => {
+    const input = {
+      actors: ["Customer", "Admin", "customer", "admin"],
+      entities: [],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const actors = result.actors as string[];
+    expect(actors.length).toBe(2);
+    expect(actors).toContain("Customer");
+    expect(actors).toContain("Admin");
+  });
+
+  it("filters empty string actor names during canonicalization", () => {
+    const input = {
+      actors: ["Customer", "", "  ", "Admin"],
+      entities: [],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const actors = result.actors as string[];
+    expect(actors.length).toBe(2);
+    expect(actors).not.toContain("");
+    expect(actors).not.toContain("  ");
+  });
+
+  it("renames actor references in functions when deduplication occurs", () => {
+    const input = {
+      actors: [
+        { name: "Customer", description: "顾客" },
+        { name: "customer", description: "顾客" },
+      ],
+      entities: [],
+      functions: [
+        { id: "F001", name: "PlaceOrder", related_actors: ["customer"] },
+      ],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const fn = (result.functions as Array<Record<string, unknown>>)[0];
+    const related = fn.related_actors as string[];
+    expect(related).toEqual(["Customer"]); // renamed to canonical form
+  });
+
+  it("keeps single actor unchanged", () => {
+    const input = {
+      actors: [{ name: "Solo", description: "唯一" }],
+      entities: [],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const actors = result.actors as Array<Record<string, unknown>>;
+    expect(actors.length).toBe(1);
+  });
+
   // ----------------------------------------------------------------
   // 3. Acronym normalization
   // ----------------------------------------------------------------
@@ -119,6 +181,69 @@ describe("RequirementNormalizer", () => {
     expect(names).not.toContain("SKU");
   });
 
+  it("normalizes 2-letter acronyms like API to Api", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "API", attributes: [{ name: "apiId", type: "String", description: "ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    expect(names).toContain("Api");
+    expect(names).not.toContain("API");
+  });
+
+  it("normalizes acronyms in actor names too", () => {
+    const input = {
+      actors: [{ name: "VIP", description: "重要用户" }],
+      entities: [],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const actors = result.actors as Array<Record<string, unknown>>;
+    expect(actors[0].name).toBe("Vip");
+  });
+
+  it("normalizes acronyms in relationship targets", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "Order", attributes: [{ name: "orderId", type: "Long", description: "ID" }], relationships: [{ target: "SKU", type: "many-to-one", description: "商品" }] },
+        { name: "SKU", attributes: [{ name: "skuId", type: "Long", description: "ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const order = (result.entities as Array<Record<string, unknown>>).find(e => e.name === "Order")!;
+    const rels = order.relationships as Array<Record<string, unknown>>;
+    // "SKU" entity name was also normalized to "Sku", so target should match
+    expect(rels[0].target).toBe("Sku");
+  });
+
+  it("leaves already-PascalCase names untouched", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "OrderItem", attributes: [{ name: "id", type: "Long", description: "ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities[0].name).toBe("OrderItem");
+  });
+
   // ----------------------------------------------------------------
   // 4. Constraint dedup
   // ----------------------------------------------------------------
@@ -137,6 +262,54 @@ describe("RequirementNormalizer", () => {
     const result = RequirementNormalizer.normalize(input);
 
     const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints.length).toBe(2);
+  });
+
+  it("deduplicates constraints with same description but different whitespace", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [],
+      constraints: [
+        { id: "C001", description: "订单金额  不超过  99999元", related_functions: [] },
+        { id: "C005", description: "   订单金额 不超过 99999元  ", related_functions: [] },
+      ],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints.length).toBe(1);
+  });
+
+  it("no-ops on single constraint", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [],
+      constraints: [
+        { id: "C001", description: "唯一约束", related_functions: [] },
+      ],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints.length).toBe(1);
+  });
+
+  it("keeps constraints with empty descriptions untouched", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [],
+      constraints: [
+        { id: "C001", description: "", related_functions: [] },
+        { id: "C002", description: "", related_functions: [] },
+      ],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    // Empty descriptions bypass dedup, both kept
     expect(constraints.length).toBe(2);
   });
 
@@ -185,17 +358,89 @@ describe("RequirementNormalizer", () => {
     expect(roleAttr!.description).toContain("Producer");
   });
 
+  it("no-ops when no User entity exists", () => {
+    const input = {
+      actors: [{ name: "Customer", description: "顾客" }],
+      entities: [
+        { name: "Order", attributes: [{ name: "orderId", type: "Long", description: "ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    // No User entity, so role should not be added to anything
+    const order = entities.find(e => e.name === "Order")!;
+    const attrs = order.attributes as Array<Record<string, unknown>>;
+    expect(attrs.some(a => a.name === "role")).toBe(false);
+  });
+
+  it("does not duplicate role attribute if already exists", () => {
+    const input = {
+      actors: [{ name: "Customer", description: "顾客" }],
+      entities: [
+        {
+          name: "User",
+          attributes: [
+            { name: "userId", type: "Long", description: "ID" },
+            { name: "role", type: "String", description: "角色" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const user = (result.entities as Array<Record<string, unknown>>).find(e => e.name === "User")!;
+    const attrs = user.attributes as Array<Record<string, unknown>>;
+    const roleAttrs = attrs.filter(a => a.name === "role");
+    expect(roleAttrs.length).toBe(1);
+  });
+
+  it("updates role description when actors change", () => {
+    const input = {
+      actors: [{ name: "Customer", description: "顾客" }, { name: "Admin", description: "管理员" }],
+      entities: [
+        {
+          name: "User",
+          attributes: [
+            { name: "userId", type: "Long", description: "ID" },
+            { name: "role", type: "String", description: "旧描述" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const user = (result.entities as Array<Record<string, unknown>>).find(e => e.name === "User")!;
+    const roleAttr = (user.attributes as Array<Record<string, unknown>>).find(a => a.name === "role");
+    expect(roleAttr!.description).toBe("角色: Customer、Admin");
+  });
+
   // ----------------------------------------------------------------
   // Edge cases
   // ----------------------------------------------------------------
   it("handles empty input gracefully", () => {
     const result = RequirementNormalizer.normalize({});
     expect(result).toBeDefined();
+    expect(Object.keys(result).length).toBe(0);
   });
 
   it("handles null/undefined gracefully", () => {
     const result = RequirementNormalizer.normalize(null as any);
     expect(result).toBeNull();
+  });
+
+  it("handles non-object input gracefully (number, string, boolean)", () => {
+    expect(RequirementNormalizer.normalize(42 as any)).toBe(42);
+    expect(RequirementNormalizer.normalize("hello" as any)).toBe("hello");
+    expect(RequirementNormalizer.normalize(true as any)).toBe(true);
   });
 
   it("no-ops when no actors match entities", () => {
@@ -313,5 +558,167 @@ describe("RequirementNormalizer — entity splitting", () => {
 
     // ChildItem should appear exactly once
     expect(names.filter(n => n === "ChildItem").length).toBe(1);
+  });
+
+  it("does not split List<primitive> like List<String>", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "ParentEntity",
+          attributes: [
+            { name: "parentId", type: "Long", description: "主键ID" },
+            { name: "tags", type: "List<String>", description: "标签列表" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    // List<String> should NOT create a "String" entity
+    expect(entities.length).toBe(1);
+    expect(entities[0].name).toBe("ParentEntity");
+  });
+
+  it("no-ops on empty entities array during split", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities.length).toBe(0);
+  });
+
+  it("handles entities with no attributes during split", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "BareEntity", attributes: [], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities.length).toBe(1);
+    expect(entities[0].name).toBe("BareEntity");
+  });
+
+  it("does not split List<Long> (primitive wrapper type)", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "ParentEntity",
+          attributes: [
+            { name: "parentId", type: "Long", description: "主键ID" },
+            { name: "ids", type: "List<Long>", description: "ID列表" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities.length).toBe(1); // no new entity for Long
+  });
+
+  it("splits multiple List<X> attributes in one entity", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "ParentEntity",
+          attributes: [
+            { name: "parentId", type: "Long", description: "主键ID" },
+            { name: "childItems", type: "List<ChildItem>", description: "子项列表" },
+            { name: "attachments", type: "List<Attachment>", description: "附件列表" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    expect(names).toContain("ChildItem");
+    expect(names).toContain("Attachment");
+    expect(entities.length).toBe(3); // ParentEntity + ChildItem + Attachment
+  });
+
+  // ----------------------------------------------------------------
+  // Shell entity edge cases
+  // ----------------------------------------------------------------
+  it("removes shell entity with only a single id attribute", () => {
+    const input = {
+      actors: [{ name: "Operator", description: "操作员" }],
+      entities: [
+        { name: "Operator", attributes: [{ name: "id", type: "Long", description: "Operator 唯一标识" }], relationships: [] },
+        { name: "Order", attributes: [{ name: "orderId", type: "Long", description: "订单ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    expect(names).not.toContain("Operator");
+    expect(names).toContain("Order");
+  });
+
+  it("keeps shell entity with relationships even if only id+status", () => {
+    const input = {
+      actors: [{ name: "Admin", description: "管理员" }],
+      entities: [
+        {
+          name: "Admin",
+          attributes: [{ name: "id", type: "Long", description: "ID" }, { name: "status", type: "String", description: "状态" }],
+          relationships: [{ target: "Department", type: "many-to-one", description: "所属部门" }],
+        },
+        { name: "Department", attributes: [{ name: "deptId", type: "Long", description: "部门ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    // Has relationships → NOT a shell entity → kept
+    expect(names).toContain("Admin");
+  });
+
+  it("removes actor entity whose only attr ends with 'id' like accountId (shell)", () => {
+    const input = {
+      actors: [{ name: "Viewer", description: "游客" }],
+      entities: [
+        { name: "Viewer", attributes: [{ name: "accountId", type: "Long", description: "账号ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    // accountId ends with "id" → matches shell check → removed (it's an actor with ≤2 attrs all like id/status/*id)
+    // But wait: accountId is one attr, ends with "id", no relationships → shell
+    expect(names).not.toContain("Viewer");
   });
 });
