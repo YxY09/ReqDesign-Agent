@@ -34,6 +34,7 @@ function isStrictSelfCheckFailure(artifact: Artifact): boolean {
 
 export class GenerationSession extends WorkerSession {
   private readonly agent: GenerationTool;
+  private readonly repairTool: RepairTool | undefined;
   private readonly logger: Logger = setupLogger("reqdesign.GenerationSession");
 
   constructor(
@@ -42,9 +43,11 @@ export class GenerationSession extends WorkerSession {
     mailbox: { sendNotification: (notif: TaskNotification) => void } | null,
     llm: unknown,
     agent: GenerationTool,
+    repairTool?: RepairTool,
   ) {
     super(sessionId, context, mailbox, llm);
     this.agent = agent;
+    this.repairTool = repairTool;
     this.state.workerType = this.workerType;
   }
 
@@ -173,7 +176,7 @@ export class GenerationSession extends WorkerSession {
       });
     }
 
-    const repairAgent = new RepairTool(this.agent.llm);
+    const repairAgent = this.repairTool ?? new RepairTool(this.agent.llm);
     const repaired = await repairAgent.repair(
       task,
       previousArtifact.content,

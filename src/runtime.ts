@@ -33,6 +33,7 @@ import { WorkflowState } from "./state.js";
 import { AgentOrchestrator } from "./orchestration/orchestrator.js";
 import { EvaluationTool } from "./tools/evaluation.js";
 import { GenerationTool } from "./tools/generation.js";
+import { RepairTool } from "./tools/repair.js";
 import { AnalyzeMerger } from "./generators/merge.js";
 import { PlanningTool } from "./tools/planning.js";
 import {
@@ -133,6 +134,7 @@ export class MultiAgentRuntime {
   readonly plannerTool: PlanningTool;
   readonly generatorTool: GenerationTool;
   readonly evaluatorTool: EvaluationTool;
+  readonly repairTool: RepairTool;
   private readonly analyzeMerger: AnalyzeMerger;
   readonly inputLoader: typeof InputLoader;
   readonly trace: TraceLogger;
@@ -184,6 +186,7 @@ export class MultiAgentRuntime {
     this.plannerTool = new PlanningTool(this.llm);
     this.generatorTool = new GenerationTool(this.llm);
     this.evaluatorTool = new EvaluationTool(this.llm);
+    this.repairTool = new RepairTool(this.llm);
     this.analyzeMerger = new AnalyzeMerger(this.llm);
     this.inputLoader = InputLoader;
 
@@ -208,6 +211,7 @@ export class MultiAgentRuntime {
       plannerTool: this.plannerTool,
       generatorTool: this.generatorTool,
       evaluatorTool: this.evaluatorTool,
+      repairTool: this.repairTool,
     });
     this.factory = new WorkerFactory(deps);
     this.backend = new ThreadBackend({

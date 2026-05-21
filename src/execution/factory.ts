@@ -4,6 +4,7 @@ import { TaskMailbox } from "../messaging.js";
 import { EvaluationTool } from "../tools/evaluation.js";
 import { GenerationTool } from "../tools/generation.js";
 import { PlanningTool } from "../tools/planning.js";
+import { RepairTool } from "../tools/repair.js";
 import { EvaluationSession, GenerationSession, PlanningSession } from "../tools/sessions.js";
 import { SessionContext, SessionDescriptor, type WorkerSession } from "../session.js";
 import { setupLogger, type Logger } from "../logger.js";
@@ -15,6 +16,7 @@ export class DependencyProvider {
   plannerTool: PlanningTool | null;
   generatorTool: GenerationTool | null;
   evaluatorTool: EvaluationTool | null;
+  repairTool: RepairTool | null;
 
   constructor(options?: {
     llm?: LLMClient | null;
@@ -22,12 +24,14 @@ export class DependencyProvider {
     plannerTool?: PlanningTool | null;
     generatorTool?: GenerationTool | null;
     evaluatorTool?: EvaluationTool | null;
+    repairTool?: RepairTool | null;
   }) {
     this.llm = options?.llm ?? null;
     this.mailbox = options?.mailbox ?? new TaskMailbox();
     this.plannerTool = options?.plannerTool ?? null;
     this.generatorTool = options?.generatorTool ?? null;
     this.evaluatorTool = options?.evaluatorTool ?? null;
+    this.repairTool = options?.repairTool ?? null;
   }
 
   ensureTools(): void {
@@ -67,6 +71,7 @@ export class WorkerFactory {
       this.deps.mailbox as { sendNotification: (notif: TaskNotification) => void },
       this.deps.llm,
       this.deps.generatorTool,
+      this.deps.repairTool ?? undefined,
     );
   }
 
