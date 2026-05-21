@@ -8,7 +8,6 @@ const root = join(__dirname, "..");
 
 const copies = [
   { from: join(root, "prompts"), to: join(root, "dist", "prompts") },
-  { from: join(root, "src", "agents", "prompts"), to: join(root, "dist", "agents", "prompts") },
 ];
 
 for (const item of copies) {
