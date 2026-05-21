@@ -1,7 +1,6 @@
 /**
  * 编排控制平面的运行状态转换。
  *
- * 源自 reqdesign/orchestration/run_manager.py。
  */
 
 import type { WorkflowState } from "../state.js";

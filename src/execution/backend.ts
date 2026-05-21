@@ -17,24 +17,16 @@ interface RunningMeta {
   heartbeatHandle: NodeJS.Timeout | null;
 }
 
-export interface ExecutionBackend {
-  submit(
-    sessionDescriptor: SessionDescriptor,
-    message: TaskMessage,
-    timeoutSeconds: number,
-  ): Promise<void>;
-  cancel(sessionId: string, reason?: string): void;
-  poll(): TaskNotification[];
-  inspect(sessionId: string): Record<string, unknown> | null;
-  hasInflight(): boolean;
-  isRunning(sessionId: string): boolean;
-  shutdown(): void;
-}
+export type SessionBackendOptions = {
+  factory?: { restore: (descriptor: SessionDescriptor) => WorkerSession } | null;
+  heartbeatInterval?: number;
+  maxConcurrency?: number;
+  onLifecycle?: (session: WorkerSession, event: string, summary: string, status: string, sequence: number) => void;
+  onNotification?: (session: WorkerSession, notification: TaskNotification) => void;
+};
 
-export class ThreadBackend extends EventEmitter implements ExecutionBackend {
-  private readonly factory: {
-    restore: (descriptor: SessionDescriptor) => WorkerSession;
-  } | null;
+/** 会话执行后端，管理 WorkerSession 的并发、心跳和超时。 */
+export class SessionBackend extends EventEmitter {
   private readonly onLifecycle?: (
     session: WorkerSession,
     event: string,
@@ -54,44 +46,12 @@ export class ThreadBackend extends EventEmitter implements ExecutionBackend {
   private readonly pendingNotifications: TaskNotification[] = [];
   private readonly submissionQueue: Array<() => void> = [];
 
-  constructor(options?: {
-    factory?: {
-      restore: (descriptor: SessionDescriptor) => WorkerSession;
-    } | null;
-    heartbeatInterval?: number;
-    maxConcurrency?: number;
-    onLifecycle?: (
-      session: WorkerSession,
-      event: string,
-      summary: string,
-      status: string,
-      sequence: number,
-    ) => void;
-    onNotification?: (
-      session: WorkerSession,
-      notification: TaskNotification,
-    ) => void;
-  }) {
+  constructor(options?: SessionBackendOptions) {
     super();
-    this.factory = options?.factory ?? null;
     this.heartbeatInterval = options?.heartbeatInterval ?? 0.25;
     this.maxConcurrency = options?.maxConcurrency ?? 3;
     this.onLifecycle = options?.onLifecycle;
     this.onNotification = options?.onNotification;
-  }
-
-  async submit(
-    sessionDescriptor: SessionDescriptor,
-    message: TaskMessage,
-    timeoutSeconds: number,
-  ): Promise<void> {
-    if (!this.factory) {
-      throw new Error(
-        "ThreadBackend has no factory; use submitSession() or provide a factory",
-      );
-    }
-    const session = this.factory.restore(sessionDescriptor);
-    await this.submitSession(session, message, timeoutSeconds);
   }
 
   async submitSession(

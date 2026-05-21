@@ -6,7 +6,7 @@
  * 移植自 tests/test_backend_contract.py。
  */
 import { describe, it, expect } from "vitest";
-import { ThreadBackend } from "../src/execution/backend.js";
+import { SessionBackend } from "../src/execution/backend.js";
 import { TaskMailbox, createTaskMessage, type TaskNotification } from "../src/messaging.js";
 import {
   SessionContext,
@@ -117,18 +117,22 @@ function makeFactory(
 }
 
 function makeBackend(
-  factoryOverride?: { restore: (descriptor: SessionDescriptor) => WorkerSession } | null,
-): ThreadBackend {
-  if (factoryOverride !== undefined) {
-    return new ThreadBackend({
-      factory: factoryOverride,
-      heartbeatInterval: 0,
-    });
-  }
-  return new ThreadBackend({
-    factory: makeFactory(FastSession),
-    heartbeatInterval: 0,
-  });
+  factory?: { restore: (d: SessionDescriptor) => WorkerSession },
+): SessionBackend {
+  const be = new SessionBackend({ heartbeatInterval: 0 });
+  (be as Record<string, unknown>)._factory = factory ?? makeFactory(FastSession);
+  return be;
+}
+
+function submitAndWait(
+  be: SessionBackend,
+  desc: SessionDescriptor,
+  msg: ReturnType<typeof makeMsg>,
+  timeoutSec = 5.0,
+): void {
+  const factory = (be as Record<string, unknown>)._factory as { restore: (d: SessionDescriptor) => WorkerSession };
+  const session = factory.restore(desc);
+  be.submitSession(session, msg, timeoutSec);
 }
 
 function makeMsg(desc: SessionDescriptor) {
@@ -140,15 +144,15 @@ function makeMsg(desc: SessionDescriptor) {
 }
 
 // -----------------------------------------------------------------------
-// 契约：ThreadBackend
+// 契约：SessionBackend
 // -----------------------------------------------------------------------
 
-describe("ThreadBackend contract", () => {
+describe("SessionBackend contract", () => {
   it("submit and poll returns completed notification", async () => {
     const be = makeBackend();
     const desc = makeDesc();
     const msg = makeMsg(desc);
-    be.submit(desc, msg, 5.0);
+    submitAndWait(be, desc, msg, 5.0);
 
     let results: TaskNotification[] = [];
     for (let i = 0; i < 20; i++) {
@@ -167,7 +171,7 @@ describe("ThreadBackend contract", () => {
     const be = makeBackend(makeFactory(SlowSession));
     const desc = makeDesc();
     const msg = makeMsg(desc);
-    be.submit(desc, msg, 5.0);
+    submitAndWait(be, desc, msg, 5.0);
     be.cancel(desc.sessionId, "test cancel");
 
     await delay(100);
@@ -180,7 +184,7 @@ describe("ThreadBackend contract", () => {
     const be = makeBackend(makeFactory(SlowSession));
     const desc = makeDesc();
     const msg = makeMsg(desc);
-    be.submit(desc, msg, 0.01);
+    submitAndWait(be, desc, msg, 0.01);
 
     await delay(30);
     const results = be.poll();
@@ -196,7 +200,7 @@ describe("ThreadBackend contract", () => {
     expect(be.inspect(desc.sessionId)).toBeNull();
 
     const msg = makeMsg(desc);
-    be.submit(desc, msg, 5.0);
+    submitAndWait(be, desc, msg, 5.0);
     const snap = be.inspect(desc.sessionId);
     expect(snap).not.toBeNull();
     expect(snap!["sessionId"]).toBe(desc.sessionId);
@@ -209,7 +213,7 @@ describe("ThreadBackend contract", () => {
     const msg = makeMsg(desc);
 
     expect(be.hasInflight()).toBe(false);
-    be.submit(desc, msg, 5.0);
+    submitAndWait(be, desc, msg, 5.0);
     expect(be.hasInflight()).toBe(true);
 
     await delay(100);
@@ -222,7 +226,7 @@ describe("ThreadBackend contract", () => {
     const be = makeBackend(makeFactory(FailingSession));
     const desc = makeDesc();
     const msg = makeMsg(desc);
-    be.submit(desc, msg, 5.0);
+    submitAndWait(be, desc, msg, 5.0);
 
     let results: TaskNotification[] = [];
     for (let i = 0; i < 20; i++) {
@@ -239,7 +243,7 @@ describe("ThreadBackend contract", () => {
     const be = makeBackend(makeFactory(SlowSession));
     const desc = makeDesc();
     const msg = makeMsg(desc);
-    be.submit(desc, msg, 0.01);
+    submitAndWait(be, desc, msg, 0.01);
 
     await delay(30);
     const results = be.poll();

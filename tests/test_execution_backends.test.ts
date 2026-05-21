@@ -3,10 +3,10 @@
  *
  * 移植自 tests/test_execution_backends.py。
  *
- * 验证 ThreadBackend 的行为是否一致和正确。
+ * 验证 SessionBackend 的行为是否一致和正确。
  */
 import { describe, it, expect } from "vitest";
-import { ThreadBackend } from "../src/execution/backend.js";
+import { SessionBackend } from "../src/execution/backend.js";
 import { TaskMailbox, createTaskMessage, type TaskNotification } from "../src/messaging.js";
 import {
   SessionContext,
@@ -128,9 +128,9 @@ function makeSession(
 
 function makeBackend(
   factoryOverride?: { restore: (descriptor: SessionDescriptor) => WorkerSession } | null,
-): ThreadBackend {
+): SessionBackend {
   if (factoryOverride !== undefined) {
-    return new ThreadBackend({
+    return new SessionBackend({
       factory: factoryOverride,
       heartbeatInterval: 0,
     });
@@ -146,17 +146,17 @@ function makeBackend(
     },
   };
 
-  return new ThreadBackend({
+  return new SessionBackend({
     factory: testFactory,
     heartbeatInterval: 0,
   });
 }
 
 // -----------------------------------------------------------------------
-// ThreadBackend 测试
+// SessionBackend 测试
 // -----------------------------------------------------------------------
 
-describe("ThreadBackend", () => {
+describe("SessionBackend", () => {
   it("should submit a fast session and poll the result", async () => {
     const backend = makeBackend();
     const session = makeSession(FastSession);

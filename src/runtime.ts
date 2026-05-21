@@ -2,8 +2,8 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import type { AgentConfig } from "./config.js";
 import { ConstitutionLoader, setConstitution } from "./constitution.js";
-import { DependencyProvider, WorkerFactory } from "./execution/factory.js";
-import { ThreadBackend } from "./execution/backend.js";
+import { WorkerFactory } from "./execution/factory.js";
+import { SessionBackend } from "./execution/backend.js";
 import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
 import { isRecord } from "./utils/isRecord.js";
@@ -144,7 +144,7 @@ export class MultiAgentRuntime {
   private readonly memoryStore: MemoryStore;
   private readonly llm: LLMClient;
   private readonly factory: WorkerFactory;
-  private readonly backend: ThreadBackend;
+  private readonly backend: SessionBackend;
   private readonly budget: BudgetManager;
   private readonly outputManagerClass = OutputManager;
   private readonly defaultTimeoutSeconds = 900;
@@ -205,16 +205,15 @@ export class MultiAgentRuntime {
 
     this.coordinator = new AgentOrchestrator(this.llm, this.budget);
 
-    const deps = new DependencyProvider({
-      llm: this.llm,
-      mailbox: this.mailbox,
-      plannerTool: this.plannerTool,
-      generatorTool: this.generatorTool,
-      evaluatorTool: this.evaluatorTool,
-      repairTool: this.repairTool,
-    });
-    this.factory = new WorkerFactory(deps);
-    this.backend = new ThreadBackend({
+    this.factory = new WorkerFactory(
+      this.llm,
+      this.mailbox,
+      this.plannerTool,
+      this.generatorTool,
+      this.evaluatorTool,
+      this.repairTool,
+    );
+    this.backend = new SessionBackend({
       factory: this.factory,
       heartbeatInterval: 0.25,
       onNotification: (session, notification) => {
