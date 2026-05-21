@@ -11,6 +11,7 @@ import OpenAI, { type ClientOptions as OpenAIClientOptions } from "openai";
 import Anthropic, { type ClientOptions as AnthropicClientOptions } from "@anthropic-ai/sdk";
 import type { AgentConfig } from "./config.js";
 import { setupLogger, type Logger } from "./logger.js";
+import { withRetry } from "./utils/retry.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -124,6 +125,13 @@ export class LLMClient {
   /** Trace sink — set by runtime to record every LLM call into TraceLogger. */
   private _traceSink: ((info: LlmCallInfo) => void) | null = null;
 
+  private readonly _retryConfig: {
+    maxRetries: number;
+    retryDelayMs: number;
+    maxDelayMs: number;
+    retryOnTimeout: boolean;
+  };
+
   // -----------------------------------------------------------------------
   // Construction
   // -----------------------------------------------------------------------
@@ -147,6 +155,13 @@ export class LLMClient {
     }
 
     this._client = this._initClient(apiKey);
+
+    this._retryConfig = {
+      maxRetries: config.retry.maxRetries,
+      retryDelayMs: config.retry.retryDelayMs,
+      maxDelayMs: config.retry.maxDelayMs,
+      retryOnTimeout: config.retry.retryOnTimeout,
+    };
   }
 
   // -----------------------------------------------------------------------
@@ -231,12 +246,42 @@ export class LLMClient {
           resultText = response.text;
           usage = response.usage;
         } else {
-          resultText = await this._chatOpenai(messages, temperature);
+          resultText = await withRetry(
+            async () => await this._chatOpenai(messages, temperature),
+            {
+              maxRetries: this._retryConfig.maxRetries,
+              baseDelayMs: this._retryConfig.retryDelayMs,
+              maxDelayMs: this._retryConfig.maxDelayMs,
+              onRetry: (err, attempt) => {
+                this._logger.warn(
+                  `[LLMClient] Retry attempt ${attempt + 1}/${this._retryConfig.maxRetries}: ${err instanceof Error ? err.message : String(err)}`,
+                );
+              },
+            },
+          );
         }
       } else if (this.provider === "anthropic") {
-        const response = await this._chatAnthropic(messages, temperature, chunkHandler);
-        resultText = response.text;
-        usage = response.usage;
+        if (shouldStream) {
+          const response = await this._chatAnthropic(messages, temperature, chunkHandler);
+          resultText = response.text;
+          usage = response.usage;
+        } else {
+          const result = await withRetry(
+            async () => await this._chatAnthropic(messages, temperature, undefined),
+            {
+              maxRetries: this._retryConfig.maxRetries,
+              baseDelayMs: this._retryConfig.retryDelayMs,
+              maxDelayMs: this._retryConfig.maxDelayMs,
+              onRetry: (err, attempt) => {
+                this._logger.warn(
+                  `[LLMClient] Retry attempt ${attempt + 1}/${this._retryConfig.maxRetries}: ${err instanceof Error ? err.message : String(err)}`,
+                );
+              },
+            },
+          );
+          resultText = result.text;
+          usage = result.usage;
+        }
       } else {
         throw new Error(`[LLMClient] Unsupported provider: ${this.provider}`);
       }
