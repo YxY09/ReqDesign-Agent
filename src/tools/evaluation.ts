@@ -12,13 +12,7 @@ import {
 } from "../shared/types.js";
 import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
-import {
-  requiresRefundFlow,
-  hasConstraint,
-  missingConcepts,
-  REFUND_FLOW_CONCEPTS,
-  REFUND_TEST_CONCEPTS,
-} from "../shared/requirementChecks.js";
+
 
 export class EvaluationTool extends BaseTool {
   constructor(llm: LLMClient) {
@@ -356,19 +350,6 @@ export class EvaluationTool extends BaseTool {
               requirementJson,
             ),
           );
-          if (dtype === "activity_diagram") {
-            issues.push(...this._checkActivityDiagramCoverage(taskId, text, requirementJson));
-          }
-          if (dtype === "state_diagram" && /Coupon|优惠券/.test(text) && /C002|支付超时/.test(text)) {
-            issues.push(createIssue({
-              severity: "major",
-              targetTaskId: taskId,
-              targetTaskType: "diagrams",
-              targetField: "diagrams.state_diagram",
-              description: "状态图中优惠券过期错误使用 C002/支付超时作为触发条件",
-              suggestion: "将 Coupon/优惠券 的过期转换改为有效期结束，不要引用支付超时约束",
-            }));
-          }
         }
         continue;
       }
@@ -387,16 +368,13 @@ export class EvaluationTool extends BaseTool {
               suggestion: "补充对应功能 ID 的正常/异常/边界测试用例",
             }));
           }
-          issues.push(
-            ...this._checkUndefinedExceptionIds(
-              taskId,
-              "tests",
-              "test_cases",
-              content as string,
-              requirementJson,
-            ),
-          );
-          issues.push(...this._checkTestFlowCoverage(taskId, content as string, requirementJson));
+          issues.push(...this._checkUndefinedExceptionIds(
+            taskId,
+            "tests",
+            "test_cases",
+            content as string,
+            requirementJson,
+          ));
         } catch (e) {
           issues.push(createIssue({ severity: "major", targetTaskId: taskId, targetTaskType: "tests", targetField: "test_cases", description: `测试用例规则校验失败: ${e instanceof Error ? e.message : String(e)}` }));
         }
@@ -707,66 +685,6 @@ export class EvaluationTool extends BaseTool {
       suggestion: `只引用 requirement_json.exceptions 中已定义的异常 ID: ${[...defined].sort().join(", ")}`,
     })];
   }
-
-  private _checkActivityDiagramCoverage(
-    taskId: string,
-    text: string,
-    requirementJson: Record<string, unknown>,
-  ): Issue[] {
-    const issues: Issue[] = [];
-    if (requiresRefundFlow(requirementJson)) {
-      const missing = missingConcepts(text, REFUND_FLOW_CONCEPTS);
-      if (missing.length > 0) {
-        issues.push(createIssue({
-          severity: "major",
-          targetTaskId: taskId,
-          targetTaskType: "diagrams",
-          targetField: "diagrams.activity_diagram",
-          description: `活动图未完整覆盖退货退款流程，缺少: ${missing.join(", ")}`,
-          suggestion: "补充申请退款/退货、商家审核、填写退货物流、仓库验收、退款到账的完整分支",
-        }));
-      }
-    }
-
-    if (hasConstraint(requirementJson, "C001")) {
-      const missing = missingConcepts(text, [
-        ["订单总数量<=99", /(总数量|商品数量|件数).*(99|上限)|(99).*(件|数量)/],
-        ["订单金额<=99999", /(金额|实付|总价).*(99999|上限)|(99999).*(元|金额)/],
-        ["单商品数量<=10", /(单商品|同一商品|单个商品|限购).*(10|上限)|(10).*(件|限购)/],
-        ["地址配送范围", /(地址|收货地址).*(配送范围|可配送)|(配送范围).*(地址|校验)/],
-      ]);
-      if (missing.length > 0) {
-        issues.push(createIssue({
-          severity: "major",
-          targetTaskId: taskId,
-          targetTaskType: "diagrams",
-          targetField: "diagrams.activity_diagram",
-          description: `活动图未完整覆盖 C001 订单约束校验，缺少: ${missing.join(", ")}`,
-          suggestion: "在提交订单前补充总数量、总金额、单商品数量、地址配送范围四类校验及失败出口",
-        }));
-      }
-    }
-    return issues;
-  }
-
-  private _checkTestFlowCoverage(
-    taskId: string,
-    text: string,
-    requirementJson: Record<string, unknown>,
-  ): Issue[] {
-    if (!requiresRefundFlow(requirementJson)) return [];
-    const missing = missingConcepts(text, REFUND_TEST_CONCEPTS);
-    if (missing.length === 0) return [];
-    return [createIssue({
-      severity: "major",
-      targetTaskId: taskId,
-      targetTaskType: "tests",
-      targetField: "test_cases",
-      description: `测试用例未覆盖完整退货退款正常流程，缺少: ${missing.join(", ")}`,
-      suggestion: "添加从申请退款/退货、商家审核通过、填写物流单号、仓库验收通过到退款到账的完整正常场景",
-    })];
-  }
-
 
   private _checkClassDiagramEntities(
     taskId: string,

@@ -1,88 +1,5 @@
 import { MermaidValidator } from "../generators/mermaid.js";
 
-const ENTITY_NAME_MAP: Record<string, string[]> = {
-  用户: ["User", "Account", "Member"],
-  管理员: ["Admin", "Administrator", "Manager"],
-  学生: ["Student"],
-  教师: ["Teacher", "Instructor", "Professor"],
-  图书: ["Book"],
-  订单: ["Order"],
-  商品: ["Product", "Goods", "Item"],
-  课程: ["Course"],
-  成绩: ["Grade", "Score"],
-  选课记录: ["Enrollment", "CourseSelection", "Selection"],
-  员工: ["Employee", "Staff", "Worker"],
-  会议室: ["MeetingRoom", "Room"],
-  预约记录: ["Reservation", "Booking", "Appointment"],
-  设备: ["Equipment", "Device", "Facility"],
-  顾客: ["Customer", "Client"],
-  商家: ["Merchant", "Seller", "Shop"],
-  平台管理员: ["PlatformAdmin", "Admin"],
-  购物车: ["Cart", "ShoppingCart"],
-  支付: ["Payment", "Pay"],
-  退款: ["Refund"],
-  医院: ["Hospital"],
-  挂号: ["Registration"],
-  医生: ["Doctor"],
-  病人: ["Patient"],
-  患者: ["Patient"],
-  号源: ["Source", "NumberSource"],
-  就诊记录: ["VisitRecord", "MedicalRecord"],
-  预约: ["Appointment", "Reservation"],
-  科室: ["Department"],
-  排班: ["Schedule", "Duty"],
-  借阅记录: ["BorrowRecord", "LendingRecord", "Loan"],
-  学期: ["Semester", "Term"],
-};
-
-const FUNCTION_SYNONYMS: Record<string, string[]> = {
-  用户注册: ["注册", "用户注册与登录", "注册与登录"],
-  用户登录: ["登录", "用户注册与登录", "注册与登录", "登录系统"],
-  图书搜索: ["搜索图书", "图书查询", "查询图书", "检索"],
-  图书借阅: ["借阅图书", "借书", "借阅"],
-  图书归还: ["归还图书", "还书", "归还"],
-  借阅管理: ["借阅记录管理", "图书借阅管理"],
-  图书管理: ["图书信息管理", "图书维护"],
-  选课: ["课程选择", "选择课程"],
-  退课: ["退选", "取消选课"],
-  课程发布: ["发布课程", "创建课程"],
-  课程审核: ["审核课程"],
-  成绩录入: ["录入成绩", "成绩管理"],
-  课表查看: ["查看课表", "课表查询"],
-  订单管理: ["查看订单", "订单查看"],
-  订单取消: ["取消订单"],
-  退款申请: ["申请退款"],
-  退款处理: ["处理退款", "退款审核"],
-  购物车管理: ["管理购物车"],
-  下单支付: ["下单", "支付", "下单与支付"],
-  商品浏览: ["浏览商品", "查看商品"],
-  用户注册与登录: ["注册", "登录", "用户注册", "用户登录"],
-  预约申请: ["提交预约", "发起预约"],
-  预约审批: ["审批预约", "审核预约"],
-  取消预约: ["预约取消"],
-  预约查看: ["查看预约", "预约查询"],
-  会议室管理: ["管理会议室"],
-  设备管理: ["管理设备"],
-  患者注册: ["注册", "患者注册与登录"],
-  科室浏览: ["浏览科室", "查看科室"],
-  医生查询: ["查询医生", "查看医生"],
-  排班管理: ["管理排班", "医生排班"],
-  预约挂号: ["挂号预约", "挂号"],
-  就诊管理: ["管理就诊"],
-  就诊记录: ["查看就诊记录"],
-  会议室浏览: ["浏览会议室", "查看会议室"],
-  预约管理: ["管理预约"],
-  挂号管理: ["管理挂号"],
-};
-
-const EN_TO_CN: Record<string, string[]> = {};
-for (const [cn, enNames] of Object.entries(ENTITY_NAME_MAP)) {
-  for (const en of enNames) {
-    EN_TO_CN[en.toLowerCase()] ??= [];
-    EN_TO_CN[en.toLowerCase()].push(cn);
-  }
-}
-
 const RE_CONSTRAINT_SPLIT = /[，,、;；（）()\s的时了后]/;
 const RE_NUMBER_QUANT = /\d+\s*[分天时月秒门]/g;
 const RE_FUNC_SPLIT = /[与和及、]/;
@@ -104,15 +21,29 @@ function readNames(items: unknown, preferredKey = "name"): string[] {
   }).filter(Boolean);
 }
 
-export function fuzzyMatchEntity(entityName: string, target: string): boolean {
+export function fuzzyMatchEntity(
+  entityName: string,
+  target: string,
+  entityNameMap: Record<string, string[]> = {},
+): boolean {
   const entity = String(entityName ?? "");
   const text = String(target ?? "");
   if (!entity || !text) return false;
   if (text.includes(entity)) return true;
-  for (const en of ENTITY_NAME_MAP[entity] ?? []) {
+
+  // Build EN_TO_CN from entityNameMap
+  const enToCn: Record<string, string[]> = {};
+  for (const [cn, enNames] of Object.entries(entityNameMap)) {
+    for (const en of enNames) {
+      enToCn[en.toLowerCase()] ??= [];
+      enToCn[en.toLowerCase()].push(cn);
+    }
+  }
+
+  for (const en of entityNameMap[entity] ?? []) {
     if (text.includes(en)) return true;
   }
-  return (EN_TO_CN[entity.toLowerCase()] ?? []).some((cn) => text.includes(cn));
+  return (enToCn[entity.toLowerCase()] ?? []).some((cn) => text.includes(cn));
 }
 
 export function editDistance(s1: string, s2: string, threshold = -1): number {
@@ -139,6 +70,7 @@ export function fuzzyMatchFunction(
   funcName: string,
   resultFunctions: string[],
   resultText: string,
+  functionSynonyms: Record<string, string[]> = {},
 ): boolean {
   const name = String(funcName ?? "");
   if (!name) return false;
@@ -149,7 +81,7 @@ export function fuzzyMatchFunction(
     return true;
   }
 
-  for (const synonym of FUNCTION_SYNONYMS[name] ?? []) {
+  for (const synonym of functionSynonyms[name] ?? []) {
     if (resultText.includes(synonym)) return true;
     if (resultFunctions.some((item) => synonym.includes(item) || item.includes(synonym))) {
       return true;
@@ -157,7 +89,7 @@ export function fuzzyMatchFunction(
   }
 
   for (const resultName of resultFunctions) {
-    if ((FUNCTION_SYNONYMS[resultName] ?? []).includes(name)) {
+    if ((functionSynonyms[resultName] ?? []).includes(name)) {
       return true;
     }
   }
@@ -209,6 +141,8 @@ export function matchConstraintOrException(expected: string, targetText: string)
 export function scoreRequirementCoverage(
   result: Record<string, unknown>,
   gold: Record<string, unknown>,
+  entityNameMap: Record<string, string[]> = {},
+  functionSynonyms: Record<string, string[]> = {},
 ): number {
   if (!result || !gold) return 0;
   let total = 0;
@@ -218,7 +152,7 @@ export function scoreRequirementCoverage(
   const resultActors = readNames(result.actors);
   for (const actor of expectedActors) {
     total += 1;
-    if (resultActors.some((item) => fuzzyMatchEntity(actor, item))) covered += 1;
+    if (resultActors.some((item) => fuzzyMatchEntity(actor, item, entityNameMap))) covered += 1;
   }
 
   const expectedFunctions = readNames(gold.expected_functions);
@@ -226,14 +160,14 @@ export function scoreRequirementCoverage(
   const resultText = resultFunctions.join(" ");
   for (const func of expectedFunctions) {
     total += 1;
-    if (fuzzyMatchFunction(func, resultFunctions, resultText)) covered += 1;
+    if (fuzzyMatchFunction(func, resultFunctions, resultText, functionSynonyms)) covered += 1;
   }
 
   const expectedEntities = readNames(gold.expected_entities);
   const resultEntities = readNames(result.entities);
   for (const entity of expectedEntities) {
     total += 1;
-    if (resultEntities.some((item) => fuzzyMatchEntity(entity, item))) covered += 1;
+    if (resultEntities.some((item) => fuzzyMatchEntity(entity, item, entityNameMap))) covered += 1;
   }
 
   const expectedConstraints = readNames(gold.expected_constraints);
@@ -271,12 +205,13 @@ export function scoreDiagramSyntax(diagrams: Record<string, unknown>): number {
 export function scoreEntityAccuracy(
   result: Record<string, unknown>,
   gold: Record<string, unknown>,
+  entityNameMap: Record<string, string[]> = {},
 ): number {
   if (!result || !gold) return 0;
   const expectedEntities = readNames(gold.expected_entities);
   const resultEntities = readNames(result.entities);
   if (expectedEntities.length === 0) return 100;
-  const correct = expectedEntities.filter((entity) => resultEntities.some((item) => fuzzyMatchEntity(entity, item))).length;
+  const correct = expectedEntities.filter((entity) => resultEntities.some((item) => fuzzyMatchEntity(entity, item, entityNameMap))).length;
   return Math.round((correct / expectedEntities.length) * 1000) / 10;
 }
 
@@ -347,21 +282,22 @@ export function scoreStateDiagram(
 export function scoreConsistency(
   result: Record<string, unknown>,
   diagrams: Record<string, unknown>,
+  entityNameMap: Record<string, string[]> = {},
 ): number {
   if (!result) return 0;
   let score = 100;
   const entities = readNames(result.entities);
   const classDiagram = String(diagrams?.class_diagram ?? "");
   for (const entity of entities) {
-    if (entity && !fuzzyMatchEntity(entity, classDiagram)) score -= 10;
+    if (entity && !fuzzyMatchEntity(entity, classDiagram, entityNameMap)) score -= 10;
   }
 
   const activity = String(diagrams?.activity_diagram ?? "");
   const state = String(diagrams?.state_diagram ?? "");
   const coreClasses = entities.filter(Boolean).slice(0, 3);
   for (const item of coreClasses) {
-    if (activity && !fuzzyMatchEntity(item, activity)) score -= 5;
-    if (state && !fuzzyMatchEntity(item, state)) score -= 3;
+    if (activity && !fuzzyMatchEntity(item, activity, entityNameMap)) score -= 5;
+    if (state && !fuzzyMatchEntity(item, state, entityNameMap)) score -= 3;
   }
 
   return Math.round(Math.max(0, score) * 10) / 10;

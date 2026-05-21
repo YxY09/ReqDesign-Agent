@@ -34,7 +34,10 @@ export class BenchmarkRunner {
     private readonly casesDir: string,
     private readonly goldDir: string,
     private readonly outputDir: string,
-  ) {}
+  ) {
+    // Ensure benchmark config exists
+    this.config.benchmark ??= { entityNameMap: {}, functionSynonyms: {} };
+  }
 
   findCases(): BenchmarkCase[] {
     if (!existsSync(this.casesDir)) {
@@ -108,12 +111,25 @@ export class BenchmarkRunner {
       const requirementResult = state.requirementJson;
       const diagrams = state.diagrams;
       const scores: Record<string, number> = {
-        requirement_coverage: scoreRequirementCoverage(requirementResult, gold),
+        requirement_coverage: scoreRequirementCoverage(
+          requirementResult,
+          gold,
+          this.config.benchmark.entityNameMap,
+          this.config.benchmark.functionSynonyms,
+        ),
         diagram_syntax: scoreDiagramSyntax(diagrams),
-        entity_accuracy: scoreEntityAccuracy(requirementResult, gold),
+        entity_accuracy: scoreEntityAccuracy(
+          requirementResult,
+          gold,
+          this.config.benchmark.entityNameMap,
+        ),
         process_completeness: scoreProcessCompleteness(diagrams, gold),
         state_diagram: scoreStateDiagram(diagrams, gold),
-        consistency: scoreConsistency(requirementResult, diagrams),
+        consistency: scoreConsistency(
+          requirementResult,
+          diagrams,
+          this.config.benchmark.entityNameMap,
+        ),
       };
       scores.overall = computeOverallScore({
         requirementCoverage: scores.requirement_coverage,

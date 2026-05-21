@@ -62,11 +62,17 @@ const LoggingConfigSchema = z.object({
   logDir: z.string().default("logs/"),
 });
 
+const BenchmarkConfigSchema = z.object({
+  entityNameMap: z.record(z.string(), z.array(z.string())).default({}),
+  functionSynonyms: z.record(z.string(), z.array(z.string())).default({}),
+});
+
 const AgentConfigSchema = z.object({
   llm: LlmConfigSchema.default({}),
   retry: RetryConfigSchema.default({}),
   output: OutputConfigSchema.default({}),
   logging: LoggingConfigSchema.default({}),
+  benchmark: BenchmarkConfigSchema.default({}),
 });
 
 /** 根据 schema 验证原始 YAML 数据。验证失败时抛出 ZodError。 */
@@ -89,6 +95,9 @@ export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 
 /** 日志设置。 */
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
+
+/** Benchmark 配置（实体名映射、同义词等）。 */
+export type BenchmarkConfig = z.infer<typeof BenchmarkConfigSchema>;
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -194,6 +203,10 @@ function defaultLoggingConfig(): LoggingConfig {
   return { level: "INFO", logDir: "logs/" };
 }
 
+function defaultBenchmarkConfig(): BenchmarkConfig {
+  return { entityNameMap: {}, functionSynonyms: {} };
+}
+
 // ---------------------------------------------------------------------------
 // AgentConfig 类
 // ---------------------------------------------------------------------------
@@ -208,6 +221,7 @@ export class AgentConfig {
   retry: RetryConfig;
   output: OutputConfig;
   logging: LoggingConfig;
+  benchmark: BenchmarkConfig;
   /** 原始 YAML 数据（API 密钥已脱敏）。 */
   raw: Record<string, unknown>;
 
@@ -216,12 +230,14 @@ export class AgentConfig {
     retry?: RetryConfig;
     output?: OutputConfig;
     logging?: LoggingConfig;
+    benchmark?: BenchmarkConfig;
     raw?: Record<string, unknown>;
   }) {
     this.llm = opts?.llm ?? defaultLLMConfig();
     this.retry = opts?.retry ?? defaultRetryConfig();
     this.output = opts?.output ?? defaultOutputConfig();
     this.logging = opts?.logging ?? defaultLoggingConfig();
+    this.benchmark = opts?.benchmark ?? defaultBenchmarkConfig();
     this.raw = opts?.raw ?? {};
   }
 
@@ -270,6 +286,7 @@ export class AgentConfig {
       retry: parsed.retry,
       output: parsed.output,
       logging: parsed.logging,
+      benchmark: parsed.benchmark,
       raw: safeRaw,
     });
     console.info(
