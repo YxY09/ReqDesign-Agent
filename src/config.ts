@@ -27,6 +27,9 @@ export interface LLMConfig {
 /** Retry behaviour settings. */
 export interface RetryConfig {
   maxRetries: number;
+  retryDelayMs: number;
+  maxDelayMs: number;
+  retryOnTimeout: boolean;
 }
 
 /** Output directory settings. */
@@ -128,7 +131,12 @@ function defaultLLMConfig(): LLMConfig {
 }
 
 function defaultRetryConfig(): RetryConfig {
-  return { maxRetries: 3 };
+  return {
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    maxDelayMs: 30_000,
+    retryOnTimeout: true,
+  };
 }
 
 function defaultOutputConfig(): OutputConfig {
@@ -280,6 +288,22 @@ export class AgentConfig {
       errors.push("retry.maxRetries must be a number");
     } else if (this.retry.maxRetries < 0) {
       errors.push("retry.maxRetries must not be negative");
+    }
+
+    if (typeof this.retry.retryDelayMs !== "number" || isNaN(this.retry.retryDelayMs)) {
+      errors.push("retry.retryDelayMs must be a number");
+    } else if (this.retry.retryDelayMs <= 0) {
+      errors.push("retry.retryDelayMs must be positive");
+    }
+
+    if (typeof this.retry.maxDelayMs !== "number" || isNaN(this.retry.maxDelayMs)) {
+      errors.push("retry.maxDelayMs must be a number");
+    } else if (this.retry.maxDelayMs <= 0) {
+      errors.push("retry.maxDelayMs must be positive");
+    }
+
+    if (typeof this.retry.retryOnTimeout !== "boolean") {
+      errors.push("retry.retryOnTimeout must be a boolean");
     }
 
     if (typeof this.llm.timeout !== "number" || isNaN(this.llm.timeout)) {
