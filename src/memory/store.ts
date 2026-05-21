@@ -322,7 +322,7 @@ export class MemoryStore {
           { encoding: "utf8" },
         );
       } catch {
-        // 尽力而为
+        this._logger.warn("无法写入 README.md，记忆目录可能权限不足");
       }
     }
   }

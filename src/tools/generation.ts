@@ -244,7 +244,7 @@ export class GenerationTool extends BaseTool {
             }
           }
           if (key === "activity_diagram") {
-            issues.push(...GenerationTool._checkActivityCoverage(text, reqJson));
+            // 活动图覆盖率检查已移除硬编码域规则，由 LLM 自行判断
           }
         }
       }
@@ -257,7 +257,7 @@ export class GenerationTool extends BaseTool {
         const tcIssues = TestCaseGenerator.validateTestCases(content, reqJson);
         issues.push(...tcIssues);
         issues.push(...GenerationTool._checkUndefinedExceptionIds(content, reqJson, "测试用例"));
-        issues.push(...GenerationTool._checkRefundTestCoverage(content, reqJson));
+        // 测试覆盖检查已移除硬编码域规则，由 LLM 自行判断
       } catch (e) {
         issues.push(`测试用例规则校验失败: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -299,20 +299,6 @@ export class GenerationTool extends BaseTool {
     return unknown.length > 0
       ? [`${label} 引用了未定义的异常 ID: ${unknown.join(", ")}`]
       : [];
-  }
-
-  private static _checkActivityCoverage(
-    text: string,
-    _requirementJson: Record<string, unknown>,
-  ): string[] {
-    return [];
-  }
-
-  private static _checkRefundTestCoverage(
-    text: string,
-    _requirementJson: Record<string, unknown>,
-  ): string[] {
-    return [];
   }
 
   // ------------------------------------------------------------------
