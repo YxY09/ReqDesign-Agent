@@ -408,7 +408,8 @@ describe("fuzzyMatchFunction", () => {
   });
 
   it("reverse synonym match", () => {
-    expect(fuzzyMatchFunction("图书借阅", ["借阅图书"], "借阅图书")).toBe(true);
+    const fnSynonyms: Record<string, string[]> = { "图书借阅": ["借阅图书"] };
+    expect(fuzzyMatchFunction("图书借阅", ["借阅图书"], "借阅图书", fnSynonyms)).toBe(true);
   });
 });
 
@@ -470,7 +471,8 @@ describe("matchConstraintOrException", () => {
 
 describe("fuzzyMatchEntity", () => {
   it("reverse lookup — Chinese in target, English entity name", () => {
-    expect(fuzzyMatchEntity("Book", "这是一个图书管理系统")).toBe(true);
+    const entityMap: Record<string, string[]> = { "图书": ["Book"] };
+    expect(fuzzyMatchEntity("Book", "这是一个图书管理系统", entityMap)).toBe(true);
   });
 
   it("reverse lookup no match", () => {
