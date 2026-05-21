@@ -1,10 +1,9 @@
 /**
- * Backend contract tests: every ExecutionBackend must pass these.
+ * 后端契约测试：每个 ExecutionBackend 都必须通过这些测试。
  *
- * Tests are parameterized so adding a new backend only requires adding a
- * new describe block.
+ * 测试是参数化的，因此添加新的后端只需要添加一个新的 describe 块。
  *
- * Ported from tests/test_backend_contract.py.
+ * 移植自 tests/test_backend_contract.py。
  */
 import { describe, it, expect } from "vitest";
 import { ThreadBackend } from "../src/execution/backend.js";
@@ -16,19 +15,19 @@ import {
 } from "../src/session.js";
 import { createArtifact } from "../src/shared/types.js";
 
-// ---------------------------------------------------------------------------
-// Helpers — delay
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 辅助函数 — 延迟
+// -----------------------------------------------------------------------
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ---------------------------------------------------------------------------
-// Stub sessions
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 存根会话
+// -----------------------------------------------------------------------
 
-/** Resolves immediately. */
+/** 立即完成。 */
 class FastSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -48,7 +47,7 @@ class FastSession extends WorkerSession {
   }
 }
 
-/** Takes ~50ms to resolve. */
+/** 大约 50ms 后完成。 */
 class SlowSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -68,7 +67,7 @@ class SlowSession extends WorkerSession {
   }
 }
 
-/** Always throws. */
+/** 总是抛出异常。 */
 class FailingSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -79,9 +78,9 @@ class FailingSession extends WorkerSession {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Factory helpers
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 工厂辅助函数
+// -----------------------------------------------------------------------
 
 function makeContext(taskId = "design-1", taskType = "design"): SessionContext {
   return new SessionContext({ taskId, taskType });
@@ -140,9 +139,9 @@ function makeMsg(desc: SessionDescriptor) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Contract: ThreadBackend
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 契约：ThreadBackend
+// -----------------------------------------------------------------------
 
 describe("ThreadBackend contract", () => {
   it("submit and poll returns completed notification", async () => {
@@ -247,7 +246,7 @@ describe("ThreadBackend contract", () => {
     expect(results.some((n) => n.status === "failed")).toBe(true);
     expect(be.hasInflight()).toBe(false);
 
-    // Wait for the slow session to actually finish
+    // 等待慢速会话实际完成
     await delay(50);
     const late = be.poll();
     expect(late.length).toBe(0);

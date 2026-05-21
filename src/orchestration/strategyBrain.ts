@@ -69,7 +69,7 @@ export class StrategyBrain {
   }
 
   // -------------------------------------------------------------------
-  // Prompt building
+  // Prompt 构建
   // -------------------------------------------------------------------
 
   private _buildPrompt(snapshot: OrchestratorSnapshot): string {
@@ -126,7 +126,7 @@ export class StrategyBrain {
   }
 
   // -------------------------------------------------------------------
-  // Response parsing
+  // 响应解析
   // -------------------------------------------------------------------
 
   private static _parseResponse(

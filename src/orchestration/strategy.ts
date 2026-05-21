@@ -37,7 +37,7 @@ export function createStrategyDecision(overrides: Partial<StrategyDecision> & Pi
 }
 
 // ---------------------------------------------------------------------------
-// ActionCompiler — compiles strategies into runtime actions
+// ActionCompiler —— 将策略编译为运行时操作
 // ---------------------------------------------------------------------------
 
 import { createRuntimeAction, type RuntimeAction } from "../shared/types.js";

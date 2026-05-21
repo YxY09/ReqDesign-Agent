@@ -124,7 +124,7 @@ export class StateReader {
         artifact.type || planTaskTypesById[taskId] || "";
     }
 
-    // Extract repair counts from counters
+    // 从计数器中提取修复次数
     const repairCountsByTask: Record<string, number> = {};
     const regenerateCountsByTask: Record<string, number> = {};
     for (const [key, val] of Object.entries(counters)) {

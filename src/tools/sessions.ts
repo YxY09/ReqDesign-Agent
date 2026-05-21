@@ -160,7 +160,7 @@ export class EvaluationSession extends WorkerSession {
     const evaluatedTaskIds = this.context.evaluateScope.length > 0
       ? [...this.context.evaluateScope]
       : undefined;
-    // Build previous issues from context for incremental review
+    // 从上下文构建之前的问题以进行增量审查
     const previousIssues = this.context.previousIssues as Array<{ severity: string; description: string; location?: string }> | undefined;
     const verdict = await this.agent.evaluate(
       this.context.requirementText,
@@ -314,7 +314,7 @@ export class PlanningSession extends WorkerSession {
 }
 
 // ---------------------------------------------------------------------------
-// RepairSession
+// RepairSession（修复会话）
 // ---------------------------------------------------------------------------
 
 export class RepairSession extends WorkerSession {
@@ -417,7 +417,7 @@ export class RepairSession extends WorkerSession {
   private _buildRepairContext(message: TaskMessage): Record<string, unknown> {
     const ctx: Record<string, unknown> = {};
 
-    // Previous artifact (from hints, sourced from previous session by runtime)
+    // 从 context.hints 中获取之前的 artifact（由 runtime 从之前的会话中获取）
     if (this.context.hints.previous_artifact_content !== undefined) {
       ctx.previous_artifact = this.context.hints.previous_artifact_content;
     }
@@ -425,18 +425,18 @@ export class RepairSession extends WorkerSession {
       ctx.previous_artifact_type = this.context.hints.previous_artifact_type;
     }
 
-    // Revision history
+    // 修订历史记录
     const fixHistory = this.state.intermediateState.fix_history;
     if (Array.isArray(fixHistory)) {
       ctx.revision_history = fixHistory;
     }
 
-    // Requirement context
+    // 需求上下文
     if (this.context.requirementText) ctx.requirement_text = this.context.requirementText;
     if (Object.keys(this.context.requirementJson).length > 0) ctx.requirement_json = this.context.requirementJson;
     if (this.context.designText) ctx.design_text = this.context.designText;
 
-    // Fix instructions as hints
+    // 修复指令作为 hints
     const fixInstructions = normalizeFixInstructions(message.payload.fix_instructions);
     if (fixInstructions.length > 0) {
       ctx._hints = {

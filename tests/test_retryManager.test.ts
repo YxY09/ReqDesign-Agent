@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { RetryManager } from "./helpers/retryManager.js";
 
 describe("RetryManager", () => {
-  /** Helper: create a RetryManager with zero delay for fast tests. */
+  /** 辅助函数：创建零延迟的 RetryManager 以加快测试。 */
   function makeManager(opts: { maxRetries?: number } = {}) {
     return new RetryManager({
       maxRetries: opts.maxRetries,
@@ -12,7 +12,7 @@ describe("RetryManager", () => {
   }
 
   // ------------------------------------------------------------------
-  // success on first try
+  // 首次成功
   // ------------------------------------------------------------------
   it("succeeds on first try", async () => {
     const rm = makeManager({ maxRetries: 3 });
@@ -22,7 +22,7 @@ describe("RetryManager", () => {
   });
 
   // ------------------------------------------------------------------
-  // success after failures
+  // 失败后成功
   // ------------------------------------------------------------------
   it("succeeds after transient failures", async () => {
     const rm = makeManager({ maxRetries: 3 });
@@ -36,11 +36,11 @@ describe("RetryManager", () => {
 
     expect(result).toBe("ok");
     expect(callCount).toBe(3);
-    expect(rm.history.length).toBe(2); // 2 failures recorded
+    expect(rm.history.length).toBe(2); // 记录 2 次失败
   });
 
   // ------------------------------------------------------------------
-  // all retries exhausted
+  // 所有重试耗尽
   // ------------------------------------------------------------------
   it("throws when all retries are exhausted", async () => {
     const rm = makeManager({ maxRetries: 2 });
@@ -55,7 +55,7 @@ describe("RetryManager", () => {
   });
 
   // ------------------------------------------------------------------
-  // clear history
+  // 清除历史
   // ------------------------------------------------------------------
   it("clears failure history", async () => {
     const rm = makeManager({ maxRetries: 1 });
@@ -88,7 +88,7 @@ describe("RetryManager", () => {
   });
 });
 
-/** Minimal RuntimeError stand-in (browser-compatible). */
+/** 最小化的 RuntimeError 替代品（浏览器兼容）。 */
 class RuntimeError extends Error {
   constructor(message: string) {
     super(message);

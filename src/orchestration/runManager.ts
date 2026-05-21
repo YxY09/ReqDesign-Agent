@@ -34,7 +34,7 @@ export class RunManager {
 }
 
 // ---------------------------------------------------------------------------
-// RunSummaryBuilder — structured run summaries
+// RunSummaryBuilder —— 结构化运行摘要
 // ---------------------------------------------------------------------------
 
 export class RunSummaryBuilder {

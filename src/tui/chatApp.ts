@@ -267,23 +267,23 @@ function fitToWidth(text: string, width: number): string {
   const current = stringWidth(safe);
   if (current === width) return safe;
   if (current < width) return safe + repeat(" ", width - current);
-  // Never truncate ANSI text directly. A sliced CSI sequence renders as
-  // visible garbage such as "[38;5;179m" in the transcript.
+  // 永远不要直接截断 ANSI 文本。截断的 CSI 序列会渲染为可见的乱码，
+  // 例如在转录中显示 "[38;5;179m"。
   return truncateToWidth(stripAnsi(safe), width);
 }
 
-/** Strip dangerous terminal control characters, keeping only SGR color sequences. */
+/** 移除危险的终端控制字符，只保留 SGR 颜色序列。 */
 function sanitizeTerminalText(text: string): string {
   return text
-    // Remove OSC sequences (e.g. hyperlinks)
+    // 移除 OSC 序列（例如超链接）
     .replace(/\u001b\][\s\S]*?(?:\u0007|\u001b\\)/g, "")
-    // Keep only SGR (color) sequences; strip all other CSI sequences
+    // 只保留 SGR（颜色）序列；移除所有其他 CSI 序列
     .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, (seq) => {
       return /^\u001b\[[\d;]*m$/.test(seq) ? seq : "";
     })
-    // Strip stray ESC bytes after valid SGR sequences have been handled.
+    // 在处理完有效 SGR 序列后，移除孤立的 ESC 字节
     .replace(/\u001b(?!\[[\d;]*m)/g, "")
-    // Remove characters that break terminal layout
+    // 移除破坏终端布局的字符
     .replace(/\r/g, "")
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001a\u001c-\u001f\u007f]/g, "")
     .replace(/\t/g, "  ");
@@ -468,28 +468,27 @@ function layoutInputLines(
 }
 
 /**
- * Wrap a string that may contain ANSI escape sequences, preserving
- * the escape sequences at their original positions and only breaking
- * at visible-character boundaries.
+ * 包装可能包含 ANSI 转义序列的字符串，
+ * 在原始位置保留转义序列，只在可见字符边界处换行。
  */
 function wrapLineAnsiAware(text: string, width: number): string[] {
   if (width <= 1) return [text];
   if (!text) return [""];
 
-  // Tokenize into visible chars and ANSI sequences
+  // 分词为可见字符和 ANSI 序列
   type Token = { kind: "ansi"; text: string } | { kind: "char"; text: string; width: number };
   const tokens: Token[] = [];
   let i = 0;
   while (i < text.length) {
     if (text[i] === "\u001b" && i + 1 < text.length && text[i + 1] === "[") {
-      // ANSI escape sequence: ESC [ ... m
+      // ANSI 转义序列：ESC [ ... m
       let j = i + 2;
       while (j < text.length && text[j] !== "m") j++;
-      if (j < text.length) j++; // include the 'm'
+      if (j < text.length) j++; // 包含 'm'
       tokens.push({ kind: "ansi", text: text.slice(i, j) });
       i = j;
     } else {
-      // Visible character (handle multi-byte via Array.from)
+      // 可见字符（通过 Array.from 处理多字节）
       const chars = Array.from(text.slice(i));
       const char = chars[0];
       tokens.push({ kind: "char", text: char, width: charWidth(char) });
@@ -497,11 +496,11 @@ function wrapLineAnsiAware(text: string, width: number): string[] {
     }
   }
 
-  // Build wrapped lines preserving ANSI codes
+  // 构建换行后的行，保留 ANSI 码
   const result: string[] = [];
   let current = "";
   let currentWidth = 0;
-  // Track active ANSI styles to carry over to next line
+  // 跟踪活动 ANSI 样式以传递到下一行
   let activeStyles = "";
 
   for (const token of tokens) {
@@ -510,14 +509,14 @@ function wrapLineAnsiAware(text: string, width: number): string[] {
       if (token.text === ANSI.reset) {
         activeStyles = "";
       } else if (token.text.endsWith("m")) {
-        // Track non-reset styles (simplified)
+        // 跟踪非重置样式（简化版）
         activeStyles += token.text;
       }
       continue;
     }
-    // Visible character
+    // 可见字符
     if (currentWidth + token.width > width && currentWidth > 0) {
-      // Break here, close current and start new line with active styles
+      // 在此处断开，关闭当前行并用活动样式开始新行
       result.push(current + ANSI.reset);
       current = activeStyles + token.text;
       currentWidth = token.width;
@@ -542,16 +541,15 @@ function roleColor(role: UiRole): string {
 }
 
 // ---------------------------------------------------------------------------
-// Minimal inline Markdown to ANSI renderer
+// 极简内联 Markdown 转 ANSI 渲染器
 // ---------------------------------------------------------------------------
 
 /**
- * Render a subset of Markdown to ANSI-escaped terminal text.
- * Handles: **bold**, *italic*, `code`, ```code blocks```,
- * # headings, - / * lists, > blockquotes, tables, and links.
+ * 将部分 Markdown 渲染为 ANSI 转义的终端文本。
+ * 支持：**粗体**、*斜体*、`代码`、```代码块```、
+ * # 标题、- / * 列表、> 引用、表格和链接。
  *
- * Tables are rendered as stacked key-value pairs so they wrap naturally
- * in narrow terminal widths.
+ * 表格渲染为堆叠的键值对形式，以便在窄终端宽度下自然换行。
  */
 function renderMarkdown(text: string): string {
   const lines = text.split("\n");
@@ -562,19 +560,19 @@ function renderMarkdown(text: string): string {
   let tableRows: string[][] = [];
   let tableHeader: string[] | null = null;
 
-  // Flush accumulated table rows into a list-style rendering
+  // 将累积的表格行刷新为列表样式渲染
   const flushTable = (): void => {
     if (tableRows.length === 0) { inTable = false; return; }
     for (let i = 0; i < tableRows.length; i++) {
       const row = tableRows[i];
       if (tableHeader && row.length >= 2) {
-        // Render each row as: bold(first_cell) \n   description(rest)
+        // 渲染每行：粗体(第一格) \n   描述(其余)
         const label = renderInlineMarkdown(row[0]);
         const desc = row.slice(1).map((c) => renderInlineMarkdown(c)).join(" - ");
         result.push(ANSI.bold + label + ANSI.reset);
         result.push("  " + COLORS.placeholder + desc + ANSI.reset);
       } else {
-        // Single-column or no header: just render cells
+        // 单列或无表头：直接渲染单元格
         result.push(row.map((c) => renderInlineMarkdown(c)).join(", "));
       }
     }
@@ -584,7 +582,7 @@ function renderMarkdown(text: string): string {
   };
 
   for (const line of lines) {
-    // --- fenced code block toggle ---
+    // --- 带围栏代码块切换 ---
     if (line.trimStart().startsWith("```")) {
       if (inTable) flushTable();
       if (inCodeBlock) {
@@ -604,11 +602,11 @@ function renderMarkdown(text: string): string {
       continue;
     }
 
-    // --- table row detection ---
+    // --- 表格行检测 ---
     const tableMatch = line.match(/^\|(.+)\|$/);
     if (tableMatch) {
       const cells = tableMatch[1].split("|").map((c) => c.trim());
-      // separator row marks previous row as header
+      // 分隔行标记前一行为表头
       if (cells.every((c) => /^[-:]+$/.test(c))) {
         if (tableRows.length > 0 && !tableHeader) {
           tableHeader = tableRows.pop()!;
@@ -619,10 +617,10 @@ function renderMarkdown(text: string): string {
       tableRows.push(cells);
       continue;
     }
-    // If we were in a table but this line is not a table line, flush
+    // 如果之前在表格中但当前行不是表格行，则刷新
     if (inTable) flushTable();
 
-    // --- heading ---
+    // --- 标题 ---
     const headingMatch = line.match(/^(#{1,6})\s+(.*)/);
     if (headingMatch) {
       const level = headingMatch[1].length;
@@ -631,14 +629,14 @@ function renderMarkdown(text: string): string {
       continue;
     }
 
-    // --- blockquote ---
+    // --- 引用 ---
     if (line.trimStart().startsWith("> ")) {
       const content = line.trimStart().slice(2);
       result.push(COLORS.placeholder + "\u2502 " + renderInlineMarkdown(content) + ANSI.reset);
       continue;
     }
 
-    // --- list item (unordered) ---
+    // --- 无序列表项 ---
     const listMatch = line.match(/^(\s*)([-*])\s+(.*)/);
     if (listMatch) {
       const indent = listMatch[1];
@@ -647,7 +645,7 @@ function renderMarkdown(text: string): string {
       continue;
     }
 
-    // --- list item (ordered) ---
+    // --- 有序列表项 ---
     const orderedMatch = line.match(/^(\s*)(\d+)\.\s+(.*)/);
     if (orderedMatch) {
       const indent = orderedMatch[1];
@@ -657,13 +655,13 @@ function renderMarkdown(text: string): string {
       continue;
     }
 
-    // --- horizontal rule ---
+    // --- 水平线 ---
     if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line.trim())) {
       result.push(COLORS.border + "\u2500".repeat(40) + ANSI.reset);
       continue;
     }
 
-    // --- normal line ---
+    // --- 普通行 ---
     result.push(renderInlineMarkdown(line));
   }
 
@@ -672,19 +670,19 @@ function renderMarkdown(text: string): string {
   return result.join("\n");
 }
 
-/** Render inline Markdown: **bold**, *italic*, `code`, ~~strikethrough~~, [link](url). */
+/** 渲染内联 Markdown：**粗体**、*斜体*、`代码`、~~删除线~~、[链接](url)。 */
 function renderInlineMarkdown(text: string): string {
-  // Inline code: `...`
+  // 内联代码：`...`
   text = text.replace(/`([^`]+)`/g, (_, content: string) => COLORS.status + content + ANSI.reset);
-  // Bold+italic: ***...***
+  // 粗体加斜体：***...***
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, (_, content: string) => ANSI.bold + COLORS.assistant + content + ANSI.reset);
-  // Bold: **...**
+  // 粗体：**...**
   text = text.replace(/\*\*(.+?)\*\*/g, (_, content: string) => ANSI.bold + content + ANSI.reset);
-  // Italic: *...*
+  // 斜体：*...*
   text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, (_, content: string) => "\u001b[3m" + content + ANSI.reset);
-  // Strikethrough: ~~...~~
+  // 删除线：~~...~~
   text = text.replace(/~~(.+?)~~/g, (_, content: string) => "\u001b[9m" + content + ANSI.reset);
-  // Links: [text](url)
+  // 链接：[text](url)
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label: string, url: string) => COLORS.accent + label + COLORS.placeholder + " (" + url + ")" + ANSI.reset);
   text = text.replace(/\u26a0\ufe0f?/g, COLORS.error + "[warning]" + ANSI.reset);
   return text;
@@ -790,13 +788,13 @@ export class TerminalChatApp {
     ].join("\n"));
     this.render();
 
-    // Safety net: ensure terminal state is restored even on uncaught exceptions
+    // 安全网：确保即使在未捕获的异常时也能恢复终端状态
     const emergencyCleanup = () => {
       try {
-        process.stdout.write("\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1007l"); // Disable all mouse modes
+        process.stdout.write("\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1007l"); // 禁用所有鼠标模式
         if (process.stdin.isTTY) process.stdin.setRawMode(false);
         process.stdout.write(ANSI.showCursor + ANSI.altOff + ANSI.reset + "\n");
-      } catch { /* best effort */ }
+      } catch { /* 尽力而为 */ }
     };
     process.on("uncaughtException", emergencyCleanup);
     process.on("SIGINT", emergencyCleanup);
@@ -854,7 +852,7 @@ export class TerminalChatApp {
         try {
           setWindowsConsoleMode(this.windowsInputModeBeforeTui);
         } catch {
-          // best effort restore
+          // 尽力恢复
         }
         this.windowsInputModeBeforeTui = null;
       }
@@ -1020,7 +1018,7 @@ export class TerminalChatApp {
       return;
     }
     if (key.name === "up") {
-      // If input is empty, scroll up instead of navigating history
+      // 如果输入为空，向上滚动而非浏览历史
       if (!this.input) {
         this.scrollTranscriptBy(-3);
         return;
@@ -1029,7 +1027,7 @@ export class TerminalChatApp {
       return;
     }
     if (key.name === "down") {
-      // If input is empty, scroll down instead of navigating history
+      // 如果输入为空，向下滚动而非浏览历史
       if (!this.input) {
         this.scrollTranscriptBy(3);
         return;
@@ -1225,7 +1223,7 @@ export class TerminalChatApp {
     }
   }
 
-  /** Decide whether a user message should chat, ask a follow-up, or start a workflow. */
+  /** 决定用户消息是应该对话、请求澄清，还是启动工作流。 */
   private async coordinateConversation(input: string): Promise<ConversationDecision> {
     const pendingChoice = this.resolvePendingFileChoice(input);
     if (pendingChoice) {
@@ -1384,8 +1382,8 @@ export class TerminalChatApp {
   }
 
   private detectExplicitWorkflowGoal(input: string, filePath: string): "analyze" | "design" | null {
-    // Detect intent from explicit keywords only. A bare path should not launch
-    // a workflow because the user may want to ask about options first.
+    // 仅从显式关键词检测意图。裸露的路径不应启动
+    // 工作流，因为用户可能想先询问选项。
     const analyzeKeywords = /分析|analyze|解析|提取|extract|requirement|需求|结构/i;
     const designKeywords = /设计|design|架构|architecture|生成|generate|系统|system/i;
 
@@ -1404,11 +1402,11 @@ export class TerminalChatApp {
 
   private findExistingFilePath(input: string): string | null {
     const pathPatterns = [
-      // Quoted paths: "C:\..." or '/path/to/file'
+      // 带引号的路径："C:\..." 或 '/path/to/file'
       /["']([^"']+\.(?:md|txt|docx?|pdf|yaml|yml|json))["']/i,
-      // Unquoted paths with separators: C:\... or /path/... or ./...
+      // 带分隔符的无引号路径：C:\... 或 /path/... 或 ./...
       /(?:(?:[A-Za-z]:[\\/]|\.?[\/\\])\S+\.(?:md|txt|docx?|pdf|yaml|yml|json))/i,
-      // Bare filename with extension
+      // 带扩展名的裸露文件名
       /\b(\w+[\w-]*\.(?:md|txt|yaml|yml|json))\b/i,
     ];
 
@@ -1417,7 +1415,7 @@ export class TerminalChatApp {
       const match = input.match(pattern);
       if (match) {
         filePath = match[1] ?? match[0];
-        // Strip surrounding quotes
+        // 去除周围引号
         if (filePath.startsWith('"') || filePath.startsWith("'")) {
           filePath = filePath.slice(1, -1);
         }
@@ -1705,13 +1703,13 @@ export class TerminalChatApp {
   private consumeWorkflowEvent(event: WorkflowEvent): void {
     this.updatePanelFromEvent(event);
 
-    // --- Streaming LLM chunks: append to the live stream card ---
+    // --- 流式 LLM 块：追加到实时流卡片 ---
     if (event.kind === "llm_chunk") {
       this.appendStreamChunk(event);
       return;
     }
 
-    // --- Heartbeat: refresh runtime liveness without adding transcript noise. ---
+    // --- 心跳：刷新运行时活跃状态，不添加转录噪音。 ---
     if (event.kind === "worker_heartbeat") {
       this.panel.lastHeartbeatAt = Date.now();
       this.panel.llmStatus = this.panel.llmChunkCount > 0 ? "streaming" : "waiting first chunk";
@@ -1719,7 +1717,7 @@ export class TerminalChatApp {
       return;
     }
 
-    // --- Close stream cards when tasks finish ---
+    // --- 任务完成时关闭流卡片 ---
     if (event.taskId && (
       event.kind === "task_completed" ||
       event.kind === "task_failed" ||
@@ -1731,7 +1729,7 @@ export class TerminalChatApp {
       this.closeStreamMessagesForTask(event.taskId);
     }
 
-    // --- Worker lifecycle: keep this visible so the left pane shows what the agent is doing. ---
+    // --- Worker 生命周期：保持可见，以便左侧面板显示代理正在执行的操作。 ---
     if (event.kind === "worker_started" || event.kind === "worker_resumed") {
       const body = [
         "agent",
@@ -1751,24 +1749,24 @@ export class TerminalChatApp {
       return;
     }
 
-    // --- Filter out noisy internal events that don't belong in the transcript ---
+    // --- 过滤掉不属于转录的嘈杂内部事件 ---
     const suppressedKinds = new Set([
-      "worker_heartbeat",       // already handled above, but double-check
-      "artifact_saved",         // save success is expected, not noteworthy
-      "input_loaded",           // implementation detail
-      "planning_started",       // subsumed by planning_completed
-      "evaluation_started",     // subsumed by evaluation_completed
-      "persist_started",        // subsumed by persist_completed
-      "repair_round_started",   // subsumed by repair_round_completed
-      "repair_started",         // subsumed by repair_completed
-      "repair_task_started",    // subsumed by repair_task_completed
-      "task_started",           // subsumed by llm_started which shows the actual prompt
+      "worker_heartbeat",       // 上方已处理，此处仅作双重检查
+      "artifact_saved",         // 保存成功是预期行为，无需关注
+      "input_loaded",           // 实现细节
+      "planning_started",       // 由 planning_completed 替代
+      "evaluation_started",     // 由 evaluation_completed 替代
+      "persist_started",        // 由 persist_completed 替代
+      "repair_round_started",   // 由 repair_round_completed 替代
+      "repair_started",         // 由 repair_completed 替代
+      "repair_task_started",    // 由 repair_task_completed 替代
+      "task_started",           // 由 llm_started 替代，后者显示实际提示词
     ]);
     if (suppressedKinds.has(event.kind)) {
       return;
     }
 
-    // --- LLM started: show prompt context as a card ---
+    // --- LLM 启动：显示提示词上下文为卡片 ---
     if (event.kind === "llm_started") {
       const data = event.data ?? {};
       const tag = String(event.tag ?? "").replace(/^\[|\]$/g, "");
@@ -1784,8 +1782,8 @@ export class TerminalChatApp {
       this.panel.activeSessionId = event.sessionId ?? this.panel.activeSessionId;
       this.ensureActivityRefreshTimer();
 
-      // Keep enough prompt text to make the model request understandable
-      // without letting one prompt take over the whole viewport.
+      // 保留足够的提示文本以使模型请求可理解，
+      // 但不要让一个提示占据整个视口。
       const maxPreviewLines = 10;
       const maxPreviewChars = 900;
       const previewLines: string[] = [];
@@ -1847,7 +1845,7 @@ export class TerminalChatApp {
       return;
     }
 
-    // --- Determine role and whether it's a milestone ---
+    // --- 确定角色及其是否为里程碑 ---
     const role: UiRole = event.status === "failed" || event.status === "error" || event.kind.endsWith("_failed")
       ? "error"
       : "status";

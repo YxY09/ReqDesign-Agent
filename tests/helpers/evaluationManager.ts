@@ -55,7 +55,7 @@ interface HistoryEntry {
 }
 
 // ---------------------------------------------------------------------------
-// EvaluationManager
+// EvaluationManager（评估管理器）
 // ---------------------------------------------------------------------------
 
 export class EvaluationManager {

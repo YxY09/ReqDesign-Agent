@@ -1,6 +1,6 @@
 /**
- * RepairTool — receives structured EvaluationTool issues → produces repaired artifact.
- * Uses dedicated repair.md prompt. Async LLM calls.
+ * RepairTool — 接收 EvaluationTool 的结构化评审问题 → 生成修复后的产物。
+ * 使用专用的 repair.md prompt。异步 LLM 调用。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -30,14 +30,14 @@ export class RepairTool extends BaseTool {
   ): Promise<unknown | null> {
     this.logger.info(`repair: 开始修复 task=${task.id}, type=${task.type}，修复指令=${fixInstructions.length}条`);
 
-    // Step 1: Try deterministic fix for rule-based issues
+    // 步骤 1：尝试基于规则的确定性修复
     const detResult = this._tryDeterministicFix(task, currentContent, fixInstructions, context);
     if (detResult !== null) {
       this.logger.info(`repair: task=${task.id} 确定性修复成功，跳过LLM调用`);
       return detResult;
     }
 
-    // Step 2: LLM repair for everything else
+    // 步骤 2：对于其他情况，使用 LLM 修复
     const system = await this._loadRepairPrompt(task);
     const userPrompt = this._buildRepairPrompt(task, currentContent, fixInstructions, context);
 
@@ -57,7 +57,7 @@ export class RepairTool extends BaseTool {
       content = null;
     }
 
-    // Guard: reject output < 50% of original
+    // 保护机制：如果输出小于原始内容的 50%，则丢弃
     if (content != null && currentContent != null) {
       const origStr = task.type === "diagrams" ? JSON.stringify(currentContent) : String(currentContent);
       const newStr = task.type === "diagrams" ? JSON.stringify(content) : String(content);
@@ -76,12 +76,12 @@ export class RepairTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Deterministic repair (no LLM)
+  // 确定性修复（无需 LLM）
   // ------------------------------------------------------------------
 
   /**
-   * Try to fix issues deterministically without calling LLM.
-   * Returns repaired content if all issues can be fixed, null otherwise.
+   * 尝试在不调用 LLM 的情况下确定性地修复问题。
+   * 如果所有问题都能确定性地修复，则返回修复后的内容；否则返回 null。
    */
   private _tryDeterministicFix(
     task: Task,
@@ -91,7 +91,7 @@ export class RepairTool extends BaseTool {
   ): unknown | null {
     if (fixInstructions.length === 0) return null;
 
-    // Only attempt deterministic fix if ALL issues are fixable deterministically
+    // 仅在所有问题都能确定性修复时才尝试确定性修复
     const fixResults: Array<{ fixed: boolean; content: unknown }> = [];
     let workingContent = currentContent;
 
@@ -99,20 +99,20 @@ export class RepairTool extends BaseTool {
       const desc = String(issue.description ?? "");
       const result = this._trySingleDeterministicFix(task, workingContent, issue, desc, context);
       if (result === null) {
-        // This issue can't be fixed deterministically - abort
+        // 这个问题无法确定性修复——中止
         return null;
       }
       workingContent = result;
       fixResults.push({ fixed: true, content: result });
     }
 
-    // All issues were fixed deterministically
+    // 所有问题都已被确定性修复
     return workingContent;
   }
 
   /**
-   * Try to fix a single issue deterministically.
-   * Returns new content if fixed, null if not fixable.
+   * 尝试确定性地修复单个问题。
+   * 如果修复成功则返回新内容；否则返回 null。
    */
   private _trySingleDeterministicFix(
     task: Task,
@@ -121,7 +121,7 @@ export class RepairTool extends BaseTool {
     description: string,
     context: Record<string, unknown>,
   ): unknown | null {
-    // Pattern 1: Entity naming inconsistency — "命名不一致: 需求分析中为 'X'，设计中使用了 'Y'"
+    // 模式 1：实体命名不一致 — "命名不一致: 需求分析中为 'X'，设计中使用了 'Y'"
     const namingMatch = description.match(/命名不一致.*为\s*'([\w]+)'.*使用了\s*'([\w]+)'/);
     if (namingMatch) {
       const [, correctName, wrongName] = namingMatch;
@@ -130,7 +130,7 @@ export class RepairTool extends BaseTool {
       }
     }
 
-    // Pattern 2: Missing entity in class diagram — "类图缺少需求分析中的核心实体: X, Y"
+    // 模式 2：类图中缺少实体 — "类图缺少需求分析中的核心实体: X, Y"
     const missingEntityMatch = description.match(/类图缺少需求分析中的核心实体:\s*(.+)/);
     if (missingEntityMatch && task.type === "diagrams") {
       const entityNames = missingEntityMatch[1].split(", ").map((s) => s.trim()).filter(Boolean);
@@ -139,13 +139,13 @@ export class RepairTool extends BaseTool {
       }
     }
 
-    // Pattern 3: Constraint not covered by tests — "约束 X 未被测试用例覆盖"
+    // 模式 3：约束未被测试覆盖 — "约束 X 未被测试用例覆盖"
     const constraintMatch = description.match(/约束\s*(C\d+)\s*未被测试用例覆盖/);
     if (constraintMatch && task.type === "tests") {
       return this._fixMissingConstraintTest(task, currentContent, constraintMatch[1], context);
     }
 
-    // Pattern 4: Ghost function ID — "功能ID不一致: ...引用了分析中不存在的功能ID: F009, F010"
+    // 模式 4：幽灵功能 ID — "功能ID不一致: ...引用了分析中不存在的功能ID: F009, F010"
     const ghostIdMatch = description.match(/功能ID不一致.*不存在的功能ID:\s*([F\d, ]+)/);
     if (ghostIdMatch) {
       const ghostIds = ghostIdMatch[1].split(/,\s*/).filter((s) => /^F\d+$/.test(s.trim()));
@@ -258,8 +258,8 @@ ${attrs}
   }
 
   /**
-   * Remove ghost function IDs from design/test content.
-   * Strategy: replace ghost Fxxx with nearest valid ID from analysis, or remove the reference.
+   * 从设计/测试内容中移除幽灵功能 ID。
+   * 策略：用分析结果中最接近的有效 ID 替换幽灵 Fxxx，或者移除该引用。
    */
   private _fixGhostFunctionIds(
     task: Task,
@@ -277,7 +277,7 @@ ${attrs}
     this.logger.info(`deterministic: removing ghost function IDs: ${ghostIds.join(", ")}`);
 
     if (task.type === "tests" && typeof currentContent === "string") {
-      // For test cases: remove entire test case blocks that reference ghost IDs
+      // 对于测试用例：移除引用了幽灵 ID 的整个测试用例块
       let fixed = currentContent;
       for (const ghostId of ghostIds) {
         // Remove test case entries like "## TC-N-xxx: ...\n- **测试对象**: F009\n..."
@@ -300,7 +300,7 @@ ${attrs}
     }
 
     if (task.type === "design" && typeof currentContent === "string") {
-      // For design: remove module table rows that reference ghost IDs
+      // 对于设计：移除引用了幽灵 ID 的模块表行
       let fixed = currentContent;
       for (const ghostId of ghostIds) {
         // Remove table rows: | **ModuleName** | ... | F009 |
@@ -309,7 +309,7 @@ ${attrs}
           "",
         );
       }
-      // Fallback: simple word replacement
+      // 备选方案：简单的单词替换
       if (fixed === currentContent) {
         for (const ghostId of ghostIds) {
           fixed = fixed.replace(
@@ -355,7 +355,7 @@ ${attrs}
   }
 
   // ------------------------------------------------------------------
-  // Patch mode
+  // Patch 模式
   // ------------------------------------------------------------------
 
   private _applyPatchResponse(
@@ -422,7 +422,7 @@ ${attrs}
   }
 
   // ------------------------------------------------------------------
-  // Prompt building
+  // 构建 Prompt
   // ------------------------------------------------------------------
 
   private _loadRepairPrompt(task: Task): Promise<string> {
@@ -499,7 +499,7 @@ ${attrs}
   }
 
   // ------------------------------------------------------------------
-  // Formatting
+  // 格式化
   // ------------------------------------------------------------------
 
   static _formatIssues(issues: Array<Record<string, unknown>>): string {
@@ -545,7 +545,7 @@ ${attrs}
   }
 
   // ------------------------------------------------------------------
-  // Diagram helpers
+  // 图表辅助函数
   // ------------------------------------------------------------------
 
   static _wrapDiagramText(task: Task, text: string): unknown {
@@ -558,7 +558,7 @@ ${attrs}
   }
 
   // ------------------------------------------------------------------
-  // Response parsing
+  // 解析响应
   // ------------------------------------------------------------------
 
   private _parseResponse(response: Record<string, unknown>, task: Task): unknown {

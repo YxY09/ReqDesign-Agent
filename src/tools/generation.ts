@@ -1,6 +1,6 @@
 /**
- * GenerationTool — receives Task → produces Artifact with rule self-check.
- * Routes to appropriate generators by task.type.
+ * GenerationTool — 接收 Task → 生成带有规则自检的 Artifact。
+ * 根据 task.type 将任务路由到相应的生成器。
  */
 
 import { performance } from "node:perf_hooks";
@@ -38,7 +38,7 @@ export class GenerationTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Public API
+  // 公开 API
   // ------------------------------------------------------------------
 
   async execute(task: Task, context: Record<string, unknown>): Promise<Artifact> {
@@ -54,9 +54,9 @@ export class GenerationTool extends BaseTool {
 
       let issues = GenerationTool._ruleCheck(task, content, context);
       let selfCorrectRounds = 0;
-      // Self-check issues are recorded but NOT auto-repaired.
-      // Self-repair had 100% failure rate (6/6 in test runs) — wastes LLM calls.
-      // Downstream evaluator handles these issues.
+      // 自检问题被记录但不会自动修复。
+      // 自修复在测试中 100% 失败（6/6），会浪费 LLM 调用。
+      // 下游 evaluator 会处理这些问题。
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
 
@@ -92,7 +92,7 @@ export class GenerationTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Generation routing
+  // 生成路由
   // ------------------------------------------------------------------
 
   private async _generate(task: Task, context: Record<string, unknown>): Promise<unknown> {
@@ -192,7 +192,7 @@ export class GenerationTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Rule self-check (zero LLM cost)
+  // 规则自检（零 LLM 成本）
   // ------------------------------------------------------------------
 
   static _ruleCheck(task: Task, content: unknown, context: Record<string, unknown>): string[] {
@@ -351,7 +351,7 @@ export class GenerationTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Helpers
+  // 辅助函数
   // ------------------------------------------------------------------
 
   static _unwrapAnalyzeDict(result: Record<string, unknown>): Record<string, unknown> {

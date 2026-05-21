@@ -123,7 +123,7 @@ export class PolicyGuard {
     return !snapshot.finalReviewCurrent;
   }
 
-  // Shared by both PolicyGuard and DeterministicPolicy
+  // PolicyGuard 和 DeterministicPolicy 共享的方法
   _isSafeFinalMajorRepairTarget(snapshot: OrchestratorSnapshot, target: string): boolean {
     const taskType = this.budget.taskType(snapshot, target);
     const targetIssues = snapshot.latestIssues.filter((issue) => issue["target_task_id"] === target);
@@ -207,7 +207,7 @@ export class DeterministicPolicy {
    * 当状态需要 LLM 推理时返回 `null`——此时调用方应咨询 {@link StrategyBrain}。
    */
   decide(snapshot: OrchestratorSnapshot): StrategyDecision | null {
-    // 1) Replan produced ready remediation tasks → advance them
+    // 1) 重规划产生了就绪的修复任务 -> 推进它们
     const remediationReady = snapshot.readyTasks.filter(
       (taskId) => !snapshot.rejectedArtifacts.includes(taskId),
     );
@@ -219,8 +219,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 2) Failed plan tasks — regenerate the concrete failed task before
-    // replanning broader downstream work.
+    // 2) 计划任务失败 —— 在重新规划更广泛的下游工作之前，先重新生成具体失败的任务。
     if (snapshot.failedTasks.length > 0) {
       const target = snapshot.failedTasks.find(
         (taskId) => !isTaskRunning(snapshot, taskId),
@@ -257,7 +256,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 3) Rejected artifacts — repair, regenerate, or replan
+    // 3) 被拒绝的产物 —— 修复、重新生成或重新规划
     if (snapshot.rejectedArtifacts.length > 0) {
       const target = snapshot.rejectedArtifacts.find(
         (taskId) => !isTaskRunning(snapshot, taskId),
@@ -302,7 +301,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 4) Globally stalled and replan is available
+    // 4) 全局卡死且可以重新规划
     if (snapshot.globallyStalled && this.guard.canReplan(snapshot)) {
       return createStrategyDecision({
         strategy: "escalate_to_replan",
@@ -310,19 +309,19 @@ export class DeterministicPolicy {
       });
     }
 
-    // 5) Convergence stall — same issues persist across rounds.
-    //    But if issues are trending down and below threshold, accept.
+    // 5) 收敛卡死 —— 同样的问题在多轮中持续存在。
+    //    但如果问题呈下降趋势且低于阈值，则接受。
     if (snapshot.convergenceStalled && snapshot.convergenceRoundCount >= 3) {
       const trend = snapshot.convergenceTrend ?? "flat";
       if (trend === "decreasing" && snapshot.latestIssues.length <= 8) {
-        // Issues are declining and manageable — force accept to avoid infinite loop
+        // 问题正在下降且可控 —— 强制接受以避免无限循环
         return createStrategyDecision({
           strategy: "finish",
           reason: `convergence accepted despite stall: ${snapshot.latestIssues.length} issues, trend decreasing`,
         });
       }
-      // Also accept if non-increasing + low count — evaluator is strict,
-      // don't waste tokens on cosmetic issues that can't be resolved.
+      // 如果问题数量持平或下降且数量少也接受 —— 评估器过于严格，
+      // 不要在无法解决的表面问题上浪费 token。
       if (trend !== "increasing" && snapshot.latestIssues.length <= 10) {
         return createStrategyDecision({
           strategy: "finish",
@@ -335,7 +334,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 6) Final review rejected — no safe repair targets
+    // 6) 最终审查被拒绝 —— 没有安全的修复目标
     if (
       snapshot.finalReviewCurrent &&
       !snapshot.finalReviewPassed &&
@@ -350,9 +349,9 @@ export class DeterministicPolicy {
       });
     }
 
-    // 7) Final review major issues — try repair per-task
-    // Fire even if finalReviewCurrent is false: if evaluator found major issues,
-    // we should attempt repair before re-running evaluation.
+    // 7) 最终审查发现重大问题 —— 尝试按任务修复
+    // 即使 finalReviewCurrent 为 false 也会触发：如果评估器发现了重大问题，
+    // 我们应该在重新运行评估之前尝试修复。
     if (snapshot.majorPendingTaskIds.length > 0) {
       const target = this._selectFinalMajorRepairTarget(snapshot);
       if (target) {
@@ -392,7 +391,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 8) Current final review rejected but there is no safe automatic repair.
+    // 8) 当前最终审查被拒绝，但没有安全的自动修复方案。
     if (snapshot.finalReviewCurrent && !snapshot.finalReviewPassed) {
       return createStrategyDecision({
         strategy: "pause_for_user",
@@ -400,7 +399,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 9) Outputs already saved → finish
+    // 9) 输出已保存 -> 完成
     if (snapshot.outputSaved) {
       return createStrategyDecision({
         strategy: "finish",
@@ -408,7 +407,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 10) Work is still running → wait
+    // 10) 工作仍在运行 -> 等待
     if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
       return createStrategyDecision({
         strategy: "wait_for_running",
@@ -416,7 +415,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 11) No plan yet → delegate initial routing to LLM (StrategyBrain)
+    // 11) 尚未有计划 -> 将初始路由委托给 LLM (StrategyBrain)
     if (
       !snapshot.planReady &&
       snapshot.requirementLoaded &&
@@ -428,11 +427,11 @@ export class DeterministicPolicy {
           reason: `planner failed ${snapshot.plannerFailures} times`,
         });
       }
-      // Let StrategyBrain decide: start_planning vs route_direct_diagrams
+      // 让 StrategyBrain 决定：start_planning 还是 route_direct_diagrams
       return null;
     }
 
-    // 12) Ready tasks waiting → advance them
+    // 12) 就绪任务在等待 -> 推进它们
     if (snapshot.readyTasks.length > 0) {
       return createStrategyDecision({
         strategy: "advance_ready_work",
@@ -441,7 +440,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 13) Final review is ready
+    // 13) 最终审查已就绪
     if (this.guard.canRunFinalReview(snapshot)) {
       return createStrategyDecision({
         strategy: "run_final_review",
@@ -449,7 +448,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 14) Opportunistic review
+    // 14) 机会性审查
     const reviewPlan = this.reviewScheduler.nextScope(snapshot);
     if (reviewPlan.hasScope) {
       return createStrategyDecision({
@@ -459,7 +458,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 15) Quality + save gates passed
+    // 15) 质量门和保存门都已通过
     if (this.guard.canSave(snapshot)) {
       return createStrategyDecision({
         strategy: "save_outputs",
@@ -467,7 +466,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // 16) Nothing loaded → finish
+    // 16) 没有加载任何内容 -> 完成
     if (!snapshot.requirementLoaded && !snapshot.hasArtifacts) {
       return createStrategyDecision({
         strategy: "finish",
@@ -475,7 +474,7 @@ export class DeterministicPolicy {
       });
     }
 
-    // Requires LLM judgment
+    // 需要 LLM 判断
     return null;
   }
 

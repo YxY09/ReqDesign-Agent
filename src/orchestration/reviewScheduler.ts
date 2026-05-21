@@ -45,7 +45,7 @@ export class ReviewScheduler {
 
     const unevaluated = new Set(snapshot.unevaluatedArtifacts);
 
-    // -- Direct mode -------------------------------------------------------
+    // -- 直连模式 -------------------------------------------------------
     if (snapshot.isDirectMode) {
       const directScope = snapshot.directModeArtifacts.filter((tid) =>
         unevaluated.has(tid),
@@ -64,7 +64,7 @@ export class ReviewScheduler {
       return { ...noScope, reason: "direct stage is not complete" };
     }
 
-    // -- No plan — opportunistic review ------------------------------------
+    // -- 无计划 —— 机会性审查 ------------------------------------
     if (!snapshot.planReady) {
       const candidateIds =
         snapshot.reviewCandidates.length > 0
@@ -84,7 +84,7 @@ export class ReviewScheduler {
 
     const stageTasks = snapshot.planTaskIdsByType;
 
-    // -- Analyze stage -----------------------------------------------------
+    // -- 分析阶段 -----------------------------------------------------
     const analyzeScope = (stageTasks["analyze"] ?? []).filter((tid) =>
       unevaluated.has(tid),
     );
@@ -100,7 +100,7 @@ export class ReviewScheduler {
       };
     }
 
-    // -- Design stage ------------------------------------------------------
+    // -- 设计阶段 ------------------------------------------------------
     const designScope = (stageTasks["design"] ?? []).filter((tid) =>
       unevaluated.has(tid),
     );
@@ -116,7 +116,7 @@ export class ReviewScheduler {
       };
     }
 
-    // -- Output stage (diagrams + tests) -----------------------------------
+    // -- 输出阶段（图表 + 测试） -----------------------------------
     const outputTaskIds = [
       ...(stageTasks["diagrams"] ?? []),
       ...(stageTasks["tests"] ?? []),

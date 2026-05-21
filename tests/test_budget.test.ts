@@ -1,16 +1,16 @@
 /**
- * Unit tests for orchestration/budget.ts — BudgetManager and OrchestrationConfig.
+ * orchestration/budget.ts 的单元测试 — BudgetManager 和 OrchestrationConfig。
  */
 
 import { describe, it, expect } from "vitest";
 import { BudgetManager, OrchestrationConfig } from "../src/orchestration/budget.js";
 import type { OrchestratorSnapshot } from "../src/orchestration/snapshot.js";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 辅助函数
+// -----------------------------------------------------------------------
 
-/** Create a minimal snapshot stub for BudgetManager method tests. */
+/** 创建用于 BudgetManager 方法测试的最小快照存根。 */
 function snap(overrides: Partial<OrchestratorSnapshot> = {}): OrchestratorSnapshot {
   return {
     goal: "test",
@@ -55,9 +55,9 @@ function snap(overrides: Partial<OrchestratorSnapshot> = {}): OrchestratorSnapsh
   };
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // OrchestrationConfig
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 describe("OrchestrationConfig", () => {
   it("defaults all fields to sensible values", () => {
@@ -114,7 +114,7 @@ describe("OrchestrationConfig", () => {
   it("fromRaw preserves defaults for missing fields", () => {
     const c = OrchestrationConfig.fromRaw({ max_repair_per_task: 1 });
     expect(c.maxRepairPerTask).toBe(1);
-    // Everything else stays default
+    // 其他字段保持默认值
     expect(c.maxRuntimeSeconds).toBe(1800);
     expect(c.maxDecisionCount).toBe(500);
     expect(c.maxReplanCount).toBe(2);
@@ -129,9 +129,9 @@ describe("OrchestrationConfig", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// BudgetManager — construction
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// BudgetManager — 构造
+// -----------------------------------------------------------------------
 
 describe("BudgetManager constructor", () => {
   it("uses OrchestrationConfig defaults when no config passed", () => {
@@ -147,7 +147,7 @@ describe("BudgetManager constructor", () => {
     const b = new BudgetManager(cfg);
     expect(b.maxRepairPerTask).toBe(7);
     expect(b.maxRuntimeSeconds).toBe(900);
-    expect(b.maxDecisionCount).toBe(500); // default
+    expect(b.maxDecisionCount).toBe(500); // 默认值
   });
 
   it("accepts OrchestrationConfig with all fields customized", () => {
@@ -183,9 +183,9 @@ describe("BudgetManager constructor", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// BudgetManager — runtime methods
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// BudgetManager — 运行时方法
+// -----------------------------------------------------------------------
 
 describe("BudgetManager runtime methods", () => {
   const bm = new BudgetManager();
@@ -196,26 +196,26 @@ describe("BudgetManager runtime methods", () => {
     expect(bm.runtimeDeadline(500)).toBe(2300);
   });
 
-  it("runtimeExhausted returns false when not past deadline", () => {
+  it("未超过截止时间时 runtimeExhausted 返回 false", () => {
     // startTime=100, now=100, deadline=1900
     expect(bm.runtimeExhausted(100, 100)).toBe(false);
-    // well within budget
+    // 预算充足
     expect(bm.runtimeExhausted(100, 500)).toBe(false);
   });
 
-  it("runtimeExhausted returns true when past deadline", () => {
-    // startTime=100, now=1900 — exactly at deadline
+  it("超过截止时间时 runtimeExhausted 返回 true", () => {
+    // startTime=100, now=1900 — 正好在截止时间
     expect(bm.runtimeExhausted(100, 1900)).toBe(true);
-    // startTime=100, now=2000 — past deadline
+    // startTime=100, now=2000 — 已超过截止时间
     expect(bm.runtimeExhausted(100, 2000)).toBe(true);
   });
 
-  it("runtimeExhausted uses Date.now() when now is omitted", () => {
+  it("now 省略时 runtimeExhausted 使用 Date.now()", () => {
     const farPast = 0;
-    // With large maxRuntimeSeconds, this won't be exhausted (depends on clock)
-    // We just verify the method doesn't throw.
+    // maxRuntimeSeconds 很大时不会被耗尽（取决于时钟）
+    // 我们只需验证方法不会抛出异常。
     expect(() => bm.runtimeExhausted(Date.now() / 1000)).not.toThrow();
-    // Far in the past should be exhausted
+    // 很久以前应该被耗尽
     expect(bm.runtimeExhausted(farPast)).toBe(true);
   });
 
@@ -223,7 +223,7 @@ describe("BudgetManager runtime methods", () => {
     expect(bm.runtimeRemainingSeconds(100, 100)).toBe(1800);
     expect(bm.runtimeRemainingSeconds(100, 1000)).toBe(900);
     expect(bm.runtimeRemainingSeconds(100, 1900)).toBe(0);
-    expect(bm.runtimeRemainingSeconds(100, 2000)).toBe(0); // capped at 0
+    expect(bm.runtimeRemainingSeconds(100, 2000)).toBe(0); // 截断为 0
   });
 
   it("hasRuntimeBudgetForNewWork returns true when enough time remains", () => {
@@ -241,9 +241,9 @@ describe("BudgetManager runtime methods", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // BudgetManager — minRuntimeForTaskType / hasRuntimeBudgetForTaskType
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 describe("BudgetManager task-type runtime methods", () => {
   const bm = new BudgetManager();
@@ -260,23 +260,23 @@ describe("BudgetManager task-type runtime methods", () => {
     expect(bm.minRuntimeForTaskType("")).toBe(120);
   });
 
-  it("hasRuntimeBudgetForTaskType returns true when enough time", () => {
-    // startTime=100, now=100 → remaining=1800, analyze needs 600
+  it("时间充足时 hasRuntimeBudgetForTaskType 返回 true", () => {
+    // startTime=100, now=100 → remaining=1800, analyze 需要 600
     expect(bm.hasRuntimeBudgetForTaskType(100, "analyze", 100)).toBe(true);
-    // design needs 360, remaining 500 → ok
+    // design 需要 360, remaining 500 → ok
     expect(bm.hasRuntimeBudgetForTaskType(100, "design", 800)).toBe(true);
   });
 
-  it("hasRuntimeBudgetForTaskType returns false when not enough time", () => {
-    // startTime=100, now=1400 → remaining=500, analyze needs 600
+  it("时间不足时 hasRuntimeBudgetForTaskType 返回 false", () => {
+    // startTime=100, now=1400 → remaining=500, analyze 需要 600
     expect(bm.hasRuntimeBudgetForTaskType(100, "analyze", 1400)).toBe(false);
-    // unknown type, default 120, remaining=100
+    // 未知类型，默认为 120, remaining=100
     // startTime=100, deadline=1900, now=1781 → remaining=119 < 120
     expect(bm.hasRuntimeBudgetForTaskType(100, "unknown", 1781)).toBe(false);
   });
 
-  it("hasRuntimeBudgetForTaskType uses Date.now() when now omitted", () => {
-    // Start far in past → no time left
+  it("now 省略时 hasRuntimeBudgetForTaskType 使用 Date.now()", () => {
+    // 开始时间很早 → 没有剩余时间
     const bmFar = new BudgetManager(
       OrchestrationConfig.fromRaw({ max_runtime_seconds: 1 }),
     );
@@ -284,9 +284,9 @@ describe("BudgetManager task-type runtime methods", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // BudgetManager — decisionExhausted
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 describe("BudgetManager decisionExhausted", () => {
   const bm = new BudgetManager(); // maxDecisionCount = 500
@@ -312,9 +312,9 @@ describe("BudgetManager decisionExhausted", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// BudgetManager — task counts from snapshot
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// BudgetManager — 从快照获取任务计数
+// -----------------------------------------------------------------------
 
 describe("BudgetManager snapshot-based count methods", () => {
   const bm = new BudgetManager();
@@ -362,9 +362,9 @@ describe("BudgetManager snapshot-based count methods", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // BudgetManager — canRepair / canRepairFinalMajor
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 describe("BudgetManager canRepair / canRepairFinalMajor", () => {
   const bm = new BudgetManager(); // maxRepairPerTask = 4, maxFinalMajorRepairPerTask = 3
@@ -398,9 +398,9 @@ describe("BudgetManager canRepair / canRepairFinalMajor", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // BudgetManager — shouldRegenerate
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 describe("BudgetManager shouldRegenerate", () => {
   const bm = new BudgetManager(); // maxRegeneratePerTask=1, diagramRepairBeforeRegenerate=2, designRepairBeforeRegenerate=2
@@ -478,9 +478,9 @@ describe("BudgetManager shouldRegenerate", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // BudgetManager — canReplan
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 describe("BudgetManager canReplan", () => {
   const bm = new BudgetManager(); // maxPlannerFailures=3, maxReplanCount=2
@@ -526,25 +526,25 @@ describe("BudgetManager canReplan", () => {
     expect(bm.canReplan(s)).toBe(false);
   });
 
-  it("returns false when planner failures are too high", () => {
+  it("规划器失败次数过高时返回 false", () => {
     const s = snap({
       planReady: true,
       isDirectMode: false,
       runningTasks: [],
       evaluatorRunning: false,
-      plannerFailures: 3, // maxPlannerFailures=3, so failures < 3 is false
+      plannerFailures: 3, // maxPlannerFailures=3，所以 failures < 3 为 false
     });
     expect(bm.canReplan(s)).toBe(false);
   });
 
-  it("returns false when plan revision count exceeds limit", () => {
+  it("计划修订次数超过限制时返回 false", () => {
     const s = snap({
       planReady: true,
       isDirectMode: false,
       runningTasks: [],
       evaluatorRunning: false,
       plannerFailures: 0,
-      planRevisionCount: 2, // maxReplanCount=2, so revisionCount < 2 is false
+      planRevisionCount: 2, // maxReplanCount=2，所以 revisionCount < 2 为 false
     });
     expect(bm.canReplan(s)).toBe(false);
   });
@@ -561,26 +561,26 @@ describe("BudgetManager canReplan", () => {
     expect(bm.canReplan(s)).toBe(false);
   });
 
-  it("returns true when plannerFailures is just under the limit", () => {
+  it("plannerFailures 正好低于限制时返回 true", () => {
     const s = snap({
       planReady: true,
       isDirectMode: false,
       runningTasks: [],
       evaluatorRunning: false,
-      plannerFailures: 2, // maxPlannerFailures=3, 2 < 3 → true
+      plannerFailures: 2, // maxPlannerFailures=3，2 < 3 → true
       planRevisionCount: 0,
     });
     expect(bm.canReplan(s)).toBe(true);
   });
 
-  it("returns true when planRevisionCount is just under the limit", () => {
+  it("planRevisionCount 正好低于限制时返回 true", () => {
     const s = snap({
       planReady: true,
       isDirectMode: false,
       runningTasks: [],
       evaluatorRunning: false,
       plannerFailures: 0,
-      planRevisionCount: 1, // maxReplanCount=2, 1 < 2 → true
+      planRevisionCount: 1, // maxReplanCount=2，1 < 2 → true
     });
     expect(bm.canReplan(s)).toBe(true);
   });

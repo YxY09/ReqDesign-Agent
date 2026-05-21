@@ -1,6 +1,6 @@
 /**
- * PlanningTool — reads requirements → produces ExecutionPlan or PlanMutation.
- * Async LLM calls for plan() and replan().
+ * PlanningTool — 读取需求文档 → 生成执行计划或计划变更。
+ * plan() 和 replan() 使用异步 LLM 调用。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -16,7 +16,7 @@ import {
   createExecutionPlan,
 } from "../shared/types.js";
 
-/** Merge dependency lists preserving order while ensuring required upstream tasks exist. */
+/** 合并依赖列表，保持顺序的同时确保必需的 upstream 任务存在。 */
 function mergeDeps(existing: string[], required: string[]): string[] {
   const merged: string[] = [];
   const seen = new Set<string>();
@@ -43,7 +43,7 @@ export class PlanningTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Public API
+  // 公开 API
   // ------------------------------------------------------------------
 
   async plan(requirementText: string, goal = "design"): Promise<ExecutionPlan> {
@@ -108,7 +108,7 @@ export class PlanningTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Prompt building
+  // 构建 Prompt
   // ------------------------------------------------------------------
 
   private async _getReplanPrompt(queryContext = ""): Promise<string> {
@@ -163,7 +163,7 @@ export class PlanningTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Response parsing
+  // 解析响应
   // ------------------------------------------------------------------
 
   _parseResponse(response: Record<string, unknown>, goal: string): ExecutionPlan {
@@ -240,7 +240,7 @@ export class PlanningTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Fallbacks
+  // 降级策略
   // ------------------------------------------------------------------
 
   static _fallbackPlan(_requirementText: string, goal: string): ExecutionPlan {
@@ -431,7 +431,7 @@ export class PlanningTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Static helpers
+  // 静态辅助函数
   // ------------------------------------------------------------------
 
   static _splitDiagramTasks(tasks: Task[]): Task[] {

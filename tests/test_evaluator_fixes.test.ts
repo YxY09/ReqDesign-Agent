@@ -3,11 +3,11 @@ import { EvaluationTool } from "../src/tools/evaluation.js";
 import { createIssue } from "../src/shared/types.js";
 import type { Issue } from "../src/shared/types.js";
 
-// ---------------------------------------------------------------------------
-// Mock LLM stubs
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 模拟 LLM 存根
+// -----------------------------------------------------------------------
 
-/** Returns empty issues from LLM. */
+/** 从 LLM 返回空的 issues。 */
 function noopLlm() {
   return {
     generateJson: vi.fn().mockResolvedValue({ issues: [] }),
@@ -17,7 +17,7 @@ function noopLlm() {
   } as any;
 }
 
-/** Returns an issue targeting a sibling diagram field (should be filtered). */
+/** 返回针对同级 diagram 字段的 issue（应该被过滤）。 */
 function siblingLeakLlm() {
   return {
     generateJson: vi.fn().mockResolvedValue({
@@ -38,7 +38,7 @@ function siblingLeakLlm() {
   } as any;
 }
 
-/** Throws on generateJson. */
+/** 在 generateJson 上抛出异常。 */
 function failingLlm() {
   return {
     generateJson: vi.fn().mockRejectedValue(new Error("invalid review json")),
@@ -48,7 +48,7 @@ function failingLlm() {
   } as any;
 }
 
-/** Returns a false-positive analyze shard issue. */
+/** 返回误报的 analyze 分片 issue。 */
 function analyzeShardFalsePositiveLlm() {
   return {
     generateJson: vi.fn().mockResolvedValue({
@@ -69,9 +69,9 @@ function analyzeShardFalsePositiveLlm() {
   } as any;
 }
 
-// ---------------------------------------------------------------------------
-// Tests: _buildFixes — fix-task mapping
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 测试：_buildFixes — 修复任务映射
+// -----------------------------------------------------------------------
 
 describe("EvaluationTool._buildFixes", () => {
   it("prefers explicit targetTaskType", () => {
@@ -114,9 +114,9 @@ describe("EvaluationTool._buildFixes", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: scoped snapshots
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 测试：作用域快照
+// -----------------------------------------------------------------------
 
 describe("EvaluationTool evaluate — scoped snapshots", () => {
   it("does not pass when major issues remain", async () => {
@@ -452,16 +452,16 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: direct mode detection
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 测试：直接模式检测
+// -----------------------------------------------------------------------
 
 describe("EvaluationTool evaluate — direct mode detection", () => {
   it("analyze snapshot is not auto-detected as direct mode", async () => {
     const evaluator = new EvaluationTool(noopLlm());
     const seen: Record<string, unknown> = {};
 
-    // Override private _llmReviewSnapshots to capture isDirectMode argument
+    // 重写私有的 _llmReviewSnapshots 以捕获 isDirectMode 参数
     (evaluator as any)._llmReviewSnapshots = vi.fn(
       async (
         _req: string,
@@ -498,9 +498,9 @@ describe("EvaluationTool evaluate — direct mode detection", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: LLM failure handling
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 测试：LLM 失败处理
+// -----------------------------------------------------------------------
 
 describe("EvaluationTool evaluate — LLM failure", () => {
   it("propagates LLM error instead of silently passing", async () => {

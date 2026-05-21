@@ -54,7 +54,7 @@ export class ConsoleWorkflowStreamer {
     if (event.kind === "llm_completed") {
       this.flushTranscript(event);
     }
-    // Suppress heartbeat noise on console
+    // 抑制控制台上的心跳噪音
     if (event.kind === "worker_heartbeat") {
       return;
     }
@@ -101,8 +101,8 @@ export class ConsoleWorkflowStreamer {
   private writeTranscript(_tag: string, content: string): void {
     const trimmed = content.trimEnd();
     if (!trimmed) return;
-    // LLM output is now captured by TracingLLMClient in llm_trace.json.
-    // No longer write raw LLM output to the main log file.
+    // LLM 输出现在由 TracingLLMClient 捕获到 llm_trace.json。
+    // 不再将原始 LLM 输出写入主日志文件。
   }
 
   private streamTag(event: WorkflowEvent): string {

@@ -1,5 +1,5 @@
 /**
- * AgentOrchestrator — 单一编排决策入口。
+ * AgentOrchestrator —— 单一编排决策入口。
  * state + mailbox -> snapshot -> policy -> strategy brain -> guard -> compiler -> runtime action
  */
 

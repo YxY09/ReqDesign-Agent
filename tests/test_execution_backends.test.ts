@@ -1,9 +1,9 @@
 /**
- * Tests for the execution backend abstraction.
+ * 执行后端抽象的测试。
  *
- * Ported from tests/test_execution_backends.py.
+ * 移植自 tests/test_execution_backends.py。
  *
- * Validates that ThreadBackend behaves consistently and correctly.
+ * 验证 ThreadBackend 的行为是否一致和正确。
  */
 import { describe, it, expect } from "vitest";
 import { ThreadBackend } from "../src/execution/backend.js";
@@ -15,11 +15,11 @@ import {
 } from "../src/session.js";
 import { createArtifact, type Artifact } from "../src/shared/types.js";
 
-// ---------------------------------------------------------------------------
-// Helpers — stub sessions
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 辅助函数 — 存根会话
+// -----------------------------------------------------------------------
 
-/** A session that resolves immediately. */
+/** 立即完成的会话。 */
 class FastSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -39,7 +39,7 @@ class FastSession extends WorkerSession {
   }
 }
 
-/** A session that takes ~50ms to resolve. */
+/** 大约 50ms 后完成的会话。 */
 class SlowSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -59,7 +59,7 @@ class SlowSession extends WorkerSession {
   }
 }
 
-/** A session that always throws. */
+/** 总是抛出异常的会话。 */
 class FailingSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -70,20 +70,20 @@ class FailingSession extends WorkerSession {
   }
 }
 
-/** A session that blocks for a very long time (used for stuck-session tests). */
+/** 阻塞很长时间的会话（用于卡住会话测试）。 */
 class StuckSession extends WorkerSession {
   get workerType(): string {
     return "generator";
   }
 
   async run(_message: TaskNotification): Promise<TaskNotification> {
-    // Block for much longer than any test timeout
+    // 阻塞时间远长于任何测试超时
     await delay(300_000);
     return this._makeNotification("completed", { summary: "stuck" });
   }
 }
 
-/** A session that finishes after a delay longer than the timeout. */
+/** 在超过超时的延迟后完成的会话。 */
 class EventuallyFinishesSession extends WorkerSession {
   get workerType(): string {
     return "generator";
@@ -102,9 +102,9 @@ class EventuallyFinishesSession extends WorkerSession {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers — factories
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 辅助函数 — 工厂
+// -----------------------------------------------------------------------
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -152,9 +152,9 @@ function makeBackend(
   });
 }
 
-// ---------------------------------------------------------------------------
-// ThreadBackend tests
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// ThreadBackend 测试
+// -----------------------------------------------------------------------
 
 describe("ThreadBackend", () => {
   it("should submit a fast session and poll the result", async () => {
@@ -168,7 +168,7 @@ describe("ThreadBackend", () => {
 
     backend.submitSession(session, msg, 5.0);
 
-    // Poll until result is ready
+    // 轮询直到结果就绪
     let results: TaskNotification[] = [];
     for (let i = 0; i < 50; i++) {
       results = backend.poll();
@@ -176,7 +176,7 @@ describe("ThreadBackend", () => {
       await delay(10);
     }
 
-    // Filter for completed notifications (ignore started/heartbeat lifecycle events)
+    // 过滤完成的 notification（忽略 started/heartbeat 生命周期事件）
     const completed = results.filter((n) => n.status === "completed");
     expect(completed.length).toBeGreaterThanOrEqual(1);
     const notif = completed[0];
@@ -200,7 +200,7 @@ describe("ThreadBackend", () => {
     backend.submitSession(session, msg, 5.0);
     expect(backend.hasInflight()).toBe(true);
 
-    // Wait for completion
+    // 等待完成
     await delay(100);
     backend.poll();
     expect(backend.hasInflight()).toBe(false);

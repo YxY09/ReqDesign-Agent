@@ -1,22 +1,22 @@
 /**
- * OutputScorer — scores a completed run's output artifacts for quality metrics.
- * No LLM calls — purely rule-based.
+ * OutputScorer — 对已完成运行输出的产物进行质量评分。
+ * 无需 LLM 调用 — 纯规则驱动。
  */
 
 export interface ScoreReport {
-  entityCoverage: number;        // 0-1: fraction of analysis entities present in design
-  functionIdCoverage: number;    // 0-1: fraction of Fxxx IDs covered
-  constraintIdCoverage: number;  // 0-1: fraction of Cxxx IDs covered
-  exceptionIdCoverage: number;   // 0-1: fraction of Exxx IDs covered
-  namingConsistency: number;     // 0-1: entity names consistent across artifacts
-  testTypeBalance: number;       // 0-1: has normal + error + boundary tests
-  overall: number;               // weighted average
+  entityCoverage: number;        // 0-1：分析结果中的实体在设计中出现的比例
+  functionIdCoverage: number;    // 0-1：Fxxx ID 的覆盖率
+  constraintIdCoverage: number;  // 0-1：Cxxx ID 的覆盖率
+  exceptionIdCoverage: number;   // 0-1：Exxx ID 的覆盖率
+  namingConsistency: number;     // 0-1：产物间实体命名的一致性
+  testTypeBalance: number;       // 0-1：是否包含正常+异常+边界测试
+  overall: number;               // 加权平均
   details: string[];
 }
 
 export class OutputScorer {
   /**
-   * Score a run's output.
+   * 对运行输出进行评分。
    */
   static score(
     analysis: Record<string, unknown>,
@@ -31,7 +31,7 @@ export class OutputScorer {
     const t = testCases ?? "";
     const diag = diagrams ?? {};
 
-    // 1. Entity coverage: how many entities from analysis appear in design?
+    // 1. 实体覆盖率：分析结果中的实体有多少出现在设计中？
     const entities = (Array.isArray(analysis.entities)
       ? analysis.entities as Array<Record<string, unknown>>
       : []);
@@ -46,7 +46,7 @@ export class OutputScorer {
     }
     const entityCoverage = entityNames.length > 0 ? entityHits / entityNames.length : 1;
 
-    // 2. Function ID coverage
+    // 2. 功能 ID 覆盖率
     const functions = (Array.isArray(requirementJson.functions)
       ? requirementJson.functions as Array<Record<string, unknown>>
       : []);
@@ -57,7 +57,7 @@ export class OutputScorer {
     }
     const functionIdCoverage = funcIds.length > 0 ? funcHits / funcIds.length : 1;
 
-    // 3. Constraint ID coverage in tests
+    // 3. 测试中约束 ID 的覆盖率
     const constraints = (Array.isArray(requirementJson.constraints)
       ? requirementJson.constraints as Array<Record<string, unknown>>
       : []);
@@ -69,7 +69,7 @@ export class OutputScorer {
     }
     const constraintIdCoverage = constraintIds.length > 0 ? constraintHits / constraintIds.length : 1;
 
-    // 4. Exception ID coverage in tests
+    // 4. 测试中异常 ID 的覆盖率
     const exceptions = (Array.isArray(requirementJson.exceptions)
       ? requirementJson.exceptions as Array<Record<string, unknown>>
       : []);
@@ -81,7 +81,7 @@ export class OutputScorer {
     }
     const exceptionIdCoverage = exceptionIds.length > 0 ? exceptionHits / exceptionIds.length : 1;
 
-    // 5. Naming consistency: check if entity names in class diagram match analysis
+    // 5. 命名一致性：检查类图中的实体名是否与分析结果一致
     let classDiagram = String((diag as Record<string, unknown>).class_diagram ?? "");
     if (!classDiagram) {
       const inner = (diag as Record<string, unknown>).diagrams as Record<string, unknown> | undefined;
@@ -103,14 +103,14 @@ export class OutputScorer {
     }
     const namingConsistency = namingTotal > 0 ? namingHits / namingTotal : 1;
 
-    // 6. Test type balance
+    // 6. 测试类型平衡
     const hasNormal = /正常/.test(t) || /TC-N-/.test(t);
     const hasError = /异常/.test(t) || /TC-E-/.test(t);
     const hasBoundary = /边界/.test(t) || /TC-B-/.test(t);
     const balanceParts = [hasNormal, hasError, hasBoundary].filter(Boolean).length;
     const testTypeBalance = balanceParts / 3;
 
-    // Weighted overall score (6 dimensions)
+    // 综合评分（6 个维度）
     const overall = (
       entityCoverage * 0.20 +
       functionIdCoverage * 0.20 +

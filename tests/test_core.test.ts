@@ -1,7 +1,7 @@
 /**
- * Core module tests — config, logger, LLMClient JSON helpers.
+ * 核心模块测试 — 配置、日志、LLMClient JSON 辅助函数。
  *
- * Ported from ../tests/test_core.py (Phase 2+4).
+ * 移植自 ../tests/test_core.py（第 2+4 阶段）。
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -9,9 +9,9 @@ import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // AgentConfig
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 import {
   AgentConfig,
@@ -19,41 +19,38 @@ import {
   VALID_LOG_LEVELS,
 } from "../src/config.js";
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // Logger
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 import { setupLogger, initSharedLog, closeSharedLog, Logger } from "../src/logger.js";
 
-// ---------------------------------------------------------------------------
-// LLMClient — we only test the internal JSON helpers, so we import the module
-// and extract the unexported helpers via re-export or test them indirectly.
-// Since extractJsonText / parseJsonResponse are module-private, we test them
-// through the public generateJson path with a mocked chat, or we duplicate
-// the logic.  Instead, we'll directly exercise the functions by importing the
-// module and using vi.spyOn / manual construction.
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// LLMClient — 我们只测试内部 JSON 辅助函数，所以导入模块并通过重新导出或间接测试
+// 来提取未导出的辅助函数。由于 extractJsonText / parseJsonResponse 是模块私有的，
+// 我们通过模拟 chat 的公共 generateJson 路径来测试它们，或者复制逻辑。
+// 相反，我们通过导入模块并使用 vi.spyOn / 手动构造来直接执行函数。
+// -----------------------------------------------------------------------
 
-// The JSON helpers are not exported, so we test them by constructing a client
-// with a fully mocked transport and calling generateJson, or we replicate the
-// pure functions here for unit testing.  To avoid code duplication we test
-// through the public API with mocks.
+// JSON 辅助函数未导出，所以我们通过构造一个完全模拟传输的客户端并调用
+// generateJson 来测试它们，或者在这里复制纯函数进行单元测试。为避免代码重复，
+// 我们通过模拟的公共 API 进行测试。
 
 import { LLMClient } from "../src/llmClient.js";
 import type { AgentConfig as IAgentConfig } from "../src/config.js";
 
 // ============================================================================
-// Helpers
+// 辅助函数
 // ============================================================================
 
-/** Create a fresh tmp directory for a test. */
+/** 为测试创建一个新的临时目录。 */
 function makeTmp(prefix = "reqdesign-test-"): string {
   const dir = join(tmpdir(), `${prefix}${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
-/** Build a minimal valid AgentConfig for LLMClient tests. */
+/** 为 LLMClient 测试构建一个最小有效的 AgentConfig。 */
 function makeConfig(overrides?: Partial<IAgentConfig["llm"]>): AgentConfig {
   const config = new AgentConfig();
   config.llm.apiKey = "test-api-key";
@@ -67,7 +64,7 @@ function makeConfig(overrides?: Partial<IAgentConfig["llm"]>): AgentConfig {
 }
 
 // ============================================================================
-// AgentConfig — construction & defaults
+// AgentConfig — 构造和默认值
 // ============================================================================
 
 describe("AgentConfig", () => {
@@ -83,9 +80,9 @@ describe("AgentConfig", () => {
     expect(config.output.defaultDir).toBe("outputs/");
   });
 
-  // -------------------------------------------------------------------------
-  // Validation
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // 验证
+  // -----------------------------------------------------------------------
 
   describe("validate", () => {
     it("returns no errors for valid default config", () => {
@@ -161,9 +158,9 @@ describe("AgentConfig", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
   // loadFromYaml
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   describe("loadFromYaml", () => {
     it("loads values from a YAML file", () => {
@@ -186,7 +183,7 @@ retry:
       expect(config.llm.temperature).toBe(0.5);
       expect(config.retry.maxRetries).toBe(5);
 
-      // Cleanup
+      // 清理
       rmSync(dir, { recursive: true, force: true });
     });
 
@@ -213,9 +210,9 @@ llm:
     });
   });
 
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
   // getApiKey / getBaseUrl
-  // -------------------------------------------------------------------------
+  // -----------------------------------------------------------------------
 
   describe("getApiKey", () => {
     it("returns key from config when set", () => {
@@ -332,7 +329,7 @@ describe("Logger", () => {
     initSharedLog(tmpLogFile, "INFO");
     const logger1 = setupLogger("test_replace", "INFO");
     const logger2 = setupLogger("test_replace", "INFO");
-    // Same instance returned
+    // 返回同一实例
     expect(logger2).toBe(logger1);
     logger2.close();
   });
@@ -349,23 +346,21 @@ describe("Logger", () => {
 });
 
 // ============================================================================
-// LLMClient — JSON extraction & parsing (no real API calls)
+// LLMClient — JSON 提取和解析（无真实 API 调用）
 // ============================================================================
 
 /**
- * Since extractJsonText and parseJsonResponse are module-private, we test
- * them indirectly by constructing an LLMClient with a mocked chat method
- * and calling generateJson. We also replicate and test the core parsing
- * logic directly to ensure full coverage.
+ * 由于 extractJsonText 和 parseJsonResponse 是模块私有的，我们通过构造一个
+ * 模拟 chat 方法的 LLMClient 并调用 generateJson 来间接测试它们。我们还直接
+ * 复制并测试核心解析逻辑以确保完全覆盖。
  *
- * Strategy: mock the OpenAI/Anthropic constructors so LLMClient can be
- * instantiated without network, then spy on the private chat method.
+ * 策略：模拟 OpenAI/Anthropic 构造函数，使 LLMClient 可以在没有网络的情况下
+ * 实例化，然后监视私有的 chat 方法。
  */
 
-// We'll test the pure functions by re-implementing them identically for
-// direct unit testing, plus test through generateJson with mocks.
+// 我们将通过重新实现纯函数来进行直接单元测试，加上通过 generateJson 与模拟进行测试。
 
-// --- Replicated pure helpers (must stay in sync with llmClient.ts) ---------
+// --- 复制的纯辅助函数（必须与 llmClient.ts 保持同步）---------
 
 function extractJsonText(raw: string): string {
   const trimmed = raw.trim();
@@ -441,11 +436,11 @@ describe("parseJsonResponse (via generateJson mock)", () => {
   });
 
   /**
-   * Create an LLMClient and mock its chat() method to return a fixed string.
+   * 创建一个 LLMClient 并模拟其 chat() 方法返回固定字符串。
    */
   function makeClientWithMockChat(chatResponse: string): LLMClient {
     const c = new LLMClient(config);
-    // Mock the chat method to return our canned response
+    // 模拟 chat 方法返回我们预设的响应
     vi.spyOn(c, "chat" as never).mockResolvedValue(chatResponse);
     return c;
   }
@@ -491,18 +486,18 @@ describe("parseJsonResponse (via generateJson mock)", () => {
 
   it("throws on non-object JSON (array)", async () => {
     const client = makeClientWithMockChat("[1, 2, 3]");
-    // generateJson will parse the array, but it casts to Record<string, unknown>.
-    // The raw JSON [1,2,3] is valid JSON but may or may not be rejected depending
-    // on implementation. In the TS version it's cast without explicit type check.
-    // We just verify it doesn't crash — it returns the array as an object.
+    // generateJson 会解析数组，但它会转换为 Record<string, unknown>。
+    // 原始 JSON [1,2,3] 是有效的 JSON，但根据实现可能会或可能不会被拒绝。
+    // 在 TS 版本中它被强制转换而没有显式的类型检查。
+    // 我们只验证它不会崩溃 — 它将数组作为对象返回。
     const result = await client.generateJson("test prompt");
     expect(Array.isArray(result)).toBe(true);
   });
 
   it("throws on completely unparseable text", async () => {
     const client = makeClientWithMockChat("this is not json at all {}{}{}");
-    // This may or may not throw depending on brace matching. Let's just
-    // verify generateJson either returns an object or throws.
+    // 这可能会根据括号匹配抛出或可能不抛出。我们只验证
+    // generateJson 要么返回对象要么抛出。
     try {
       await client.generateJson("test prompt");
     } catch (err) {

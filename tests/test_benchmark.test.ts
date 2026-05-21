@@ -1,7 +1,7 @@
 /**
- * Benchmark scoring & runner tests.
+ * 基准测试评分和运行器测试。
  *
- * Ported from ../tests/test_benchmark.py (Phase 8).
+ * 移植自 ../tests/test_benchmark.py（第 8 阶段）。
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -9,9 +9,9 @@ import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-// ---------------------------------------------------------------------------
-// Imports from scorer
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 从评分器导入
+// -----------------------------------------------------------------------
 
 import {
   scoreRequirementCoverage,
@@ -29,29 +29,29 @@ import {
   type BenchmarkCaseResult,
 } from "../src/benchmark/scorer.js";
 
-// ---------------------------------------------------------------------------
-// Imports from runBenchmark
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 从运行基准测试导入
+// -----------------------------------------------------------------------
 
 import { BenchmarkRunner } from "../src/benchmark/runBenchmark.js";
 
-// ---------------------------------------------------------------------------
-// Imports from evaluationManager (test utility)
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 从评估管理器导入（测试工具）
+// -----------------------------------------------------------------------
 
 import {
   EvaluationManager,
   computeRunSummary as govComputeRunSummary,
 } from "./helpers/evaluationManager.js";
 
-// ---------------------------------------------------------------------------
-// Imports from config
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// 从配置导入
+// -----------------------------------------------------------------------
 
 import { AgentConfig } from "../src/config.js";
 
 // ===========================================================================
-// TestRequirementCoverage
+// 测试需求覆盖率
 // ===========================================================================
 
 describe("scoreRequirementCoverage", () => {
@@ -113,7 +113,7 @@ describe("scoreRequirementCoverage", () => {
 });
 
 // ===========================================================================
-// TestDiagramSyntax
+// 测试图表语法
 // ===========================================================================
 
 describe("scoreDiagramSyntax", () => {
@@ -142,7 +142,7 @@ describe("scoreDiagramSyntax", () => {
       class_diagram: 123,
       activity_diagram: "flowchart TD\n    A([开始]) --> B[处理]\n    B --> C([结束])",
     };
-    // 123 skipped, flowchart passes → 1/2 = 50%
+    // 123 被跳过，flowchart 通过 → 1/2 = 50%
     expect(scoreDiagramSyntax(diagrams)).toBe(50.0);
   });
 
@@ -155,7 +155,7 @@ describe("scoreDiagramSyntax", () => {
 });
 
 // ===========================================================================
-// TestEntityAccuracy
+// 测试实体准确性
 // ===========================================================================
 
 describe("scoreEntityAccuracy", () => {
@@ -181,7 +181,7 @@ describe("scoreEntityAccuracy", () => {
 });
 
 // ===========================================================================
-// TestProcessCompleteness
+// 测试流程完整性
 // ===========================================================================
 
 describe("scoreProcessCompleteness", () => {
@@ -202,7 +202,7 @@ describe("scoreProcessCompleteness", () => {
 });
 
 // ===========================================================================
-// TestConsistency
+// 测试一致性
 // ===========================================================================
 
 describe("scoreConsistency", () => {
@@ -234,7 +234,7 @@ describe("scoreConsistency", () => {
 });
 
 // ===========================================================================
-// TestOverallScore
+// 测试总分计算
 // ===========================================================================
 
 describe("computeOverallScore", () => {
@@ -324,13 +324,13 @@ describe("scoreStateDiagram", () => {
   });
 
   it("two-state diagram scores correctly", () => {
-    // [*] (len=2) + Pending (len=7) = 2 states after filter → 15 points
+    // [*] (len=2) + Pending (len=7) = 过滤后 2 个状态 → 15 分
     const diagrams = {
       state_diagram: "stateDiagram-v2\n    [*] --> Pending\n    Pending --> A",
     };
     const gold = { expected_processes: [] };
     const score = scoreStateDiagram(diagrams, gold);
-    // [*] gives 30, --> gives 20, 2 states gives 15, no gold gives 25 = 90
+    // [*] 得分 30, --> 得分 20, 2 个状态得分 15, 无 gold 得分 25 = 90
     expect(score).toBe(90.0);
   });
 });
@@ -431,9 +431,9 @@ describe("matchConstraintOrException", () => {
   });
 
   it("partial keyword match >= 70%", () => {
-    // 3 keywords, match 2 = 66.7% < 70%
+    // 3 个关键词，匹配 2 个 = 66.7% < 70%
     expect(matchConstraintOrException("密码不能为空为空", "密码验证")).toBe(false);
-    // 3 keywords, match 3 = 100% >= 70%
+    // 3 个关键词，匹配 3 个 = 100% >= 70%
     expect(matchConstraintOrException("密码不能为空为空", "密码不能为空为空验证")).toBe(true);
   });
 
@@ -508,7 +508,7 @@ describe("BenchmarkRunner", () => {
     writeFileSync(join(casesDir, "case1.md"), "# Case 1", "utf8");
     writeFileSync(join(casesDir, "case2.md"), "# Case 2", "utf8");
     writeFileSync(join(goldDir, "case1.json"), "{}", "utf8");
-    // case2 has no gold label
+    // case2 has no gold label → 不会被发现
 
     const config = new AgentConfig();
     const runner = new BenchmarkRunner(config, casesDir, goldDir, join(tmpDir, "out"));
@@ -654,7 +654,7 @@ describe("EvaluationManager", () => {
     const tmpDir = join(tmpdir(), `eval-merge-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     try {
-      // Access private _mergeRuns via (mgr as any)
+      // 通过 (mgr as any) 访问私有的 _mergeRuns
       const merged = (mgr as any)._mergeRuns(reports, tmpDir);
       expect(merged.totalRuns).toBe(2);
       expect(merged.results).toHaveLength(1);
@@ -712,9 +712,9 @@ describe("EvaluationManager", () => {
     expect(() => mgr.runBenchmark("cases", "gold", "out", 0)).toThrow(/runs must be >= 1/);
   });
 
-  it("runBenchmark records history", () => {
+  it("runBenchmark 记录历史", () => {
     const mgr = makeManager();
-    // The _runSingle stub returns an empty report; that's fine for this test
+    // _runSingle 返回空报告；这对测试来说就足够了
     const tmpDir = join(tmpdir(), `eval-history-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     try {
@@ -728,7 +728,7 @@ describe("EvaluationManager", () => {
 });
 
 // ===========================================================================
-// Test govComputeRunSummary (governance module)
+// 测试 govComputeRunSummary（治理模块）
 // ===========================================================================
 
 describe("govComputeRunSummary", () => {
