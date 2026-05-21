@@ -1,5 +1,11 @@
 /**
- * BaseTool abstract class — session-level prompt caching for tools.
+ * BaseTool — 编排 + 后处理层 (Layer 2)
+ *
+ * 职责：组合多个 Generator 的输出 + 执行后处理逻辑（验证、评分、修复）
+ * 持有 LLMClient 引用用于策略决策（如 orchestrator 的 LLM routing）
+ * 可感知全局状态（通过参数传入）
+ *
+ * 实现类：GenerationTool, EvaluationTool, PlanningTool, RepairTool, AgentOrchestrator
  */
 
 import type { LLMClient } from "../llmClient.js";

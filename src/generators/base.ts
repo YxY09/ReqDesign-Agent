@@ -1,6 +1,11 @@
 /**
- * BaseGenerator — shared base class for all LLM-based generators.
- * Extracts common patterns: prompt loading, sanitization, unwrap, retry, contract formatting.
+ * BaseGenerator — LLM 内容生产层 (Layer 1)
+ *
+ * 职责：加载 prompt 模板 → 调用 LLM → 返回结构化输出
+ * 不涉及：状态管理、多步编排、后处理、评分
+ *
+ * 实现类：SystemDesigner, TestCaseGenerator, RequirementAnalyzer,
+ *         DiagramGenerator, AnalyzeMerger
  */
 
 import type { LLMClient } from "../llmClient.js";
