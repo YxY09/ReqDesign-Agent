@@ -9,6 +9,7 @@
  */
 
 import type { LLMClient } from "../llmClient.js";
+import type { ToolCapabilities } from "./types.js";
 import { buildSystemPrompt } from "../promptBuilder.js";
 import { loadPrompt } from "../promptLoader.js";
 import { setupLogger, type Logger } from "../logger.js";
@@ -35,6 +36,9 @@ export abstract class BaseTool {
 
   /** Agent name (for logging/display). */
   abstract get name(): string;
+
+  /** Tool capabilities declaration. */
+  abstract get capabilities(): ToolCapabilities;
 
   /**
    * Load a prompt template from the unified prompts/ directory.

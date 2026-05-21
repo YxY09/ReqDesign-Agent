@@ -5,6 +5,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "./base.js";
+import type { ToolCapabilities } from "./types.js";
 import {
   type ExecutionPlan,
   type PlanMutation,
@@ -35,6 +36,10 @@ export class PlanningTool extends BaseTool {
 
   get name(): string {
     return "PlanningTool";
+  }
+
+  get capabilities(): ToolCapabilities {
+    return { requiresLlm: true, supportedTaskTypes: ["plan"] };
   }
 
   // ------------------------------------------------------------------

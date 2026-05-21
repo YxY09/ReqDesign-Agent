@@ -6,6 +6,8 @@
 import { performance } from "node:perf_hooks";
 import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "./base.js";
+import type { ToolCapabilities } from "./types.js";
+import { createToolError } from "./types.js";
 import { type Task, type Artifact, createArtifact } from "../agent/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
@@ -31,6 +33,10 @@ export class GenerationTool extends BaseTool {
 
   get name(): string { return "GenerationTool"; }
 
+  get capabilities(): ToolCapabilities {
+    return { requiresLlm: true, supportedTaskTypes: ["analyze", "design", "diagrams", "tests"] };
+  }
+
   // ------------------------------------------------------------------
   // Public API
   // ------------------------------------------------------------------
@@ -42,7 +48,7 @@ export class GenerationTool extends BaseTool {
     try {
       let content = await this._generate(task, context);
       if (content === null || content === undefined) {
-        throw new Error(`生成 ${task.type} 返回空结果`);
+        throw createToolError("GEN_EMPTY", `生成 ${task.type} 返回空结果`, { recoverable: true });
       }
 
 
@@ -105,7 +111,7 @@ export class GenerationTool extends BaseTool {
       case "tests":
         return await this._generateTests(context, hints, desc, injectedPrompt);
       default:
-        throw new Error(`未知任务类型: ${task.type}`);
+        throw createToolError("GEN_UNKNOWN_TYPE", `未知任务类型: ${task.type}`, { recoverable: false });
     }
   }
 
@@ -166,7 +172,7 @@ export class GenerationTool extends BaseTool {
         state_diagram: () => generator.generateStateDiagram(reqJson, designText, systemPrompt, reqText),
       };
       const method = methodMap[diagramKind];
-      if (!method) throw new Error(`未知图表类型: ${diagramKind}`);
+      if (!method) throw createToolError("GEN_UNKNOWN_DIAGRAM", `未知图表类型: ${diagramKind}`, { recoverable: false });
       const result = await method();
       return { [diagramKind]: result };
     }

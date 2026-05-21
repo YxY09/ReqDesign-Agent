@@ -5,6 +5,7 @@
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
+import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
 export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> {
@@ -28,7 +29,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     existingJson?: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     if (!requirementText && !existingJson) {
-      throw new Error("需求文本和已有分析结果不能同时为空");
+      throw createToolError("ANALYZE_EMPTY_INPUT", "需求文本和已有分析结果不能同时为空", { recoverable: false });
     }
 
     let prefix = "";

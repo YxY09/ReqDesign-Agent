@@ -7,6 +7,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
@@ -34,7 +35,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     systemPrompt?: string,
   ): Promise<Record<string, unknown>> {
     if (artifacts.length === 0) {
-      throw new Error("没有可合并的分析结果");
+      throw createToolError("MERGE_NO_RESULTS", "没有可合并的分析结果", { recoverable: false });
     }
 
     // Single artifact: no merge needed, just return it
@@ -59,7 +60,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const result = await this.llm.generateJson(prompt, systemPrompt ?? "");
 
     if (typeof result !== "object" || result === null || Array.isArray(result)) {
-      throw new Error("merge 返回了非字典类型");
+      throw createToolError("MERGE_NON_DICT", "merge 返回了非字典类型", { recoverable: false });
     }
 
     return BaseGenerator.unwrapContent(result);

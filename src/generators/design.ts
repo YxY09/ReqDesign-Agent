@@ -4,6 +4,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
 const GENERIC_SUFFIXES = new Set([
@@ -186,7 +187,7 @@ export class SystemDesigner extends BaseGenerator<string> {
     systemPrompt?: string,
   ): Promise<string> {
     if (!requirementJson || typeof requirementJson !== "object") {
-      throw new Error("需求JSON不能为空且必须是字典类型");
+      throw createToolError("DESIGN_EMPTY_INPUT", "需求JSON不能为空且必须是字典类型", { recoverable: false });
     }
 
     let reqStr = JSON.stringify(requirementJson, null, 2);

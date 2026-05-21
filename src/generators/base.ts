@@ -9,6 +9,7 @@
  */
 
 import type { LLMClient } from "../llmClient.js";
+import { createToolError } from "../tools/types.js";
 
 export abstract class BaseGenerator<TOutput> {
   protected llm: LLMClient;
@@ -75,13 +76,13 @@ export abstract class BaseGenerator<TOutput> {
       try {
         const result = await this.llm.generateJson(prompt, systemPrompt);
         if (typeof result !== "object" || result === null || Array.isArray(result)) {
-          throw new Error(`LLM returned non-dict type: ${typeof result}`);
+          throw createToolError("GEN_NON_DICT", `LLM returned non-dict type: ${typeof result}`, { recoverable: true });
         }
         return result as Record<string, unknown>;
       } catch (e) {
         lastError = e instanceof Error ? e : new Error(String(e));
         if (attempt >= maxRetries) {
-          throw new Error(`Generation failed after ${maxRetries} attempts: ${lastError.message}`);
+          throw createToolError("GEN_FAILED", `Generation failed after ${maxRetries} attempts: ${lastError.message}`, { recoverable: true });
         }
       }
     }

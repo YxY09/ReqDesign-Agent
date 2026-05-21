@@ -6,6 +6,7 @@
 import type { LLMClient } from "../llmClient.js";
 import { SystemDesigner } from "../generators/design.js";
 import { BaseTool } from "./base.js";
+import type { ToolCapabilities } from "./types.js";
 import { ArtifactPatcher, type PatchOp } from "./artifactPatcher.js";
 import type { Task } from "../agent/types.js";
 import { isRecord } from "../utils/isRecord.js";
@@ -16,6 +17,10 @@ export class RepairTool extends BaseTool {
   }
 
   get name(): string { return "RepairTool"; }
+
+  get capabilities(): ToolCapabilities {
+    return { requiresLlm: true, supportedTaskTypes: ["repair"] };
+  }
 
   async repair(
     task: Task,

@@ -5,6 +5,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "../tools/base.js";
+import type { ToolCapabilities } from "../tools/types.js";
 import type { RuntimeAction } from "./types.js";
 import type { WorkflowState } from "../state.js";
 import type { TaskMailbox } from "../messaging.js";
@@ -34,6 +35,10 @@ export class AgentOrchestrator extends BaseTool {
 
   get name(): string {
     return "AgentOrchestrator";
+  }
+
+  get capabilities(): ToolCapabilities {
+    return { requiresLlm: true, supportedTaskTypes: [] };
   }
 
   async decide(

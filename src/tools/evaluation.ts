@@ -5,6 +5,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "./base.js";
+import type { ToolCapabilities } from "./types.js";
 import {
   type Issue, type Task, type Verdict, type Scope,
   createIssue, createTask, createVerdict,
@@ -25,6 +26,10 @@ export class EvaluationTool extends BaseTool {
   }
 
   get name(): string { return "EvaluationTool"; }
+
+  get capabilities(): ToolCapabilities {
+    return { requiresLlm: true, supportedTaskTypes: ["evaluate"] };
+  }
 
   // ------------------------------------------------------------------
   // Public API
