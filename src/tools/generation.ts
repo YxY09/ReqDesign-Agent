@@ -121,7 +121,7 @@ export class GenerationTool extends BaseTool {
   ): Promise<Record<string, unknown>> {
     let text = (ctx.requirement_text as string) ?? "";
     const existingJson = ctx.requirement_json as Record<string, unknown> | undefined;
-    if (!text && !existingJson) throw new Error("缺少 requirement_text 和 requirement_json");
+    if (!text && !existingJson) throw createToolError("GEN_MISSING_INPUT", "缺少 requirement_text 和 requirement_json", { recoverable: false });
 
     if (hints.focus_areas) {
       const focus = (hints.focus_areas as string[]).join(", ");
@@ -141,7 +141,7 @@ export class GenerationTool extends BaseTool {
     desc: string, systemPrompt: string,
   ): Promise<string> {
     const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
-    if (!reqJson) throw new Error("缺少 requirement_json");
+    if (!reqJson) throw createToolError("GEN_MISSING_REQJSON", "缺少 requirement_json", { recoverable: false });
 
     if (this.llm) this.llm.streamTag = "[Generator:design]";
     const requirementText = GenerationTool._augmentRequirementTextForTask(
