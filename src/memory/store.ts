@@ -595,6 +595,32 @@ export class MemoryStore {
           return true; // 已存在，跳过
         }
 
+        // 同类记忆合并：单文件 3+ 条更新时只增计数器，不追加内容
+        const updateBlocks = (existing.match(/^## 更新 /gm) || []).length;
+        const countMatch = existing.match(/<!-- count: (\d+) -->/);
+        if (updateBlocks >= 3) {
+          const currentCount = countMatch ? parseInt(countMatch[1], 10) : updateBlocks + 1;
+          const newCount = currentCount + 1;
+          let updated = existing;
+          if (countMatch) {
+            updated = updated.replace(
+              /<!-- count: \d+ -->/,
+              `<!-- count: ${newCount} -->`,
+            );
+          } else {
+            const fmEnd = updated.indexOf("---\n", 4) + 4;
+            updated = updated.slice(0, fmEnd) +
+              `\n\n<!-- count: ${newCount} -->\n\n此模式已出现 ${newCount} 次，最新：${created}\n` +
+              updated.slice(fmEnd);
+          }
+          updated = updated.replace(
+            /此模式已出现 \d+ 次，最新：.*/m,
+            `此模式已出现 ${newCount} 次，最新：${created}`,
+          );
+          writeFileSync(topicPath, updated.trim() + "\n", { encoding: "utf8" });
+          return true;
+        }
+
         let update = `\n\n---\n\n## 更新 ${created}\n\n`;
         if (marker) {
           update += `${marker}\n\n`;

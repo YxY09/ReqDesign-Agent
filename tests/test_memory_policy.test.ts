@@ -515,6 +515,34 @@ describe("MemoryStore GC", () => {
     }
   });
 
+  it("increments count when same topic has 3+ updates instead of appending", () => {
+    const tmp = makeTmpDir();
+    try {
+      const store = new MemoryStore(tmp);
+      const topic = "fail_pattern_local";
+
+      for (let i = 0; i < 5; i++) {
+        store.save(
+          "evaluator",
+          `blocker pattern attempt ${i}`,
+          "feedback",
+          topic,
+          `key-${i}`,
+        );
+      }
+
+      const path = join(tmp, ".reqdesign-memory", `evaluator_feedback_${topic}.md`);
+      const content = readFileSync(path, "utf-8");
+      expect(content).toContain("<!-- count: 5 -->");
+      expect(content).toContain("此模式已出现 5 次");
+      // 5 次保存：第 1 次创建，第 2-4 次追加更新块，第 5 次合并为计数
+      const updateCount = (content.match(/^## 更新 /gm) || []).length;
+      expect(updateCount).toBeLessThanOrEqual(3);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("prunes oldest files when count exceeds MAX_MEMORY_FILES", () => {
     const tmp = makeTmpDir();
     try {
