@@ -79,11 +79,10 @@ export class BenchmarkRunner {
     try {
       gold = JSON.parse(readFileSync(testCase.goldPath, "utf8")) as Record<string, unknown>;
     } catch (error: unknown) {
-      const result = {
+      const result: BenchmarkCaseResult = {
         case_name: testCase.name,
         status: "error",
         error: `gold label加载失败: ${error instanceof Error ? error.message : String(error)}`,
-        scores: {},
       };
       this.emitEvent("benchmark_case_completed", `case ${testCase.name} failed to load gold labels`, {
         caseName: testCase.name,
@@ -110,56 +109,59 @@ export class BenchmarkRunner {
       });
       const requirementResult = state.requirementJson;
       const diagrams = state.diagrams;
-      const scores: Record<string, number> = {
-        requirement_coverage: scoreRequirementCoverage(
+      const requirementCoverage = scoreRequirementCoverage(
           requirementResult,
           gold,
           this.config.benchmark.entityNameMap,
           this.config.benchmark.functionSynonyms,
-        ),
-        diagram_syntax: scoreDiagramSyntax(diagrams),
-        entity_accuracy: scoreEntityAccuracy(
+        );
+      const diagramSyntax = scoreDiagramSyntax(diagrams);
+      const entityAccuracy = scoreEntityAccuracy(
           requirementResult,
           gold,
           this.config.benchmark.entityNameMap,
-        ),
-        process_completeness: scoreProcessCompleteness(diagrams, gold),
-        state_diagram: scoreStateDiagram(diagrams, gold),
-        consistency: scoreConsistency(
+        );
+      const processCompleteness = scoreProcessCompleteness(diagrams, gold);
+      const stateDiagramScore = scoreStateDiagram(diagrams, gold);
+      const consistency = scoreConsistency(
           requirementResult,
           diagrams,
           this.config.benchmark.entityNameMap,
-        ),
-      };
-      scores.overall = computeOverallScore({
-        requirementCoverage: scores.requirement_coverage,
-        diagramSyntax: scores.diagram_syntax,
-        entityAccuracy: scores.entity_accuracy,
-        processCompleteness: scores.process_completeness,
-        consistency: scores.consistency,
-        stateDiagram: scores.state_diagram,
+        );
+      const overall = computeOverallScore({
+        requirementCoverage,
+        diagramSyntax,
+        entityAccuracy,
+        processCompleteness,
+        consistency,
+        stateDiagram: stateDiagramScore,
       });
-      const result = {
+      const result: BenchmarkCaseResult = {
         case_name: testCase.name,
         status: "success",
-        passed: scores.overall >= 80,
-        scores,
+        passed: overall >= 80,
+        requirement_coverage: requirementCoverage,
+        diagram_syntax: diagramSyntax,
+        entity_accuracy: entityAccuracy,
+        process_completeness: processCompleteness,
+        state_diagram: stateDiagramScore,
+        consistency,
+        overall,
       };
       this.emitEvent("benchmark_case_completed", `case ${testCase.name} completed`, {
         caseName: testCase.name,
         status: result.passed ? "completed" : "failed",
         data: {
-          overall: scores.overall,
+          overall,
           passed: result.passed,
         },
       }, options?.onEvent);
       return result;
     } catch (error: unknown) {
-      const result = {
+      const result: BenchmarkCaseResult = {
         case_name: testCase.name,
         status: "error",
         error: error instanceof Error ? error.message : String(error),
-        scores: {},
       };
       this.emitEvent("benchmark_case_completed", `case ${testCase.name} errored`, {
         caseName: testCase.name,
@@ -271,9 +273,8 @@ export class BenchmarkRunner {
 
     for (const result of results) {
       if (result.status === "success") {
-        const scores = result.scores ?? {};
         lines.push(
-          `| ${result.case_name} | success | ${scores.requirement_coverage ?? 0} | ${scores.diagram_syntax ?? 0} | ${scores.entity_accuracy ?? 0} | ${scores.process_completeness ?? 0} | ${scores.state_diagram ?? 0} | ${scores.consistency ?? 0} | ${scores.overall ?? 0} | ${result.passed ? "是" : "否"} |`,
+          `| ${result.case_name} | success | ${result.requirement_coverage ?? 0} | ${result.diagram_syntax ?? 0} | ${result.entity_accuracy ?? 0} | ${result.process_completeness ?? 0} | ${result.state_diagram ?? 0} | ${result.consistency ?? 0} | ${result.overall ?? 0} | ${result.passed ? "是" : "否"} |`,
         );
       } else {
         lines.push(`| ${result.case_name} | ${result.status} | - | - | - | - | - | - | - | - |`);

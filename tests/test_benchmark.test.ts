@@ -342,8 +342,8 @@ describe("scoreStateDiagram", () => {
 describe("computeRunSummary (scorer)", () => {
   it("all success", () => {
     const results: BenchmarkCaseResult[] = [
-      { case_name: "A", status: "success", passed: true, scores: { overall: 90, requirement_coverage: 95 } },
-      { case_name: "B", status: "success", passed: true, scores: { overall: 85, requirement_coverage: 90 } },
+      { case_name: "A", status: "success", passed: true, overall: 90, requirement_coverage: 95 },
+      { case_name: "B", status: "success", passed: true, overall: 85, requirement_coverage: 90 },
     ];
     const summary = computeRunSummary(results) as Record<string, unknown>;
     expect(summary.passed).toBe(2);
@@ -355,8 +355,8 @@ describe("computeRunSummary (scorer)", () => {
 
   it("mixed results", () => {
     const results: BenchmarkCaseResult[] = [
-      { case_name: "A", status: "success", passed: true, scores: { overall: 90 } },
-      { case_name: "B", status: "success", passed: false, scores: { overall: 60 } },
+      { case_name: "A", status: "success", passed: true, overall: 90 },
+      { case_name: "B", status: "success", passed: false, overall: 60 },
       { case_name: "C", status: "error", error: "timeout" },
     ];
     const summary = computeRunSummary(results) as Record<string, unknown>;
@@ -530,15 +530,13 @@ describe("BenchmarkRunner", () => {
           case_name: "test",
           status: "success",
           passed: true,
-          scores: {
-            requirement_coverage: 100,
-            diagram_syntax: 100,
-            entity_accuracy: 100,
-            process_completeness: 100,
-            state_diagram: 100,
-            consistency: 100,
-            overall: 100,
-          },
+          requirement_coverage: 100,
+          diagram_syntax: 100,
+          entity_accuracy: 100,
+          process_completeness: 100,
+          state_diagram: 100,
+          consistency: 100,
+          overall: 100,
         },
       ],
       summary: { passed: 1, failed: 0, error: 0, avg_scores: { overall: 100 } },
@@ -576,15 +574,13 @@ describe("BenchmarkRunner", () => {
           case_name: "low_score",
           status: "success",
           passed: false,
-          scores: {
-            requirement_coverage: 50,
-            diagram_syntax: 50,
-            entity_accuracy: 50,
-            process_completeness: 50,
-            state_diagram: 50,
-            consistency: 50,
-            overall: 50,
-          },
+          requirement_coverage: 50,
+          diagram_syntax: 50,
+          entity_accuracy: 50,
+          process_completeness: 50,
+          state_diagram: 50,
+          consistency: 50,
+          overall: 50,
         },
       ],
       summary: { passed: 0, failed: 1, error: 0, avg_scores: { overall: 50 } },
