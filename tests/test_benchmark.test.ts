@@ -42,7 +42,7 @@ import { BenchmarkRunner } from "../src/benchmark/runBenchmark.js";
 import {
   EvaluationManager,
   computeRunSummary as govComputeRunSummary,
-} from "./evaluationManager.js";
+} from "./helpers/evaluationManager.js";
 
 // ---------------------------------------------------------------------------
 // Imports from config

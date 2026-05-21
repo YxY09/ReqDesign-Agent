@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RetryManager } from "./retryManager.js";
+import { RetryManager } from "./helpers/retryManager.js";
 
 describe("RetryManager", () => {
   /** Helper: create a RetryManager with zero delay for fast tests. */

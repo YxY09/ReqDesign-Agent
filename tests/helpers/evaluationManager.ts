@@ -9,7 +9,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Logger, setupLogger } from "../src/logger.js";
+import { Logger, setupLogger } from "../../src/logger.js";
 
 // ---------------------------------------------------------------------------
 // Types

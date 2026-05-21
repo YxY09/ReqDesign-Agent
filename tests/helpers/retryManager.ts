@@ -10,7 +10,7 @@
  * - Statistics tracking
  */
 
-import { Logger, setupLogger } from "../src/logger.js";
+import { Logger, setupLogger } from "../../src/logger.js";
 
 // ---------------------------------------------------------------------------
 // Enums
