@@ -144,17 +144,22 @@ const WINDOWS_INPUT_MODE_ENABLE_VT_INPUT = 0x0200;
 const ENABLE_MOUSE_TRACKING = "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h";
 const DISABLE_MOUSE_TRACKING = "\x1b[?1006l\x1b[?1003l\x1b[?1002l\x1b[?1000l";
 
+const NATIVE_CONSOLE_CSHARP = [
+  "$signature = @'",
+  "using System;",
+  "using System.Runtime.InteropServices;",
+  "public static class NativeConsole {",
+  '  [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);',
+  '  [DllImport("kernel32.dll", SetLastError = true)] public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out int lpMode);',
+  '  [DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetConsoleMode(IntPtr hConsoleHandle, int dwMode);',
+  "}",
+  "'@",
+  "Add-Type -TypeDefinition $signature | Out-Null",
+];
+
 function setWindowsConsoleMode(mode: number): void {
   const script = [
-    "$signature = @'",
-    "using System;",
-    "using System.Runtime.InteropServices;",
-    "public static class NativeConsole {",
-    "  [DllImport(\"kernel32.dll\", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);",
-    "  [DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool SetConsoleMode(IntPtr hConsoleHandle, int dwMode);",
-    "}",
-    "'@",
-    "Add-Type -TypeDefinition $signature | Out-Null",
+    ...NATIVE_CONSOLE_CSHARP,
     "$handle = [NativeConsole]::GetStdHandle(-10)",
     `if (-not [NativeConsole]::SetConsoleMode($handle, ${mode})) { exit 1 }`,
   ].join("\n");
@@ -167,16 +172,7 @@ function configureWindowsVirtualTerminalInput(): number | null {
   if (process.platform !== "win32") return null;
 
   const script = [
-    "$signature = @'",
-    "using System;",
-    "using System.Runtime.InteropServices;",
-    "public static class NativeConsole {",
-    "  [DllImport(\"kernel32.dll\", SetLastError = true)] public static extern IntPtr GetStdHandle(int nStdHandle);",
-    "  [DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out int lpMode);",
-    "  [DllImport(\"kernel32.dll\", SetLastError = true)] public static extern bool SetConsoleMode(IntPtr hConsoleHandle, int dwMode);",
-    "}",
-    "'@",
-    "Add-Type -TypeDefinition $signature | Out-Null",
+    ...NATIVE_CONSOLE_CSHARP,
     "$handle = [NativeConsole]::GetStdHandle(-10)",
     "$mode = 0",
     "if (-not [NativeConsole]::GetConsoleMode($handle, [ref]$mode)) { exit 1 }",

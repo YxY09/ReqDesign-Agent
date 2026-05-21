@@ -11,6 +11,13 @@ import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
 import { TestCaseGenerator } from "../generators/tests.js";
+import {
+  requiresRefundFlow,
+  hasConstraint,
+  missingConcepts,
+  REFUND_FLOW_CONCEPTS,
+  REFUND_TEST_CONCEPTS,
+} from "../shared/requirementChecks.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -305,21 +312,15 @@ export class GenerationTool extends BaseTool {
     requirementJson: Record<string, unknown>,
   ): string[] {
     const issues: string[] = [];
-    if (GenerationTool._requiresRefundFlow(requirementJson)) {
-      const missing = GenerationTool._missingConcepts(text, [
-        ["申请退款/退货", /(申请.*(退款|退货))|refund/i],
-        ["商家审核", /商家.*审核|审核.*(通过|拒绝)/],
-        ["填写退货物流", /(物流|运单|快递).*(填写|录入|提交)|(填写|录入|提交).*(物流|运单|快递)/],
-        ["仓库验收", /仓库.*验收|验收.*(通过|失败)/],
-        ["退款到账", /退款.*(到账|成功|原路|返回)|(到账|原路返回)/],
-      ]);
+    if (requiresRefundFlow(requirementJson)) {
+      const missing = missingConcepts(text, REFUND_FLOW_CONCEPTS);
       if (missing.length > 0) {
         issues.push(`activity_diagram 未完整覆盖退货退款流程，缺少: ${missing.join(", ")}`);
       }
     }
 
-    if (GenerationTool._hasConstraint(requirementJson, "C001")) {
-      const missing = GenerationTool._missingConcepts(text, [
+    if (hasConstraint(requirementJson, "C001")) {
+      const missing = missingConcepts(text, [
         ["订单总数量<=99", /(总数量|商品数量|件数).*(99|上限)|(99).*(件|数量)/],
         ["订单金额<=99999", /(金额|实付|总价).*(99999|上限)|(99999).*(元|金额)/],
         ["单商品数量<=10", /(单商品|同一商品|单个商品|限购).*(10|上限)|(10).*(件|限购)/],
@@ -336,44 +337,11 @@ export class GenerationTool extends BaseTool {
     text: string,
     requirementJson: Record<string, unknown>,
   ): string[] {
-    if (!GenerationTool._requiresRefundFlow(requirementJson)) return [];
-    const missing = GenerationTool._missingConcepts(text, [
-      ["申请退款/退货", /(申请.*(退款|退货))|refund/i],
-      ["商家审核通过", /商家.*审核.*(通过|同意)|(通过|同意).*退款/],
-      ["填写物流单号", /(物流单号|退货物流|快递单号|运单号)/],
-      ["仓库验收", /仓库.*验收|验收.*(通过|成功)/],
-      ["退款到账", /退款.*(到账|成功|原路返回|72)/],
-    ]);
+    if (!requiresRefundFlow(requirementJson)) return [];
+    const missing = missingConcepts(text, REFUND_TEST_CONCEPTS);
     return missing.length > 0
       ? [`测试用例未覆盖完整退货退款正常流程，缺少: ${missing.join(", ")}`]
       : [];
-  }
-
-  private static _requiresRefundFlow(requirementJson: Record<string, unknown>): boolean {
-    const functions = Array.isArray(requirementJson.functions)
-      ? requirementJson.functions as Array<Record<string, unknown>>
-      : [];
-    return functions.some((item) =>
-      /退款|退货|售后|refund|return/i.test(
-        `${String(item.name ?? "")} ${String(item.description ?? "")}`,
-      ),
-    );
-  }
-
-  private static _hasConstraint(requirementJson: Record<string, unknown>, id: string): boolean {
-    const constraints = Array.isArray(requirementJson.constraints)
-      ? requirementJson.constraints as Array<Record<string, unknown>>
-      : [];
-    return constraints.some((item) => String(item.id ?? "").trim() === id);
-  }
-
-  private static _missingConcepts(
-    text: string,
-    concepts: Array<[string, RegExp]>,
-  ): string[] {
-    return concepts
-      .filter(([, pattern]) => !pattern.test(text))
-      .map(([label]) => label);
   }
 
   // ------------------------------------------------------------------
