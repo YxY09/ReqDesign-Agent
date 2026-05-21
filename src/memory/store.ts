@@ -4,7 +4,7 @@
  * MemoryStore 负责：
  * - 保存记忆（写入主题文件 + 更新索引）
  * - 加载记忆（索引扫描 + frontmatter 解析）
- * - 相关性检索（确定性加权匹配，无 LLM）
+ * - 相关性检索（LLM 候选筛选 + 确定性 fallback）
  * - 提示注入（将记忆追加到系统提示词）
  *
  * 源自 reqdesign/memory/store.py。
@@ -13,6 +13,7 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
 import { Logger, setupLogger } from "../logger.js";
+import type { LLMClient } from "../llmClient.js";
 import {
   MEMORY_DIR_NAME,
   MEMORY_INDEX_NAME,
@@ -51,10 +52,15 @@ export class MemoryStore {
   readonly memoryDir: string;
   private _indexCache: string | null = null;
   private readonly _logger: Logger;
+  private readonly _llm: Pick<LLMClient, "generateJson"> | null;
 
-  constructor(projectRoot: string = process.cwd()) {
+  constructor(
+    projectRoot: string = process.cwd(),
+    llm: Pick<LLMClient, "generateJson"> | null = null,
+  ) {
     this.projectRoot = resolve(projectRoot);
     this.memoryDir = join(this.projectRoot, MEMORY_DIR_NAME);
+    this._llm = llm;
     this._logger = setupLogger("reqdesign.memory");
     this._ensureDir();
     this.pruneOldFiles();
@@ -247,8 +253,7 @@ export class MemoryStore {
   /**
    * 查找与查询相关的记忆。
    *
-   * 使用确定性加权匹配而非基于 LLM 的选择，
-   * 以保持 TypeScript 版本自包含。
+   * 使用确定性加权匹配，作为无 LLM 时的稳定 fallback。
    */
   findRelevant(
     query: string,
@@ -296,6 +301,32 @@ export class MemoryStore {
     return candidates.slice(0, maxCount).map((s) => s.entry);
   }
 
+  /**
+   * 先用确定性检索收集候选，再让 LLM 选择与当前上下文最相关的记忆。
+   *
+   * LLM 失败、未配置或返回无效结果时，自动退回确定性排序，避免记忆系统
+   * 影响主工作流稳定性。
+   */
+  async findRelevantWithLlm(
+    query: string,
+    agentType = "",
+    maxCount: number = MAX_RELEVANT_MEMORIES,
+  ): Promise<MemoryEntry[]> {
+    const candidateLimit = Math.max(maxCount * 3, 10);
+    const candidates = this.findRelevant(query, agentType, candidateLimit);
+    if (!this._llm || !query.trim() || candidates.length <= maxCount) {
+      return candidates.slice(0, maxCount);
+    }
+
+    const selected = await this._selectRelevantWithLlm(
+      query,
+      agentType,
+      candidates,
+      maxCount,
+    );
+    return selected.length > 0 ? selected : candidates.slice(0, maxCount);
+  }
+
   // ================================================================
   // 提示注入
   // ================================================================
@@ -303,11 +334,11 @@ export class MemoryStore {
   /**
    * 将相关记忆追加到基础提示词。
    */
-  appendToPrompt(
+  async appendToPrompt(
     agentType: string,
     basePrompt: string,
     queryContext = "",
-  ): string {
+  ): Promise<string> {
     const typeLabels: Record<string, string> = {
       planner: "规划经验",
       generator: "生成模式",
@@ -317,7 +348,7 @@ export class MemoryStore {
     const label = typeLabels[agentType] ?? "Agent 记忆";
 
     if (queryContext) {
-      const relevant = this.findRelevant(queryContext, agentType);
+      const relevant = await this.findRelevantWithLlm(queryContext, agentType);
       if (relevant.length > 0) {
         const memoryText = formatRelevantMemories(relevant, label);
         return `${basePrompt}\n\n---\n\n## Agent 记忆（${label}）\n\n${memoryText}`;
@@ -363,6 +394,88 @@ export class MemoryStore {
       /\btimeout\b/,
     ];
     return blockedPatterns.some((pattern) => pattern.test(text));
+  }
+
+  private async _selectRelevantWithLlm(
+    query: string,
+    agentType: string,
+    candidates: MemoryEntry[],
+    maxCount: number,
+  ): Promise<MemoryEntry[]> {
+    const candidatePayload = candidates.map((entry, index) => ({
+      index,
+      filename: entry.filename,
+      type: entry.memType,
+      description: entry.description,
+      last_modified: entry.lastModified,
+      excerpt: MemoryStore._memoryExcerpt(entry.content),
+    }));
+
+    const prompt = [
+      "Select only the memories that are strongly relevant to the current task context.",
+      "Prefer durable project/user/feedback lessons that directly affect the next action.",
+      "Reject memories that are merely recent, generic, or about a different task.",
+      `Agent type: ${agentType || "unknown"}`,
+      `Maximum selections: ${maxCount}`,
+      "",
+      "Current task context:",
+      query.slice(0, 6000),
+      "",
+      "Candidate memories:",
+      "```json",
+      JSON.stringify(candidatePayload, null, 2),
+      "```",
+      "",
+      "Return JSON only: {\"selected_filenames\":[\"file.md\"],\"reason\":\"short rationale\"}.",
+    ].join("\n");
+
+    try {
+      const response = await this._llm!.generateJson(
+        prompt,
+        "You are a retrieval ranker for an agent memory system. Select precise, high-signal memories only.",
+      );
+      const raw =
+        response.selected_filenames ??
+        response.filenames ??
+        response.selected ??
+        [];
+      if (!Array.isArray(raw)) return [];
+
+      const allowed = new Map(candidates.map((entry) => [entry.filename, entry]));
+      const selected: MemoryEntry[] = [];
+      const seen = new Set<string>();
+      for (const item of raw) {
+        const filename = String(item).trim();
+        const entry = allowed.get(filename);
+        if (!entry || seen.has(filename)) continue;
+        seen.add(filename);
+        selected.push(entry);
+        if (selected.length >= maxCount) break;
+      }
+      return selected;
+    } catch (error: unknown) {
+      this._logger.debug(
+        `LLM 记忆筛选失败，回退到确定性检索: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return [];
+    }
+  }
+
+  private static _memoryExcerpt(content: string): string {
+    return content
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) =>
+        line &&
+        line !== "---" &&
+        !line.startsWith("created:") &&
+        !line.startsWith("updated:") &&
+        !line.startsWith("status:"),
+      )
+      .join("\n")
+      .slice(0, 1200);
   }
 
   private _ensureDir(): void {

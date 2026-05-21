@@ -4,7 +4,7 @@ import type { AgentConfig } from "./config.js";
 import { ConstitutionLoader, setConstitution } from "./constitution.js";
 import { WorkerFactory } from "./execution/factory.js";
 import { SessionBackend } from "./execution/backend.js";
-import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
+import { LLMClient, type LlmCallInfo, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
 import { isRecord } from "./utils/isRecord.js";
 import { OutputScorer } from "../evaluate/scorer.js";
@@ -28,7 +28,7 @@ import { BudgetManager } from "./orchestration/budget.js";
 import { RunManager } from "./orchestration/runManager.js";
 import { RunSummaryBuilder } from "./orchestration/runManager.js";
 import { OutputManager } from "./outputManager.js";
-import { SessionContext, SessionRegistry, type WorkerSession } from "./session.js";
+import { SessionContext, SessionRegistry } from "./session.js";
 import { WorkflowState } from "./state.js";
 import { AgentOrchestrator } from "./orchestration/orchestrator.js";
 import { EvaluationTool } from "./tools/evaluation.js";
@@ -48,7 +48,7 @@ import {
   type WorkerKind,
 } from "./shared/types.js";
 import { InputLoader } from "./inputLoader.js";
-import { TraceLogger, TracingLLMClient } from "./traceLogger.js";
+import { TraceLogger } from "./traceLogger.js";
 import {
   createWorkflowEvent,
   type WorkflowEvent,
@@ -162,8 +162,8 @@ export class MultiAgentRuntime {
     this.config = config;
     this.logger = setupLogger("reqdesign.runtime", config.logging.level);
     this.trace = new TraceLogger();
-    const rawLlm = new LLMClient(config);
-    this.llm = new TracingLLMClient(rawLlm, this.trace);
+    this.llm = new LLMClient(config);
+    this.llm.setTraceSink((info) => this.recordLlmTrace(info));
 
     const projectRoot = resolve(process.cwd());
     const constitution = new ConstitutionLoader([
@@ -172,7 +172,7 @@ export class MultiAgentRuntime {
     ]);
     setConstitution(constitution);
 
-    this.memoryStore = new MemoryStore(projectRoot);
+    this.memoryStore = new MemoryStore(projectRoot, this.llm);
     setMemory(this.memoryStore);
 
     this.mailbox = new TaskMailbox();
@@ -668,6 +668,9 @@ export class MultiAgentRuntime {
       severity: i.severity,
       description: `${i.description} (task: ${i.targetTaskId}, field: ${i.targetField})`,
     })) ?? [];
+    const artifactSnapshots = evaluateScope.length > 0
+      ? state.artifactSnapshots(evaluateScope)
+      : state.finalArtifactSnapshots();
     const context = new SessionContext({
       taskId: "evaluator",
       taskType: "evaluator",
@@ -679,9 +682,7 @@ export class MultiAgentRuntime {
       diagrams: state.diagrams,
       testCases: state.testCases,
       artifactSummary: state.artifactSummary(),
-      artifactSnapshots: state.artifactSnapshots(
-        evaluateScope.length > 0 ? evaluateScope : undefined,
-      ),
+      artifactSnapshots,
       isDirectMode: state.isDirectMode,
       evaluateScope: [...evaluateScope],
       previousIssues,
@@ -790,7 +791,11 @@ export class MultiAgentRuntime {
     if (prevSession) {
       const descriptor = prevSession.exportDescriptor();
       const lastArtifact = descriptor.intermediateState?.last_artifact;
-      if (lastArtifact?.content !== undefined && lastArtifact?.content !== null) {
+      if (
+        isRecord(lastArtifact) &&
+        lastArtifact.content !== undefined &&
+        lastArtifact.content !== null
+      ) {
         context.hints.previous_artifact_content = lastArtifact.content;
         context.hints.previous_artifact_type = lastArtifact.type;
       }
@@ -1065,6 +1070,7 @@ export class MultiAgentRuntime {
         state.requirementText ?? "",
       );
       state.setRequirementJson(RequirementNormalizer.normalize(merged));
+      RequirementNormalizer.normalizeAgainstSource(merged, state.requirementText ?? "");
 
       // 将合并结果持久化到磁盘
       const outputManager = new (this.outputManagerClass)(state.outputDir);
@@ -1358,13 +1364,14 @@ export class MultiAgentRuntime {
   }
 
   private emitLlmChunk(event: LlmStreamEvent): void {
+    const context = this.streamContextForTag(event.tag);
     if (event.kind === "start") {
       this.emitRuntimeEvent("llm_started", this.llmEventMessage(event), {
         scope: "llm",
-        phase: this.activeStreamContext?.workerType,
-        taskId: this.activeStreamContext?.taskId,
-        taskType: this.activeStreamContext?.taskType,
-        sessionId: this.activeStreamContext?.sessionId,
+        phase: context?.workerType,
+        taskId: context?.taskId,
+        taskType: context?.taskType,
+        sessionId: context?.sessionId,
         status: "running",
         tag: event.tag,
         data: {
@@ -1383,10 +1390,10 @@ export class MultiAgentRuntime {
     if (event.kind === "end") {
       this.emitRuntimeEvent("llm_completed", this.llmEventMessage(event), {
         scope: "llm",
-        phase: this.activeStreamContext?.workerType,
-        taskId: this.activeStreamContext?.taskId,
-        taskType: this.activeStreamContext?.taskType,
-        sessionId: this.activeStreamContext?.sessionId,
+        phase: context?.workerType,
+        taskId: context?.taskId,
+        taskType: context?.taskType,
+        sessionId: context?.sessionId,
         status: event.text ? "error" : "completed",
         tag: event.tag,
         data: {
@@ -1404,10 +1411,10 @@ export class MultiAgentRuntime {
 
     this.emitRuntimeEvent("llm_chunk", event.text ?? "", {
       scope: "llm",
-      phase: this.activeStreamContext?.workerType,
-      taskId: this.activeStreamContext?.taskId,
-      taskType: this.activeStreamContext?.taskType,
-      sessionId: this.activeStreamContext?.sessionId,
+      phase: context?.workerType,
+      taskId: context?.taskId,
+      taskType: context?.taskType,
+      sessionId: context?.sessionId,
       status: "running",
       tag: event.tag,
       chunk: event.text ?? "",
@@ -1418,11 +1425,29 @@ export class MultiAgentRuntime {
     });
   }
 
+  private recordLlmTrace(info: LlmCallInfo): void {
+    this.trace.log("llm", "llm_call", {
+      tag: info.tag,
+      provider: info.provider,
+      model: info.model,
+      duration_ms: info.durationMs,
+      input_messages: info.inputMessageCount,
+      input_chars: info.inputChars,
+      prompt_preview: info.promptPreview,
+      response_chars: info.responseChars,
+      response_text: info.responseText,
+      prompt_tokens: info.promptTokens,
+      completion_tokens: info.completionTokens,
+      total_tokens: info.totalTokens,
+    });
+  }
+
   private llmEventMessage(event: LlmStreamEvent): string {
+    const contextForTag = this.streamContextForTag(event.tag);
     const context = [
-      this.activeStreamContext?.workerType,
-      this.activeStreamContext?.taskId,
-      this.activeStreamContext?.taskType,
+      contextForTag?.workerType,
+      contextForTag?.taskId,
+      contextForTag?.taskType,
     ]
       .filter(Boolean)
       .join(" / ");
@@ -1448,6 +1473,27 @@ export class MultiAgentRuntime {
     ]
       .filter(Boolean)
       .join(" | ");
+  }
+
+  private streamContextForTag(tag: string): {
+    workerType: WorkerKind;
+    taskId: string;
+    taskType: string;
+    sessionId: string;
+  } | null {
+    const sessionId = tag.match(/\bsession=([^;\s]+)/)?.[1];
+    if (sessionId) {
+      const inflight = this.inflight.get(sessionId);
+      if (inflight) {
+        return {
+          workerType: inflight.workerType,
+          taskId: inflight.taskId,
+          taskType: tag.match(/\btype=([^;\s]+)/)?.[1] ?? "",
+          sessionId,
+        };
+      }
+    }
+    return this.activeStreamContext;
   }
 
   private emitRuntimeEvent(

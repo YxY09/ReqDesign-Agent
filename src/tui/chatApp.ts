@@ -90,7 +90,7 @@ type ConversationDecision =
   | { action: "chat" }
   | { action: "respond"; title: string; content: string }
   | { action: "ask_clarification"; filePath: string; message: string }
-  | { action: "run_workflow"; goal: "analyze" | "design"; input: string; output?: string; reason: string };
+  | { action: "run_workflow"; goal: "design"; input: string; output?: string; reason: string };
 
 interface WorkflowMemory {
   goal: string;
@@ -783,7 +783,7 @@ export class TerminalChatApp {
     this.enterScreen();
     this.pushMessage("system", "ReqDesign Chat", [
       "交互模式已启动。",
-      "普通输入走对话模型；/design /analyze /benchmark 会把本地流程实时流式输出到左侧会话区。",
+      "普通输入走对话模型；/design /benchmark 会把本地流程实时流式输出到左侧会话区。",
       "支持 Ctrl+R 搜索记录、Up/Down 输入历史、右侧状态面板实时查看任务进度。",
     ].join("\n"));
     this.render();
@@ -1267,10 +1267,9 @@ export class TerminalChatApp {
         `我检测到本地文件路径：${filePath}`,
         "",
         "你想让我怎么处理它？",
-        "1. /analyze 只做需求分析，产出结构化需求和 Markdown 摘要。",
-        "2. /design 做完整设计流程，包含需求分析、系统设计、Mermaid 图和测试用例。",
+        "1. /design 做完整设计流程，包含需求分析、系统设计、Mermaid 图和测试用例。",
         "",
-        "回复 1 或 analyze 运行需求分析；回复 2 或 design 运行完整设计。",
+        "回复 1 或 design 运行完整设计。",
       ].join("\n"),
     };
   }
@@ -1282,12 +1281,12 @@ export class TerminalChatApp {
       "Return JSON only, no Markdown.",
       "",
       "Allowed JSON shape:",
-      '{"action":"chat"|"ask_clarification"|"run_workflow","goal":"analyze"|"design"|null,"question":string,"reason":string}',
+      '{"action":"chat"|"ask_clarification"|"run_workflow","goal":"design"|null,"question":string,"reason":string}',
       "",
       "Policy:",
       "- Never run a workflow from a bare file path alone.",
-      "- Run analyze only when the user explicitly asks for analysis, extraction, requirements, or structure.",
       "- Run design only when the user explicitly asks for design, architecture, diagrams, drawing, tests, or a full workflow.",
+      "- Standalone analysis/extraction/requirements-structure workflows are disabled; ask the user to run design if they want the full workflow.",
       "- If unclear, ask a concise clarification question.",
       "- The local file exists and is safe to reference.",
       "",
@@ -1305,7 +1304,7 @@ export class TerminalChatApp {
       ]);
       const parsed = this.parseCoordinatorDecision(raw);
       if (!parsed) return this.fallbackFileDecision(input, filePath);
-      if (parsed.action === "run_workflow" && (parsed.goal === "analyze" || parsed.goal === "design")) {
+      if (parsed.action === "run_workflow" && parsed.goal === "design") {
         return {
           action: "run_workflow",
           goal: parsed.goal,
@@ -1316,7 +1315,7 @@ export class TerminalChatApp {
       }
       if (parsed.action === "ask_clarification") {
         const fallback = this.fallbackFileDecision(input, filePath);
-        const fallbackMessage = fallback.action === "ask_clarification" ? fallback.message : "请选择 analyze 或 design。";
+        const fallbackMessage = fallback.action === "ask_clarification" ? fallback.message : "请选择 design。";
         return {
           action: "ask_clarification",
           filePath,
@@ -1347,15 +1346,13 @@ export class TerminalChatApp {
   private resolvePendingFileChoice(input: string): ConversationDecision | null {
     if (!this.pendingFilePath) return null;
     const normalized = input.trim().toLowerCase();
-    const wantsAnalyze = /^(1|a|analyze|分析|需求分析)$/.test(normalized);
-    const wantsDesign = /^(2|d|design|设计|画图|生成图|完整设计)$/.test(normalized);
+    const wantsAnalyze = /^(a|analyze|分析|需求分析)$/.test(normalized);
+    const wantsDesign = /^(1|d|design|设计|画图|生成图|完整设计)$/.test(normalized);
     if (wantsAnalyze) {
       return {
-        action: "run_workflow",
-        goal: "analyze",
-        input: this.pendingFilePath,
-        output: "outputs/analyze",
-        reason: "user selected analyze for pending file",
+        action: "respond",
+        title: "Analyze Is Internal",
+        content: "analyze 现在只作为完整设计流程的内部需求结构化阶段，不再作为单独工作流入口。请使用 /design 运行完整流程。",
       };
     }
     if (wantsDesign) {
@@ -1381,11 +1378,10 @@ export class TerminalChatApp {
     return action?.decision ?? null;
   }
 
-  private detectExplicitWorkflowGoal(input: string, filePath: string): "analyze" | "design" | null {
+  private detectExplicitWorkflowGoal(input: string, filePath: string): "design" | null {
     // 仅从显式关键词检测意图。裸露的路径不应启动
     // 工作流，因为用户可能想先询问选项。
-    const analyzeKeywords = /分析|analyze|解析|提取|extract|requirement|需求|结构/i;
-    const designKeywords = /设计|design|架构|architecture|生成|generate|系统|system/i;
+    const designKeywords = /设计|design|架构|architecture|生成|generate|系统|system|画图|diagram|测试|test|完整流程|full workflow/i;
 
     const lower = input.toLowerCase();
     const intentText = lower.replace(filePath.toLowerCase(), "");
@@ -1393,10 +1389,6 @@ export class TerminalChatApp {
     if (designKeywords.test(intentText)) {
       return "design";
     }
-    if (analyzeKeywords.test(intentText)) {
-      return "analyze";
-    }
-
     return null;
   }
 
@@ -1438,13 +1430,13 @@ export class TerminalChatApp {
       "You are ReqDesign-Agent, a multi-agent LLM system for requirements-driven software design, running inside a terminal chat UI.",
       "",
       "## Auto-Detection",
-      "When the user provides a file path plus explicit intent keywords (e.g. 分析, 设计, analyze, design), the terminal UI may run the matching workflow command before this chat prompt is used.",
-      "A bare file path should not be treated as implicit permission to analyze or design. Ask what the user wants to do, or suggest explicit /analyze and /design commands.",
+      "When the user provides a file path plus explicit design intent keywords (e.g. 设计, architecture, diagram, test, full workflow), the terminal UI may run the design workflow before this chat prompt is used.",
+      "A bare file path should not be treated as implicit permission to run design. Ask what the user wants to do, or suggest the explicit /design command.",
       "",
       "## Your Role",
       "- Answer questions about software design, architecture, requirements engineering directly.",
       "- When discussing a specific file, do not assume a workflow has already launched unless the transcript shows a workflow event.",
-      "- If the user asks about your capabilities, mention /design, /analyze, /benchmark commands.",
+      "- If the user asks about your capabilities, mention /design and /benchmark commands. Analyze is an internal stage of /design.",
       "- Be concise, technical, and action-oriented.",
       "- Respond in the same language the user uses (Chinese -> Chinese, English -> English).",
       "- Do not use emoji, icons, pictographs, decorative symbols, or icon-like bullets in replies. Use plain text and standard Markdown only.",
@@ -1489,7 +1481,6 @@ export class TerminalChatApp {
         "/clear",
         "/search <keyword>",
         "/design <file> [outputDir]",
-        "/analyze <file> [outputDir]",
         "/benchmark [casesDir] [outputDir]",
         "/cancel",
         "/quit",
@@ -1522,7 +1513,11 @@ export class TerminalChatApp {
       this.requestCancelWorkflow("cancelled by /cancel");
       return;
     }
-    if (command === "/design" || command === "/analyze") {
+    if (command === "/analyze") {
+      this.pushMessage("error", "Command Error", "/analyze 已关闭；需求分析现在是 /design 的内部阶段。");
+      return;
+    }
+    if (command === "/design") {
       if (args.length < 1) {
         this.pushMessage("error", "Command Error", `${command} 需要文件路径参数。`);
         return;

@@ -22,6 +22,15 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     );
   }
 
+  async generate(
+    requirementText: string,
+    maxRetries = 3,
+    systemPrompt?: string,
+    existingJson?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return this.analyze(requirementText, maxRetries, systemPrompt, existingJson);
+  }
+
   async analyze(
     requirementText: string,
     maxRetries = 3,
@@ -45,6 +54,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     result = BaseGenerator.unwrapContent(result);
     result = RequirementAnalyzer._normalizeResult(result);
     result = RequirementNormalizer.normalize(result);
+    result = RequirementNormalizer.normalizeAgainstSource(result, requirementText);
 
     return result;
   }

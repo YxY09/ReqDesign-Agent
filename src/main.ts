@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { existsSync } from "node:fs";
-import { AgentConfig } from "./config.js";
+import { AgentConfig, VALID_PROVIDERS } from "./config.js";
 import { setConsoleLoggingEnabled, setupLogger, closeSharedLog, writeToSharedLog } from "./logger.js";
 import { MultiAgentRuntime } from "./runtime.js";
 import { BenchmarkRunner } from "./benchmark/runBenchmark.js";
@@ -25,7 +25,12 @@ function loadConfig(args: CommonCliArgs): { config: AgentConfig; logger: ReturnT
     : new AgentConfig();
 
   if (args.model) config.llm.model = args.model;
-  if (args.provider) config.llm.provider = args.provider;
+  if (args.provider) {
+    if (!(VALID_PROVIDERS as readonly string[]).includes(args.provider)) {
+      throw new Error(`unsupported provider: ${args.provider}`);
+    }
+    config.llm.provider = args.provider as (typeof VALID_PROVIDERS)[number];
+  }
   if (args.maxRetry) config.retry.maxRetries = Number(args.maxRetry);
 
   const errors = config.validate();
@@ -75,7 +80,7 @@ async function main(): Promise<void> {
   program
     .name("reqdesign")
     .description("ReqDesign-Agent: an LLM-based requirements analysis and system design assistant")
-    .option("--goal <goal>", "Task goal: analyze or design", "design")
+    .option("--goal <goal>", "Task goal: design (analyze is internal only)", "design")
     .requiredOption("-i, --input <path>", "Input requirement document path")
     .option("-o, --output <path>", "Output directory", "outputs/")
     .option("-c, --config <path>", "Config file path", "config.yaml")
@@ -99,6 +104,10 @@ async function main(): Promise<void> {
     benchmark: boolean;
     executionBackend: string;
   } & CommonCliArgs>();
+
+  if (args.goal !== "design") {
+    throw new Error(`unsupported goal: ${args.goal}. Public CLI runs only design; analyze is an internal workflow stage.`);
+  }
 
   const { config } = loadConfig(args);
 

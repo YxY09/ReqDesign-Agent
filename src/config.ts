@@ -118,6 +118,7 @@ export const VALID_LOG_LEVELS = [
   "ERROR",
   "CRITICAL",
 ] as const;
+type LogLevel = (typeof VALID_LOG_LEVELS)[number];
 
 // ---------------------------------------------------------------------------
 // .env 加载器
@@ -363,7 +364,7 @@ export class AgentConfig {
       errors.push("logging.level must be a string");
     } else {
       const upper = this.logging.level.toUpperCase();
-      if (!(VALID_LOG_LEVELS as readonly string[]).includes(upper)) {
+      if (!isLogLevel(upper)) {
         errors.push(
           `logging.level '${this.logging.level}' is not supported. Valid: ${VALID_LOG_LEVELS.join(", ")}`,
         );
@@ -395,6 +396,7 @@ export class AgentConfig {
       anthropic: "ANTHROPIC_AUTH_TOKEN",
       deepseek: "DEEPSEEK_API_KEY",
       qwen: "QWEN_API_KEY",
+      minimax: "MINIMAX_API_KEY",
     };
 
     const providerKey = envMap[this.llm.provider];
@@ -421,11 +423,16 @@ export class AgentConfig {
       anthropic: "ANTHROPIC_BASE_URL",
       deepseek: "DEEPSEEK_BASE_URL",
       qwen: "QWEN_BASE_URL",
+      minimax: "MINIMAX_BASE_URL",
     };
 
     const envName = envMap[this.llm.provider];
     return envName ? (process.env[envName] ?? "") : "";
   }
+}
+
+function isLogLevel(value: string): value is LogLevel {
+  return (VALID_LOG_LEVELS as readonly string[]).includes(value);
 }
 
 

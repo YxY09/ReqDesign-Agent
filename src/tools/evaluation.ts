@@ -240,6 +240,7 @@ export class EvaluationTool extends BaseTool {
 
       issue.targetTaskId = taskId;
       issue.targetTaskType = String(snapshot.type ?? "");
+      EvaluationTool._mapSyntheticFinalIssueToSource(issue, snapshot);
 
       const allowedFields = this._allowedSnapshotFields(snapshot);
       const field = issue.targetField.trim();
@@ -250,6 +251,90 @@ export class EvaluationTool extends BaseTool {
       filtered.push(issue);
     }
     return filtered;
+  }
+
+  private static _mapSyntheticFinalIssueToSource(
+    issue: Issue,
+    snapshot: Record<string, unknown>,
+  ): void {
+    const taskId = issue.targetTaskId;
+    if (!taskId.endsWith("-final")) return;
+
+    const sourceTaskIds = Array.isArray(snapshot.sourceTaskIds)
+      ? snapshot.sourceTaskIds.map((item) => String(item)).filter(Boolean)
+      : [];
+    const sourceRevisions = snapshot.sourceRevisions;
+    const sourceFromRevisions = sourceRevisions && typeof sourceRevisions === "object" && !Array.isArray(sourceRevisions)
+      ? Object.keys(sourceRevisions as Record<string, unknown>)
+      : [];
+
+    const sources = sourceTaskIds.length > 0 ? sourceTaskIds : sourceFromRevisions;
+    if (sources.length === 0) return;
+
+    if (taskId === "diagrams-final") {
+      const field = issue.targetField;
+      const wanted = field.includes("class") ? "class" : field.includes("activity") ? "activity" : field.includes("state") ? "state" : "";
+      const matched = wanted
+        ? sources.find((source) => source.toLowerCase().includes(wanted) || source.includes("类图") || source.includes("活动") || source.includes("状态"))
+        : "";
+      issue.targetTaskId = matched || sources[0];
+      return;
+    }
+
+    if (taskId === "analyze-final") {
+      // Try to match the issue to the correct analyze shard by inspecting
+      // entity names or function IDs in the issue description
+      const desc = issue.description ?? "";
+      const shardContent = snapshot.content;
+      if (sources.length > 1 && typeof shardContent === "object" && shardContent !== null) {
+        // Extract entity names / function IDs from issue description
+        const entityRe = /\b([A-Z][a-zA-Z0-9]+)\b/g;
+        const fnIdRe = /\b(F\d{1,4})\b/g;
+        const mentionedEntities = new Set<string>();
+        const mentionedFnIds = new Set<string>();
+        let m: RegExpExecArray | null;
+        while ((m = entityRe.exec(desc)) !== null) mentionedEntities.add(m[1]);
+        while ((m = fnIdRe.exec(desc)) !== null) mentionedFnIds.add(m[1]);
+
+        // Score each source shard by relevance
+        let bestSource = sources[0];
+        let bestScore = 0;
+        for (const source of sources) {
+          let score = 0;
+          // Check if this source has a snapshot in the context
+          const sourceSnap = (snapshot as Record<string, unknown>).__sourceSnapshots
+            ? ((snapshot as Record<string, unknown>).__sourceSnapshots as Record<string, Record<string, unknown>>)[source]
+            : undefined;
+          if (sourceSnap?.content && typeof sourceSnap.content === "object") {
+            const srcContent = sourceSnap.content as Record<string, unknown>;
+            const srcEntities = Array.isArray(srcContent.entities)
+              ? (srcContent.entities as Array<Record<string, unknown>>)
+              : [];
+            for (const ent of srcEntities) {
+              if (mentionedEntities.has(String(ent.name ?? ""))) score += 2;
+            }
+            const srcFunctions = Array.isArray(srcContent.functions)
+              ? (srcContent.functions as Array<Record<string, unknown>>)
+              : [];
+            for (const fn of srcFunctions) {
+              if (mentionedFnIds.has(String(fn.id ?? ""))) score += 3;
+            }
+          }
+          // Fallback: check if source ID contains relevant keywords
+          const sourceLower = source.toLowerCase();
+          for (const entity of mentionedEntities) {
+            if (sourceLower.includes(entity.toLowerCase())) score += 1;
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestSource = source;
+          }
+        }
+        issue.targetTaskId = bestSource;
+      } else {
+        issue.targetTaskId = sources[0];
+      }
+    }
   }
 
   _ruleCheckSnapshots(
@@ -451,7 +536,7 @@ export class EvaluationTool extends BaseTool {
             for (let i = 0; i < Math.min(dcNorm.length, normalized.length); i++) {
               if (dcNorm[i] === normalized[i]) commonChars++;
             }
-            return commonChars / minLen >= 0.6 && Math.abs(dcNorm.length - normalized.length) <= 6;
+            return commonChars / minLen >= 0.75 && Math.abs(dcNorm.length - normalized.length) <= 4;
           });
           if (similarInDesign.length > 0) {
             issues.push(createIssue({

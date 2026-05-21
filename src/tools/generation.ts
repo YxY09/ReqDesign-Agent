@@ -203,7 +203,7 @@ export class GenerationTool extends BaseTool {
   static _patchMissingFields(
     task: Task,
     content: unknown,
-    issues: string[],
+    _issues: string[],
   ): unknown {
     if (task.type !== "analyze") return content;
     if (typeof content !== "object" || content === null || Array.isArray(content)) return content;

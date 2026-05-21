@@ -122,19 +122,16 @@ export QWEN_API_KEY="your-key"
 
 ```bash
 # 生成完整设计结果
-node dist/main.js --goal design --input requirements.md --output outputs/demo
-
-# 只生成需求分析结果
-node dist/main.js --goal analyze --input requirements.md --output outputs/analyze
+node dist/src/main.js --goal design --input requirements.md --output outputs/demo
 
 # 指定模型与重试次数
-node dist/main.js --goal design --input requirements.md --output outputs/demo --model qwen3.5-flash --max-retry 3
+node dist/src/main.js --goal design --input requirements.md --output outputs/demo --model qwen3.5-flash --max-retry 3
 
 # 指定日志级别
-node dist/main.js --goal design --input requirements.md --output outputs/demo --log-level DEBUG
+node dist/src/main.js --goal design --input requirements.md --output outputs/demo --log-level DEBUG
 
 # 交互式聊天模式
-node dist/main.js chat
+node dist/src/main.js chat
 ```
 
 ### 快捷开发命令
@@ -151,7 +148,7 @@ npm run lint         # ESLint 检查
 ### 运行基准测试
 
 ```bash
-node dist/main.js --benchmark --input benchmark/cases --output benchmark/results
+node dist/src/main.js --benchmark --input benchmark/cases --output benchmark/results
 ```
 
 ### 运行测试
@@ -268,7 +265,6 @@ outputs/demo/
   - `/help`
   - `/clear`
   - `/design <file> [outputDir]`
-  - `/analyze <file> [outputDir]`
   - `/benchmark [casesDir] [outputDir]`
   - `/quit`
 

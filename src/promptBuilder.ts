@@ -37,7 +37,7 @@ export async function buildSystemPrompt(
   try {
     const { getMemory } = await import("./memory/store.js");
     const memory = getMemory();
-    prompt = memory.appendToPrompt(agentType, prompt, queryContext);
+    prompt = await memory.appendToPrompt(agentType, prompt, queryContext);
   } catch {
     // 记忆模块不可用 — 静默跳过
   }

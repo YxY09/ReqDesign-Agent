@@ -27,7 +27,7 @@ export class AgentOrchestrator extends BaseTool {
   private readonly strategyBrain: StrategyBrain | null;
 
   constructor(llm: LLMClient | null, budget: BudgetManager) {
-    super(llm);
+    super(llm as LLMClient);
     this.policyGuard = new PolicyGuard(budget);
     this.deterministicPolicy = new DeterministicPolicy(this.policyGuard);
     this.actionCompiler = new ActionCompiler();

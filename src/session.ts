@@ -371,6 +371,24 @@ export abstract class WorkerSession {
 
   abstract run(message: TaskMessage): Promise<TaskNotification>;
 
+  runInLlmStreamContext<T>(fn: () => Promise<T>): Promise<T> {
+    const runner = this.llm as {
+      runWithStreamTagContext?: (
+        initialTag: string,
+        suffix: string,
+        callback: () => Promise<T>,
+      ) => Promise<T>;
+    };
+    if (!runner || typeof runner.runWithStreamTagContext !== "function") {
+      return fn();
+    }
+    return runner.runWithStreamTagContext(
+      `[${this.workerType}:${this.context.taskType || this.context.taskId}]`,
+      `session=${this.sessionId};task=${this.context.taskId};type=${this.context.taskType}`,
+      fn,
+    );
+  }
+
   recordToolCall(toolName: string, inputData: unknown, outputData: unknown): void {
     this.state.toolHistory.push({
       tool: toolName,

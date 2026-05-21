@@ -57,7 +57,7 @@ python -m reqdesign.main --goal <任务类型> --input <输入文件> --output <
 
 | 参数 | 缩写 | 说明 | 默认值 |
 |------|------|------|--------|
-| --goal | | 任务类型: analyze 或 design | design |
+| --goal | | 任务类型: design（analyze 为内部阶段） | design |
 | --input | -i | 输入需求文档路径 | (必填) |
 | --output | -o | 输出目录 | outputs/ |
 | --config | -c | 配置文件路径 | config.yaml |
@@ -73,7 +73,7 @@ python -m reqdesign.main --goal <任务类型> --input <输入文件> --output <
 python -m reqdesign.main --goal design --input examples/requirements.md --output outputs/demo
 
 # 仅需求分析
-python -m reqdesign.main --goal analyze --input requirements.md --output outputs/analyze
+node dist/src/main.js --goal design --input requirements.md --output outputs/design
 
 # 使用DeepSeek模型
 python -m reqdesign.main --goal design --input requirements.md --output outputs/demo --provider deepseek --model deepseek-chat

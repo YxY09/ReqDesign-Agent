@@ -350,7 +350,7 @@ describe("MemoryStore", () => {
     }
   });
 
-  it("adds freshness caveats when injecting stale memories", () => {
+  it("adds freshness caveats when injecting stale memories", async () => {
     const tmp = makeTmpDir();
     try {
       const store = new MemoryStore(tmp);
@@ -369,12 +369,54 @@ describe("MemoryStore", () => {
       const old = new Date(Date.now() - 3 * 86_400_000);
       utimesSync(path, old, old);
 
-      const prompt = store.appendToPrompt(
+      const prompt = await store.appendToPrompt(
         "coordinator",
         "base prompt",
         "final major local repair",
       );
       expect(prompt).toContain("记忆时效提醒");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("lets LLM select the strongest relevant memories from deterministic candidates", async () => {
+    const tmp = makeTmpDir();
+    try {
+      const llm = {
+        async generateJson() {
+          return {
+            selected_filenames: [
+              "coordinator_project_strong_route_note.md",
+            ],
+          };
+        },
+      };
+      const store = new MemoryStore(tmp, llm);
+      store.save(
+        "coordinator",
+        "## weak route note\n**经验**: final major local repair appears in passing.",
+        "project",
+        "weak_route_note",
+        "weak-route",
+      );
+      store.save(
+        "coordinator",
+        "## strong route note\n**经验**: final major local repair should trigger replan after repair budget is exhausted.",
+        "project",
+        "strong_route_note",
+        "strong-route",
+      );
+
+      const relevant = await store.findRelevantWithLlm(
+        "final major local repair budget exhausted",
+        "coordinator",
+        1,
+      );
+      expect(relevant).toHaveLength(1);
+      expect(relevant[0]?.filename).toBe(
+        "coordinator_project_strong_route_note.md",
+      );
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

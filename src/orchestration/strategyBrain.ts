@@ -48,7 +48,7 @@ export class StrategyBrain {
 
   /** 向 LLM 请求策略，而非底层运行时操作。 */
   async decide(snapshot: OrchestratorSnapshot): Promise<StrategyDecision> {
-    const prompt = this._buildPrompt(snapshot);
+    const prompt = await this._buildPrompt(snapshot);
     const system =
       "You are an engineering orchestration strategist. " +
       "Choose a high-level strategy only. Do not choose low-level spawn/save actions.";
@@ -72,7 +72,7 @@ export class StrategyBrain {
   // Prompt 构建
   // -------------------------------------------------------------------
 
-  private _buildPrompt(snapshot: OrchestratorSnapshot): string {
+  private async _buildPrompt(snapshot: OrchestratorSnapshot): Promise<string> {
     const data: Record<string, unknown> = {
       goal: snapshot.goal,
       requirement_preview: snapshot.requirementPreview,
@@ -119,7 +119,7 @@ export class StrategyBrain {
       ]
         .filter(Boolean)
         .join("\n");
-      return memory.appendToPrompt("coordinator", basePrompt, queryContext);
+      return await memory.appendToPrompt("coordinator", basePrompt, queryContext);
     } catch {
       return basePrompt;
     }

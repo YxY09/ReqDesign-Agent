@@ -34,7 +34,7 @@ export function createToolError(
 export function isToolError(error: unknown): error is Error & ToolError {
   return (
     error instanceof Error &&
-    typeof (error as Record<string, unknown>).code === "string" &&
-    typeof (error as Record<string, unknown>).recoverable === "boolean"
+    typeof (error as unknown as Record<string, unknown>).code === "string" &&
+    typeof (error as unknown as Record<string, unknown>).recoverable === "boolean"
   );
 }

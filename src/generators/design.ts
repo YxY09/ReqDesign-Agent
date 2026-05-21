@@ -170,6 +170,21 @@ function extractRequirementIds(designText: string, prefixes: string[]): string[]
   return [...new Set(designText.match(idRe) ?? [])];
 }
 
+function isSimpleRequirement(requirementJson: Record<string, unknown>): boolean {
+  const actors = Array.isArray(requirementJson.actors) ? requirementJson.actors.length : 0;
+  const functions = Array.isArray(requirementJson.functions) ? requirementJson.functions.length : 0;
+  const entities = Array.isArray(requirementJson.entities) ? requirementJson.entities.length : 0;
+  const processes = Array.isArray(requirementJson.business_processes) ? requirementJson.business_processes.length : 0;
+  return actors <= 2 && functions > 0 && functions <= 5 && entities <= 1 && processes === 0;
+}
+
+function isMediumRequirement(requirementJson: Record<string, unknown>): boolean {
+  const actors = Array.isArray(requirementJson.actors) ? requirementJson.actors.length : 0;
+  const functions = Array.isArray(requirementJson.functions) ? requirementJson.functions.length : 0;
+  const entities = Array.isArray(requirementJson.entities) ? requirementJson.entities.length : 0;
+  return !isSimpleRequirement(requirementJson) && actors <= 3 && functions <= 15 && entities <= 5;
+}
+
 export class SystemDesigner extends BaseGenerator<string> {
   private promptTemplate: string;
 
@@ -179,6 +194,14 @@ export class SystemDesigner extends BaseGenerator<string> {
       "design_planner.md",
       "请根据以下需求分析结果和原始需求生成系统设计方案：\n\n结构化需求：\n{requirement_json}\n\n原始需求：\n{requirement_text}",
     );
+  }
+
+  async generate(
+    requirementJson: Record<string, unknown>,
+    requirementText = "",
+    systemPrompt?: string,
+  ): Promise<string> {
+    return this.generateDesign(requirementJson, requirementText, systemPrompt);
   }
 
   async generateDesign(
@@ -209,6 +232,29 @@ export class SystemDesigner extends BaseGenerator<string> {
       requirementJson.functions,
       ["id", "name", "description"],
     );
+
+    // Build sub-capabilities section for each function that has them
+    const functionsWithSubs = (Array.isArray(requirementJson.functions)
+      ? requirementJson.functions as Array<Record<string, unknown>>
+      : []).filter((fn) =>
+        Array.isArray(fn.sub_capabilities) && fn.sub_capabilities.length > 0 ||
+        Array.isArray(fn.acceptance_criteria) && fn.acceptance_criteria.length > 0,
+      );
+    const subCapsLines = functionsWithSubs.length > 0
+      ? [
+          "### 功能子能力与验收点（设计必须覆盖）",
+          ...functionsWithSubs.map((fn) => {
+            const id = String(fn.id ?? "");
+            const subs = Array.isArray(fn.sub_capabilities) ? fn.sub_capabilities as string[] : [];
+            const acs = Array.isArray(fn.acceptance_criteria) ? fn.acceptance_criteria as string[] : [];
+            const parts: string[] = [];
+            if (subs.length > 0) parts.push(`  子能力: ${subs.join(", ")}`);
+            if (acs.length > 0) parts.push(`  验收点: ${acs.join(", ")}`);
+            return `- ${id} ${String(fn.name ?? "")}:\n${parts.join("\n")}`;
+          }),
+        ]
+      : [];
+
     const entities = BaseGenerator.formatContractList(
       requirementJson.entities,
       ["name", "description"],
@@ -229,6 +275,7 @@ export class SystemDesigner extends BaseGenerator<string> {
       entities.length > 0 ? `### 允许的核心领域类\n${entities.map((item) => `- ${item}`).join("\n")}` : "",
       constraints.length > 0 ? `### 约束 ID 清单\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
       exceptions.length > 0 ? `### 异常 ID 清单\n${exceptions.map((item) => `- ${item}`).join("\n")}` : "",
+      subCapsLines.length > 0 ? subCapsLines.join("\n") : "",
       "### 输出前自检",
       "- 模块划分必须覆盖全部功能 ID，且每个 ID 所在模块语义必须匹配功能名称和描述。",
       "- 核心类/接口设计里的核心领域类必须来自“允许的核心领域类”清单，大小写完全一致。",
@@ -288,6 +335,30 @@ export class SystemDesigner extends BaseGenerator<string> {
           const label = fid || name;
           warnings.push(`功能 ${label} 未在设计中体现`);
         }
+      }
+    }
+
+    if (isSimpleRequirement(requirementJson)) {
+      const overDesignSignals = [
+        /Repository|仓储|DAO|数据库|持久化|历史记录|审计|消息队列|微服务|分布式/i,
+        /Strategy|策略模式|策略接口/i,
+      ];
+      const matched = overDesignSignals.some((re) => re.test(designText));
+      if (matched) {
+        warnings.push("简单需求设计出现无原文依据的复杂机制（如持久化、仓储、策略模式、微服务等）");
+      }
+    }
+
+    // Medium complexity: warn (not block) about overdesign signals
+    if (isMediumRequirement(requirementJson)) {
+      const heavySignals = [
+        /微服务|分布式锁|消息队列|Redis Cluster|Elasticsearch|Kubernetes/i,
+        /Strategy|策略模式|策略接口|StrategyFactory/i,
+        /Repository|仓储模式|仓储接口|DAO模式/i,
+      ];
+      const matchedHeavy = heavySignals.some((re) => re.test(designText));
+      if (matchedHeavy) {
+        warnings.push("中等复杂度需求使用了较重的技术架构（如微服务、分布式锁、消息队列、仓储模式），请确认原始需求中是否有明确的性能、并发或扩展性要求支撑这些选型");
       }
     }
 

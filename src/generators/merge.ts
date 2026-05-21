@@ -9,6 +9,7 @@ import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
+import { RequirementNormalizer } from "../shared/normalizer.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private promptTemplate: string;
@@ -63,6 +64,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       throw createToolError("MERGE_NON_DICT", "merge 返回了非字典类型", { recoverable: false });
     }
 
-    return BaseGenerator.unwrapContent(result);
+    const merged = BaseGenerator.unwrapContent(result);
+    RequirementNormalizer.normalize(merged);
+    RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
+    return merged;
   }
 }

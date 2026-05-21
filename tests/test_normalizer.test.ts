@@ -423,6 +423,78 @@ describe("RequirementNormalizer", () => {
     expect(roleAttr!.description).toBe("角色: Customer、Admin");
   });
 
+  it("ensures function detail arrays exist", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [
+        { id: "F001", name: "CreateOrder", description: "创建订单" },
+      ],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const fn = (result.functions as Array<Record<string, unknown>>)[0];
+    expect(fn.sub_capabilities).toEqual([]);
+    expect(fn.acceptance_criteria).toEqual([]);
+  });
+
+  it("removes unsupported record entities when source has no persistence evidence", () => {
+    const input = {
+      actors: [{ name: "User", description: "用户" }],
+      entities: [
+        { name: "Calculator", attributes: [{ name: "id", type: "Long", description: "ID" }], relationships: [{ target: "CalculationRecord", type: "one-to-many", description: "生成记录" }] },
+        { name: "CalculationRecord", attributes: [{ name: "recordId", type: "Long", description: "ID" }, { name: "result", type: "Decimal", description: "结果" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    RequirementNormalizer.normalize(input);
+    const result = RequirementNormalizer.normalizeAgainstSource(input, "用户输入两个数字，系统返回它们的和。除数不能为零。");
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities.map(e => e.name)).toEqual(["Calculator"]);
+    expect((entities[0].relationships as unknown[]).length).toBe(0);
+  });
+
+  it("keeps record entities when source mentions records", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "BorrowRecord", attributes: [{ name: "recordId", type: "Long", description: "ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalizeAgainstSource(input, "系统需要保存借阅记录并支持查询历史。");
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities.map(e => e.name)).toContain("BorrowRecord");
+  });
+
+  it("promotes order item from product detail source text", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "Order", attributes: [{ name: "orderId", type: "Long", description: "订单ID" }], relationships: [{ target: "Product", type: "many-to-many", description: "订单包含多个商品" }] },
+        { name: "Product", attributes: [{ name: "productId", type: "Long", description: "商品ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    RequirementNormalizer.normalize(input);
+    const result = RequirementNormalizer.normalizeAgainstSource(input, "订单包含商品明细，商品明细记录购买数量和下单价格。");
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    expect(names).toContain("OrderItem");
+
+    const order = entities.find(e => e.name === "Order")!;
+    const rels = order.relationships as Array<Record<string, unknown>>;
+    expect(rels.some(r => r.target === "OrderItem" && r.type === "one-to-many")).toBe(true);
+    expect(rels.some(r => r.target === "Product" && r.type === "many-to-many")).toBe(false);
+  });
+
   // ----------------------------------------------------------------
   // Edge cases
   // ----------------------------------------------------------------

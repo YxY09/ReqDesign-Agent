@@ -68,7 +68,7 @@
 
 ### tests（测试用例）
 
-产出 Markdown 格式的测试用例文档：
+产出 JSON 格式的测试用例，根对象包含 `test_cases` 数组。不要输出 Markdown、代码围栏或解释文本。只输出合法 JSON。
 - 正常场景测试（Happy Path）— 至少 3 个
 - 异常场景测试（Error Handling）— 至少 2 个
 - 边界条件测试（Boundary Cases）— 至少 2 个

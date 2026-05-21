@@ -109,7 +109,7 @@ export class SessionBackend extends EventEmitter {
     this.armHeartbeats(meta);
 
     meta.promise = session
-      .run(message)
+      .runInLlmStreamContext(() => session.run(message))
       .then((notif) => {
         if (this.settledRuns.has(runKey)) {
           return;

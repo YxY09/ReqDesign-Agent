@@ -345,7 +345,7 @@ ${attrs}
     const testNum = (currentContent.match(/## TC-B-/g) ?? []).length + 1;
     const testId = `TC-B-${String(testNum).padStart(3, "0")}`;
 
-    const newTest = `\n\n## ${testId}: ${constraintId} 约束边界测试\n- **类型**: 边界\n- **测试对象**: ${constraintId}\n- **前置条件**: 系统正常运行\n- **测试步骤**: 1. 验证约束 ${constraintId}（${desc.slice(0, 40)}...）的边界条件\n- **预期结果**: 系统正确执行约束校验\n- **优先级**: P1`;
+    const newTest = `\n\n## ${testId}: ${constraintId} 约束边界测试\n- **类型**: 边界\n- **测试对象**: ${constraintId}\n- **前置条件**: 系统已初始化，相关数据就绪\n- **测试步骤**: 1. 构造满足约束 ${constraintId}（${desc.slice(0, 60)}）边界值的数据 2. 触发对应业务操作 3. 验证系统对边界值的处理结果\n- **预期结果**: 系统在边界值处正确执行约束校验，边界内通过，边界外拒绝并给出提示\n- **优先级**: P1`;
 
     return currentContent + newTest;
   }

@@ -8,6 +8,7 @@
 
 import OpenAI, { type ClientOptions as OpenAIClientOptions } from "openai";
 import Anthropic, { type ClientOptions as AnthropicClientOptions } from "@anthropic-ai/sdk";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { AgentConfig } from "./config.js";
 import { setupLogger, type Logger } from "./logger.js";
 import { withRetry } from "./utils/retry.js";
@@ -118,6 +119,10 @@ export class LLMClient {
 
   /** 替换 Python 的 threading.local() stream tag。 */
   private _streamTag = "";
+  private readonly _streamTagContext = new AsyncLocalStorage<{
+    tag: string;
+    suffix: string;
+  }>();
   private _streamListener: ((event: LlmStreamEvent) => void) | null = null;
 
   /** Trace sink — 运行时设置，用于将每次 LLM 调用记录到 TraceLogger。 */
@@ -168,11 +173,31 @@ export class LLMClient {
 
   /** 用于自动启用流式传输的标签。设置了 streamTag 且没有提供 onChunk 时，自动启用流式传输。 */
   get streamTag(): string {
-    return this._streamTag;
+    const scoped = this._streamTagContext.getStore();
+    return scoped ? LLMClient._formatScopedStreamTag(scoped.tag, scoped.suffix) : this._streamTag;
   }
 
   set streamTag(value: string) {
+    const scoped = this._streamTagContext.getStore();
+    if (scoped) {
+      scoped.tag = value ?? "";
+      return;
+    }
     this._streamTag = value ?? "";
+  }
+
+  runWithStreamTagContext<T>(
+    initialTag: string,
+    suffix: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    return this._streamTagContext.run(
+      {
+        tag: initialTag,
+        suffix,
+      },
+      fn,
+    );
   }
 
   setStreamListener(listener?: (event: LlmStreamEvent) => void): void {
@@ -182,6 +207,14 @@ export class LLMClient {
   /** 设置 trace sink，用于记录每次完成的 LLM 调用。 */
   setTraceSink(sink: ((info: LlmCallInfo) => void) | null): void {
     this._traceSink = sink;
+  }
+
+  private static _formatScopedStreamTag(tag: string, suffix: string): string {
+    const base = (tag || "").trim();
+    const extra = suffix.trim();
+    if (!base) return extra;
+    if (!extra || base.includes(extra)) return base;
+    return `${base} ${extra}`;
   }
 
   // -----------------------------------------------------------------------

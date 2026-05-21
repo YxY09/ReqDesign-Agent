@@ -15,6 +15,37 @@ export class DiagramGenerator extends BaseGenerator<string> {
     this.prompts = this._loadPrompts();
   }
 
+  async generate(
+    requirementJson: Record<string, unknown> | null,
+    designText: string,
+    diagramType = "class_diagram",
+    systemPrompt?: string,
+    requirementText = "",
+  ): Promise<string> {
+    if (diagramType === "activity_diagram") {
+      return this.generateActivityDiagram(
+        requirementJson,
+        designText,
+        systemPrompt,
+        requirementText,
+      );
+    }
+    if (diagramType === "state_diagram") {
+      return this.generateStateDiagram(
+        requirementJson,
+        designText,
+        systemPrompt,
+        requirementText,
+      );
+    }
+    return this.generateClassDiagram(
+      requirementJson,
+      designText,
+      systemPrompt,
+      requirementText,
+    );
+  }
+
   private _loadPrompts(): Record<string, string> {
     const templates: Record<string, string> = {};
     for (const name of ["class_diagram", "activity_diagram", "state_diagram"]) {
