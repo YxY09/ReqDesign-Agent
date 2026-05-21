@@ -8,6 +8,29 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { parseAndValidate } from "./configSchema.js";
+
+// ---------------------------------------------------------------------------
+// YAML snake_case → camelCase conversion
+// ---------------------------------------------------------------------------
+
+/** Recursively convert snake_case keys to camelCase in an object. */
+function snakeToCamel(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj.map(snakeToCamel);
+  }
+  if (obj !== null && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      const camelKey = key.includes("_")
+        ? key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+        : key;
+      result[camelKey] = snakeToCamel(value);
+    }
+    return result;
+  }
+  return obj;
+}
 
 // ---------------------------------------------------------------------------
 // Interfaces for sub-configs
@@ -214,34 +237,36 @@ export class AgentConfig {
       (safeRaw.llm as Record<string, unknown>).api_key = "***";
     }
 
-    const config = new AgentConfig({ raw: safeRaw });
+    // Zod 严格验证 — 失败时 throw，不再 warn
+    // Convert YAML snake_case keys → camelCase before schema validation
+    const camelData = snakeToCamel(data);
+    const parsed = parseAndValidate(camelData);
 
-    // Apply LLM section with type coercion
-    if (typeof data.llm === "object" && data.llm !== null) {
-      applySection(config.llm as unknown as Record<string, unknown>, data.llm as Record<string, unknown>, defaultLLMConfig() as unknown as Record<string, unknown>);
-    }
-
-    // Apply other sections
-    for (const sectionName of ["retry", "output", "logging"] as const) {
-      const sectionData = data[sectionName];
-      if (typeof sectionData !== "object" || sectionData === null) continue;
-      const defaults =
-        sectionName === "retry"
-          ? defaultRetryConfig()
-          : sectionName === "output"
-            ? defaultOutputConfig()
-            : defaultLoggingConfig();
-      applySection(
-        config[sectionName] as unknown as Record<string, unknown>,
-        sectionData as Record<string, unknown>,
-        defaults as unknown as Record<string, unknown>,
-      );
-    }
-
-    const errors = config.validate();
-    if (errors.length > 0) {
-      console.warn(`[reqdesign] Config validation warnings: ${errors.join("; ")}`);
-    }
+    const config = new AgentConfig({
+      llm: {
+        provider: parsed.llm.provider,
+        model: parsed.llm.model,
+        apiKey: parsed.llm.apiKey ?? "",
+        baseUrl: parsed.llm.baseUrl ?? "",
+        temperature: parsed.llm.temperature,
+        maxTokens: parsed.llm.maxTokens,
+        timeout: parsed.llm.timeout,
+      },
+      retry: {
+        maxRetries: parsed.retry.maxRetries,
+        retryDelayMs: parsed.retry.retryDelayMs,
+        maxDelayMs: parsed.retry.maxDelayMs,
+        retryOnTimeout: parsed.retry.retryOnTimeout,
+      },
+      output: {
+        defaultDir: parsed.output.defaultDir,
+      },
+      logging: {
+        level: parsed.logging.level,
+        logDir: parsed.logging.logDir,
+      },
+      raw: safeRaw,
+    });
     console.info(
       `[reqdesign] Config loaded: provider=${config.llm.provider}, model=${config.llm.model}`,
     );
@@ -381,42 +406,4 @@ export class AgentConfig {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
-/**
- * Apply a YAML section's key/value pairs onto a config object, performing
- * numeric type coercion to match the default field types.
- */
-function applySection(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-  defaults: Record<string, unknown>,
-): void {
-  for (const [key, value] of Object.entries(source)) {
-    // Support snake_case YAML keys → camelCase TS fields
-    const camelKey = key.includes("_")
-      ? key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
-      : key;
-    const targetKey = (camelKey in target) ? camelKey : key;
-    if (!(targetKey in target)) continue;
-
-    // Type coercion: match the default field's type
-    const defaultVal = defaults[targetKey];
-    if (typeof defaultVal === "number" && value != null) {
-      try {
-        if (Number.isInteger(defaultVal)) {
-          (target as Record<string, unknown>)[targetKey] = Number(value);
-        } else {
-          (target as Record<string, unknown>)[targetKey] = Number(value);
-        }
-      } catch {
-        // Keep original; validate() will catch it
-        (target as Record<string, unknown>)[targetKey] = value;
-      }
-    } else {
-      (target as Record<string, unknown>)[targetKey] = value;
-    }
-  }
-}
