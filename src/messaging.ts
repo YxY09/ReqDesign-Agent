@@ -1,10 +1,10 @@
 /**
- * Messaging layer for inter-agent communication.
+ * Agent 间通信的消息层。
  *
- * Ported from reqdesign/messaging.py (Phase 5).
+ * 源自 reqdesign/messaging.py (Phase 5)。
  *
- * Provides typed messages, notifications, and a thread-safe(ish) mailbox.
- * No locks are needed because Node.js is single-threaded.
+ * 提供类型化消息、通知和线程安全的邮箱。
+ * 无需锁，因为 Node.js 是单线程的。
  */
 
 import * as crypto from "node:crypto";
@@ -19,10 +19,10 @@ import type {
 // Literal union types
 // ---------------------------------------------------------------------------
 
-/** Kinds of messages that can be sent between agents. */
+/** 可在 Agent 之间发送的消息类型。 */
 export type MessageType = "spawn" | "repair" | "stop" | "inspect" | "replan";
 
-/** Lifecycle status of a task. */
+/** 任务的生命周期状态。 */
 export type TaskStatus =
   | "running"
   | "completed"
@@ -30,7 +30,7 @@ export type TaskStatus =
   | "rejected"
   | "cancelled";
 
-/** Notification event kinds emitted by agents. */
+/** Agent 发出的通知事件类型。 */
 export type NotificationEvent =
   | "started"
   | "heartbeat"
@@ -45,8 +45,8 @@ export type NotificationEvent =
 // ---------------------------------------------------------------------------
 
 /**
- * Set of events that mark a notification as terminal — i.e. the task will
- * not produce any further updates after one of these.
+ * 标记通知为终结事件的事件集合——即任务在这些事件之一发生后
+ * 将不会再产生任何更新。
  */
 export const TERMINAL_EVENTS: ReadonlySet<string> = new Set([
   "result",
@@ -58,7 +58,7 @@ export const TERMINAL_EVENTS: ReadonlySet<string> = new Set([
 // Union for typed result payloads
 // ---------------------------------------------------------------------------
 
-/** Tagged union result carried by a {@link TaskNotification}. */
+/** {@link TaskNotification} 携带的标记联合结果。 */
 export type NotificationResult =
   | Artifact
   | Verdict
@@ -73,61 +73,61 @@ export type NotificationResult =
 // Interfaces
 // ---------------------------------------------------------------------------
 
-/** A message sent *to* an agent (or the coordinator) to request work. */
+/** 发给 Agent（或协调器）以请求工作的消息。 */
 export interface TaskMessage {
-  /** Discriminator for the message kind. */
+  /** 消息类型的判别器。 */
   type: MessageType;
-  /** The task this message refers to. */
+  /** 此消息所指的任务。 */
   taskId: string;
-  /** Logical session / execution run this message belongs to. */
+  /** 此消息所属的逻辑会话/执行运行。 */
   sessionId: string;
-  /** Arbitrary data payload. */
+  /** 任意数据负载。 */
   payload: Record<string, unknown>;
-  /** Optional metadata for tracing / debugging. */
+  /** 用于追踪/调试的可选元数据。 */
   metadata: Record<string, unknown>;
-  /** Higher values are delivered first. */
+  /** 值越高越优先送达。 */
   priority: number;
-  /** Free-text reason this message was created. */
+  /** 创建此消息的自由文本原因。 */
   cause: string;
-  /** Session that spawned this message (for hierarchical tracking). */
+  /** 生成此消息的会话（用于层级追踪）。 */
   parentSessionId: string;
-  /** Extra context supplied when type is `"replan"`. */
+  /** 类型为 `"replan"` 时提供的额外上下文。 */
   replanContext: Record<string, unknown>;
-  /** Scope description when type is `"repair"`. */
+  /** 类型为 `"repair"` 时的范围描述。 */
   repairScope: string;
 }
 
-/** A notification emitted *by* an agent about its progress or result. */
+/** Agent 发出的关于其进度或结果的通知。 */
 export interface TaskNotification {
-  /** The task this notification is about. */
+  /** 此通知相关的任务。 */
   taskId: string;
-  /** Logical session this notification belongs to. */
+  /** 此通知所属的逻辑会话。 */
   sessionId: string;
-  /** Current lifecycle status of the task. */
+  /** 任务的当前生命周期状态。 */
   status: TaskStatus;
-  /** What kind of event this notification represents. */
+  /** 此通知代表的事件类型。 */
   event: NotificationEvent;
-  /** Human-readable summary. */
+  /** 人类可读的摘要。 */
   summary: string;
-  /** Structured result payload (Artifact, Verdict, etc.) or a primitive. */
+  /** 结构化结果负载（Artifact、Verdict 等）或原始值。 */
   result: NotificationResult;
-  /** Token / usage statistics. */
+  /** Token/使用统计。 */
   usage: Record<string, unknown>;
-  /** Error message, if the task failed. */
+  /** 如果任务失败则包含错误消息。 */
   error: string;
-  /** Suggestions for follow-up actions. */
+  /** 后续行动建议。 */
   suggestions: ReadonlyArray<Record<string, unknown>>;
-  /** Monotonically increasing sequence number for ordering. */
+  /** 用于排序的递增序列号。 */
   sequence: number;
-  /** Epoch seconds when this notification was created. */
+  /** 此通知创建时的 Unix 时间戳（秒）。 */
   timestamp: number;
-  /** Incremental progress information. */
+  /** 增量进度信息。 */
   progressDelta: Record<string, unknown>;
-  /** Recommended next action for the coordinator. */
+  /** 协调器的推荐下一步行动。 */
   recommendedAction: string;
-  /** Hint string that may guide replanning. */
+  /** 可能指导重规划的提示字符串。 */
   replanHint: string;
-  /** Whether this notification is the last one for this task. */
+  /** 此通知是否是该任务的最后一个。 */
   terminal: boolean;
 }
 
@@ -136,9 +136,9 @@ export interface TaskNotification {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a {@link TaskMessage} with sensible defaults.
+ * 创建带有合理默认值的 {@link TaskMessage}。
  *
- * @param overrides - Fields to override. `taskId` and `type` are required.
+ * @param overrides - 要覆盖的字段。`taskId` 和 `type` 是必需的。
  */
 export function createTaskMessage(
   overrides: Partial<TaskMessage> & Pick<TaskMessage, "taskId" | "type">,
@@ -157,10 +157,10 @@ export function createTaskMessage(
 }
 
 /**
- * Create a {@link TaskNotification} with sensible defaults.
+ * 创建带有合理默认值的 {@link TaskNotification}。
  *
- * @param overrides - Fields to override. `taskId`, `sessionId`, and `status`
- *   are required.
+ * @param overrides - 要覆盖的字段。`taskId`、`sessionId` 和 `status`
+ *   是必需的。
  */
 export function createTaskNotification(
   overrides: Partial<TaskNotification> &
@@ -188,10 +188,10 @@ export function createTaskNotification(
 // ---------------------------------------------------------------------------
 
 /**
- * Return `true` when the notification represents a terminal event.
+ * 当通知代表终结事件时返回 `true`。
  *
- * A notification is terminal if its {@link TaskNotification.terminal} flag is
- * set **or** its event is in {@link TERMINAL_EVENTS}.
+ * 如果通知的 {@link TaskNotification.terminal} 标志被设置**或**
+ * 其事件在 {@link TERMINAL_EVENTS} 中，则该通知为终结通知。
  */
 export function isTerminal(notif: TaskNotification): boolean {
   return notif.terminal || TERMINAL_EVENTS.has(notif.event);
@@ -202,29 +202,29 @@ export function isTerminal(notif: TaskNotification): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Shape used when serializing a {@link TaskNotification.result} value so that
- * downstream consumers can reconstruct the original domain type.
+ * 序列化 {@link TaskNotification.result} 值时使用的形状，
+ * 以便下游消费者能重建原始领域类型。
  */
 export interface SerializedResult {
-  /** Discriminator tag identifying the domain type. */
+  /** 标识领域类型的判别器标签。 */
   __type__: "artifact" | "verdict" | "execution_plan" | "plan_mutation" | "primitive";
-  /** The actual data. */
+  /** 实际数据。 */
   __data__: unknown;
 }
 
 /**
- * Tag a notification result for JSON-safe serialization.
+ * 为通知结果打标签以便 JSON 安全序列化。
  *
- * Primitive values and `null` are wrapped as `"primitive"`. Domain objects
- * are tagged according to their structural role.
+ * 原始值和 `null` 被包装为 `"primitive"`。领域对象
+ * 根据其结构角色被打上标签。
  */
 function serializeResult(result: NotificationResult): SerializedResult {
   if (result === null || typeof result === "string" || typeof result === "number" || typeof result === "boolean") {
     return { __type__: "primitive", __data__: result };
   }
 
-  // Discriminate domain types by duck-typing. Order matters: more specific
-  // checks should come before broader ones.
+  // 通过结构类型识别领域类型。顺序很重要：更具体的
+  // 检查应放在更宽泛的检查之前。
   const obj = result as unknown as Record<string, unknown>;
 
   if (obj.dropTaskIds !== undefined) {
@@ -240,15 +240,15 @@ function serializeResult(result: NotificationResult): SerializedResult {
     return { __type__: "artifact", __data__: result };
   }
 
-  // Fallback — treat as a generic primitive container
+  // 回退——作为通用原始容器处理
   return { __type__: "primitive", __data__: result };
 }
 
 /**
- * Reconstruct a notification result from its serialized tagged form.
+ * 从序列化的标记形式重建通知结果。
  *
- * Returns the value as-is for `"primitive"` tags; otherwise returns the
- * `__data__` payload (consumers can cast to the appropriate domain type).
+ * 对于 `"primitive"` 标签返回原值；否则返回
+ * `__data__` 负载（消费者可转换为适当的领域类型）。
  */
 function deserializeResult(tagged: SerializedResult): NotificationResult {
   if (tagged.__type__ === "primitive") {
@@ -258,7 +258,7 @@ function deserializeResult(tagged: SerializedResult): NotificationResult {
 }
 
 /**
- * Serialize a {@link TaskNotification} to a JSON-safe plain object.
+ * 将 {@link TaskNotification} 序列化为 JSON 安全的普通对象。
  */
 export function serializeNotification(notif: TaskNotification): Record<string, unknown> {
   return {
@@ -268,7 +268,7 @@ export function serializeNotification(notif: TaskNotification): Record<string, u
 }
 
 /**
- * Deserialize a plain object back into a {@link TaskNotification}.
+ * 将普通对象反序列化为 {@link TaskNotification}。
  */
 export function deserializeNotification(
   data: Record<string, unknown>,
@@ -299,14 +299,14 @@ export function deserializeNotification(
 }
 
 /**
- * Serialize a {@link TaskMessage} to a JSON-safe plain object.
+ * 将 {@link TaskMessage} 序列化为 JSON 安全的普通对象。
  */
 export function serializeMessage(msg: TaskMessage): Record<string, unknown> {
   return { ...msg };
 }
 
 /**
- * Deserialize a plain object back into a {@link TaskMessage}.
+ * 将普通对象反序列化为 {@link TaskMessage}。
  */
 export function deserializeMessage(data: Record<string, unknown>): TaskMessage {
   return {
@@ -328,11 +328,11 @@ export function deserializeMessage(data: Record<string, unknown>): TaskMessage {
 // ---------------------------------------------------------------------------
 
 /**
- * In-process message bus for inter-agent communication.
+ * 进程内 Agent 间通信的消息总线。
  *
- * Agents push messages and notifications into the mailbox; the coordinator
- * (or other agents) poll for them. Because Node.js is single-threaded no
- * locking is required.
+ * Agent 将消息和通知推入邮箱；协调器
+ *（或其他 Agent）从中轮询。因为 Node.js 是单线程的，
+ * 无需加锁。
  */
 export class TaskMailbox {
   private readonly _messages: TaskMessage[] = [];
@@ -343,10 +343,10 @@ export class TaskMailbox {
   // ----- messages ----------------------------------------------------------
 
   /**
-   * Enqueue a message for delivery.
+   * 将消息加入队列以便投递。
    *
-   * Messages are sorted by descending {@link TaskMessage.priority} so that
-   * higher-priority items are consumed first.
+   * 消息按 {@link TaskMessage.priority} 降序排序，
+   * 以便高优先级项优先被消费。
    */
   sendMessage(msg: TaskMessage): void {
     this._messages.push(msg);
@@ -354,11 +354,9 @@ export class TaskMailbox {
   }
 
   /**
-   * Return and consume all unconsumed messages, optionally filtered by
-   * session.
+   * 返回并消费所有未消费的消息，可按会话过滤。
    *
-   * @param sessionId - If provided, only messages whose `sessionId` matches
-   *   are returned.
+   * @param sessionId - 如果提供，仅返回 `sessionId` 匹配的消息。
    */
   pollMessages(sessionId?: string): TaskMessage[] {
     const pending = this._messages.slice(this._messageCursor);
@@ -371,15 +369,14 @@ export class TaskMailbox {
   }
 
   /**
-   * Return `true` if there are unconsumed messages matching the optional
-   * session filter.
+   * 如果存在匹配可选会话过滤器的未消费消息，返回 `true`。
    */
   hasMessages(sessionId?: string): boolean {
     return this.unreadMessageCount(sessionId) > 0;
   }
 
   /**
-   * Count of unconsumed messages, optionally filtered by session.
+   * 未消费消息的数量，可按会话过滤。
    */
   unreadMessageCount(sessionId?: string): number {
     const pending = this._messages.slice(this._messageCursor);
@@ -392,15 +389,14 @@ export class TaskMailbox {
   // ----- notifications -----------------------------------------------------
 
   /**
-   * Enqueue a notification.
+   * 将通知加入队列。
    */
   sendNotification(notif: TaskNotification): void {
     this._notifications.push(notif);
   }
 
   /**
-   * Return and consume all unconsumed notifications, optionally filtered by
-   * task id and/or status.
+   * 返回并消费所有未消费的通知，可按任务 ID 和/或状态过滤。
    */
   pollNotifications(
     taskId?: string,
@@ -430,9 +426,9 @@ export class TaskMailbox {
   }
 
   /**
-   * Find the **latest** notification for a given session, or `null`.
+   * 查找给定会话的**最新**通知，或返回 `null`。
    *
-   * Does **not** consume the notification.
+   * **不会**消费该通知。
    */
   getNotificationBySession(sessionId: string): TaskNotification | null {
     for (let i = this._notifications.length - 1; i >= 0; i--) {
@@ -444,7 +440,7 @@ export class TaskMailbox {
   }
 
   /**
-   * Peek at the most recent notification without consuming it.
+   * 不消费地窥视最近的通知。
    */
   peekLatestNotification(): TaskNotification | null {
     return this._notifications.length > 0
@@ -453,16 +449,14 @@ export class TaskMailbox {
   }
 
   /**
-   * Peek at **all** notifications (including already consumed ones) without
-   * advancing any cursor.
+   * 不消费也不前进光标地窥视**所有**通知（包括已消费的）。
    */
   peekAllNotifications(): TaskNotification[] {
     return [...this._notifications];
   }
 
   /**
-   * Peek at **all** messages (including already consumed ones) without
-   * advancing any cursor.
+   * 不消费也不前进光标地窥视**所有**消息（包括已消费的）。
    */
   peekAllMessages(): TaskMessage[] {
     return [...this._messages];
@@ -471,8 +465,7 @@ export class TaskMailbox {
   // ----- cursor / reset ----------------------------------------------------
 
   /**
-   * Reset consumption cursors so that previously-consumed messages and
-   * notifications will be yielded again on the next poll.
+   * 重置消费光标，以便在下次轮询时再次产生之前已消费的消息和通知。
    */
   resetCursors(): void {
     this._messageCursor = 0;
@@ -480,7 +473,7 @@ export class TaskMailbox {
   }
 
   /**
-   * Remove all messages and notifications and reset cursors.
+   * 删除所有消息和通知并重置光标。
    */
   clear(): void {
     this._messages.length = 0;
@@ -492,9 +485,9 @@ export class TaskMailbox {
   // ----- static helpers ----------------------------------------------------
 
   /**
-   * Generate a deterministic session id from a task id.
+   * 从任务 ID 生成确定性会话 ID。
    *
-   * Format: `{taskId}-{randomSuffix}`.
+   * 格式：`{taskId}-{randomSuffix}`。
    */
   static generateSessionId(taskId: string): string {
     return `${taskId}-${crypto.randomUUID()}`;

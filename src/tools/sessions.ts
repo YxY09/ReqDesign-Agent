@@ -34,7 +34,6 @@ function isStrictSelfCheckFailure(artifact: Artifact): boolean {
 
 export class GenerationSession extends WorkerSession {
   private readonly agent: GenerationTool;
-  private readonly repairTool: RepairTool | undefined;
   private readonly logger: Logger = setupLogger("reqdesign.GenerationSession");
 
   constructor(
@@ -43,11 +42,9 @@ export class GenerationSession extends WorkerSession {
     mailbox: { sendNotification: (notif: TaskNotification) => void } | null,
     llm: unknown,
     agent: GenerationTool,
-    repairTool?: RepairTool,
   ) {
     super(sessionId, context, mailbox, llm);
     this.agent = agent;
-    this.repairTool = repairTool;
     this.state.workerType = this.workerType;
   }
 
@@ -69,22 +66,6 @@ export class GenerationSession extends WorkerSession {
     }
 
     const ctx = this.buildAgentContext();
-    const fixInstructions = normalizeFixInstructions(message.payload.fix_instructions);
-    if (message.type === "repair" && fixInstructions.length > 0) {
-      const nextHints = isRecord(ctx._hints) ? { ...ctx._hints } : {};
-      nextHints.fix_instructions = fixInstructions;
-      nextHints.revision = this.state.resumeCount;
-      ctx._hints = nextHints;
-    }
-
-    const previousArtifact = this.state.intermediateState.last_artifact as Artifact | undefined;
-    if (previousArtifact?.content !== null && previousArtifact?.content !== undefined) {
-      ctx.previous_artifact = previousArtifact.content;
-      ctx.previous_artifact_type = previousArtifact.type;
-      ctx.revision_history = Array.isArray(this.state.intermediateState.fix_history)
-        ? this.state.intermediateState.fix_history
-        : [];
-    }
 
     const task = createTask({
       id: this.context.taskId,
@@ -93,41 +74,12 @@ export class GenerationSession extends WorkerSession {
       contextHints: isRecord(ctx._hints) ? ctx._hints : this.context.hints,
     });
 
-    const artifact = message.type === "repair" && previousArtifact?.content !== undefined
-      ? await this.repairFromPrevious(task, ctx, previousArtifact, fixInstructions)
-      : await this.agent.execute(task, ctx);
+    const artifact = await this.agent.execute(task, ctx);
 
     this.markHeartbeat();
 
     if (artifact.content !== null && artifact.content !== undefined) {
       this.state.intermediateState.last_artifact = artifact;
-    }
-
-    if (message.type === "repair") {
-      const history = Array.isArray(this.state.intermediateState.fix_history)
-        ? [...(this.state.intermediateState.fix_history as Array<Record<string, unknown>>)]
-        : [];
-      history.push({
-        timestamp: Date.now() / 1000,
-        fix_instructions: fixInstructions,
-        used_previous_artifact: previousArtifact !== undefined,
-        self_check_passed: artifact.selfCheckPassed,
-        self_correct_rounds: artifact.selfCorrectRounds,
-        issues_count: artifact.selfCheckIssues.length,
-      });
-      this.state.intermediateState.fix_history = history.slice(-10);
-      this.state.intermediateState.last_fix_instructions = fixInstructions;
-
-      const selfCheckHistory = Array.isArray(this.state.intermediateState.self_check_history)
-        ? [...(this.state.intermediateState.self_check_history as Array<Record<string, unknown>>)]
-        : [];
-      selfCheckHistory.push({
-        timestamp: Date.now() / 1000,
-        passed: artifact.selfCheckPassed,
-        issues: artifact.selfCheckIssues.slice(0, 5),
-        correct_rounds: artifact.selfCorrectRounds,
-      });
-      this.state.intermediateState.self_check_history = selfCheckHistory.slice(-20);
     }
 
     if (artifact.content === null || artifact.content === undefined) {
@@ -155,55 +107,6 @@ export class GenerationSession extends WorkerSession {
     return this._makeNotification("completed", {
       summary: `generated ${this.context.taskType} in ${artifact.generationDuration.toFixed(1)}s`,
       result: artifact,
-    });
-  }
-
-  private async repairFromPrevious(
-    task: Task,
-    ctx: Record<string, unknown>,
-    previousArtifact: Artifact,
-    fixInstructions: Array<Record<string, unknown>>,
-  ): Promise<Artifact> {
-    const started = performance.now();
-    if (this.agent.llm === null) {
-      return createArtifact({
-        taskId: task.id,
-        type: task.type,
-        content: null,
-        selfCheckPassed: false,
-        selfCheckIssues: ["repair requires an LLM client"],
-        generationDuration: (performance.now() - started) / 1000,
-      });
-    }
-
-    const repairAgent = this.repairTool ?? new RepairTool(this.agent.llm);
-    const repaired = await repairAgent.repair(
-      task,
-      previousArtifact.content,
-      fixInstructions,
-      ctx,
-    );
-
-    if (repaired === null || repaired === undefined) {
-      return createArtifact({
-        taskId: task.id,
-        type: task.type,
-        content: null,
-        selfCheckPassed: false,
-        selfCheckIssues: ["session repair returned no content"],
-        generationDuration: (performance.now() - started) / 1000,
-      });
-    }
-
-    const issues = GenerationTool._ruleCheck(task, repaired, ctx);
-    return createArtifact({
-      taskId: task.id,
-      type: task.type,
-      content: repaired,
-      selfCheckPassed: issues.length === 0,
-      selfCheckIssues: issues,
-      selfCorrectRounds: 1,
-      generationDuration: (performance.now() - started) / 1000,
     });
   }
 
@@ -407,5 +310,141 @@ export class PlanningSession extends WorkerSession {
       summary: `replanned: +${mutation.addTasks.length} ~${mutation.updateTasks.length} -${mutation.dropTaskIds.length}`,
       result: mutation,
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RepairSession
+// ---------------------------------------------------------------------------
+
+export class RepairSession extends WorkerSession {
+  private readonly agent: RepairTool;
+  private readonly logger: Logger = setupLogger("reqdesign.RepairSession");
+
+  constructor(
+    sessionId: string,
+    context: SessionContext,
+    mailbox: { sendNotification: (notif: TaskNotification) => void } | null,
+    llm: unknown,
+    agent: RepairTool,
+  ) {
+    super(sessionId, context, mailbox, llm);
+    this.agent = agent;
+    this.state.workerType = this.workerType;
+  }
+
+  get workerType(): string {
+    return "repair";
+  }
+
+  async run(message: TaskMessage): Promise<TaskNotification> {
+    this.state.messageCount += 1;
+    this.markHeartbeat();
+    this.logger.info(`run: task=${this.context.taskId}，message=repair，msgCount=${this.state.messageCount}`);
+
+    const started = performance.now();
+    const ctx = this._buildRepairContext(message);
+
+    if (this.agent.llm === null) {
+      return this._makeNotification("failed", {
+        summary: `repair failed: no LLM client`,
+        error: "repair requires an LLM client",
+      });
+    }
+
+    const previousContent = ctx.previous_artifact as unknown;
+    if (previousContent === null || previousContent === undefined) {
+      return this._makeNotification("failed", {
+        summary: `repair failed: no previous artifact to repair`,
+        error: "no previous artifact content available",
+      });
+    }
+
+    const task = createTask({
+      id: this.context.taskId,
+      type: this.context.taskType as Task["type"],
+      description: this.context.taskDescription,
+      contextHints: isRecord(ctx._hints) ? ctx._hints : this.context.hints,
+    });
+
+    const fixInstructions = normalizeFixInstructions(message.payload.fix_instructions);
+    const repaired = await this.agent.repair(task, previousContent, fixInstructions, ctx);
+
+    this.markHeartbeat();
+
+    if (repaired === null || repaired === undefined) {
+      return this._makeNotification("failed", {
+        summary: `repair returned no content`,
+        error: "repair returned no content",
+      });
+    }
+
+    const issues = GenerationTool._ruleCheck(task, repaired, ctx);
+    const totalRounds = fixInstructions.length > 0 ? 1 : 0;
+    const elapsed = (performance.now() - started) / 1000;
+
+    const artifact = createArtifact({
+      taskId: task.id,
+      type: task.type,
+      content: repaired,
+      selfCheckPassed: issues.length === 0,
+      selfCheckIssues: issues,
+      selfCorrectRounds: totalRounds,
+      generationDuration: elapsed,
+    });
+
+    this.state.intermediateState.last_artifact = artifact;
+
+    const history = Array.isArray(this.state.intermediateState.fix_history)
+      ? [...(this.state.intermediateState.fix_history as Array<Record<string, unknown>>)]
+      : [];
+    history.push({
+      timestamp: Date.now() / 1000,
+      fix_instructions: fixInstructions,
+      self_check_passed: artifact.selfCheckPassed,
+      self_correct_rounds: artifact.selfCorrectRounds,
+      issues_count: artifact.selfCheckIssues.length,
+    });
+    this.state.intermediateState.fix_history = history.slice(-10);
+    this.state.intermediateState.last_fix_instructions = fixInstructions;
+
+    return this._makeNotification("completed", {
+      summary: `repaired ${this.context.taskType} in ${elapsed.toFixed(1)}s`,
+      result: artifact,
+    });
+  }
+
+  private _buildRepairContext(message: TaskMessage): Record<string, unknown> {
+    const ctx: Record<string, unknown> = {};
+
+    // Previous artifact (from hints, sourced from previous session by runtime)
+    if (this.context.hints.previous_artifact_content !== undefined) {
+      ctx.previous_artifact = this.context.hints.previous_artifact_content;
+    }
+    if (this.context.hints.previous_artifact_type !== undefined) {
+      ctx.previous_artifact_type = this.context.hints.previous_artifact_type;
+    }
+
+    // Revision history
+    const fixHistory = this.state.intermediateState.fix_history;
+    if (Array.isArray(fixHistory)) {
+      ctx.revision_history = fixHistory;
+    }
+
+    // Requirement context
+    if (this.context.requirementText) ctx.requirement_text = this.context.requirementText;
+    if (Object.keys(this.context.requirementJson).length > 0) ctx.requirement_json = this.context.requirementJson;
+    if (this.context.designText) ctx.design_text = this.context.designText;
+
+    // Fix instructions as hints
+    const fixInstructions = normalizeFixInstructions(message.payload.fix_instructions);
+    if (fixInstructions.length > 0) {
+      ctx._hints = {
+        fix_instructions: fixInstructions,
+        revision: this.state.resumeCount,
+      };
+    }
+
+    return ctx;
   }
 }

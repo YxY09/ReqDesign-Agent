@@ -1,7 +1,7 @@
 /**
- * LLM-backed strategy adviser for non-obvious orchestration states.
+ * 基于 LLM 的策略顾问 — 用于非显而易见的编排状态。
  *
- * Ported from reqdesign/orchestration/strategy_brain.py.
+ * 源自 reqdesign/orchestration/strategy_brain.py。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -18,7 +18,7 @@ import { getMemory } from "../memory/store.js";
 // StrategyBrain
 // ---------------------------------------------------------------------------
 
-/** Set of valid strategy names the LLM may choose. */
+/** LLM 可选择的有效策略名称集合。 */
 const VALID_STRATEGIES: ReadonlySet<string> = new Set<StrategyName>([
   "start_planning",
   "route_direct_diagrams",
@@ -46,7 +46,7 @@ export class StrategyBrain {
     this.llm = llm;
   }
 
-  /** Ask the LLM for a strategy, not a low-level runtime action. */
+  /** 向 LLM 请求策略，而非底层运行时操作。 */
   async decide(snapshot: OrchestratorSnapshot): Promise<StrategyDecision> {
     const prompt = this._buildPrompt(snapshot);
     const system =

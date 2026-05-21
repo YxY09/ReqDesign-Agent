@@ -1,9 +1,8 @@
 /**
- * Progress tracking for the multi-agent runtime.
+ * 多 Agent 运行时进度追踪。
  *
- * Makes "progress" a first-class concept: the runtime tracks whether
- * each notification represents genuine forward movement or stagnation,
- * and exposes that information to the Coordinator for smarter decisions.
+ * 将"进度"作为一等公民：运行时追踪每个通知是否代表真正的进展或停滞，
+ * 并将这些信息暴露给 Coordinator 以做出更智能的决策。
  */
 
 import { createHash } from "node:crypto";
@@ -13,8 +12,8 @@ import { createHash } from "node:crypto";
 // ---------------------------------------------------------------------------
 
 /**
- * Deterministic hash of artifact content for change detection.
- * Returns the first 16 hex characters of a SHA-256 digest.
+ * 用于变更检测的产物内容确定性哈希。
+ * 返回 SHA-256 摘要的前 16 个十六进制字符。
  */
 function contentHash(content: unknown): string {
   if (content === null || content === undefined) {
@@ -24,7 +23,7 @@ function contentHash(content: unknown): string {
   return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 16);
 }
 
-/** Current wall-clock time in seconds (equivalent to Python's `time.time()`). */
+/** 当前挂钟时间（秒），等同于 Python 的 `time.time()`。 */
 function nowSeconds(): number {
   return Date.now() / 1000;
 }
@@ -34,64 +33,63 @@ function nowSeconds(): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Snapshot of progress state at a point in time.
+ * 某一时刻的进度状态快照。
  *
- * Updated by the runtime when folding notifications; read by the
- * Coordinator to decide repair / replan / pause strategies.
+ * 由运行时在折叠通知时更新；由 Coordinator 读取以决定 repair/replan/pause 策略。
  */
 export class ProgressSnapshot {
-  // -- Thresholds (class-level defaults, overridable per instance) ---------
+  // -- 阈值（类级默认值，可按实例覆盖） ---------
 
-  /** Consecutive rejections before a task is considered stalled. */
+  /** 任务被判定为停滞前的连续拒绝次数。 */
   stalledRejectionThreshold: number = 3;
 
-  /** Minimum fractional content change to be considered meaningful. */
+  /** 被视为有意义变化的最小内容变化比例。 */
   contentChangeMinRatio: number = 0.05;
 
-  // -- Tracked state -------------------------------------------------------
+  // -- 追踪状态 -------------------------------------------------------
 
-  /** How many times each task's artifact was revised. */
+  /** 每个任务的产物被修订的次数。 */
   artifactRevisionCount: Record<string, number> = {};
 
-  /** SHA-256 prefix hash of each task's latest artifact content. */
+  /** 每个任务最新产物内容的 SHA-256 前缀哈希。 */
   artifactContentHashes: Record<string, string> = {};
 
-  /** How many times each task was re-spawned from scratch. */
+  /** 每个任务从头重新启动的次数。 */
   taskRetryCount: Record<string, number> = {};
 
-  /** Timestamp (seconds) of the last *meaningful* progress event. */
+  /** 最后一次*有意义的*进度事件的时间戳（秒）。 */
   lastProgressAt: number = 0.0;
 
-  /** Task IDs with repeated rejections and no improvement. */
+  /** 反复被拒绝且无改进的任务 ID。 */
   stalledTaskIds: Set<string> = new Set();
 
-  /** Consecutive rejections (by task) without a pass. */
+  /** 各任务的连续拒绝次数（未通过）。 */
   rejectionStreakByTask: Record<string, number> = {};
 
-  /** How many times the plan was mutated. */
+  /** 计划被变更的次数。 */
   planRevisionCount: number = 0;
 
-  /** Evaluator scores across rounds (for trend detection). */
+  /** 跨轮次的评估器分数（用于趋势检测）。 */
   scoreHistory: number[] = [];
 
-  /** Consecutive global no-progress events. */
+  /** 全局连续无进展事件数。 */
   noProgressStreak: number = 0;
 
-  // -- Private bookkeeping -------------------------------------------------
+  // -- 私有记账 -------------------------------------------------
 
-  /** Arbitrary counters for budget tracking (e.g. planner_fail, repair_count:taskId). */
+  /** 用于预算跟踪的任意计数器（如 planner_fail、repair_count:taskId）。 */
   _counters: Record<string, number> = {};
 
   private _lastContentText: Record<string, string> = {};
 
   // -----------------------------------------------------------------------
-  // Mutation API (called by runtime when folding notifications)
+  // 变更 API（由运行时在折叠通知时调用）
   // -----------------------------------------------------------------------
 
   /**
-   * Record a new artifact revision.
+   * 记录新的产物修订。
    *
-   * @returns `true` if the content meaningfully changed.
+   * @returns 内容是否有意义地改变了。
    */
   recordArtifact(taskId: string, content: unknown): boolean {
     const newHash = contentHash(content);
@@ -102,7 +100,7 @@ export class ProgressSnapshot {
     this.artifactContentHashes[taskId] = newHash;
 
     if (oldHash === null) {
-      // First artifact for this task — always progress
+      // 该任务的第一个产物 — 始终视为进展
       this._lastContentText[taskId] =
         content !== null && content !== undefined ? String(content) : "";
       this._markProgress();
@@ -138,8 +136,8 @@ export class ProgressSnapshot {
   }
 
   /**
-   * Record a rejection for a task.
-   * Increments the rejection streak and may mark the task as stalled.
+   * 记录任务被拒绝。
+   * 增加连续拒绝计数，并可能将任务标记为停滞。
    */
   recordRejection(taskId: string): void {
     const streak = (this.rejectionStreakByTask[taskId] ?? 0) + 1;
@@ -153,8 +151,8 @@ export class ProgressSnapshot {
   }
 
   /**
-   * Record a successful pass.
-   * Clears the rejection streak for this task.
+   * 记录成功通过。
+   * 清除该任务的连续拒绝计数。
    */
   recordAcceptance(taskId: string): void {
     delete this.rejectionStreakByTask[taskId];
@@ -163,9 +161,9 @@ export class ProgressSnapshot {
   }
 
   /**
-   * Record an evaluator score.
+   * 记录评估器分数。
    *
-   * @returns `true` if the score improved over the previous one.
+   * @returns 分数是否比上一次有所提升。
    */
   recordScore(score: number): boolean {
     this.scoreHistory.push(score);
@@ -181,59 +179,59 @@ export class ProgressSnapshot {
     return true;
   }
 
-  /** Record that a task was re-spawned (not continued). */
+  /** 记录任务被重新启动（非继续）。 */
   recordRetry(taskId: string): void {
     this.taskRetryCount[taskId] = (this.taskRetryCount[taskId] ?? 0) + 1;
   }
 
-  /** Record that the plan was mutated. */
+  /** 记录计划被变更。 */
   recordPlanMutation(): void {
     this.planRevisionCount += 1;
     this._markProgress();
   }
 
-  /** Explicitly mark a no-progress event. */
+  /** 显式标记无进展事件。 */
   recordNoProgress(): void {
     this.noProgressStreak += 1;
   }
 
   // -----------------------------------------------------------------------
-  // Query API (called by Coordinator)
+  // 查询 API（由 Coordinator 调用）
   // -----------------------------------------------------------------------
 
-  /** Is this task stalled (repeated rejections with no improvement)? */
+  /** 该任务是否停滞（反复拒绝且无改进）？ */
   isTaskStalled(taskId: string): boolean {
     return this.stalledTaskIds.has(taskId);
   }
 
-  /** Is the entire run stalled (consecutive no-progress events)? */
+  /** 整个运行是否停滞（连续无进展事件）？ */
   isGloballyStalled(threshold = 3): boolean {
     return this.noProgressStreak >= threshold;
   }
 
-  /** Return a sorted array of all stalled task IDs. */
+  /** 返回所有停滞任务 ID 的排序数组。 */
   getStalledTaskIds(): string[] {
     return Array.from(this.stalledTaskIds).sort();
   }
 
-  /** Get the current rejection streak for a task. */
+  /** 获取任务的当前连续拒绝次数。 */
   getRejectionStreak(taskId: string): number {
     return this.rejectionStreakByTask[taskId] ?? 0;
   }
 
-  /** Get how many times a task has been retried from scratch. */
+  /** 获取任务从头重试的次数。 */
   getRetryCount(taskId: string): number {
     return this.taskRetryCount[taskId] ?? 0;
   }
 
-  /** Return the most recent evaluator score, or `0.0` if none recorded. */
+  /** 返回最新的评估器分数，如果没有记录则返回 `0.0`。 */
   latestScore(): number {
     if (this.scoreHistory.length === 0) return 0.0;
     return this.scoreHistory[this.scoreHistory.length - 1];
   }
 
   /**
-   * Determine the trend of recent scores.
+   * 判断近期分数趋势。
    *
    * @returns `"improving"` | `"declining"` | `"flat"` | `"unknown"`
    */
@@ -250,13 +248,13 @@ export class ProgressSnapshot {
     return "flat";
   }
 
-  /** Seconds since the last meaningful progress event. */
+  /** 距离上次有意义进度事件的秒数。 */
   timeSinceLastProgress(): number {
     if (this.lastProgressAt === 0.0) return 0.0;
     return nowSeconds() - this.lastProgressAt;
   }
 
-  /** Export a summary dict for Coordinator consumption. */
+  /** 导出供 Coordinator 使用的摘要字典。 */
   summary(): Record<string, unknown> {
     return {
       artifactRevisionCount: { ...this.artifactRevisionCount },
@@ -274,10 +272,10 @@ export class ProgressSnapshot {
   }
 
   // -----------------------------------------------------------------------
-  // Serialization
+  // 序列化
   // -----------------------------------------------------------------------
 
-  /** Serialize to a plain object (suitable for JSON). */
+  /** 序列化为普通对象（适合 JSON）。 */
   toDict(): Record<string, unknown> {
     return {
       artifactRevisionCount: { ...this.artifactRevisionCount },
@@ -292,7 +290,7 @@ export class ProgressSnapshot {
     };
   }
 
-  /** Reconstruct a `ProgressSnapshot` from a previously serialized object. */
+  /** 从之前序列化的对象重建 `ProgressSnapshot`。 */
   static fromDict(data: Record<string, unknown>): ProgressSnapshot {
     const snap = new ProgressSnapshot();
     snap.artifactRevisionCount = (data["artifactRevisionCount"] as Record<string, number>) ?? {};
@@ -311,21 +309,21 @@ export class ProgressSnapshot {
   }
 
   // -----------------------------------------------------------------------
-  // Internal
+  // 内部方法
   // -----------------------------------------------------------------------
 
-  /** Mark that meaningful progress just occurred. */
+  /** 标记刚刚发生了有意义的进展。 */
   private _markProgress(): void {
     this.lastProgressAt = nowSeconds();
     this.noProgressStreak = 0;
   }
 
-  /** Return the last known raw content text for size comparison. */
+  /** 返回用于大小比较的最后一个已知原始内容文本。 */
   private _lastKnownContent(taskId: string): string {
     return this._lastContentText[taskId] ?? "";
   }
 
-  // Expose _lastKnownContent for testing (mirrors Python's internal helper)
+  // 暴露 _lastKnownContent 用于测试（对应 Python 的内部辅助函数）
   /** @internal */
   getLastKnownContent(taskId: string): string {
     return this._lastKnownContent(taskId);

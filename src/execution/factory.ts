@@ -6,6 +6,7 @@ import { GenerationTool } from "../tools/generation.js";
 import { PlanningTool } from "../tools/planning.js";
 import { RepairTool } from "../tools/repair.js";
 import { EvaluationSession, GenerationSession, PlanningSession } from "../tools/sessions.js";
+import { RepairSession } from "../tools/sessions.js";
 import { SessionContext, SessionDescriptor, type WorkerSession } from "../session.js";
 import { setupLogger, type Logger } from "../logger.js";
 
@@ -71,7 +72,19 @@ export class WorkerFactory {
       this.deps.mailbox as { sendNotification: (notif: TaskNotification) => void },
       this.deps.llm,
       this.deps.generatorTool,
-      this.deps.repairTool ?? undefined,
+    );
+  }
+
+  createRepairSession(sessionId: string, context: SessionContext): RepairSession {
+    if (!this.deps.repairTool) {
+      throw new Error("RepairTool dependency is unavailable");
+    }
+    return new RepairSession(
+      sessionId,
+      context,
+      this.deps.mailbox as { sendNotification: (notif: TaskNotification) => void },
+      this.deps.llm,
+      this.deps.repairTool,
     );
   }
 
@@ -93,6 +106,7 @@ export class WorkerFactory {
     if (workerType === "planner") return this.createPlannerSession(sessionId, context);
     if (workerType === "generator") return this.createGeneratorSession(sessionId, context);
     if (workerType === "evaluator") return this.createEvaluatorSession(sessionId, context);
+    if (workerType === "repair") return this.createRepairSession(sessionId, context);
     throw new Error(`unknown worker_type: ${workerType}`);
   }
 

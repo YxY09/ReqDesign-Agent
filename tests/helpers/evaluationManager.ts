@@ -1,10 +1,9 @@
 /**
- * Evaluation manager for benchmark evaluation.
+ * 基准测试评估管理器。
  *
- * Ported from governance/evaluation_manager.py.
+ * 源自 governance/evaluation_manager.py。
  *
- * Manages benchmark runs, score aggregation across multiple runs,
- * and historical trending.
+ * 管理基准测试运行、多轮运行的分数聚合和历史趋势分析。
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -12,7 +11,7 @@ import { join } from "node:path";
 import { Logger, setupLogger } from "../../src/logger.js";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型定义
 // ---------------------------------------------------------------------------
 
 interface AgentConfig {
@@ -80,13 +79,13 @@ export class EvaluationManager {
   }
 
   /**
-   * Run benchmark evaluation.
+   * 运行基准测试评估。
    *
-   * @param casesDir - Directory containing benchmark cases.
-   * @param goldDir - Directory containing gold labels.
-   * @param outputDir - Directory for result output.
-   * @param runs - Number of runs to average (reduces LLM randomness).
-   * @returns The merged benchmark report.
+   * @param casesDir - 基准测试用例目录。
+   * @param goldDir - 标准答案目录。
+   * @param outputDir - 结果输出目录。
+   * @param runs - 平均运行的次数（减少LLM随机性）。
+   * @returns 合并后的基准测试报告。
    */
   runBenchmark(
     casesDir = "benchmark/cases",
@@ -107,7 +106,7 @@ export class EvaluationManager {
         this._logger.info(`第 ${i + 1}/${runs} 次运行`);
       }
 
-      // Placeholder: in practice this would call BenchmarkRunner
+      // 占位符：实际使用时需调用 BenchmarkRunner
       const report = this._runSingle(
         casesDir,
         goldDir,
@@ -142,10 +141,10 @@ export class EvaluationManager {
   }
 
   /**
-   * Run a single benchmark pass.
+   * 运行单次基准测试。
    *
-   * Basic implementation: validates that output files exist and conform to expected structure.
-   * For production use, extend this with semantic quality checks (e.g., LLM-based evaluation).
+   * 基础实现：验证输出文件存在并符合预期结构。
+   * 生产使用时，需扩展语义质量检查（如基于LLM的评估）。
    */
   private _runSingle(
     casesDir: string,
@@ -154,22 +153,22 @@ export class EvaluationManager {
     _runIndex?: number,
   ): BenchmarkReport {
     this._logger.info(
-      `Running benchmark: cases=${casesDir}, gold=${goldDir}, output=${outputDir}`,
+      `运行基准测试: cases=${casesDir}, gold=${goldDir}, output=${outputDir}`,
     );
 
     const results: CaseResult[] = [];
 
-    // Basic validation: check if expected output files exist
-    // This is a minimal implementation - in production you'd want:
-    // 1. JSON schema validation
-    // 2. Content quality checks
-    // 3. LLM-based semantic evaluation
+    // 基础验证：检查预期输出文件是否存在
+    // 最小化实现——生产环境应包含：
+    // 1. JSON schema 验证
+    // 2. 内容质量检查
+    // 3. 基于LLM的语义评估
     const fs = require("node:fs");
     const path = require("node:path");
 
     try {
       if (!fs.existsSync(outputDir)) {
-        this._logger.error(`Output directory does not exist: ${outputDir}`);
+        this._logger.error(`输出目录不存在: ${outputDir}`);
         return {
           runTime: new Date().toISOString().replace("T", " ").slice(0, 19),
           totalRuns: 1,
@@ -179,7 +178,7 @@ export class EvaluationManager {
         };
       }
 
-      // Check for common output files
+      // 检查常见输出文件
       const expectedFiles = [
         "requirement_analysis.json",
         "system_design.md",
@@ -191,7 +190,7 @@ export class EvaluationManager {
         fs.existsSync(path.join(outputDir, file)),
       );
 
-      const passed = foundFiles.length >= 2; // At least 2 outputs present
+      const passed = foundFiles.length >= 2; // 至少2个输出文件存在
       const score = foundFiles.length / expectedFiles.length;
 
       results.push({
@@ -201,7 +200,7 @@ export class EvaluationManager {
         passed,
         issues: expectedFiles
           .filter((f) => !foundFiles.includes(f))
-          .map((f) => `Missing file: ${f}`),
+          .map((f) => `缺少文件: ${f}`),
       });
 
       return {
@@ -219,7 +218,7 @@ export class EvaluationManager {
       };
     } catch (error: unknown) {
       this._logger.error(
-        `Benchmark execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        `基准测试执行失败: ${error instanceof Error ? error.message : String(error)}`,
       );
       return {
         runTime: new Date().toISOString().replace("T", " ").slice(0, 19),
@@ -234,7 +233,7 @@ export class EvaluationManager {
   }
 
   /**
-   * Merge multiple benchmark runs, computing average scores per case.
+   * 合并多次基准测试运行，计算每个用例的平均分数。
    */
   private _mergeRuns(
     reports: BenchmarkReport[],
@@ -250,7 +249,7 @@ export class EvaluationManager {
       };
     }
 
-    // Aggregate scores by case name
+    // 按用例名聚合分数
     const caseScores = new Map<string, Record<string, number>[]>();
 
     for (const report of reports) {
@@ -271,7 +270,7 @@ export class EvaluationManager {
       }
     }
 
-    // Compute average per case
+    // 计算每个用例的平均分
     const avgResults: CaseResult[] = [];
 
     for (const [caseName, scoreList] of caseScores) {
@@ -310,7 +309,7 @@ export class EvaluationManager {
       });
     }
 
-    // Compute summary
+    // 计算汇总信息
     const summary = this._computeSummary(avgResults);
 
     const merged: BenchmarkReport = {
@@ -321,7 +320,7 @@ export class EvaluationManager {
       summary,
     };
 
-    // Save merged results
+    // 保存合并结果
     try {
       mkdirSync(outputDir, { recursive: true });
       const reportPath = join(outputDir, "benchmark_report.json");
@@ -336,10 +335,10 @@ export class EvaluationManager {
   }
 
   /**
-   * Compute a summary from results.
+   * 从结果计算汇总信息。
    *
-   * Delegates to computeRunSummary — a standalone function that
-   * mirrors the Python scorer.compute_run_summary.
+   * 委托给 computeRunSummary —— 一个独立函数，
+   * 镜像 Python 版本的 scorer.compute_run_summary。
    */
   private _computeSummary(results: CaseResult[]): Record<string, unknown> {
     return computeRunSummary(results);
@@ -347,13 +346,13 @@ export class EvaluationManager {
 }
 
 // ---------------------------------------------------------------------------
-// computeRunSummary (ported from benchmark/scorer.py)
+// computeRunSummary（源自 benchmark/scorer.py）
 // ---------------------------------------------------------------------------
 
 /**
- * Compute a summary from benchmark results.
+ * 从基准测试结果计算汇总信息。
  *
- * Returns aggregate statistics: pass rate, average scores per metric, etc.
+ * 返回聚合统计：通过率、各指标平均分数等。
  */
 export function computeRunSummary(
   results: CaseResult[],

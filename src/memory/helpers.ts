@@ -1,7 +1,7 @@
 /**
- * Memory system helpers — pure functions for formatting, parsing, truncation.
+ * 记忆系统辅助函数 — 用于格式化、解析、截断的纯函数。
  *
- * Ported from reqdesign/memory/helpers.py.
+ * 源自 reqdesign/memory/helpers.py。
  */
 
 import {
@@ -16,12 +16,12 @@ import {
 } from "./constants.js";
 
 // ---------------------------------------------------------------------------
-// Frontmatter parsing
+// Frontmatter 解析
 // ---------------------------------------------------------------------------
 
 /**
- * Parse YAML-like frontmatter from text.
- * Delimited by `---` lines.
+ * 从文本中解析类似 YAML 的 frontmatter。
+ * 以 `---` 行作为分隔符。
  */
 export function parseFrontmatter(text: string): Record<string, string> {
   const result: Record<string, string> = {};
@@ -49,11 +49,11 @@ export function parseFrontmatter(text: string): Record<string, string> {
 }
 
 // ---------------------------------------------------------------------------
-// Filename generation
+// 文件名生成
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a topic filename from agent type, memory type, and content.
+ * 根据 Agent 类型、记忆类型和内容生成主题文件名。
  */
 export function topicFilename(
   agentType: string,
@@ -73,7 +73,7 @@ export function topicFilename(
 }
 
 /**
- * Generate a stable topic filename from an explicit topic name.
+ * 根据显式的主题名称生成稳定的主题文件名。
  */
 export function topicFilenameFromTopic(
   agentType: string,
@@ -92,10 +92,10 @@ export function topicFilenameFromTopic(
 }
 
 // ---------------------------------------------------------------------------
-// Description extraction
+// 描述提取
 // ---------------------------------------------------------------------------
 
-/** Extract a brief description from the first line of an entry. */
+/** 从记录的第一行提取简短描述。 */
 export function extractDescription(entry: string): string {
   let firstLine = entry.split("\n")[0].trim();
   if (firstLine.length > 120) {
@@ -105,11 +105,11 @@ export function extractDescription(entry: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Formatting for prompts
+// 提示词格式化
 // ---------------------------------------------------------------------------
 
 /**
- * Format a list of relevant memories as prompt text, grouped by memType.
+ * 将相关记忆列表格式化为提示文本，按 memType 分组。
  */
 export function formatRelevantMemories(
   memories: MemoryEntry[],
@@ -147,7 +147,7 @@ export function formatRelevantMemories(
 }
 
 /**
- * Format a single memory as a natural-language bullet point.
+ * 将单条记忆格式化为自然语言的项目符号。
  */
 export function formatSingleMemory(
   description: string,
@@ -174,7 +174,7 @@ export function formatSingleMemory(
     return `  - ${description} — ${fieldText}`;
   }
 
-  // Fallback: use the first meaningful line
+  // 兜底：使用第一行有意义的内容
   for (const line of content.split("\n")) {
     const stripped = line.trim().replace(/^[#\- ]+/, "");
     if (
@@ -192,10 +192,10 @@ export function formatSingleMemory(
 }
 
 // ---------------------------------------------------------------------------
-// Freshness
+// 时效性
 // ---------------------------------------------------------------------------
 
-/** Return the age of a memory in whole days. */
+/** 以天为单位返回记忆的年龄。 */
 export function memoryAgeDays(lastModified: number | string): number {
   let ms: number;
   if (typeof lastModified === "number") {
@@ -208,10 +208,9 @@ export function memoryAgeDays(lastModified: number | string): number {
 }
 
 /**
- * Return a short caveat for stale memories.
+ * 为陈旧记忆返回简短提示。
  *
- * Memories are historical observations. The model should verify stale claims
- * before using them as current workflow facts.
+ * 记忆是历史观察。模型在将陈旧记忆作为当前工作流事实使用前，应验证其有效性。
  */
 export function memoryFreshnessText(lastModified: string): string {
   const days = memoryAgeDays(lastModified);
@@ -220,11 +219,11 @@ export function memoryFreshnessText(lastModified: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Truncation
+// 截断
 // ---------------------------------------------------------------------------
 
 /**
- * Truncate the memory index to fit within max lines and max bytes.
+ * 将记忆索引截断以适应最大行数和最大字节数。
  */
 export function truncateIndex(
   raw: string,
@@ -271,14 +270,14 @@ export function truncateIndex(
 }
 
 /**
- * Truncate a topic file, keeping the frontmatter and most recent updates.
+ * 截断主题文件，保留 frontmatter 和最近的更新。
  */
 export function truncateTopicFile(
   content: string,
   maxBytes: number = 12_000,
 ): string {
-  const warningText = "> memory file truncated to recent updates.";
-  const warningPattern = /\n{0,2}> memory file truncated to recent updates\.\n?/g;
+  const warningText = "> 记忆文件已截断至最近的更新。";
+  const warningPattern = /\n{0,2}> 记忆文件已截断至最近的更新。\n?/g;
   let normalizedContent = content.replace(warningPattern, "\n");
   normalizedContent = normalizedContent.replace(/\n{3,}/g, "\n\n").trimEnd();
 
@@ -289,7 +288,7 @@ export function truncateTopicFile(
   const separator = "\n---\n";
   const firstSep = normalizedContent.indexOf(separator);
   if (firstSep === -1) {
-    // No separator — keep the tail
+    // 无分隔符 — 保留末尾内容
     const buf = Buffer.from(normalizedContent, "utf8");
     if (buf.length <= maxBytes) return normalizedContent;
     return buf.subarray(buf.length - maxBytes).toString("utf8");
@@ -316,11 +315,11 @@ export function truncateTopicFile(
 }
 
 // ---------------------------------------------------------------------------
-// Header filtering
+// 头部筛选
 // ---------------------------------------------------------------------------
 
 /**
- * Filter memory headers for a given agent type based on filename prefixes.
+ * 根据文件名前缀筛选给定 Agent 类型的记忆头。
  */
 export function headersForAgent(
   agentType: string,

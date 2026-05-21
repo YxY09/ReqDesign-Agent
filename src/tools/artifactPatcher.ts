@@ -1,12 +1,12 @@
 /**
- * ArtifactPatcher — splits artifacts into sections and applies patch operations.
+ * ArtifactPatcher — 将产物拆分为多个章节并应用补丁操作。
  *
- * Used by RepairTool for targeted patching instead of full artifact rewrites.
- * Pure utility, no LLM calls, no async.
+ * 供 RepairTool 使用，实现精准修补而非全量重写。
+ * 纯工具类，无 LLM 调用，无异步。
  */
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型定义
 // ---------------------------------------------------------------------------
 
 export interface Section {
@@ -25,11 +25,11 @@ export interface PatchOp {
 // ---------------------------------------------------------------------------
 
 export class ArtifactPatcher {
-  // ------------------------------------------------------------------
-  // Section parsing
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 章节解析
+  // --------------------------------------------------------------
 
-  /** Split an artifact into named sections based on its type. */
+  /** 根据产物类型将产物拆分为命名章节。 */
   static parseSections(content: unknown, taskType: string): Section[] {
     if (taskType === "diagrams") {
       return ArtifactPatcher._parseDiagramSections(content);
@@ -46,11 +46,11 @@ export class ArtifactPatcher {
       return [{ key: "full", content: "" }];
     }
 
-    // Try ## heading split first
+    // 优先尝试 ## 标题拆分
     const h2Sections = ArtifactPatcher._splitByHeading(text, /^## /);
     if (h2Sections.length > 1) return h2Sections;
 
-    // Try ### heading split
+     // 优先尝试 ### 标题拆分
     const h3Sections = ArtifactPatcher._splitByHeading(text, /^### /);
     if (h3Sections.length > 1) return h3Sections;
 
@@ -72,14 +72,14 @@ export class ArtifactPatcher {
       ];
       const sections: Section[] = [];
 
-      // Standard diagram keys first (preserving order)
+      // 优先标准图表键（保持顺序）
       for (const key of diagramKeys) {
         if (key in dict && typeof dict[key] === "string") {
           sections.push({ key, content: dict[key] as string });
         }
       }
 
-      // Include any non-standard keys
+      // 包含所有非标准键
       for (const [key, val] of Object.entries(dict)) {
         if (!diagramKeys.includes(key) && typeof val === "string") {
           sections.push({ key, content: val });
@@ -89,7 +89,7 @@ export class ArtifactPatcher {
       if (sections.length > 0) return sections;
     }
 
-    // Single string diagram
+    // 单字符串图表
     const text =
       typeof content === "string" ? content : String(content ?? "");
     return [{ key: "diagram", content: text }];
@@ -107,7 +107,7 @@ export class ArtifactPatcher {
     for (const line of lines) {
       if (headingRegex.test(line.trim())) {
         if (currentKey || currentLines.some((l) => l.trim())) {
-          // For the initial section (no heading found yet), try to extract key from # heading
+          // 对于初始章节（尚未找到标题），尝试从 # 标题提取键
           let pushKey = currentKey;
           if (!pushKey) {
             const h1Match = currentLines[0]?.trim().match(/^#\s+(.+)/);
@@ -128,7 +128,7 @@ export class ArtifactPatcher {
     }
 
     if (currentKey || currentLines.some((l) => l.trim())) {
-      // For the first section, try to extract a key from # heading if key is empty
+      // 对于第一个章节，如果键为空则尝试从 # 标题提取键
       if (!currentKey) {
         const h1Match = currentLines[0]?.trim().match(/^#\s+(.+)/);
         if (h1Match) {
@@ -141,11 +141,11 @@ export class ArtifactPatcher {
     return sections;
   }
 
-  // ------------------------------------------------------------------
-  // Patch application
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 补丁应用
+  // --------------------------------------------------------------
 
-  /** Apply patch operations to parsed sections, return joined content string. */
+  /** 应用补丁操作到解析后的章节，返回拼接后的内容字符串。 */
   static applyPatches(sections: Section[], patches: PatchOp[]): string {
     const result = sections.map((s) => ({ ...s }));
 
@@ -186,11 +186,11 @@ export class ArtifactPatcher {
     return match ? match[1].trim() : "section";
   }
 
-  // ------------------------------------------------------------------
-  // Reconstruction
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 重建
+  // --------------------------------------------------------------
 
-  /** Reconstruct sections back into the original artifact format. */
+  /** 将章节重新组装为原始产物格式。 */
   static reconstruct(sections: Section[], taskType: string): unknown {
     if (taskType === "diagrams") {
       const dict: Record<string, string> = {};
@@ -203,17 +203,17 @@ export class ArtifactPatcher {
     return sections.map((s) => s.content).join("\n\n");
   }
 
-  // ------------------------------------------------------------------
-  // Validation
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 验证
+  // --------------------------------------------------------------
 
-  /** Check that patched result is not significantly shorter than original. */
+  /** 检查修补结果是否未显著短于原始内容。 */
   static validateResult(original: string, patched: string): boolean {
     if (!original.trim()) return true;
     return patched.length >= original.length * 0.5;
   }
 
-  /** Get a formatted listing of section keys for prompt inclusion. */
+  /** 获取格式化的章节列表，用于放入 prompt。 */
   static sectionListing(sections: Section[]): string {
     return sections
       .map((s, i) => `${i + 1}. "${s.key}" (${s.content.length} chars)`)

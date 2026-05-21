@@ -149,7 +149,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
         let val = result.value;
         // 空结果重试一次
         if (!val?.trim()) {
-          try { val = await tasks[i].fn(); } catch { /* keep empty */ }
+          try { val = await tasks[i].fn(); } catch { /* 保持空值 */ }
         }
         if (!val?.trim()) {
           failed.push(tasks[i].name);

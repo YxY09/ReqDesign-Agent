@@ -1,10 +1,10 @@
 /**
- * Full-chain trace logging module.
+ * 全链路追踪日志模块。
  *
- * Ported from governance/trace_logger.py.
+ * 源自 governance/trace_logger.py。
  *
- * Provides TraceLogger for recording execution traces and
- * TracingLLMClient for transparently wrapping LLMClient calls.
+ * 提供 TraceLogger 用于记录执行追踪，
+ * TracingLLMClient 用于透明地包装 LLMClient 调用。
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -12,7 +12,7 @@ import { dirname } from "node:path";
 import { Logger, setupLogger } from "../logger.js";
 
 // ---------------------------------------------------------------------------
-// TraceEntry
+// TraceEntry（追踪条目）
 // ---------------------------------------------------------------------------
 
 export interface TraceEntryData {
@@ -22,7 +22,7 @@ export interface TraceEntryData {
   data: Record<string, unknown>;
 }
 
-/** Factory for TraceEntry with defaults. */
+/** 带有默认值的 TraceEntry 工厂函数。 */
 export function createTraceEntry(
   overrides: Partial<TraceEntryData> = {},
 ): TraceEntryData {
@@ -36,7 +36,7 @@ export function createTraceEntry(
 }
 
 // ---------------------------------------------------------------------------
-// TraceLogger
+// TraceLogger（追踪日志器）
 // ---------------------------------------------------------------------------
 
 export class TraceLogger {
@@ -52,12 +52,12 @@ export class TraceLogger {
     this._logger = setupLogger("reqdesign.trace");
   }
 
-  /** Set the file path for auto-flush. Once set, every log() call writes to disk. */
+  /** 设置自动刷新的文件路径。设置后，每次 log() 调用都会写入磁盘。 */
   setPersistPath(path: string): void {
     this._persistPath = path;
   }
 
-  /** Record a trace entry. */
+  /** 记录一条追踪条目。 */
   log(
     stage: string,
     eventType: string,
@@ -74,16 +74,16 @@ export class TraceLogger {
       this.entries = this.entries.slice(-TraceLogger.MAX_ENTRIES);
     }
     this._logger.debug(
-      `[Trace] ${stage}/${eventType}: ${summarizeData(data)}`,
+      `[追踪] ${stage}/${eventType}: ${summarizeData(data)}`,
     );
 
-    // Auto-flush to disk if persist path is set
+    // 设置了持久化路径时自动刷新到磁盘
     if (this._persistPath) {
       this._flushToDisk();
     }
   }
 
-  /** Record an LLM call. */
+  /** 记录一次 LLM 调用。 */
   logLlmCall(
     stage: string,
     method: string,
@@ -109,7 +109,7 @@ export class TraceLogger {
     });
   }
 
-  /** Record a validation result. */
+  /** 记录验证结果。 */
   logValidation(
     stage: string,
     isValid: boolean,
@@ -125,7 +125,7 @@ export class TraceLogger {
     });
   }
 
-  /** Record a repair action. */
+  /** 记录修复操作。 */
   logRepair(
     stage: string,
     attempt: number,
@@ -141,7 +141,7 @@ export class TraceLogger {
     });
   }
 
-  /** Record a gate decision. */
+  /** 记录门控决策。 */
   logGateDecision(stage: string, decision: string, reason = ""): void {
     this.log(stage, "gate_decision", {
       decision,
@@ -149,7 +149,7 @@ export class TraceLogger {
     });
   }
 
-  /** Record human input. */
+  /** 记录人工输入。 */
   logHumanInput(stage: string, action: string, feedback = ""): void {
     this.log(stage, "human_input", {
       action,
@@ -157,12 +157,12 @@ export class TraceLogger {
     });
   }
 
-  /** Record stage start. */
+  /** 记录阶段开始。 */
   logStageStart(stage: string): void {
     this.log(stage, "stage_start");
   }
 
-  /** Record stage end. */
+  /** 记录阶段结束。 */
   logStageEnd(stage: string, status: string, duration: number): void {
     this.log(stage, "stage_end", {
       status,
@@ -170,7 +170,7 @@ export class TraceLogger {
     });
   }
 
-  /** Filter trace entries by stage and/or event type. */
+  /** 按阶段和/或事件类型筛选追踪条目。 */
   getEntries(stage?: string, eventType?: string): TraceEntryData[] {
     let result = this.entries;
     if (stage) {
@@ -182,7 +182,7 @@ export class TraceLogger {
     return result;
   }
 
-  /** Get a summary of trace activity. */
+  /** 获取追踪活动的摘要。 */
   getSummary(): Record<string, unknown> {
     const stages: Record<
       string,
@@ -205,7 +205,7 @@ export class TraceLogger {
     };
   }
 
-  /** Export trace records as JSON string. Optionally write to a file. */
+  /** 将追踪记录导出为 JSON 字符串。可选择写入文件。 */
   exportJson(path?: string): string {
     const data = {
       summary: this.getSummary(),
@@ -233,11 +233,11 @@ export class TraceLogger {
     return jsonStr;
   }
 
-  // -------------------------------------------------------------------
-  // Persistence
-  // -------------------------------------------------------------------
+// -------------------------------------------------------------------
+// 持久化
+// -------------------------------------------------------------------
 
-  /** Write current trace to disk (called automatically when persistPath is set). */
+  /** 将当前追踪写入磁盘（设置 persistPath 后自动调用）。 */
   private _flushToDisk(): void {
     try {
       const data = {
@@ -248,25 +248,25 @@ export class TraceLogger {
       mkdirSync(dirname(this._persistPath), { recursive: true });
       writeFileSync(this._persistPath, jsonStr, { encoding: "utf8" });
     } catch {
-      // Trace flush must never fail the main workflow
+      // 追踪刷新不能导致主工作流失败
     }
   }
 
-  /** Clear all trace entries. */
+  /** 清除所有追踪条目。 */
   clear(): void {
     this.entries.length = 0;
   }
 }
 
 // ---------------------------------------------------------------------------
-// TracingLLMClient
+// TracingLLMClient（带追踪的LLM客户端）
 // ---------------------------------------------------------------------------
 
 /**
- * Transparent wrapper around an LLMClient that records all calls.
+ * 透明包装 LLMClient 以记录所有调用的包装器。
  *
- * The `_client` must have: chat(), generateJson(), generateText(), and
- * properties: provider, model, temperature, maxTokens, streamTag.
+ * `_client` 必须具有：chat()、generateJson()、generateText()，
+ * 以及属性：provider、model、temperature、maxTokens、streamTag。
  */
 export class TracingLLMClient {
   private readonly _client: Record<string, unknown> & {
@@ -299,7 +299,7 @@ export class TracingLLMClient {
     this._stage = stage;
   }
 
-  /** Set the current stage name. */
+  /** 设置当前阶段名称。 */
   setStage(stage: string): void {
     this._stage = stage;
   }
@@ -328,7 +328,7 @@ export class TracingLLMClient {
     (this._client as Record<string, unknown>)["streamTag"] = value;
   }
 
-  /** Traced chat call. */
+  /** 带追踪的 chat 调用。 */
   async chat(
     messages: Record<string, unknown>[],
     temperature?: number,
@@ -352,7 +352,7 @@ export class TracingLLMClient {
     }
   }
 
-  /** Traced generateJson call. */
+  /** 带追踪的 generateJson 调用。 */
   async generateJson(
     prompt: string,
     system = "",
@@ -390,7 +390,7 @@ export class TracingLLMClient {
     }
   }
 
-  /** Traced generateText call. */
+  /** 带追踪的 generateText 调用。 */
   async generateText(
     prompt: string,
     system = "",
@@ -423,7 +423,7 @@ export class TracingLLMClient {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers（辅助函数）
 // ---------------------------------------------------------------------------
 
 function summarizeData(data: Record<string, unknown> | null, maxLen = 100): string {

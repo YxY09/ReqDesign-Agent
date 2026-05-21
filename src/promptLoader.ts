@@ -1,8 +1,8 @@
 /**
- * Shared prompt-template loader with file-level caching.
+ * 共享的提示词模板加载器，带文件级缓存。
  *
- * Resolves prompt files relative to a `prompts/` directory located two levels
- * above this source file (i.e. `<project-root>/prompts/`).
+ * 相对于本源文件两个层级之上的 `prompts/` 目录解析提示词文件
+ *（即 `<project-root>/prompts/`）。
  *
  * @module promptLoader
  */
@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
-// Resolve PROMPT_DIR: <project-root>/prompts
+// 解析 PROMPT_DIR: <project-root>/prompts
 // ---------------------------------------------------------------------------
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,30 +20,30 @@ const __dirname = path.dirname(__filename);
 const PROMPT_DIR = path.resolve(__dirname, "..", "prompts");
 
 // ---------------------------------------------------------------------------
-// Module-level cache
+// 模块级缓存
 // ---------------------------------------------------------------------------
 
-/** Cache mapping filename → loaded content (avoids repeated disk reads). */
+/** 文件名 → 已加载内容的缓存映射（避免重复磁盘读取）。 */
 const _cache = new Map<string, string>();
 
 // ---------------------------------------------------------------------------
-// Public API
+// 公共 API
 // ---------------------------------------------------------------------------
 
 /**
- * Load a prompt template file from the `prompts/` directory with caching.
+ * 从 `prompts/` 目录加载提示词模板文件，带缓存。
  *
- * The `filename` is sanitised via `path.basename` to prevent path-traversal
- * attacks.  If the file does not exist, `fallback` is returned.
+ * 通过 `path.basename` 对 `filename` 进行清理以防止路径遍历攻击。
+ * 如果文件不存在，返回 `fallback`。
  *
- * @param filename - Name of the file inside the `prompts/` directory
- *                   (e.g. `"requirement_analysis.md"`).
- * @param fallback - Default content returned when the file is missing
- *                   (default `""`).
- * @returns The prompt template text.
+ * @param filename - `prompts/` 目录内的文件名
+ *                   （如 `"requirement_analysis.md"`）。
+ * @param fallback - 文件缺失时返回的默认内容
+ *                   （默认为 `""`）。
+ * @returns 提示词模板文本。
  */
 export function loadPrompt(filename: string, fallback = ""): string {
-  // Sanitise: prevent path traversal
+  // 清理：防止路径遍历
   const safeName = path.basename(filename);
   if (!safeName || safeName === "." || safeName === "..") {
     return fallback;
@@ -65,16 +65,16 @@ export function loadPrompt(filename: string, fallback = ""): string {
       "code" in err &&
       (err as NodeJS.ErrnoException).code === "ENOENT"
     ) {
-      // File not found — return fallback silently
+      // 文件未找到 — 静默返回 fallback
       return fallback;
     }
-    // Re-throw unexpected errors
+    // 重新抛出意外错误
     throw err;
   }
 }
 
 /**
- * Clear the prompt cache (useful in tests).
+ * 清空提示词缓存（在测试中很有用）。
  */
 export function clearCache(): void {
   _cache.clear();

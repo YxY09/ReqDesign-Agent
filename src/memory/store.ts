@@ -1,13 +1,13 @@
 /**
- * Persistent Agent memory system.
+ * 持久化 Agent 记忆系统。
  *
- * MemoryStore handles:
- * - Saving memories (write topic file + update index)
- * - Loading memories (index scan + frontmatter parsing)
- * - Relevance retrieval (deterministic weighted matching, no LLM)
- * - Prompt injection (appending memories to system prompt)
+ * MemoryStore 负责：
+ * - 保存记忆（写入主题文件 + 更新索引）
+ * - 加载记忆（索引扫描 + frontmatter 解析）
+ * - 相关性检索（确定性加权匹配，无 LLM）
+ * - 提示注入（将记忆追加到系统提示词）
  *
- * Ported from reqdesign/memory/store.py.
+ * 源自 reqdesign/memory/store.py。
  */
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync } from "node:fs";
@@ -59,17 +59,17 @@ export class MemoryStore {
   }
 
   // ================================================================
-  // Save
+  // 保存
   // ================================================================
 
   /**
-   * Save a memory entry.
+   * 保存一条记忆条目。
    *
-   * @param agentType - Agent type (planner, generator, evaluator, etc.).
-   * @param entry - Memory content text.
-   * @param memType - Memory type: user, feedback, project, reference.
-   * @param topic - Optional explicit topic name.
-   * @param dedupKey - Optional dedup key (skip write if existing file contains it).
+   * @param agentType - Agent 类型（planner、generator、evaluator 等）。
+   * @param entry - 记忆内容文本。
+   * @param memType - 记忆类型：user、feedback、project、reference。
+   * @param topic - 可选的主题名称。
+   * @param dedupKey - 可选的去重键（如果现有文件已包含则跳过写入）。
    */
   save(
     agentType: string,
@@ -125,11 +125,11 @@ export class MemoryStore {
   }
 
   // ================================================================
-  // Load
+  // 加载
   // ================================================================
 
   /**
-   * Load all remembered context for a given agent type.
+   * 加载给定 Agent 类型的所有记忆上下文。
    */
   load(agentType: string): string {
     if (!(agentType in AGENT_TYPE_MAP)) {
@@ -156,7 +156,7 @@ export class MemoryStore {
   }
 
   /**
-   * Load memory context for all agent types.
+   * 加载所有 Agent 类型的记忆上下文。
    */
   loadAll(): Record<string, string> {
     const result: Record<string, string> = {};
@@ -167,14 +167,14 @@ export class MemoryStore {
   }
 
   // ================================================================
-  // Relevance retrieval
+  // 相关性检索
   // ================================================================
 
   /**
-   * Find memories relevant to a query.
+   * 查找与查询相关的记忆。
    *
-   * Uses deterministic weighted matching instead of LLM-based selection
-   * to keep the TypeScript port self-contained.
+   * 使用确定性加权匹配而非基于 LLM 的选择，
+   * 以保持 TypeScript 版本自包含。
    */
   findRelevant(
     query: string,
@@ -210,7 +210,7 @@ export class MemoryStore {
         if (content.includes(term)) relevanceScore += 1;
       }
 
-      // Recency is a tie-breaker only; relevance should dominate prompt context.
+      // 时效性仅作为平局决胜器；相关性应主导提示上下文。
       const score = relevanceScore + header.mtime / 1e12;
       return { entry, score, relevanceScore };
     });
@@ -223,11 +223,11 @@ export class MemoryStore {
   }
 
   // ================================================================
-  // Prompt injection
+  // 提示注入
   // ================================================================
 
   /**
-   * Append relevant memories to a base prompt.
+   * 将相关记忆追加到基础提示词。
    */
   appendToPrompt(
     agentType: string,
@@ -267,7 +267,7 @@ export class MemoryStore {
   }
 
   // ================================================================
-  // Internal methods
+  // 内部方法
   // ================================================================
 
   private static _queryTerms(query: string): string[] {
@@ -322,7 +322,7 @@ export class MemoryStore {
           { encoding: "utf8" },
         );
       } catch {
-        // best-effort
+        // 尽力而为
       }
     }
   }
@@ -518,7 +518,7 @@ export class MemoryStore {
       if (existsSync(topicPath)) {
         let existing = readFileSync(topicPath, "utf8");
         if (marker && existing.includes(marker)) {
-          return true; // Already exists, skip
+          return true; // 已存在，跳过
         }
 
         let update = `\n\n---\n\n## 更新 ${created}\n\n`;
@@ -544,12 +544,12 @@ export class MemoryStore {
 }
 
 // ================================================================
-// Global singleton
+// 全局单例
 // ================================================================
 
 let _memoryStore: MemoryStore | null = null;
 
-/** Get the global MemoryStore singleton. */
+/** 获取全局 MemoryStore 单例。 */
 export function getMemory(): MemoryStore {
   if (_memoryStore === null) {
     _memoryStore = new MemoryStore();
@@ -557,7 +557,7 @@ export function getMemory(): MemoryStore {
   return _memoryStore;
 }
 
-/** Set a custom MemoryStore instance. */
+/** 设置自定义 MemoryStore 实例。 */
 export function setMemory(store: MemoryStore): void {
   _memoryStore = store;
 }

@@ -1,7 +1,7 @@
 /**
- * Streaming output utilities — print LLM responses token-by-token to the terminal.
+ * 流式输出工具 — 将 LLM 响应逐 token 打印到终端。
  *
- * Mirrors the Python `streaming.py` module with an async-friendly TypeScript API.
+ * 用异步友好的 TypeScript API 镜像 Python 的 `streaming.py` 模块。
  *
  * @module streaming
  */
@@ -9,31 +9,30 @@
 import process from "node:process";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
-/** Callback pair returned by {@link makeStreamPrinter}. */
+/** {@link makeStreamPrinter} 返回的回调对。 */
 export interface StreamPrinter {
-  /** Called for each incoming chunk of text. */
+  /** 对每个到来的文本块调用。 */
   onChunk(text: string): void;
-  /** Called once when the stream is finished. */
+  /** 流结束时调用一次。 */
   done(): void;
 }
 
 // ---------------------------------------------------------------------------
-// Stream printer
+// 流式打印机
 // ---------------------------------------------------------------------------
 
 /**
- * Create a stream printer that writes chunks to `stdout` with a labelled
- * prefix (similar to Claude Code's output style).
+ * 创建一个流式打印机，将文本块写入 `stdout` 并带有标签前缀
+ *（类似于 Claude Code 的输出风格）。
  *
- * The first call to `onChunk` emits the `tag` prefix.  Subsequent calls
- * append text directly.  `done()` emits a final newline when at least one
- * chunk was printed.
+ * 首次调用 `onChunk` 时输出 `tag` 前缀。后续调用直接追加文本。
+ * 如果至少打印了一个块，`done()` 会输出一个最终换行符。
  *
- * @param tag - Label shown before the streamed text (e.g. `"[PlanningTool]"`).
- * @returns A {@link StreamPrinter} with `onChunk` and `done` callbacks.
+ * @param tag - 流式文本前显示的标签（如 `"[PlanningTool]"`）。
+ * @returns 带有 `onChunk` 和 `done` 回调的 {@link StreamPrinter}。
  */
 export function makeStreamPrinter(tag: string): StreamPrinter {
   let printed = false;
@@ -46,7 +45,7 @@ export function makeStreamPrinter(tag: string): StreamPrinter {
     try {
       process.stdout.write(text);
     } catch {
-      // Ignore encoding errors (e.g. emoji on Windows GBK consoles)
+      // 忽略编码错误（如 Windows GBK 控制台上的 emoji）
     }
   };
 

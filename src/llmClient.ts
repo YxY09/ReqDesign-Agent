@@ -1,8 +1,7 @@
 /**
- * LLM client abstraction — unified interface across OpenAI-compatible and
- * Anthropic providers.
+ * LLM 客户端抽象层 — 统一接口，支持 OpenAI 兼容 Provider 和 Anthropic。
  *
- * Ported from reqdesign/llm_client.py (Phase 4).
+ * Ported from reqdesign/llm_client.py (Phase 4)。
  *
  * @module llmClient
  */
@@ -17,27 +16,27 @@ import { withRetry } from "./utils/retry.js";
 // Types
 // ---------------------------------------------------------------------------
 
-/** Streaming callback — invoked for each text fragment received from the LLM. */
+/** 流式回调 — 每次从 LLM 收到文本片段时调用。 */
 export type OnChunk = (text: string) => void;
 
-/** Structured record of a completed LLM call, emitted via trace sink. */
+/** 已完成的 LLM 调用记录，通过 trace sink 发出。 */
 export interface LlmCallInfo {
   tag: string;
   provider: string;
   model: string;
-  /** Total wall-clock time in milliseconds. */
+  /** 总耗时（毫秒）。 */
   durationMs: number;
-  /** Number of messages sent. */
+  /** 发送的消息数。 */
   inputMessageCount: number;
-  /** Characters in the concatenated prompt. */
+  /** 连接后的提示词字符数。 */
   inputChars: number;
-  /** First 2000 chars of the last user message. */
+  /** 最后一条用户消息的前 2000 个字符。 */
   promptPreview: string;
-  /** Full assistant response text. */
+  /** 完整的助手响应文本。 */
   responseText: string;
-  /** Characters in the response. */
+  /** 响应的字符数。 */
   responseChars: number;
-  /** Token usage (may be undefined for some providers). */
+  /** Token 用量（某些 provider 可能为 undefined）。 */
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
@@ -57,9 +56,9 @@ export interface LlmStreamEvent {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
-  /** Roles of each message in the request (e.g. ["system", "user"]). */
+  /** 请求中每条消息的角色（如 ["system", "user"]）。 */
   messageRoles?: string[];
-  /** First segment of the last user message (the actual question/prompt). */
+  /** 最后一条用户消息的第一段（实际的问题/提示）。 */
   promptPreview?: string;
 }
 
@@ -74,14 +73,14 @@ interface StreamResult {
   usage?: LlmTokenUsage;
 }
 
-/** A single chat message in the format accepted by both SDKs. */
+/** 单条聊天消息格式，两个 SDK 都接受。 */
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
 
 // ---------------------------------------------------------------------------
-// Provider defaults
+// Provider 默认值
 // ---------------------------------------------------------------------------
 
 const OPENAI_COMPAT_PROVIDERS = new Set([
@@ -102,10 +101,9 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Unified async client for OpenAI-compatible and Anthropic LLM providers.
+ * OpenAI 兼容和 Anthropic LLM Provider 的统一异步客户端。
  *
- * Supports both non-streaming and streaming chat completions, as well as
- * convenience helpers for JSON and plain-text generation.
+ * 支持非流式和流式聊天补全，以及 JSON 和纯文本生成的便捷辅助方法。
  */
 export class LLMClient {
   readonly provider: string;
@@ -118,11 +116,11 @@ export class LLMClient {
   private readonly _client: OpenAI | Anthropic;
   private readonly _logger: Logger;
 
-  /** Replaces the Python `threading.local()` stream tag. */
+  /** 替换 Python 的 threading.local() stream tag。 */
   private _streamTag = "";
   private _streamListener: ((event: LlmStreamEvent) => void) | null = null;
 
-  /** Trace sink — set by runtime to record every LLM call into TraceLogger. */
+  /** Trace sink — 运行时设置，用于将每次 LLM 调用记录到 TraceLogger。 */
   private _traceSink: ((info: LlmCallInfo) => void) | null = null;
 
   private readonly _retryConfig: {
@@ -165,11 +163,10 @@ export class LLMClient {
   }
 
   // -----------------------------------------------------------------------
-  // Stream tag (replaces thread-local storage)
+  // Stream tag (替换 thread-local storage)
   // -----------------------------------------------------------------------
 
-  /** Tag used to auto-enable streaming. When non-empty and no `onChunk` is
-   *  provided to {@link chat}, streaming is enabled automatically. */
+  /** 用于自动启用流式传输的标签。设置了 streamTag 且没有提供 onChunk 时，自动启用流式传输。 */
   get streamTag(): string {
     return this._streamTag;
   }
@@ -182,7 +179,7 @@ export class LLMClient {
     this._streamListener = listener ?? null;
   }
 
-  /** Set the trace sink to record every completed LLM call. */
+  /** 设置 trace sink，用于记录每次完成的 LLM 调用。 */
   setTraceSink(sink: ((info: LlmCallInfo) => void) | null): void {
     this._traceSink = sink;
   }
@@ -192,15 +189,15 @@ export class LLMClient {
   // -----------------------------------------------------------------------
 
   /**
-   * Send a chat completion request and return the full assistant response.
+   * 发送聊天补全请求，返回完整的助手响应。
    *
-   * When `onChunk` is provided (or when `streamTag` is set), the response is
-   * streamed and the callback is invoked for each text fragment.
+   * 提供了 onChunk（或设置了 streamTag）时，响应会流式传输，
+   * 回调函数会为每个文本片段调用。
    *
-   * @param messages    - Conversation messages.
-   * @param temperature - Override the default temperature (optional).
-   * @param onChunk     - Streaming callback (optional).
-   * @returns The full assistant response text.
+   * @param messages    - 对话消息列表。
+   * @param temperature - 覆盖默认 temperature（可选）。
+   * @param onChunk     - 流式回调（可选）。
+   * @returns 完整的助手响应文本。
    */
   async chat(
     messages: ChatMessage[],
@@ -213,7 +210,7 @@ export class LLMClient {
     const shouldStream = chunkHandler !== undefined;
     const emitMetadata = shouldStream && this._streamListener !== null && streamTag.trim().length > 0;
     if (emitMetadata) {
-      // Extract prompt preview: the last user message, bounded for TUI display.
+      // 提取提示词预览：最后一条用户消息，截断用于 TUI 显示。
       const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
       const promptPreview = lastUserMsg
         ? lastUserMsg.content.slice(0, 1200)
@@ -304,7 +301,7 @@ export class LLMClient {
         throw new Error(`[LLMClient] Unsupported provider: ${this.provider}`);
       }
 
-      // Emit stream metadata for TUI / runtime event system
+      // 为 TUI / 运行时事件系统发出流元数据
       if (emitMetadata) {
         this._emitStreamEvent(streamTag, "end", {
           responseChars: Array.from(resultText).length,
@@ -315,7 +312,7 @@ export class LLMClient {
         );
       }
 
-      // Emit structured trace record
+      // 发出结构化追踪记录
       this._emitTrace(streamTag, messages, inputChars, promptPreview, resultText, Date.now() - startTime, usage);
 
       return resultText;
@@ -338,15 +335,14 @@ export class LLMClient {
   // -----------------------------------------------------------------------
 
   /**
-   * Send a prompt and parse the response as JSON.
+   * 发送提示词并解析响应为 JSON。
    *
-   * Handles markdown code blocks, truncated JSON, trailing commas, and
-   * single/double-quoted strings.
+   * 处理 markdown 代码块、截断的 JSON、尾随逗号和单/双引号字符串。
    *
-   * @param prompt   - The user prompt.
-   * @param system   - Optional system prompt.
-   * @param onChunk  - Streaming callback (optional).
-   * @returns Parsed JSON object.
+   * @param prompt   - 用户提示词。
+   * @param system   - 可选的系统提示词。
+   * @param onChunk  - 流式回调（可选）。
+   * @returns 解析后的 JSON 对象。
    */
   async generateJson(
     prompt: string,
@@ -363,12 +359,12 @@ export class LLMClient {
   // -----------------------------------------------------------------------
 
   /**
-   * Send a prompt and return the raw text response.
+   * 发送提示词并返回原始文本响应。
    *
-   * @param prompt   - The user prompt.
-   * @param system   - Optional system prompt.
-   * @param onChunk  - Streaming callback (optional).
-   * @returns The assistant response text.
+   * @param prompt   - 用户提示词。
+   * @param system   - 可选的系统提示词。
+   * @param onChunk  - 流式回调（可选）。
+   * @returns 助手响应文本。
    */
   async generateText(
     prompt: string,
@@ -409,7 +405,7 @@ export class LLMClient {
         totalTokens: usage?.totalTokens,
       });
     } catch {
-      // Trace emission must never fail the main workflow.
+      // 追踪发出绝不能导致主流程失败。
     }
   }
 
@@ -573,7 +569,7 @@ export class LLMClient {
   ): Promise<StreamResult> {
     const client = this._client as Anthropic;
 
-    // Anthropic expects system as a top-level parameter, not in messages
+    // Anthropic 期望 system 作为顶级参数，而不是在 messages 中
     const systemMessage = messages.find((m) => m.role === "system")?.content ?? "";
     const nonSystemMessages = messages.filter((m) => m.role !== "system");
 
@@ -581,7 +577,7 @@ export class LLMClient {
       return this._chatStreamAnthropic(client, systemMessage, nonSystemMessages, temperature, onChunk);
     }
 
-    // Non-streaming
+    // 非流式
     const msg = await client.messages.create(
       {
         model: this.model,
@@ -698,18 +694,18 @@ function buildMessages(prompt: string, system: string): ChatMessage[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Extract JSON text from a raw LLM response.
+ * 从原始 LLM 响应中提取 JSON 文本。
  *
- * Handles:
- * - Markdown code blocks (```json ... ``` or ``` ... ```)
- * - Bare JSON objects/arrays (brace/bracket matching)
- * - Truncated responses (best-effort extraction)
+ * 处理：
+ * - Markdown 代码块（```json ... ``` 或 ``` ... ```）
+ * - 裸 JSON 对象/数组（括号匹配）
+ * - 截断的响应（尽力提取）
  */
 function extractJsonText(raw: string): string {
   const trimmed = raw.trim();
 
-  // 1. Try markdown code blocks first
-  //    ```json\n{...}\n``` or ```\n{...}\n```
+  // 1. 首先尝试 markdown 代码块
+  //    ```json\n{...}\n``` 或 ```\n{...}\n```
   const codeBlockMatches = [...trimmed.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n\s*```/g)];
   for (const match of codeBlockMatches) {
     const candidate = match[1].trim();
@@ -719,16 +715,16 @@ function extractJsonText(raw: string): string {
     return codeBlockMatches[0][1].trim();
   }
 
-  // 2. If the response starts with { or [, try brace matching
+  // 2. 如果响应以 { 或 [ 开头，尝试括号匹配
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     const extracted = matchBraces(trimmed);
     if (extracted && canParseJsonCandidate(extracted)) return extracted;
     if (extracted) return extracted;
   }
 
-  // 3. Scan for the first parseable balanced JSON candidate. Reasoning models
-  // often emit prose or <think> blocks containing placeholders such as
-  // `{requirement_json}` before the actual JSON object.
+  // 3. 扫描第一个可解析的平衡 JSON 候选项。推理模型
+  // 经常在实际的 JSON 对象前输出解释性文字或 <think> 块，
+  // 其中可能包含 `{requirement_json}` 等占位符。
   for (let i = 0; i < trimmed.length; i++) {
     const ch = trimmed[i];
     if (ch !== "{" && ch !== "[") continue;
@@ -736,8 +732,8 @@ function extractJsonText(raw: string): string {
     if (extracted && canParseJsonCandidate(extracted)) return extracted;
   }
 
-  // 4. Look for the first { or [ and return everything from there as a last
-  // resort so truncation repair can still run.
+  // 4. 查找第一个 { 或 [，并返回从该位置开始的所有内容，
+  // 作为最后的兜底方案，以便截断修复仍能运行。
   const firstBrace = trimmed.search(/[{[]/);
   if (firstBrace !== -1) {
     const sub = trimmed.slice(firstBrace);
@@ -746,12 +742,12 @@ function extractJsonText(raw: string): string {
     return sub;
   }
 
-  // 5. Return as-is
+  // 5. 原样返回
   return trimmed;
 }
 
 /**
- * Match balanced braces/brackets and return the outermost JSON-like substring.
+ * 匹配平衡的大括号/方括号，返回最外层的类 JSON 子串。
  */
 function matchBraces(text: string): string | null {
   const openChar = text[0];
@@ -790,15 +786,15 @@ function matchBraces(text: string): string | null {
     }
   }
 
-  // No balanced match found
+  // 未找到平衡匹配
   return null;
 }
 
 /**
- * Robustly parse a JSON string, handling common LLM artefacts:
- * - JavaScript-style comments (// and /* *​/)
- * - Trailing commas before ] or }
- * - Truncated JSON (attempts completion)
+ * 鲁棒地解析 JSON 字符串，处理常见的 LLM 工件：
+ * - JavaScript 风格注释（// 和 /* *​/）
+ * - ] 或 } 前的尾随逗号
+ * - 截断的 JSON（尝试补全）
  */
 function parseJsonResponse(raw: string): Record<string, unknown> {
   const primary = extractJsonText(raw);
@@ -879,7 +875,7 @@ function extractJsonCandidates(raw: string): string[] {
 }
 
 /**
- * Remove JS-style comments and trailing commas from a JSON string.
+ * 从 JSON 字符串中移除 JS 风格注释和尾随逗号。
  */
 function stripCommentsAndTrailingCommas(text: string): string {
   let result = "";
@@ -917,19 +913,19 @@ function stripCommentsAndTrailingCommas(text: string): string {
       continue;
     }
 
-    // Single-line comment //
+    // 单行注释 //
     if (ch === "/" && i + 1 < text.length && text[i + 1] === "/") {
-      // Skip until end of line
+      // 跳过直到行尾
       i += 2;
       while (i < text.length && text[i] !== "\n") i++;
       continue;
     }
 
-    // Multi-line comment /* ... */
+    // 多行注释 /* ... */
     if (ch === "/" && i + 1 < text.length && text[i + 1] === "*") {
       i += 2;
       while (i < text.length && !(text[i] === "*" && i + 1 < text.length && text[i + 1] === "/")) i++;
-      i += 2; // skip */
+      i += 2; // 跳过 */
       continue;
     }
 
@@ -937,28 +933,28 @@ function stripCommentsAndTrailingCommas(text: string): string {
     i++;
   }
 
-  // Remove trailing commas before } or ]
+  // 移除 } 或 ] 前的尾随逗号
   result = result.replace(/,\s*([}\]])/g, "$1");
 
   return result;
 }
 
 /**
- * Attempt to repair truncated JSON by closing open structures.
+ * 尝试通过关闭未完成的结构来修复截断的 JSON。
  *
- * Strategy:
- * 1. Track open braces/brackets (outside strings).
- * 2. If the last meaningful character suggests truncation mid-value, strip it.
- * 3. Close all open structures.
+ * 策略：
+ * 1. 追踪未关闭的大括号/方括号（在字符串外）。
+ * 2. 如果最后一个有意义的字符暗示截断在值中间，则剥离它。
+ * 3. 关闭所有未完成的结构。
  */
 function tryCompleteJson(text: string): string {
   let result = text.trimEnd();
 
-  // Remove a trailing incomplete token (partial string, number, etc.)
-  // Heuristic: if the text doesn't end with }, ], ", or a digit, trim back
+  // 移除末尾不完整的 token（截断的字符串、数字等）
+  // 启发式：如果文本不以 }、]、" 或数字结尾，则回退修剪
   result = result.replace(/[,:\s]+$/, "");
 
-  // Track nesting depth for braces and brackets
+  // 追踪大括号和方括号的嵌套深度
   let braceDepth = 0;
   let bracketDepth = 0;
   let inString = false;
@@ -990,17 +986,17 @@ function tryCompleteJson(text: string): string {
     else if (ch === "]") bracketDepth--;
   }
 
-  // Close unclosed string
+  // 关闭未结束的字符串
   if (inString) {
     result += '"';
   }
 
-  // Remove trailing comma that may precede closing brackets
+  // 移除可能位于闭括号前的尾随逗号
   result = result.replace(/,\s*$/, "");
 
-  // Close open structures in reverse order
-  // Simple approach: close all brackets first, then all braces
-  // (This is a heuristic — complex nested structures may not be perfectly repaired)
+  // 按逆序关闭未完成的结构
+  // 简单方法：先关闭所有方括号，再关闭所有大括号
+  // （这是一个启发式方法——复杂嵌套结构可能无法完美修复）
   for (let i = 0; i < bracketDepth; i++) {
     result += "]";
   }

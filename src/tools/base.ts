@@ -17,7 +17,7 @@ import { setupLogger, type Logger } from "../logger.js";
 export abstract class BaseTool {
   llm: LLMClient;
 
-  /** Session-level prompt cache: avoids re-reading files every call. */
+  /** Session 级提示词缓存：避免每次调用都重新读取文件。 */
   protected _promptCache: Map<string, string> = new Map();
   private _systemPromptCache: Map<string, string> = new Map();
 
@@ -25,7 +25,7 @@ export abstract class BaseTool {
     this.llm = llm;
   }
 
-  /** Lazy logger — initialised on first use to avoid constructor ordering issues. */
+  /** 基于 (filename, query_context[:200]) 缓存提示词。 */
   private _loggerInstance: Logger | null = null;
   protected get logger(): Logger {
     if (!this._loggerInstance) {
@@ -34,22 +34,21 @@ export abstract class BaseTool {
     return this._loggerInstance;
   }
 
-  /** Agent name (for logging/display). */
+  /** Agent 名称（用于日志/显示）。 */
   abstract get name(): string;
 
-  /** Tool capabilities declaration. */
+  /** 工具能力声明。 */
   abstract get capabilities(): ToolCapabilities;
 
   /**
-   * Load a prompt template from the unified prompts/ directory.
+   * 从 unified prompts/ 目录加载提示词模板。
    */
   protected _loadPrompt(filename: string, fallback = ""): string {
     return loadPrompt(filename, fallback);
   }
 
   /**
-   * Load prompt with constitution + memory injection.
-   * Cached by (filename, query_context[:200]) key.
+   * 加载提示词，注入宪法 + 记忆。按 (filename, query_context[:200]) 缓存。
    */
   protected async _loadPromptWithConstitution(
     filename: string,
@@ -66,7 +65,7 @@ export abstract class BaseTool {
       return fallback;
     }
 
-    // Infer agent_type from filename
+    /** 基于文件名推断 agent_type */
     const typeMap: Record<string, string> = {
       planner: "planner",
       generator: "generator",
@@ -90,7 +89,7 @@ export abstract class BaseTool {
     return prompt;
   }
 
-  /** Unified system prompt loading with caching. */
+  /** 统一系统提示词加载，带缓存。 */
   protected async _getSystemPrompt(
     filename: string,
     fallback: string,
@@ -105,7 +104,7 @@ export abstract class BaseTool {
     return prompt;
   }
 
-  /** Invalidate prompt cache (called after memory updates). */
+  /** 使提示词缓存失效（记忆更新后调用）。 */
   invalidatePromptCache(): void {
     this._promptCache.clear();
     this._systemPromptCache.clear();

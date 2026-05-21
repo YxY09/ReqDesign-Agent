@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 /** Kinds of worker agents in the multi-agent system. */
-export type WorkerKind = "planner" | "generator" | "evaluator";
+export type WorkerKind = "planner" | "generator" | "evaluator" | "repair";
 
 /** Kinds of tasks the planner can emit. */
 export type TaskType = "analyze" | "design" | "diagrams" | "tests";

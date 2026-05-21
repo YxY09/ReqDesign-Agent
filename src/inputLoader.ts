@@ -1,7 +1,7 @@
 /**
- * Input loading module: read, clean, and segment requirement documents.
+ * 输入加载模块：读取、清理和切分需求文档。
  *
- * Ported from reqdesign/input_loader.py.
+ * 源自 reqdesign/input_loader.py。
  */
 
 import { readFileSync, existsSync, lstatSync } from "node:fs";
@@ -32,11 +32,11 @@ export class InputLoader {
   static readonly MAX_CHARS = 100_000;
 
   /**
-   * Read a requirement document, returning cleaned text.
+   * 读取需求文档，返回清理后的文本。
    *
-   * @param filePath - Path to the input file.
-   * @returns Cleaned text content.
-   * @throws If the file doesn't exist, is unsupported, too large, or empty.
+   * @param filePath - 输入文件的路径。
+   * @returns 清理后的文本内容。
+   * @throws 如果文件不存在、不支持、过大或为空。
    */
   static load(filePath: string): string {
     if (!existsSync(filePath)) {
@@ -90,7 +90,7 @@ export class InputLoader {
   }
 
   /**
-   * Read a file with multi-encoding fallback support.
+   * 读取文件，支持多编码回退。
    */
   private static _readFile(filePath: string): string {
     const encodings = ["utf8", "gbk", "latin1"] as const;
@@ -147,7 +147,7 @@ export class InputLoader {
   }
 
   /**
-   * Extract text from JSON content.
+   * 从 JSON 内容中提取文本。
    */
   private static _loadJson(content: string): string {
     try {
@@ -173,14 +173,14 @@ export class InputLoader {
   }
 
   /**
-   * Clean plain text / markdown.
+   * 清理纯文本 / markdown。
    */
   private static _loadText(content: string): string {
     return InputLoader._cleanText(content);
   }
 
   /**
-   * Clean text: normalize whitespace, collapse blank lines.
+   * 清理文本：规范化空白，合并空行。
    */
   static _cleanText(text: string): string {
     text = text.trim();
@@ -205,14 +205,14 @@ export class InputLoader {
   }
 
   /**
-   * Try to extract JSON from text (markdown code fences, raw braces).
+   * 尝试从文本中提取 JSON（markdown 代码块、原始括号）。
    *
-   * @returns Parsed object or `null` if no valid JSON found.
+   * @returns 解析后的对象；如果未找到有效 JSON 则返回 `null`。
    */
   static _extractJson(text: string): Record<string, unknown> | null {
     const trimmed = text.trim();
 
-    // Try markdown code fence
+    // 尝试 markdown 代码块
     const codeBlockMatch = trimmed.match(
       /```(?:json)?\s*\n?(.*?)```/s,
     );
@@ -227,7 +227,7 @@ export class InputLoader {
       }
     }
 
-    // Try raw braces with bracket matching
+    // 尝试带括号匹配的原始花括号
     const start = trimmed.indexOf("{");
     if (start >= 0) {
       let depth = 0;
@@ -277,7 +277,7 @@ export class InputLoader {
   }
 
   /**
-   * Split requirement text into sections by heading level.
+   * 按标题级别将需求文本切分为章节。
    */
   static splitSections(text: string): Section[] {
     const sections: Section[] = [];

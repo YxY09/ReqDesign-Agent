@@ -1,7 +1,7 @@
 /**
- * Stage-aware review scheduling for the orchestration control plane.
+ * 阶段感知的审查调度器 — 用于编排控制平面。
  *
- * Ported from reqdesign/orchestration/review_scheduler.py.
+ * 源自 reqdesign/orchestration/review_scheduler.py。
  */
 
 import type { OrchestratorSnapshot } from "./snapshot.js";
@@ -22,7 +22,7 @@ export interface ReviewPlan {
 // ---------------------------------------------------------------------------
 
 export class ReviewScheduler {
-  /** Stage boundaries in review order. */
+  /** 审查阶段的边界顺序。 */
   static readonly STAGE_ORDER: readonly string[] = [
     "analyze",
     "design",
@@ -30,7 +30,7 @@ export class ReviewScheduler {
     "direct",
   ];
 
-  /** Choose the next review scope at stage boundaries. */
+  /** 在阶段边界处选择下一个审查范围。 */
   nextScope(snapshot: OrchestratorSnapshot): ReviewPlan {
     const noScope: ReviewPlan = {
       scopeTaskIds: [],
@@ -143,7 +143,7 @@ export class ReviewScheduler {
   // Internal helpers
   // -------------------------------------------------------------------
 
-  /** All given task IDs are present in the completed set. */
+  /** 所有给定的任务 ID 均存在于已完成集合中。 */
   private static _allCompleted(
     snapshot: OrchestratorSnapshot,
     taskIds: string[],

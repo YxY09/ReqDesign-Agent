@@ -1,5 +1,5 @@
 /**
- * Orchestration configuration + BudgetManager — runtime-tunable limits.
+ * 编排配置 + BudgetManager — 运行时可调的限制。
  */
 
 export interface OrchestrationConfigRaw {

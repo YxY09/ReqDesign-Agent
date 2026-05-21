@@ -263,7 +263,7 @@ export class MermaidValidator {
     } catch {
       return { valid: false, message: "CLI校验异常" };
     } finally {
-      try { unlinkSync(tmpFile); } catch { /* ignore */ }
+      try { unlinkSync(tmpFile); } catch { /* 忽略错误 */ }
     }
   }
 

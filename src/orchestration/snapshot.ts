@@ -1,7 +1,7 @@
 /**
- * Stable state snapshots for top-level orchestration.
+ * 顶层编排的稳定状态快照。
  *
- * Ported from reqdesign/orchestration/snapshot.py.
+ * 源自 reqdesign/orchestration/snapshot.py。
  */
 
 import type { WorkflowState } from "../state.js";
@@ -11,7 +11,7 @@ import type { TaskMailbox } from "../messaging.js";
 // OrchestratorSnapshot
 // ---------------------------------------------------------------------------
 
-/** Coordinator-facing scheduling snapshot (noise-reduced). */
+/** 面向协调器的调度快照（降噪后）。 */
 export interface OrchestratorSnapshot {
   goal: string;
   requirementLoaded: boolean;
@@ -46,15 +46,15 @@ export interface OrchestratorSnapshot {
   globallyStalled: boolean;
   recentErrors: string[];
 
-  /** Computed: convergence state from evaluation history. */
+  /** 计算得出：评估历史中的收敛状态。 */
   convergenceStalled: boolean;
   convergenceStalledFingerprints: string[];
   convergenceTrend: string;
   convergenceRoundCount: number;
 
-  /** Computed: all plan tasks are completed. */
+  /** 计算得出：所有计划任务均已完成。 */
   planAllCompleted: boolean;
-  /** Computed: at least one artifact exists. */
+  /** 计算得出：至少存在一个产物。 */
   hasArtifacts: boolean;
 }
 
@@ -62,7 +62,7 @@ export interface OrchestratorSnapshot {
 // StateReader
 // ---------------------------------------------------------------------------
 
-/** Build an orchestration snapshot from runtime state. */
+/** 从运行时状态构建编排快照。 */
 export class StateReader {
   static fromState(
     state: WorkflowState,

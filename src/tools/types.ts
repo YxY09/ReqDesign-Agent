@@ -1,8 +1,8 @@
 /**
- * Standardized tool types — shared across tools layer.
+ * 标准化工具类型定义 — 各工具层共享。
  */
 
-/** Standardized error result for tools */
+/** 工具的标准化错误结果 */
 export interface ToolError {
   code: string;
   message: string;
@@ -10,13 +10,13 @@ export interface ToolError {
   details?: Record<string, unknown>;
 }
 
-/** Capabilities a tool can declare */
+/** 工具可声明的能力 */
 export interface ToolCapabilities {
   readonly requiresLlm: boolean;
   readonly supportedTaskTypes: string[];
 }
 
-/** Factory: create an Error with ToolError extension fields */
+/** 工厂函数：创建带有 ToolError 扩展字段的 Error */
 export function createToolError(
   code: string,
   message: string,
@@ -30,7 +30,7 @@ export function createToolError(
   return error as Error & ToolError;
 }
 
-/** Type guard: check if a value is a ToolError */
+/** 类型守卫：检查值是否为 ToolError */
 export function isToolError(error: unknown): error is Error & ToolError {
   return (
     error instanceof Error &&

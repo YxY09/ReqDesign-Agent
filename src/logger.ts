@@ -1,8 +1,8 @@
 /**
- * 日志配置模块 — provides a custom Logger with dual output (console + file).
+ * 日志配置模块——提供双输出（控制台 + 文件）的自定义 Logger。
  *
- * All loggers within a run share a single log file path.
- * The log file is created in the logs/ directory via initSharedLog().
+ * 一次运行中的所有 logger 共享同一个日志文件路径。
+ * 日志文件通过 initSharedLog() 在 logs/ 目录中创建。
  *
  * @module logger
  */
@@ -60,8 +60,8 @@ export class Logger {
   error(message: string): void { this._emit("ERROR", message); }
 
   close(): void {
-    // Logger instances are lightweight handles over the shared log file.
-    // Closing one logger must not close logging for the whole process.
+    // Logger 实例是共享日志文件的轻量句柄。
+    // 关闭一个 logger 不应关闭整个进程的日志记录。
   }
 
   private _emit(level: LogLevel, message: string): void {
@@ -81,14 +81,14 @@ export class Logger {
       try {
         fs.appendFileSync(_sharedLogFilePath, line + "\n", { encoding: "utf8" });
       } catch {
-        // Logging must never fail the main workflow.
+        // 日志记录绝不能导致主工作流程失败。
       }
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Module state
+// 模块状态
 // ---------------------------------------------------------------------------
 
 const _loggers = new Map<string, Logger>();
@@ -96,8 +96,8 @@ let _sharedLogFilePath: string | null = null;
 let _globalLevel: LogLevel = "INFO";
 
 /**
- * Initialize the shared log file stream.
- * Call once at program start. All setupLogger() calls share this stream.
+ * 初始化共享日志文件流。
+ * 在程序启动时调用一次。所有 setupLogger() 调用共享此流。
  */
 export function initSharedLog(
   filePath: string,
@@ -112,27 +112,27 @@ export function initSharedLog(
   _sharedLogFilePath = filePath;
 }
 
-/** Close the shared log stream. Safe to call multiple times. */
+/** 关闭共享日志流。可以安全地多次调用。 */
 export function closeSharedLog(): void {
   _sharedLogFilePath = null;
 }
 
 /**
- * Write a raw line directly to the shared log file (no timestamp/level prefix).
- * Used by workflow events, streaming chunks, and final summaries that bypass
- * the Logger class but should still appear in the log file.
+ * 直接向共享日志文件写入原始行（无时间戳/级别前缀）。
+ * 用于工作流事件、流式块和绕过 Logger 类但仍应出现在
+ * 日志文件中的最终摘要。
  */
 export function writeToSharedLog(line: string): void {
   if (!_sharedLogFilePath) return;
   try {
     fs.appendFileSync(_sharedLogFilePath, line + "\n", { encoding: "utf8" });
   } catch {
-    // Never let logging fail the main workflow.
+    // 绝不让日志记录导致主工作流程失败。
   }
 }
 
 /**
- * Create (or retrieve) a Logger that writes to the shared log file.
+ * 创建（或获取）写入共享日志文件的 Logger。
  */
 export function setupLogger(
   name = "reqdesign",

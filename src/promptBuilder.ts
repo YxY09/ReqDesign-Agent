@@ -13,13 +13,12 @@
 import { getConstitution } from "./constitution.js";
 
 /**
- * Assemble the full system prompt by layering constitution and memory
- * on top of the agent-specific prompt.
+ * 通过在 Agent 专属提示词之上叠加宪法和记忆来组装完整的 system prompt。
  *
- * @param agentPrompt  - Agent-specific prompt text
- * @param agentType    - Agent role identifier (e.g. "planner", "generator")
- * @param queryContext - Optional context for memory relevance retrieval
- * @returns The assembled system prompt
+ * @param agentPrompt  - Agent 专属提示词文本
+ * @param agentType    - Agent 角色标识符（如 "planner"、"generator"）
+ * @param queryContext - 用于记忆相关性检索的可选上下文
+ * @returns 组装后的 system prompt
  */
 export async function buildSystemPrompt(
   agentPrompt: string,
@@ -40,7 +39,7 @@ export async function buildSystemPrompt(
     const memory = getMemory();
     prompt = memory.appendToPrompt(agentType, prompt, queryContext);
   } catch {
-    // Memory module not available — skip silently
+    // 记忆模块不可用 — 静默跳过
   }
 
   return prompt;

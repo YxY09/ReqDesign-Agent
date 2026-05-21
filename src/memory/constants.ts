@@ -1,11 +1,11 @@
 /**
- * Memory system constants and data structures.
+ * 记忆系统常量与数据结构。
  *
- * Ported from reqdesign/memory/constants.py.
+ * 源自 reqdesign/memory/constants.py。
  */
 
 // ---------------------------------------------------------------------------
-// Constants
+// 常量
 // ---------------------------------------------------------------------------
 
 export const MEMORY_DIR_NAME = ".reqdesign-memory";
@@ -29,7 +29,7 @@ export const MAX_MEMORY_FILES = 200;
 export const MAX_TOPIC_BYTES = 12_000;
 export const MAX_MEMORY_AGE_DAYS = 90;
 
-/** Maps agent type to the memory file they consult. */
+/** 将 Agent 类型映射到其查询的记忆文件。 */
 export const AGENT_TYPE_MAP: Record<string, string> = {
   planner: "planner.md",
   generator: "generator.md",
@@ -39,10 +39,10 @@ export const AGENT_TYPE_MAP: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Data structures
+// 数据结构
 // ---------------------------------------------------------------------------
 
-/** Memory file header extracted from frontmatter. */
+/** 从 frontmatter 提取的记忆文件头。 */
 export interface MemoryHeader {
   filename: string;
   filepath: string;
@@ -53,7 +53,7 @@ export interface MemoryHeader {
   mtimeIso: string;
 }
 
-/** A complete memory record. */
+/** 一条完整的记忆记录。 */
 export interface MemoryEntry {
   filename: string;
   content: string;
@@ -63,7 +63,7 @@ export interface MemoryEntry {
   lastModified: string;
 }
 
-/** Factory for MemoryHeader with defaults. */
+/** 带有默认值的 MemoryHeader 工厂函数。 */
 export function createMemoryHeader(
   overrides: Partial<MemoryHeader> & Pick<MemoryHeader, "filename" | "filepath">,
 ): MemoryHeader {
@@ -77,7 +77,7 @@ export function createMemoryHeader(
   };
 }
 
-/** Factory for MemoryEntry with defaults. */
+/** 带有默认值的 MemoryEntry 工厂函数。 */
 export function createMemoryEntry(
   overrides: Partial<MemoryEntry> & Pick<MemoryEntry, "filename" | "content">,
 ): MemoryEntry {

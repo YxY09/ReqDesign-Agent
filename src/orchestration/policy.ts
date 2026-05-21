@@ -1,7 +1,7 @@
 /**
- * Deterministic engineering policy for obvious orchestration states.
+ * 确定性工程策略 — 针对明显编排状态的工程化策略。
  *
- * Ported from reqdesign/orchestration/policy.py.
+ * 源自 reqdesign/orchestration/policy.py。
  */
 
 import { BudgetManager } from "./budget.js";
@@ -202,10 +202,9 @@ export class DeterministicPolicy {
   }
 
   /**
-   * Return a strategy for states that do not need LLM judgment.
+   * 为不需要 LLM 判断的状态返回策略。
    *
-   * Returns `null` when the state requires LLM reasoning — the caller
-   * should then consult {@link StrategyBrain}.
+   * 当状态需要 LLM 推理时返回 `null`——此时调用方应咨询 {@link StrategyBrain}。
    */
   decide(snapshot: OrchestratorSnapshot): StrategyDecision | null {
     // 1) Replan produced ready remediation tasks → advance them

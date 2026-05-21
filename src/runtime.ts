@@ -219,7 +219,7 @@ export class MultiAgentRuntime {
       heartbeatInterval: 0.25,
       onNotification: (session, notification) => {
         this.emitBackendNotification(
-          session.workerType as "planner" | "generator" | "evaluator",
+          session.workerType as "planner" | "generator" | "evaluator" | "repair",
           notification,
         );
       },
@@ -485,10 +485,9 @@ export class MultiAgentRuntime {
         return { didDispatch: false, breakLoop: false, skipFinalSave: false };
       }
       return {
-        didDispatch: this.submitGeneratorTask(
+        didDispatch: this.submitRepairTask(
           state,
           decision.taskId,
-          "repair",
           decision,
         ),
         breakLoop: false,
@@ -504,7 +503,6 @@ export class MultiAgentRuntime {
         didDispatch: this.submitGeneratorTask(
           state,
           decision.taskId,
-          "spawn",
           decision,
         ),
         breakLoop: false,
@@ -614,7 +612,7 @@ export class MultiAgentRuntime {
     if (taskId === "evaluator") {
       return this.submitEvaluator(state, decision.evaluateScope ?? []);
     }
-    return this.submitGeneratorTask(state, taskId, "spawn", decision);
+    return this.submitGeneratorTask(state, taskId, decision);
   }
 
   private submitPlanner(
@@ -713,7 +711,6 @@ export class MultiAgentRuntime {
   private submitGeneratorTask(
     state: WorkflowState,
     taskId: string,
-    mode: "spawn" | "repair",
     decision: RuntimeAction,
   ): boolean {
     if (state.taskStatus(taskId) === "running") {
@@ -740,36 +737,76 @@ export class MultiAgentRuntime {
       return false;
     }
 
-    const issues =
-      mode === "repair" && state.latestVerdict
-        ? state.latestVerdict.issues.filter(
-            (issue) => issue.targetTaskId === taskId,
-          )
-        : [];
     const message = createTaskMessage({
-      type: mode,
+      type: "spawn",
       taskId,
       sessionId: "",
       cause: decision.reason,
-      payload:
-        mode === "repair"
-          ? {
-              fix_instructions: issues.map((issue) => ({
-                severity: issue.severity,
-                target_field: issue.targetField,
-                description: issue.description,
-                suggestion: issue.suggestion,
-                task_id: issue.targetTaskId,
-                task_type: issue.targetTaskType,
-              })),
-            }
-          : {},
-      repairScope: mode === "repair" ? "local" : "",
+      payload: {},
     });
     return this.submitWorker(
       state,
       "generator",
       this.buildTaskContext(state, task),
+      message,
+      this.defaultTimeoutSeconds,
+      [],
+      decision,
+    );
+  }
+
+  private submitRepairTask(
+    state: WorkflowState,
+    taskId: string,
+    decision: RuntimeAction,
+  ): boolean {
+    if (state.taskStatus(taskId) === "running") {
+      return false;
+    }
+
+    const task = state.plan?.tasks.find((item) => item.id === taskId) ?? null;
+    if (!task) {
+      return false;
+    }
+
+    const issues = state.latestVerdict
+      ? state.latestVerdict.issues.filter((issue) => issue.targetTaskId === taskId)
+      : [];
+
+    const message = createTaskMessage({
+      type: "repair",
+      taskId,
+      sessionId: "",
+      cause: decision.reason,
+      payload: {
+        fix_instructions: issues.map((issue) => ({
+          severity: issue.severity,
+          target_field: issue.targetField,
+          description: issue.description,
+          suggestion: issue.suggestion,
+          task_id: issue.targetTaskId,
+          task_type: issue.targetTaskType,
+        })),
+      },
+      repairScope: "local",
+    });
+
+    // Extract previous artifact content from recent session for repair context
+    const context = this.buildTaskContext(state, task);
+    const prevSession = this.sessions.latestSessionForTask(taskId);
+    if (prevSession) {
+      const descriptor = prevSession.exportDescriptor();
+      const lastArtifact = descriptor.intermediateState?.last_artifact;
+      if (lastArtifact?.content !== undefined && lastArtifact?.content !== null) {
+        context.hints.previous_artifact_content = lastArtifact.content;
+        context.hints.previous_artifact_type = lastArtifact.type;
+      }
+    }
+
+    return this.submitWorker(
+      state,
+      "repair",
+      context,
       message,
       this.defaultTimeoutSeconds,
       [],
@@ -791,22 +828,7 @@ export class MultiAgentRuntime {
     message.sessionId = sessionId;
     context.taskId = context.taskId || message.taskId;
 
-    // 对于 repair 消息，恢复之前的会话以便 RepairTool 访问
-    // 上一个产物的内容。没有这个，previousArtifact 始终为 undefined，
-    // repair 会退化为完整重新生成。
-    let session: WorkerSession;
-    if (message.type === "repair") {
-      const prevSession = this.sessions.latestSessionForTask(context.taskId);
-      if (prevSession) {
-        const descriptor = prevSession.exportDescriptor();
-        session = this.factory.restore(descriptor);
-        this.logger.info(`restored session for repair: task=${context.taskId}, has_last_artifact=${!!descriptor.intermediateState?.last_artifact}`);
-      } else {
-        session = this.factory.createSession(workerType, sessionId, context);
-      }
-    } else {
-      session = this.factory.createSession(workerType, sessionId, context);
-    }
+    const session = this.factory.createSession(workerType, sessionId, context);
 
     this.sessions.register(session);
     this.activeStreamContext = {
@@ -876,7 +898,7 @@ export class MultiAgentRuntime {
     if (notif.status === "completed") {
       if (workerType === "planner") {
         this.applyPlannerCompletion(state, notif, messageType, inflight?.decision);
-      } else if (workerType === "generator") {
+      } else if (workerType === "generator" || workerType === "repair") {
         await this.applyGeneratorCompletion(
           state,
           taskId,
@@ -1014,8 +1036,8 @@ export class MultiAgentRuntime {
   }
 
   /**
-   * Check if all analyze tasks in the plan are completed.
-   * If so, gather their artifacts and run LLM merge.
+   * 检查计划中的所有 analyze 任务是否都已完成。
+   * 如果是，收集它们的产品并运行 LLM 合并。
    */
   private async tryMergeAnalyzeResults(state: WorkflowState): Promise<void> {
     const plan = state.plan;
@@ -1312,7 +1334,7 @@ export class MultiAgentRuntime {
   }
 
   private emitBackendNotification(
-    workerType: "planner" | "generator" | "evaluator",
+    workerType: "planner" | "generator" | "evaluator" | "repair",
     notification: TaskNotification,
   ): void {
     const kindByEvent: Record<string, string> = {

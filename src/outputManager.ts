@@ -1,17 +1,17 @@
 /**
- * Output management module: save artifacts to categorized subdirectories.
+ * 输出管理模块：将产物保存到分类子目录。
  *
- * Ported from reqdesign/output_manager.py.
+ * 移植自 reqdesign/output_manager.py。
  *
- * Directory structure:
+ * 目录结构：
  *   output_dir/
- *   ├── requirement/          Requirement analysis
- *   ├── design/               System design
- *   ├── diagrams/             Mermaid diagrams
- *   ├── tests/                Test cases
- *   ├── review/               Review reports
- *   ├── traces/               Execution traces
- *   └── summary_report.md     Summary report
+ *   ├── requirement/          需求分析
+ *   ├── design/               系统设计
+ *   ├── diagrams/             Mermaid 图表
+ *   ├── tests/                测试用例
+ *   ├── review/               审查报告
+ *   ├── traces/               执行追踪
+ *   └── summary_report.md     汇总报告
  */
 
 import {
@@ -26,7 +26,7 @@ import { Logger, setupLogger } from "./logger.js";
 import { TestCaseGenerator } from "./generators/tests.js";
 
 // ---------------------------------------------------------------------------
-// Constants
+// 常量
 // ---------------------------------------------------------------------------
 
 const SUBDIR_REQUIREMENT = "requirement";
@@ -39,10 +39,10 @@ const SUBDIR_TRACES = "traces";
 const SAFE_NAME_RE = /^[\w\u4e00-\u9fff\-\.]+$/;
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
-/** Sanitize filename to prevent path traversal. */
+/** 清理文件名以防止路径遍历攻击。 */
 function sanitizeFilename(name: string): string {
   if (!name || !name.trim()) {
     throw new Error("文件名不能为空");
@@ -58,7 +58,7 @@ function sanitizeFilename(name: string): string {
   return name;
 }
 
-/** Escape markdown table cell content. */
+/** 转义 Markdown 表格单元格内容。 */
 function escapeMdCell(text: unknown): string {
   if (!text) return "";
   return String(text).replace(/\|/g, "\\|").replace(/\n/g, " ");
@@ -90,7 +90,7 @@ export class OutputManager {
   }
 
   // ---------------------------------------------------------------
-  // Resolve paths
+  // 解析路径
   // ---------------------------------------------------------------
 
   private _resolvePath(subdir: string, filename: string): string {
@@ -107,7 +107,7 @@ export class OutputManager {
   }
 
   // ---------------------------------------------------------------
-  // Write helpers
+  // 写入辅助函数
   // ---------------------------------------------------------------
 
   private _writeFile(filename: string, content: string, subdir = ""): void {
@@ -140,10 +140,10 @@ export class OutputManager {
   }
 
   // ---------------------------------------------------------------
-  // Save methods
+  // 保存方法
   // ---------------------------------------------------------------
 
-  /** Save requirement analysis results → requirement/ */
+  /** 保存需求分析结果 → requirement/ */
   saveRequirementAnalysis(
     requirementJson: Record<string, unknown>,
     _requirementText = "",
@@ -156,13 +156,13 @@ export class OutputManager {
     this._logger.info(`需求分析结果已保存 → ${SUBDIR_REQUIREMENT}/`);
   }
 
-  /** Save system design → design/ */
+  /** 保存系统设计 → design/ */
   saveSystemDesign(designText: string): void {
     this._writeFile("system_design.md", designText || "", SUBDIR_DESIGN);
     this._logger.info(`系统设计已保存 → ${SUBDIR_DESIGN}/`);
   }
 
-  /** Save Mermaid diagrams → diagrams/ */
+  /** 保存 Mermaid 图表 → diagrams/ */
   saveDiagrams(diagrams: Record<string, unknown>): void {
     const diagramsObj = diagrams || {};
     this._writeJson("diagrams.json", { diagrams: diagramsObj }, SUBDIR_DIAGRAMS);
@@ -178,7 +178,7 @@ export class OutputManager {
     );
   }
 
-  /** Save test cases → tests/ */
+  /** 保存测试用例 → tests/ */
   saveTestCases(testCases: string): void {
     const structured = TestCaseGenerator.parseStructuredTestCases(testCases || "");
     if (structured) {
@@ -190,7 +190,7 @@ export class OutputManager {
     this._logger.info(`测试用例已保存 → ${SUBDIR_TESTS}/`);
   }
 
-  /** Save a per-task artifact to by_task/<taskId>/ subdirectory. */
+  /** 保存单个任务产物到 by_task/<taskId>/ 子目录。 */
   saveArtifactByTask(
     taskId: string,
     taskType: string,
@@ -224,7 +224,7 @@ export class OutputManager {
     this._logger.info(`per-task save: ${taskId} → ${taskDir}/`);
   }
 
-  /** Save review report → review/ */
+  /** 保存审查报告 → review/ */
   saveReviewReport(
     reviewReport: string,
     reviewResult: Record<string, unknown> | null = null,
@@ -236,19 +236,19 @@ export class OutputManager {
     this._logger.info(`审查报告已保存 → ${SUBDIR_REVIEW}/`);
   }
 
-  /** Save trace file → traces/ */
+  /** 保存追踪文件 → traces/ */
   saveTrace(filename: string, content: string): void {
     this._writeFile(filename, content, SUBDIR_TRACES);
     this._logger.info(`追踪文件已保存 → ${SUBDIR_TRACES}/${filename}`);
   }
 
-  /** Save trace JSON → traces/ */
+  /** 保存追踪 JSON → traces/ */
   saveTraceJson(filename: string, data: Record<string, unknown>): void {
     this._writeJson(filename, data, SUBDIR_TRACES);
     this._logger.info(`追踪文件已保存 → ${SUBDIR_TRACES}/${filename}`);
   }
 
-  /** Save all artifacts in one call. */
+  /** 一次调用保存所有产物。 */
   saveAll(
     requirementJson: Record<string, unknown>,
     requirementText: string,
@@ -275,22 +275,22 @@ export class OutputManager {
   }
 
   // ---------------------------------------------------------------
-  // SVG rendering (optional — skipped)
+  // SVG 渲染（可选 - 已跳过）
   // ---------------------------------------------------------------
 
   /**
-   * Try to render SVGs using mmdc CLI.
-   * Skipped in TypeScript port — use an external Mermaid renderer.
-   * @returns 0 (no SVGs rendered).
+   * 尝试使用 mmdc CLI 渲染 SVG。
+   * TypeScript 移植版已跳过 — 请使用外部 Mermaid 渲染器。
+   * @returns 0（未渲染 SVG）。
    */
   _tryRenderSvg(_diagrams: Record<string, unknown>): number {
-    // Skip mmdc SVG rendering — optional feature.
-    // If needed, use child_process.spawn with mmdc.
+    // 跳过 mmdc SVG 渲染 — 可选功能。
+    // 如有需要，使用 child_process.spawn 调用 mmdc。
     return 0;
   }
 
   // ---------------------------------------------------------------
-  // Markdown generation
+  // Markdown 生成
   // ---------------------------------------------------------------
 
   private _generateRequirementMd(req: Record<string, unknown>): string {
@@ -535,7 +535,7 @@ export class OutputManager {
           statSync(join(dirPath, f)).isFile(),
         );
         if (files.length > 0) {
-          lines.push(`├── ${subdir}/  # ${label}\n`);
+          lines.push(`├── ${subdir}/  // ${label}\n`);
           for (const f of files.sort()) {
             const size = statSync(join(dirPath, f)).size;
             lines.push(`│   ├── ${f}  (${size} bytes)\n`);

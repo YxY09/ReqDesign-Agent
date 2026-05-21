@@ -7,21 +7,21 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-/** Logger shim — replace with a real logger when available. */
+/** Logger 垫片 — 有真实 logger 时替换。 */
 function log(level: "info" | "warn", message: string): void {
   // eslint-disable-next-line no-console
   if (level === "warn") console.warn(`[constitution] ${message}`);
 }
 
-/** Default filenames searched for when locating the constitution file. */
+/** 查找宪法文件时默认搜索的文件名。 */
 const DEFAULT_FILENAMES: readonly string[] = ["ReqDesign.md"];
 
 /**
- * Loads a project constitution file (e.g. `ReqDesign.md`) and injects it
- * into agent system prompts as a top-level constraint section.
+ * 加载项目宪法文件（如 `ReqDesign.md`），并将其作为顶层约束部分
+ * 注入到 agent 系统提示词中。
  */
 export class ConstitutionLoader {
-  /** File names to search for, in order of priority. */
+  /** 搜索文件名，按优先级排序。 */
   readonly defaultFilenames: readonly string[] = DEFAULT_FILENAMES;
 
   /** Directories that will be searched for the constitution file. */
@@ -34,7 +34,7 @@ export class ConstitutionLoader {
     this.searchDirs = searchDirs ?? [process.cwd()];
   }
 
-  /** Constitution content (lazy-loaded on first access). */
+  /** 宪法内容（首次访问时惰性加载）。 */
   get content(): string {
     if (this._content === null) {
       const result = this._load();
@@ -44,7 +44,7 @@ export class ConstitutionLoader {
     return this._content;
   }
 
-  /** Absolute path of the loaded constitution file, or `null`. */
+  /** 已加载的宪法文件的绝对路径，未找到时为 `null`。 */
   get sourcePath(): string | null {
     if (this._content === null) {
       const result = this._load();
@@ -54,7 +54,7 @@ export class ConstitutionLoader {
     return this._sourcePath;
   }
 
-  /** Whether a constitution file was successfully loaded. */
+  /** 宪法文件是否成功加载。 */
   get isLoaded(): boolean {
     if (this._content === null) {
       const result = this._load();
@@ -64,7 +64,7 @@ export class ConstitutionLoader {
     return this._content.length > 0;
   }
 
-  /** Force a re-read of the constitution file from disk. */
+  /** 强制重新从磁盘读取宪法文件。 */
   reload(): string {
     this._content = null;
     this._sourcePath = null;
@@ -72,8 +72,8 @@ export class ConstitutionLoader {
   }
 
   /**
-   * Search configured directories for a constitution file and load it.
-   * Returns an empty string when no file is found.
+   * 在配置的目录中搜索宪法文件并加载。
+   * 未找到文件时返回空字符串。
    */
   private _load(): { content: string; sourcePath: string | null } {
     for (const searchDir of this.searchDirs) {
@@ -99,10 +99,10 @@ export class ConstitutionLoader {
   }
 
   /**
-   * Prepend the constitution as a "## 项目宪法（必须遵守）" section
-   * in front of the agent prompt.
+   * 将宪法作为 "## 项目宪法（必须遵守）" 部分前置到
+   * agent 提示词前面。
    *
-   * If no constitution content is available, returns the prompt unchanged.
+   * 如果没有宪法内容，则原样返回提示词。
    */
   injectSection(agentPrompt: string): string {
     if (!this.content) {
@@ -119,7 +119,7 @@ export class ConstitutionLoader {
 
 let _constitutionLoader: ConstitutionLoader | null = null;
 
-/** Get the global constitution loader (lazy-initialised). */
+/** 获取全局宪法加载器（惰性初始化）。 */
 export function getConstitution(): ConstitutionLoader {
   if (_constitutionLoader === null) {
     _constitutionLoader = new ConstitutionLoader();
@@ -127,7 +127,7 @@ export function getConstitution(): ConstitutionLoader {
   return _constitutionLoader;
 }
 
-/** Replace the global constitution loader (used by Runtime). */
+/** 替换全局宪法加载器（供 Runtime 使用）。 */
 export function setConstitution(loader: ConstitutionLoader): void {
   _constitutionLoader = loader;
 }

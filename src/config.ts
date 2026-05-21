@@ -1,7 +1,7 @@
 /**
- * Configuration management module.
+ * 配置管理模块。
  *
- * Ported from reqdesign/config.py (Phase 2).
+ * 来自 reqdesign/config.py（第二阶段）。
  * @module
  */
 
@@ -11,10 +11,10 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
-// YAML snake_case → camelCase conversion
+// YAML snake_case → camelCase 转换
 // ---------------------------------------------------------------------------
 
-/** Recursively convert snake_case keys to camelCase in an object. */
+/** 递归将对象中的 snake_case 键转换为 camelCase。 */
 function snakeToCamel(obj: unknown): unknown {
   if (Array.isArray(obj)) {
     return obj.map(snakeToCamel);
@@ -33,7 +33,7 @@ function snakeToCamel(obj: unknown): unknown {
 }
 
 // =========================================================================
-// Zod schemas — single source of truth for config shape & validation
+// Zod schema — 配置结构与验证的唯一数据源
 // =========================================================================
 
 const LlmConfigSchema = z.object({
@@ -69,29 +69,29 @@ const AgentConfigSchema = z.object({
   logging: LoggingConfigSchema.default({}),
 });
 
-/** Validate raw YAML data against the schema. Throws ZodError on failure. */
+/** 根据 schema 验证原始 YAML 数据。验证失败时抛出 ZodError。 */
 export function parseAndValidate(raw: unknown) {
   return AgentConfigSchema.parse(raw ?? {});
 }
 
 // =========================================================================
-// TypeScript types derived from zod schemas (no duplication)
+// 从 zod schema 派生的 TypeScript 类型（无重复定义）
 // =========================================================================
 
-/** LLM provider settings. */
+/** LLM 提供商设置。 */
 export type LLMConfig = z.infer<typeof LlmConfigSchema>;
 
-/** Retry behaviour settings. */
+/** 重试行为设置。 */
 export type RetryConfig = z.infer<typeof RetryConfigSchema>;
 
-/** Output directory settings. */
+/** 输出目录设置。 */
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 
-/** Logging settings. */
+/** 日志设置。 */
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 
 // ---------------------------------------------------------------------------
-// Constants
+// 常量
 // ---------------------------------------------------------------------------
 
 export const VALID_PROVIDERS = [
@@ -111,14 +111,14 @@ export const VALID_LOG_LEVELS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// .env loader
+// .env 加载器
 // ---------------------------------------------------------------------------
 
 const _dotenvLoadedPaths = new Set<string>();
 
 /**
- * Load key=value pairs from a `.env` file without overriding existing
- * environment variables.
+ * 从 `.env` 文件加载 key=value 对，且不会覆盖已存在的
+ * 环境变量。
  */
 function loadDotenv(dotenvDir?: string): void {
   const candidates: string[] = [];
@@ -142,7 +142,7 @@ function loadDotenv(dotenvDir?: string): void {
         const eqIdx = line.indexOf("=");
         const key = line.slice(0, eqIdx).trim();
         let value = line.slice(eqIdx + 1).trim();
-        // Strip surrounding quotes
+        // 去除首尾引号
         if (
           (value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'"))
@@ -162,7 +162,7 @@ function loadDotenv(dotenvDir?: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Defaults helpers
+// 默认值辅助函数
 // ---------------------------------------------------------------------------
 
 function defaultLLMConfig(): LLMConfig {
@@ -195,20 +195,20 @@ function defaultLoggingConfig(): LoggingConfig {
 }
 
 // ---------------------------------------------------------------------------
-// AgentConfig class
+// AgentConfig 类
 // ---------------------------------------------------------------------------
 
 /**
- * Top-level configuration for the agent system.
+ * Agent 系统的顶层配置。
  *
- * Load from YAML via {@link AgentConfig.loadFromYaml} or construct manually.
+ * 通过 {@link AgentConfig.loadFromYaml} 从 YAML 加载，或手动构造。
  */
 export class AgentConfig {
   llm: LLMConfig;
   retry: RetryConfig;
   output: OutputConfig;
   logging: LoggingConfig;
-  /** Raw YAML data (API keys are redacted). */
+  /** 原始 YAML 数据（API 密钥已脱敏）。 */
   raw: Record<string, unknown>;
 
   constructor(opts?: {
@@ -226,14 +226,14 @@ export class AgentConfig {
   }
 
   // -----------------------------------------------------------------------
-  // YAML loading
+  // YAML 加载
   // -----------------------------------------------------------------------
 
   /**
-   * Load configuration from a YAML file.
+   * 从 YAML 文件加载配置。
    *
-   * @param path - Absolute or relative path to the YAML config file.
-   * @throws {Error} If the file does not exist or cannot be parsed.
+   * @param path - YAML 配置文件的绝对或相对路径。
+   * @throws {Error} 如果文件不存在或无法解析。
    */
   static loadFromYaml(path: string): AgentConfig {
     const absPath = resolve(path);
@@ -251,7 +251,7 @@ export class AgentConfig {
       return new AgentConfig();
     }
 
-    // Store raw config but redact API keys
+    // 保存原始配置，但脱敏 API 密钥
     const safeRaw: Record<string, unknown> = structuredClone(data);
     if (
       typeof safeRaw.llm === "object" &&
@@ -280,12 +280,12 @@ export class AgentConfig {
   }
 
   // -----------------------------------------------------------------------
-  // Validation
+  // 验证
   // -----------------------------------------------------------------------
 
   /**
-   * Validate the current configuration.
-   * @returns An array of error strings (empty when valid).
+   * 验证当前配置。
+   * @returns 错误字符串数组（为空时表示配置有效）。
    */
   validate(): string[] {
     const errors: string[] = [];
@@ -359,20 +359,20 @@ export class AgentConfig {
   }
 
   // -----------------------------------------------------------------------
-  // API key / base URL resolution
+  // API 密钥 / base URL 解析
   // -----------------------------------------------------------------------
 
   /**
-   * Resolve the API key from config or environment variables.
+   * 从配置或环境变量解析 API 密钥。
    *
-   * Checks provider-specific env names when the config value is empty.
+   * 当配置值为空时，检查提供商特定的环境变量名。
    */
   getApiKey(): string {
     if (this.llm.apiKey) return this.llm.apiKey;
 
     loadDotenv();
 
-    // Provider-specific environment variable fallback
+    // 提供商特定的环境变量回退
     const envMap: Record<string, string> = {
       openai: "OPENAI_API_KEY",
       anthropic: "ANTHROPIC_AUTH_TOKEN",
@@ -392,9 +392,9 @@ export class AgentConfig {
   }
 
   /**
-   * Resolve the base URL from config or environment variables.
+   * 从配置或环境变量解析 base URL。
    *
-   * Checks provider-specific env names when the config value is empty.
+   * 当配置值为空时，检查提供商特定的环境变量名。
    */
   getBaseUrl(): string {
     if (this.llm.baseUrl) return this.llm.baseUrl;

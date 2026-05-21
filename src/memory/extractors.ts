@@ -1,10 +1,10 @@
 /**
- * Event-driven memory extraction functions.
+ * 事件驱动的记忆提取函数。
  *
- * Transforms structured runtime outputs (Verdict / RuntimeAction / Artifact)
- * into MemoryWrite records for persistence by MemoryStore.
+ * 将结构化运行时输出（Verdict / RuntimeAction / Artifact）
+ * 转换为 MemoryWrite 记录，供 MemoryStore 持久化。
  *
- * Ported from reqdesign/memory/extractors.py.
+ * 源自 reqdesign/memory/extractors.py。
  */
 
 import type {
@@ -19,7 +19,7 @@ import { getMemory } from "./store.js";
 // MemoryWrite
 // ---------------------------------------------------------------------------
 
-/** A memory record ready to be persisted. */
+/** 准备持久化的记忆记录。 */
 export interface MemoryWrite {
   agentType: string;
   content: string;
@@ -29,9 +29,9 @@ export interface MemoryWrite {
 }
 
 /**
- * Persist extracted memory writes using the global memory store.
+ * 使用全局记忆存储持久化提取的记忆写入。
  *
- * Best-effort only: write failures are swallowed so runtime flow is unaffected.
+ * 仅尽力而为：写入失败会被吞没，运行时流程不受影响。
  */
 export function persistMemoryWrites(writes: MemoryWrite[]): void {
   if (writes.length === 0) return;
@@ -48,21 +48,21 @@ export function persistMemoryWrites(writes: MemoryWrite[]): void {
       );
     }
   } catch {
-    // Memory persistence is non-critical.
+    // 记忆持久化为非关键操作。
   }
 }
 
 // ---------------------------------------------------------------------------
-// Evaluator → Structured experience
+// Evaluator → 结构化经验
 // ---------------------------------------------------------------------------
 
 /**
- * Extract structured experience from an Evaluator Verdict.
+ * 从 Evaluator 裁决中提取结构化经验。
  *
- * Strategy:
- * - passed=true → Only record clean final wins (final review, no issues).
- * - passed=false → Only record blocker/upstream/systemic issues.
- * - Group issues by scope.
+ * 策略：
+ * - passed=true → 仅记录干净的最终通过（final review，无问题）。
+ * - passed=false → 仅记录 blocker/upstream/systemic 问题。
+ * - 按范围对问题分组。
  */
 export function extractEvaluatorInsight(
   verdict: Verdict,
@@ -74,7 +74,7 @@ export function extractEvaluatorInsight(
     return results;
   }
 
-  // Passed: only persist clean final wins
+  // 通过：仅持久化干净的最终胜利
   if (verdict.passed) {
     if (
       verdict.isFinalReview &&
@@ -108,7 +108,7 @@ export function extractEvaluatorInsight(
     return results;
   }
 
-  // Rejected: extract common failure patterns
+  // 拒绝：提取常见失败模式
   const actionableIssues = verdict.issues.filter(
     (issue) =>
       issue.severity === "blocker" ||
@@ -118,7 +118,7 @@ export function extractEvaluatorInsight(
 
   if (actionableIssues.length === 0) return results;
 
-  // Group by scope
+  // 按范围分组
   const byScope = new Map<string, Issue[]>();
   for (const issue of actionableIssues) {
     const scope = issue.scope || "unclassified";
@@ -154,14 +154,14 @@ export function extractEvaluatorInsight(
 }
 
 // ---------------------------------------------------------------------------
-// Coordinator → Routing rules
+// Coordinator → 路由规则
 // ---------------------------------------------------------------------------
 
 /**
- * Extract routing rules from Coordinator decisions.
+ * 从 Coordinator 决策中提取路由规则。
  *
- * Only persists durable orchestration lessons (replan, save, finish, regenerate).
- * Routine spawn/inspect/repair decisions are too frequent to persist.
+ * 仅持久化持久的编排经验（replan、save、finish、regenerate）。
+ * 常规的 spawn/inspect/repair 决策过于频繁，不予持久化。
  */
 export function extractCoordinatorDecision(
   action: RuntimeAction,
@@ -174,7 +174,7 @@ export function extractCoordinatorDecision(
 ): MemoryWrite[] {
   if (!action.action) return [];
 
-  // Only persist strategic decisions
+  // 仅持久化战略性决策
   const persistableActions = new Set([
     "replan",
     "save",
@@ -182,7 +182,7 @@ export function extractCoordinatorDecision(
     "regenerate",
   ]);
   if (!persistableActions.has(action.action)) {
-    // Allow direct_diagrams spawn
+    // 允许 direct_diagrams spawn
     if (
       !(action.action === "spawn" && action.taskId === "direct_diagrams")
     ) {
@@ -224,16 +224,16 @@ export function extractCoordinatorDecision(
 }
 
 // ---------------------------------------------------------------------------
-// Generator → Lessons
+// Generator → 经验教训
 // ---------------------------------------------------------------------------
 
 /**
- * Extract lessons from Generator artifacts.
+ * 从 Generator 产物中提取经验教训。
  *
- * Strategy:
- * - selfCheckPassed=false → Record failure mode (feedback type).
- * - selfCheckPassed=true after corrections → Record what fix strategy worked (project type).
- * - selfCheckPassed=true with no corrections → Too trivial, skip.
+ * 策略：
+ * - selfCheckPassed=false → 记录失败模式（feedback 类型）。
+ * - selfCheckPassed=true 经过修正后 → 记录有效的修复策略（project 类型）。
+ * - selfCheckPassed=true 无需修正 → 太琐碎，跳过。
  */
 export function extractGeneratorLesson(
   artifact: Artifact,
@@ -242,7 +242,7 @@ export function extractGeneratorLesson(
   const results: MemoryWrite[] = [];
   const effectiveType = taskType || artifact.type || "unknown";
 
-  // Self-check failed: record failure mode
+  // 自检失败：记录失败模式
   if (!artifact.selfCheckPassed) {
     const issuesText =
       artifact.selfCheckIssues.length > 0
@@ -264,7 +264,7 @@ export function extractGeneratorLesson(
     return results;
   }
 
-  // Self-check passed after multiple corrections: record fix strategy
+  // 自检经多轮修正后通过：记录修复策略
   if (artifact.selfCorrectRounds > 1) {
     results.push({
       agentType: "generator",
@@ -284,7 +284,7 @@ export function extractGeneratorLesson(
 }
 
 // ---------------------------------------------------------------------------
-// Internal formatters
+// 内部格式化函数
 // ---------------------------------------------------------------------------
 
 function formatPositivePattern(
@@ -427,7 +427,7 @@ function formatCorrectionLesson(
 }
 
 // ---------------------------------------------------------------------------
-// Strategy inference
+// 策略推断
 // ---------------------------------------------------------------------------
 
 function inferStrategy(verdict: Verdict, issues?: Issue[]): string {
@@ -458,7 +458,7 @@ function inferStrategy(verdict: Verdict, issues?: Issue[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function severityRank(severity: string): number {

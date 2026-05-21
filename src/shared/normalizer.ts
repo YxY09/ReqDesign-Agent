@@ -1,17 +1,17 @@
 /**
- * RequirementNormalizer — deterministic post-processing for analyze results.
- * Zero LLM calls. Runs after single analyze, after merge, and after analyze repair.
+ * RequirementNormalizer — analyze 结果的确定性后处理。
+ * 零 LLM 调用。在单次 analyze、合并后、以及 analyze repair 后运行。
  */
 
 export class RequirementNormalizer {
-  /** Standard types that should never become entity names. */
+  /** 不应成为实体名的标准类型。 */
   private static readonly _PRIMITIVE_TYPES: Set<string> = new Set([
     "String", "Integer", "Int", "Long", "Double", "Float",
     "Boolean", "Decimal", "BigDecimal", "DateTime", "Date",
     "Object", "List", "Map", "Set", "Array", "UUID",
   ]);
   /**
-   * Normalize an analyze result in-place and return it.
+   * 原地规范化 analyze 结果并返回。
    */
   static normalize(analysis: Record<string, unknown>): Record<string, unknown> {
     if (!analysis || typeof analysis !== "object") return analysis;
@@ -27,7 +27,7 @@ export class RequirementNormalizer {
   }
 
   // ------------------------------------------------------------------
-  // 1. Remove shell entities (only id + status), merge role names into User.role
+  // 1. 移除壳实体（仅 id + status），将角色名合并到 User.role
   // ------------------------------------------------------------------
   private static _removeShellEntities(analysis: Record<string, unknown>): void {
     const entities = RequirementNormalizer._getEntities(analysis);
@@ -43,7 +43,7 @@ export class RequirementNormalizer {
       const name = String(e.name ?? "").trim();
       const attrs = Array.isArray(e.attributes) ? e.attributes as Record<string, unknown>[] : [];
 
-      // Check if this is a shell entity: only id + status fields, no relationships
+      // 检查这是否是壳实体：只有 id + status 字段，无关系
       const isShell = actors.some(a => a.toLowerCase() === name.toLowerCase()) &&
         attrs.length <= 2 &&
         attrs.every(a => {
@@ -61,13 +61,13 @@ export class RequirementNormalizer {
 
     if (removedRoles.length > 0) {
       analysis.entities = kept;
-      // Store removed roles for User.role merging (done in _ensureUserRole)
+      // 存储已移除的角色用于 User.role 合并（在 _ensureUserRole 中完成）
       (analysis as Record<string, unknown>).__removedRoles = removedRoles;
     }
   }
 
   // ------------------------------------------------------------------
-  // 2. Canonicalize actor names — deduplicate synonyms (case-insensitive)
+  // 2. 规范化角色名 — 去重同义词（不区分大小写）
   // ------------------------------------------------------------------
   private static _canonicalizeActorNames(analysis: Record<string, unknown>): void {
     const actors = Array.isArray(analysis.actors) ? analysis.actors : [];
@@ -126,7 +126,7 @@ export class RequirementNormalizer {
   }
 
   // ------------------------------------------------------------------
-  // 3. Normalize acronyms to PascalCase (SKU→Sku, XML→Xml, etc.)
+  // 3. 将缩写规范化为 PascalCase（SKU→Sku、XML→Xml 等）
   // ------------------------------------------------------------------
   private static _normalizeAcronyms(analysis: Record<string, unknown>): void {
     const targets: Array<{ arr: unknown[] | undefined; field: string }> = [
@@ -164,13 +164,13 @@ export class RequirementNormalizer {
   }
 
   /**
-   * Convert ALL_CAPS acronyms within a PascalCase name to title case.
-   * E.g. "SKU" → "Sku", "XMLTag" → "XmlTag", "XMLRegistry" → "XmlRegistry"
-   * Preserves names that are already PascalCase.
+   * 将 PascalCase 名称中的全大写缩写转换为标题大小写。
+   * 例如 "SKU" → "Sku"、"XMLTag" → "XmlTag"、"XMLRegistry" → "XmlRegistry"
+   * 保留已经是 PascalCase 的名称。
    */
   private static _toPascalCase(name: string): string {
-    // Only transform names that are ENTIRELY uppercase (e.g. SKU, XML, API).
-    // Mixed-case like XmlTag, XMLTag, ApiResponse are already valid PascalCase.
+    // 仅转换完全大写的名称（如 SKU、XML、API）。
+    // 混合大小写如 XmlTag、XMLTag、ApiResponse 已经是有效的 PascalCase。
     if (/^[A-Z]{2,}$/.test(name)) {
       return name.charAt(0) + name.slice(1).toLowerCase();
     }
@@ -178,7 +178,7 @@ export class RequirementNormalizer {
   }
 
   // ------------------------------------------------------------------
-  // 4. Deduplicate constraints by description
+  // 4. 按描述去重约束
   // ------------------------------------------------------------------
   private static _dedupConstraints(analysis: Record<string, unknown>): void {
     const constraints = Array.isArray(analysis.constraints)
@@ -195,8 +195,8 @@ export class RequirementNormalizer {
 
       const existing = seen.get(desc);
       if (existing) {
-        // Merge: keep the one with more info or earlier ID
-        // If IDs differ, keep the earlier one
+        // 合并：保留信息更多的或 ID 更早的
+        // 如果 ID 不同，保留更早的那个
       } else {
         seen.set(desc, c);
         kept.push(c);
@@ -209,7 +209,7 @@ export class RequirementNormalizer {
   }
 
   // ------------------------------------------------------------------
-  // 5. Ensure User entity has a role attribute
+  // 5. 确保 User 实体有 role 属性
   // ------------------------------------------------------------------
   private static _ensureUserRole(analysis: Record<string, unknown>): void {
     const entities = RequirementNormalizer._getEntities(analysis);
@@ -219,7 +219,7 @@ export class RequirementNormalizer {
     const removedRoles = (analysis as Record<string, unknown>).__removedRoles as string[] | undefined;
     const allRoles = [...new Set([...actors, ...(removedRoles ?? [])])];
 
-    // Clean up internal field
+    // 清理内部字段
     delete (analysis as Record<string, unknown>).__removedRoles;
 
     if (allRoles.length === 0) return;
@@ -241,7 +241,7 @@ export class RequirementNormalizer {
       ? userEntity.attributes as Record<string, unknown>[]
       : [];
 
-    // Check if role attribute already exists
+    // 检查 role 属性是否已存在
     const hasRole = attrs.some(a => String(a.name ?? "").toLowerCase() === "role");
     if (!hasRole) {
       attrs.push({
@@ -251,7 +251,7 @@ export class RequirementNormalizer {
       });
       userEntity.attributes = attrs;
     } else {
-      // Update description to include all roles
+      // 更新描述以包含所有角色
       const roleAttr = attrs.find(a => String(a.name ?? "").toLowerCase() === "role");
       if (roleAttr && !String(roleAttr.description ?? "").includes(allRoles[0])) {
         roleAttr.description = `角色: ${allRoles.join("、")}`;
@@ -260,17 +260,17 @@ export class RequirementNormalizer {
   }
 
   // ------------------------------------------------------------------
-  // 6. Split nested Object/List entities into independent entities
+  // 6. 将嵌套的 Object/List 实体拆分为独立实体
   // ------------------------------------------------------------------
   /**
-   * The most common LLM failure mode: writing entity-like attributes as
-   * Object or List<X> instead of creating independent entities.
-   * This scanner detects those and promotes them to top-level entities.
+   * 最常见的 LLM 失败模式：将类似实体的属性写为
+   * Object 或 List<X> 而不是创建独立实体。
+   * 此扫描器检测这些情况并将其提升为顶级实体。
    *
-   * Patterns detected:
-   *   type === "Object"       → new entity (name derived from attribute)
-   *   type is "List<X>"       → new entity X (only if X is PascalCase)
-   *   type is "String" but name looks like entity ref → skip (too many false positives)
+   * 检测到的模式：
+   *   type === "Object"       → 新实体（名称派生自属性）
+   *   type 为 "List<X>"       → 新实体 X（仅当 X 为 PascalCase 时）
+   *   type 为 "String" 但名称看起来像实体引用 → 跳过（误报太多）
    */
   private static _splitNestedEntities(analysis: Record<string, unknown>): void {
     const entities = RequirementNormalizer._getEntities(analysis);
@@ -295,15 +295,15 @@ export class RequirementNormalizer {
 
         let newEntityName = "";
 
-        // Pattern A: List<X> where X is a PascalCase entity name (LLM literally wrote the name)
+        // 模式 A：List<X>，其中 X 是 PascalCase 实体名（LLM 直接写出了名称）
         const listMatch = type.match(/^List<([A-Z][a-zA-Z0-9]+)>$/);
         if (listMatch) {
           newEntityName = listMatch[1];
         }
 
-        // Pattern B: Plain Object type → skip. Attribute name→entity name
-        // derivation is too unreliable (suffix stripping creates garbage names).
-        // The LLM already creates most entities; we only fix the List<X> nesting case.
+        // 模式 B：纯 Object 类型 → 跳过。属性名→实体名
+        // 派生太不可靠（后缀剥离会产生垃圾名称）。
+        // LLM 已经创建了大多数实体；我们只修复 List<X> 嵌套情况。
         // If (type === "Object") { ... }
 
         if (!newEntityName || entityNames.has(newEntityName)) continue;
@@ -314,16 +314,16 @@ export class RequirementNormalizer {
         entityNames.add(newEntityName);
       }
 
-      // Apply replacements and create new entities
+      // 应用替换并创建新实体
       for (const { attr, newEntityName } of replacements) {
         const type = String(attr.type ?? "").trim();
         const isList = type.startsWith("List<");
 
-        // Change attribute type to Long reference
+        // 将属性类型更改为 Long 引用
         attr.type = isList ? "List<Long>" : "Long";
         attr.description = String(attr.description ?? "") + ` → 关联实体 ${newEntityName}`;
 
-        // Create stub entity
+        // 创建存根实体
         const parentName = String(entity.name ?? "");
         newEntities.push({
           name: newEntityName,
@@ -337,7 +337,7 @@ export class RequirementNormalizer {
           ],
         });
 
-        // Add relationship from parent to new entity
+        // 添加从父实体到新实体的关系
         const rels = Array.isArray(entity.relationships)
           ? (entity.relationships as Record<string, unknown>[])
           : [];

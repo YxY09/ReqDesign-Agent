@@ -1,5 +1,5 @@
 /**
- * Strategy-level types for the engineering orchestrator.
+ * 工程化编排器的策略级类型。
  */
 
 export type StrategyName =
@@ -17,7 +17,7 @@ export type StrategyName =
   | "finish"
   | "pause_for_user";
 
-/** Agent-level strategy before it is compiled into a runtime action. */
+/** 编译为运行时操作之前的 Agent 级策略。 */
 export interface StrategyDecision {
   strategy: StrategyName;
   targetTaskId: string;

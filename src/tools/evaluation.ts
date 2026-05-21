@@ -1,6 +1,6 @@
 /**
- * EvaluationTool — reviews artifacts, finds structured issues, produces fix tasks.
- * Rule checks (no LLM) + LLM semantic review. Async LLM calls.
+ * EvaluationTool — 评审产物，找出结构化问题，生成修复任务。
+ * 规则检查（无 LLM）+ LLM 语义评审。异步 LLM 调用。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -31,9 +31,9 @@ export class EvaluationTool extends BaseTool {
     return { requiresLlm: true, supportedTaskTypes: ["evaluate"] };
   }
 
-  // ------------------------------------------------------------------
-  // Public API
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 公开 API
+  // --------------------------------------------------------------
 
   async evaluate(
     requirementText: string,
@@ -69,12 +69,12 @@ export class EvaluationTool extends BaseTool {
 
     const issues: Issue[] = [];
 
-    // 1. Rule check
+    // 1. 规则检查
     const ruleIssues = this._ruleCheckSnapshots(snapshots, isDirectMode, requirementJson);
     issues.push(...ruleIssues);
     this.logger.info(`evaluate: 规则检查发现 ${ruleIssues.length} 个问题`);
 
-    // 2. LLM review
+    // 2. LLM 评审
     let llmIssues: Issue[];
     const reviewMode = EvaluationTool._selectReviewMode(snapshots, isDirectMode, goal);
     if (EvaluationTool._shouldSkipAnalyzeShardLlmReview(snapshots, goal)) {
@@ -91,16 +91,16 @@ export class EvaluationTool extends BaseTool {
     llmIssues = this._filterSnapshotIssues(llmIssues, snapshots);
     issues.push(...llmIssues);
 
-    // Classify scope
+    // 分类范围
     for (const issue of issues) EvaluationTool._classifyIssueScope(issue);
 
-    // 3. Decide pass/fail
+    // 3. 判断通过/失败
     const blockers = issues.filter((i) => i.severity === "blocker");
     const majors = issues.filter((i) => i.severity === "major");
     const passed = blockers.length === 0 && majors.length === 0;
     this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，majors=${majors.length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
 
-    // 4. Build fix tasks
+    // 4. 构建修复任务
     const fixes = passed ? [] : EvaluationTool._buildFixes(issues);
 
     // Build evaluated_revisions
@@ -140,18 +140,18 @@ export class EvaluationTool extends BaseTool {
     });
   }
 
-  // ------------------------------------------------------------------
-  // Rule checks (no LLM)
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // 规则检查（无 LLM）
+  // --------------------------------------------------------------
 
   static _classifyIssueScope(issue: Issue): Scope {
     if (issue.targetTaskType === "analyze" && issue.severity === "blocker") {
       issue.scope = "systemic";
     } else if (issue.targetField.startsWith("requirement_json.") && issue.targetTaskType === "analyze") {
-      // Only analyze tasks with requirement_json issues are truly upstream
+      // 仅对 requirement_json 有问题的分析任务视为真正的上游问题
       issue.scope = "upstream";
     } else {
-      // Design/diagrams/tests issues referencing requirement fields are local (fixable by patching the artifact)
+      // 设计/图表/测试问题引用需求字段属于本地问题（可通过修补产物修复）
       issue.scope = "local";
     }
     return issue.scope;
@@ -403,16 +403,16 @@ export class EvaluationTool extends BaseTool {
       }
     }
 
-    // Cross-artifact entity naming consistency check
+    // 跨产物实体命名一致性检查
     issues.push(...this._checkCrossArtifactNaming(snapshots, requirementJson));
 
-    // Cross-artifact function ID consistency check
+    // 跨产物功能 ID 一致性检查
     issues.push(...this._checkFunctionIdConsistency(snapshots, requirementJson));
 
-    // Cross-artifact constraint boundary test coverage
+    // 跨产物约束边界测试覆盖率检查
     issues.push(...this._checkConstraintBoundaryCoverage(snapshots, requirementJson));
 
-    // Cross-artifact business process coverage in activity diagram
+    // 跨产物业务流程在活动图中的覆盖率检查
     issues.push(...this._checkBusinessProcessCoverage(snapshots, requirementJson));
 
     return issues;
@@ -426,7 +426,7 @@ export class EvaluationTool extends BaseTool {
     const entities = (requirementJson.entities ?? []) as Array<Record<string, unknown>>;
     if (entities.length === 0) return issues;
 
-    // Build canonical entity name set from requirement analysis
+    // 从需求分析中构建规范的实体名集合（normalized -> original）
     const entityNames = new Map<string, string>(); // normalized -> original
     for (const entity of entities) {
       const name = String(entity.name ?? "").trim();
@@ -436,7 +436,7 @@ export class EvaluationTool extends BaseTool {
     }
     if (entityNames.size === 0) return issues;
 
-    // Check design text for renamed entities
+    // 检查设计文本中是否有重命名的实体
     for (const [taskId, snapshot] of Object.entries(snapshots)) {
       const taskType = String(snapshot.type ?? "");
       if (taskType !== "design") continue;
@@ -536,11 +536,11 @@ export class EvaluationTool extends BaseTool {
   }
 
   /**
-   * Check that all function IDs referenced in design/test exist in analysis.
-   * Flags "ghost IDs" that were hallucinated by downstream tasks.
+   * 检查设计/测试中引用的所有功能 ID 是否在分析中存在。
+   * 标记"幽灵 ID"——下游任务中虚构的 ID。
    */
   /**
-   * Check that activity diagram covers all business processes from analysis.
+   * 检查活动图是否覆盖了分析中的所有业务流程。
    */
   private _checkBusinessProcessCoverage(
     snapshots: Record<string, Record<string, unknown>>,
@@ -809,9 +809,9 @@ export class EvaluationTool extends BaseTool {
     })];
   }
 
-  // ------------------------------------------------------------------
-  // LLM review
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
+  // LLM 评审
+  // --------------------------------------------------------------
 
   private async _llmReviewSnapshots(
     requirementText: string,
