@@ -20,16 +20,6 @@ export interface StreamPrinter {
   done(): void;
 }
 
-/** Minimal interface that any LLM client must satisfy for {@link streamLlm}. */
-export interface LLMClient {
-  /** Stream a JSON-structured response. */
-  generateJson<T = unknown>(
-    ...args: unknown[]
-  ): Promise<T>;
-  /** Stream a plain-text response. */
-  generateText(...args: unknown[]): Promise<string>;
-}
-
 // ---------------------------------------------------------------------------
 // Stream printer
 // ---------------------------------------------------------------------------
@@ -69,37 +59,4 @@ export function makeStreamPrinter(tag: string): StreamPrinter {
   return { onChunk, done };
 }
 
-// ---------------------------------------------------------------------------
-// Generic streaming LLM call
-// ---------------------------------------------------------------------------
 
-/**
- * Invoke an LLM method with streaming output.
- *
- * This is the async counterpart of the Python `stream_llm` helper.  It
- * wraps the call with a {@link StreamPrinter} so that tokens are printed
- * in real-time, and guarantees `done()` is called even on error.
- *
- * @typeParam T - The expected return type (defaults to `unknown`).
- * @param llm    - An object satisfying the {@link LLMClient} interface.
- * @param method - `'json'` to call `generateJson`, `'text'` to call `generateText`.
- * @param args   - Positional arguments forwarded to the LLM method.
- * @param tag    - Label for the stream printer prefix.
- * @returns The parsed LLM response.
- */
-export async function streamLlm<T = unknown>(
-  llm: LLMClient,
-  method: "json" | "text",
-  args: unknown[] = [],
-  tag = "",
-): Promise<T> {
-  const { onChunk, done } = makeStreamPrinter(tag);
-  try {
-    if (method === "json") {
-      return (await llm.generateJson<T>(...args, { onChunk })) as T;
-    }
-    return (await llm.generateText(...args, { onChunk })) as unknown as T;
-  } finally {
-    done();
-  }
-}
