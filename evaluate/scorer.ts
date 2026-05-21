@@ -1,6 +1,9 @@
 /**
  * OutputScorer — 对已完成运行输出的产物进行质量评分。
  * 无需 LLM 调用 — 纯规则驱动。
+ *
+ * 从 src/tools/scorer.ts 剥离到独立 evaluate/ 模块。
+ * 不参与核心决策逻辑，仅作为后置质量诊断工具。
  */
 
 export interface ScoreReport {

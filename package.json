@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Multi-agent LLM system for requirements-driven software design",
   "type": "module",
-  "main": "dist/main.js",
+  "main": "dist/src/main.js",
   "bin": {
-    "reqdesign": "dist/main.js"
+    "reqdesign": "dist/src/main.js"
   },
   "vitest": {
     "exclude": [
