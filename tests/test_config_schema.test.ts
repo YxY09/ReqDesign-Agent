@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAndValidate } from "../src/configSchema.js";
+import { parseAndValidate } from "../src/config.js";
 
 describe("AgentConfigSchema", () => {
   it("空输入使用默认值", () => {

@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { parseAndValidate } from "./configSchema.js";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // YAML snake_case → camelCase conversion
@@ -32,39 +32,63 @@ function snakeToCamel(obj: unknown): unknown {
   return obj;
 }
 
-// ---------------------------------------------------------------------------
-// Interfaces for sub-configs
-// ---------------------------------------------------------------------------
+// =========================================================================
+// Zod schemas — single source of truth for config shape & validation
+// =========================================================================
+
+const LlmConfigSchema = z.object({
+  provider: z.enum(["openai", "anthropic", "deepseek", "qwen", "minimax"]).default("openai"),
+  model: z.string().min(1).default("gpt-4o"),
+  apiKey: z.string().optional().default(""),
+  baseUrl: z.string().optional().default(""),
+  temperature: z.number().min(0).max(2).default(0.3),
+  maxTokens: z.number().int().positive().default(8192),
+  timeout: z.number().positive().default(120),
+});
+
+const RetryConfigSchema = z.object({
+  maxRetries: z.number().int().nonnegative().default(3),
+  retryDelayMs: z.number().int().positive().default(1000),
+  maxDelayMs: z.number().int().positive().default(30_000),
+  retryOnTimeout: z.boolean().default(true),
+});
+
+const OutputConfigSchema = z.object({
+  defaultDir: z.string().default("outputs/"),
+});
+
+const LoggingConfigSchema = z.object({
+  level: z.enum(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]).default("INFO"),
+  logDir: z.string().default("logs/"),
+});
+
+const AgentConfigSchema = z.object({
+  llm: LlmConfigSchema.default({}),
+  retry: RetryConfigSchema.default({}),
+  output: OutputConfigSchema.default({}),
+  logging: LoggingConfigSchema.default({}),
+});
+
+/** Validate raw YAML data against the schema. Throws ZodError on failure. */
+export function parseAndValidate(raw: unknown) {
+  return AgentConfigSchema.parse(raw ?? {});
+}
+
+// =========================================================================
+// TypeScript types derived from zod schemas (no duplication)
+// =========================================================================
 
 /** LLM provider settings. */
-export interface LLMConfig {
-  provider: string;
-  model: string;
-  apiKey: string;
-  baseUrl: string;
-  temperature: number;
-  maxTokens: number;
-  timeout: number;
-}
+export type LLMConfig = z.infer<typeof LlmConfigSchema>;
 
 /** Retry behaviour settings. */
-export interface RetryConfig {
-  maxRetries: number;
-  retryDelayMs: number;
-  maxDelayMs: number;
-  retryOnTimeout: boolean;
-}
+export type RetryConfig = z.infer<typeof RetryConfigSchema>;
 
 /** Output directory settings. */
-export interface OutputConfig {
-  defaultDir: string;
-}
+export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 
 /** Logging settings. */
-export interface LoggingConfig {
-  level: string;
-  logDir: string;
-}
+export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -237,34 +261,15 @@ export class AgentConfig {
       (safeRaw.llm as Record<string, unknown>).api_key = "***";
     }
 
-    // Zod 严格验证 — 失败时 throw，不再 warn
-    // Convert YAML snake_case keys → camelCase before schema validation
+    // Zod 严格验证 — 失败时 throw
     const camelData = snakeToCamel(data);
-    const parsed = parseAndValidate(camelData);
+    const parsed = AgentConfigSchema.parse(camelData ?? {});
 
     const config = new AgentConfig({
-      llm: {
-        provider: parsed.llm.provider,
-        model: parsed.llm.model,
-        apiKey: parsed.llm.apiKey ?? "",
-        baseUrl: parsed.llm.baseUrl ?? "",
-        temperature: parsed.llm.temperature,
-        maxTokens: parsed.llm.maxTokens,
-        timeout: parsed.llm.timeout,
-      },
-      retry: {
-        maxRetries: parsed.retry.maxRetries,
-        retryDelayMs: parsed.retry.retryDelayMs,
-        maxDelayMs: parsed.retry.maxDelayMs,
-        retryOnTimeout: parsed.retry.retryOnTimeout,
-      },
-      output: {
-        defaultDir: parsed.output.defaultDir,
-      },
-      logging: {
-        level: parsed.logging.level,
-        logDir: parsed.logging.logDir,
-      },
+      llm: { ...parsed.llm, apiKey: parsed.llm.apiKey ?? "", baseUrl: parsed.llm.baseUrl ?? "" },
+      retry: parsed.retry,
+      output: parsed.output,
+      logging: parsed.logging,
       raw: safeRaw,
     });
     console.info(
