@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   existsSync,
   readFileSync,
+  readdirSync,
   rmSync,
   utimesSync,
   writeFileSync,
@@ -29,6 +30,7 @@ import {
 } from "../src/memory/extractors.js";
 import { getMemory, MemoryStore, setMemory } from "../src/memory/store.js";
 import { truncateTopicFile } from "../src/memory/helpers.js";
+import { MAX_MEMORY_FILES } from "../src/memory/constants.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -437,6 +439,100 @@ describe("MemoryStore", () => {
       expect(content).toContain("修正策略有效");
     } finally {
       setMemory(previousMemory);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MemoryStore GC
+// ---------------------------------------------------------------------------
+
+describe("MemoryStore GC", () => {
+  it("prunes deprecated files on disk, not just skips them during scan", () => {
+    const tmp = makeTmpDir();
+    try {
+      const store = new MemoryStore(tmp);
+      const memoryDir = join(tmp, ".reqdesign-memory");
+
+      writeFileSync(
+        join(memoryDir, "old_deprecated.md"),
+        [
+          "---",
+          "type: project",
+          "description: deprecated rule",
+          "status: deprecated",
+          "created: 2025-01-01T00:00:00Z",
+          "---",
+          "",
+          "## deprecated rule",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      const expiredPath = join(memoryDir, "old_expired.md");
+      writeFileSync(
+        expiredPath,
+        [
+          "---",
+          "type: project",
+          "description: expired rule",
+          "status: active",
+          "created: 2025-01-01T00:00:00Z",
+          "---",
+          "",
+          "## expired rule",
+        ].join("\n"),
+        "utf-8",
+      );
+      const veryOld = new Date("2025-01-01");
+      utimesSync(expiredPath, veryOld, veryOld);
+
+      expect(existsSync(join(memoryDir, "old_deprecated.md"))).toBe(true);
+      expect(existsSync(expiredPath)).toBe(true);
+
+      store.pruneOldFiles();
+
+      expect(existsSync(join(memoryDir, "old_deprecated.md"))).toBe(false);
+      expect(existsSync(expiredPath)).toBe(false);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps active recent memories", () => {
+    const tmp = makeTmpDir();
+    try {
+      const store = new MemoryStore(tmp);
+      store.save("coordinator", "recent rule", "project", "recent_topic", "recent-key");
+
+      store.pruneOldFiles();
+
+      const path = join(tmp, ".reqdesign-memory", "coordinator_project_recent_topic.md");
+      expect(existsSync(path)).toBe(true);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("prunes oldest files when count exceeds MAX_MEMORY_FILES", () => {
+    const tmp = makeTmpDir();
+    try {
+      const store = new MemoryStore(tmp);
+      for (let i = 0; i < MAX_MEMORY_FILES + 5; i++) {
+        store.save("coordinator", `rule ${i}`, "project", `topic_${i}`, `key-${i}`);
+      }
+
+      const before = readdirSync(join(tmp, ".reqdesign-memory"))
+        .filter((f) => f.endsWith(".md") && f !== "MEMORY.md" && f !== "README.md");
+      expect(before.length).toBeGreaterThan(MAX_MEMORY_FILES);
+
+      store.pruneOldFiles();
+
+      const after = readdirSync(join(tmp, ".reqdesign-memory"))
+        .filter((f) => f.endsWith(".md") && f !== "MEMORY.md" && f !== "README.md");
+      expect(after.length).toBeLessThanOrEqual(MAX_MEMORY_FILES);
+    } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
   });

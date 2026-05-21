@@ -10,7 +10,7 @@
  * 源自 reqdesign/memory/store.py。
  */
 
-import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
 import { Logger, setupLogger } from "../logger.js";
 import {
@@ -57,6 +57,76 @@ export class MemoryStore {
     this.memoryDir = join(this.projectRoot, MEMORY_DIR_NAME);
     this._logger = setupLogger("reqdesign.memory");
     this._ensureDir();
+    this.pruneOldFiles();
+  }
+
+  // ================================================================
+  // GC
+  // ================================================================
+
+  /**
+   * 清理过期、废弃或超出数量上限的记忆文件。
+   *
+   * 删除规则：
+   * 1. status === "deprecated" → 删除
+   * 2. mtime 超过 MAX_MEMORY_AGE_DAYS → 删除
+   * 3. 文件数超过 MAX_MEMORY_FILES → 从最旧的开始删
+   *
+   * @returns 删除的文件数量。
+   */
+  pruneOldFiles(): number {
+    let removed = 0;
+    try {
+      const entries = readdirSync(this.memoryDir, { withFileTypes: true });
+      const files = entries
+        .filter((e) => e.isFile() && e.name.endsWith(".md") &&
+          e.name !== MEMORY_INDEX_NAME && e.name !== "README.md")
+        .map((e) => {
+          const fullPath = join(this.memoryDir, e.name);
+          let mtime = 0;
+          try { mtime = statSync(fullPath).mtimeMs / 1000; } catch { /* ignore */ }
+          let status = "";
+          try {
+            const raw = readFileSync(fullPath, "utf8");
+            const fm = parseFrontmatter(raw);
+            status = (fm["status"] ?? "active").trim().toLowerCase();
+          } catch { /* ignore */ }
+          return { name: e.name, path: fullPath, mtime, status };
+        });
+
+      // 规则 1: 删除 deprecated
+      for (const f of files) {
+        if (f.status === "deprecated") {
+          try { unlinkSync(f.path); removed++; } catch { /* ignore */ }
+        }
+      }
+
+      // 规则 2: 删除过期
+      const remaining = files.filter((f) => !(f.status === "deprecated"));
+      for (const f of remaining) {
+        if (memoryAgeDays(f.mtime * 1000) > MAX_MEMORY_AGE_DAYS) {
+          try { unlinkSync(f.path); removed++; } catch { /* ignore */ }
+        }
+      }
+
+      // 规则 3: 截断到 MAX_MEMORY_FILES
+      const stillThere = remaining.filter((f) => {
+        try { return existsSync(f.path); } catch { return false; }
+      });
+      stillThere.sort((a, b) => a.mtime - b.mtime);
+      const overflow = stillThere.slice(0, Math.max(0, stillThere.length - MAX_MEMORY_FILES));
+      for (const f of overflow) {
+        try { unlinkSync(f.path); removed++; } catch { /* ignore */ }
+      }
+
+      if (removed > 0) {
+        this._logger.info(`GC: 清理了 ${removed} 个旧记忆文件`);
+        this._indexCache = null;
+      }
+    } catch (e) {
+      this._logger.warn(`GC 失败: ${e}`);
+    }
+    return removed;
   }
 
   // ================================================================
