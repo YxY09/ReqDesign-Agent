@@ -48,7 +48,7 @@ import {
   type WorkerKind,
 } from "./shared/types.js";
 import { InputLoader } from "./inputLoader.js";
-import { TraceLogger } from "./governance/traceLogger.js";
+import { TraceLogger, TracingLLMClient } from "./traceLogger.js";
 import {
   createWorkflowEvent,
   type WorkflowEvent,
@@ -162,14 +162,8 @@ export class MultiAgentRuntime {
     this.config = config;
     this.logger = setupLogger("reqdesign.runtime", config.logging.level);
     this.trace = new TraceLogger();
-    this.llm = new LLMClient(config);
-    this.llm.setTraceSink((info) => this.trace.logLlmCall(
-      info.tag || "llm",
-      "chat",
-      [{ role: "user", content: info.promptPreview }],
-      info.responseText,
-      info.durationMs / 1000,
-    ));
+    const rawLlm = new LLMClient(config);
+    this.llm = new TracingLLMClient(rawLlm, this.trace);
 
     const projectRoot = resolve(process.cwd());
     const constitution = new ConstitutionLoader([

@@ -9,7 +9,7 @@
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { Logger, setupLogger } from "../logger.js";
+import { Logger, setupLogger } from "./logger.js";
 
 // ---------------------------------------------------------------------------
 // TraceEntry（追踪条目）
