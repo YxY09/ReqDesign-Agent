@@ -131,6 +131,9 @@ export class MemoryStore {
 
   /**
    * 加载给定 Agent 类型的所有记忆上下文。
+   *
+   * 内部委托给 findRelevant("", agentType)，无查询时按 mtime 排序，与有查询
+   * 上下文时走同一条检索路径，保证排序一致性。
    */
   load(agentType: string): string {
     if (!(agentType in AGENT_TYPE_MAP)) {
@@ -141,16 +144,16 @@ export class MemoryStore {
     const indexContent = this._loadIndex();
     if (!indexContent) return "";
 
-    const memHeaders = this._scanMemoryFiles();
-    if (memHeaders.length === 0) return "";
+    // 统一走 findRelevant 的确定性检索路径，空查询时仅按 mtime 排序
+    const relevant = this.findRelevant("", agentType, MAX_RELEVANT_MEMORIES);
+    if (relevant.length === 0) return "";
 
     const parts: string[] = [`## 记忆索引\n${indexContent}\n`];
     parts.push("## 记忆主题文件");
 
-    const filtered = headersForAgent(agentType, memHeaders);
-    for (const h of filtered.slice(0, MAX_RELEVANT_MEMORIES)) {
-      const typeLabel = MEMORY_TYPE_LABELS[h.memType as MemoryType] ?? "未知";
-      parts.push(`- [${typeLabel}] ${h.filename}: ${h.description}`);
+    for (const m of relevant) {
+      const typeLabel = MEMORY_TYPE_LABELS[m.memType as MemoryType] ?? "未知";
+      parts.push(`- [${typeLabel}] ${m.filename}: ${m.description}`);
     }
 
     return parts.join("\n");
