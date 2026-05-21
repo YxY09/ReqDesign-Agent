@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   ConvergenceTracker,
   type EvaluationRound,
-} from "../src/orchestration/convergence.js";
+} from "../src/orchestration/snapshot.js";
 
 describe("ConvergenceTracker", () => {
   it("detects identical issue across rounds", () => {

@@ -7,9 +7,6 @@
 import type { WorkflowState } from "../state.js";
 import type { TaskMailbox } from "../messaging.js";
 
-// Re-export for convenience
-export { ConvergenceTracker } from "./convergence.js";
-
 // ---------------------------------------------------------------------------
 // OrchestratorSnapshot
 // ---------------------------------------------------------------------------
@@ -208,4 +205,66 @@ export class StateReader {
     }
     return revisions;
   }
+}
+
+// ---------------------------------------------------------------------------
+// ConvergenceTracker — detect stalled repair loops
+// ---------------------------------------------------------------------------
+
+export interface IssueFingerprint {
+  fingerprint: string;
+  severity: string;
+}
+
+export interface EvaluationRound {
+  issues: IssueFingerprint[];
+}
+
+export type Trend = "decreasing" | "flat" | "increasing" | "unknown";
+
+export class ConvergenceTracker {
+  private readonly rounds: EvaluationRound[] = [];
+  private readonly stallThreshold: number;
+
+  constructor(stallThreshold = 3) { this.stallThreshold = stallThreshold; }
+
+  addRound(round: EvaluationRound): void { this.rounds.push(round); }
+  get roundCount(): number { return this.rounds.length; }
+
+  static fingerprint(description: string): string {
+    return description.trim().slice(0, 80).toLowerCase();
+  }
+
+  isStalled(): boolean {
+    if (this.rounds.length < this.stallThreshold) return false;
+    if (this.stalledFingerprints().length === 0) return false;
+    if (this.trend() === "decreasing") return false;
+    return true;
+  }
+
+  stalledFingerprints(): string[] {
+    if (this.rounds.length < this.stallThreshold) return [];
+    const recent = this.rounds.slice(-this.stallThreshold);
+    const firstSet = new Set(recent[0].issues.map((i) => i.fingerprint));
+    return [...firstSet].filter((fp) =>
+      recent.every((round) => round.issues.some((i) => i.fingerprint === fp)),
+    );
+  }
+
+  trend(): Trend {
+    if (this.rounds.length < 2) return "unknown";
+    const counts = this.rounds.slice(-3).map((r) => r.issues.length);
+    const strictlyDecreasing = counts.every((c, i) => i === 0 || c < counts[i - 1]);
+    const strictlyIncreasing = counts.every((c, i) => i === 0 || c > counts[i - 1]);
+    if (strictlyDecreasing) return "decreasing";
+    if (strictlyIncreasing) return "increasing";
+    return "flat";
+  }
+
+  get latestMajorCount(): number {
+    if (this.rounds.length === 0) return 0;
+    return this.rounds[this.rounds.length - 1].issues.filter((i) => i.severity === "major").length;
+  }
+
+  reset(): void { this.rounds.length = 0; }
 }

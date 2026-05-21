@@ -12,7 +12,7 @@ import {
 import type { LLMClient } from "../src/llmClient.js";
 import { getMemory, MemoryStore, setMemory } from "../src/memory/store.js";
 import { BudgetManager } from "../src/orchestration/budget.js";
-import { OrchestrationConfig } from "../src/orchestration/config.js";
+import { OrchestrationConfig } from "../src/orchestration/budget.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
