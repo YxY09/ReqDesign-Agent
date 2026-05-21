@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createArtifact, createIssue, createVerdict } from "../src/agent/types.js";
+import {
+  createArtifact,
+  createExecutionPlan,
+  createIssue,
+  createPlanMutation,
+  createTask,
+  createVerdict,
+} from "../src/agent/types.js";
 import { WorkflowState } from "../src/state.js";
 
 describe("WorkflowState subdomain views", () => {
@@ -115,6 +122,268 @@ describe("WorkflowState subdomain views", () => {
     expect(state.finalReviewPassed).toBe(true);
     expect(state.finalReviewRevisions).toEqual({ "design-1": 2 });
     expect(state.finalReviewRevisions).toBe(reviewState.finalReviewRevisions);
+  });
+
+  // --- Task lifecycle / plan mutation tests ---
+
+  it("tracks task lifecycle: pending → running → completed", () => {
+    const state = new WorkflowState();
+    state.setPlan(
+      createExecutionPlan({
+        tasks: [
+          createTask({ id: "analyze-1", type: "analyze", description: "Analyze" }),
+          createTask({ id: "design-1", type: "design", description: "Design", dependsOn: ["analyze-1"] }),
+        ],
+      }),
+    );
+
+    expect(state.taskStatus("analyze-1")).toBe("pending");
+    expect(state.taskStatus("design-1")).toBe("pending");
+    expect(state.getReadyTaskIds()).toEqual(["analyze-1"]);
+    expect(state.getBlockedTaskIds()).toEqual(["design-1"]);
+
+    state.markTaskStatus("analyze-1", "running");
+    expect(state.isTaskRunning("analyze-1")).toBe(true);
+    expect(state.getRunningTaskIds()).toEqual(["analyze-1"]);
+
+    state.markTaskStatus("analyze-1", "completed");
+    expect(state.isTaskCompleted("analyze-1")).toBe(true);
+    expect(state.getCompletedTaskIds()).toEqual(["analyze-1"]);
+    // design-1 is now unblocked
+    expect(state.getReadyTaskIds()).toEqual(["design-1"]);
+    expect(state.getBlockedTaskIds()).toEqual([]);
+  });
+
+  it("mutatePlan adds and drops tasks with DAG validation", () => {
+    const state = new WorkflowState();
+    state.setPlan(
+      createExecutionPlan({
+        tasks: [
+          createTask({ id: "analyze-1", type: "analyze", description: "Analyze" }),
+          createTask({ id: "design-1", type: "design", description: "Design", dependsOn: ["analyze-1"] }),
+        ],
+      }),
+    );
+
+    // Add a new task
+    const errors = state.mutatePlan(
+      createPlanMutation({
+        addTasks: [createTask({ id: "tests-1", type: "tests", description: "Tests", dependsOn: ["design-1"] })],
+        dropTaskIds: [],
+        updateTasks: [],
+        reorderEdges: {},
+        reasoning: "add tests",
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(state.getPlanTaskIds()).toContain("tests-1");
+    expect(state.taskStatus("tests-1")).toBe("pending");
+
+    // Drop the new task
+    const dropErrors = state.mutatePlan(
+      createPlanMutation({
+        addTasks: [],
+        dropTaskIds: ["tests-1"],
+        updateTasks: [],
+        reorderEdges: {},
+        reasoning: "drop tests",
+      }),
+    );
+    expect(dropErrors).toEqual([]);
+    expect(state.getPlanTaskIds()).not.toContain("tests-1");
+  });
+
+  it("mutatePlan rejects cycle and completed task drop", () => {
+    const state = new WorkflowState();
+    state.setPlan(
+      createExecutionPlan({
+        tasks: [
+          createTask({ id: "analyze-1", type: "analyze", description: "A" }),
+          createTask({ id: "design-1", type: "design", description: "D", dependsOn: ["analyze-1"] }),
+        ],
+      }),
+    );
+
+    // Mark analyze-1 as completed
+    state.markTaskStatus("analyze-1", "completed");
+
+    // Cannot drop completed task
+    const dropErrors = state.mutatePlan(
+      createPlanMutation({
+        addTasks: [],
+        dropTaskIds: ["analyze-1"],
+        updateTasks: [],
+        reorderEdges: {},
+        reasoning: "bad drop",
+      }),
+    );
+    expect(dropErrors.length).toBeGreaterThan(0);
+
+    // Cannot create cycle: design-1 → analyze-1 → design-1
+    // Both tasks still pending for reorderEdges to take effect
+    const state2 = new WorkflowState();
+    state2.setPlan(
+      createExecutionPlan({
+        tasks: [
+          createTask({ id: "a", type: "analyze", description: "A" }),
+          createTask({ id: "d", type: "design", description: "D", dependsOn: ["a"] }),
+        ],
+      }),
+    );
+    const cycleErrors = state2.mutatePlan(
+      createPlanMutation({
+        addTasks: [],
+        dropTaskIds: [],
+        updateTasks: [],
+        reorderEdges: { a: ["d"], d: ["a"] },
+        reasoning: "bad cycle",
+      }),
+    );
+    expect(cycleErrors.length).toBeGreaterThan(0);
+    expect(cycleErrors[0]).toContain("cycle");
+  });
+
+  // --- Artifact management tests ---
+
+  it("addArtifact increments revision and syncs design aggregate", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+    expect(state.artifactsState.artifactRevisionsByTask["design-1"]).toBe(1);
+    expect(state.artifactsState.designText).toBe("v1");
+
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v2" }));
+    expect(state.artifactsState.artifactRevisionsByTask["design-1"]).toBe(2);
+    expect(state.artifactsState.designText).toBe("v2");
+  });
+
+  it("addArtifact syncs test_cases and diagrams aggregates", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "tests-1", type: "tests", content: "TC-001" }));
+    expect(state.artifactsState.testCases).toBe("TC-001");
+
+    state.addArtifact(
+      createArtifact({ taskId: "diag-1", type: "diagrams", content: { classDiagram: "class A{}" } }),
+    );
+    expect(state.artifactsState.diagrams).toEqual({ classDiagram: "class A{}" });
+
+    // Second diagram merges
+    state.addArtifact(
+      createArtifact({ taskId: "diag-2", type: "diagrams", content: { sequenceDiagram: "A->B" } }),
+    );
+    expect(state.artifactsState.diagrams).toEqual({ classDiagram: "class A{}", sequenceDiagram: "A->B" });
+  });
+
+  it("addArtifact clears majorPendingTaskIds and resets qualityStatus", () => {
+    const state = new WorkflowState();
+    state.majorPendingTaskIds.add("design-1");
+    state.qualityStatus = "passed";
+
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "fixed" }));
+    expect(state.majorPendingTaskIds.size).toBe(0);
+    expect(state.qualityStatus).toBe("unknown");
+  });
+
+  // --- Verdict / review status tests ---
+
+  it("addVerdict marks task as passed when no blocker", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        issues: [],
+      }),
+    );
+
+    expect(state.reviewStatusByTask["design-1"]).toBe("passed");
+    expect(state.acceptedRevisionsByTask["design-1"]).toBe(1);
+    expect(state.currentReviewStatus("design-1")).toBe("passed");
+    expect(state.isCurrentArtifactAccepted("design-1")).toBe(true);
+  });
+
+  it("addVerdict records major pending for non-blocker major issues", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+
+    state.addVerdict(
+      createVerdict({
+        passed: false,
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        issues: [
+          createIssue({
+            severity: "major",
+            targetTaskId: "design-1",
+            targetTaskType: "design",
+            description: "minor style issue",
+          }),
+        ],
+      }),
+    );
+
+    // Major but not blocker → passed but tracked in majorPending
+    expect(state.reviewStatusByTask["design-1"]).toBe("passed");
+    expect(state.majorPendingTaskIds.has("design-1")).toBe(true);
+    expect(state.getMajorPendingTaskIds()).toEqual(["design-1"]);
+  });
+
+  it("final review sets finalReviewDone/Passed and qualityStatus", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        issues: [],
+        isFinalReview: true,
+      }),
+    );
+
+    expect(state.reviewState.finalReviewDone).toBe(true);
+    expect(state.reviewState.finalReviewPassed).toBe(true);
+    expect(state.qualityStatus).toBe("passed");
+  });
+
+  it("getUnevaluatedArtifactTaskIds tracks pending evaluations", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+    state.addArtifact(createArtifact({ taskId: "tests-1", type: "tests", content: "t1" }));
+
+    // Neither evaluated yet
+    expect(state.getUnevaluatedArtifactTaskIds()).toEqual(["design-1", "tests-1"]);
+
+    // Evaluate design-1
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        issues: [],
+      }),
+    );
+
+    expect(state.getUnevaluatedArtifactTaskIds()).toEqual(["tests-1"]);
+    expect(state.getRejectedArtifactTaskIds()).toEqual([]);
+  });
+
+  // --- Notification / repair tracking tests ---
+
+  it("recordNotification and recordRepairAttempt track correctly", () => {
+    const state = new WorkflowState();
+    state.recordNotification({ type: "task_start", taskId: "design-1" });
+    state.recordNotification({ type: "task_complete", taskId: "design-1" });
+
+    expect(state.notifications).toHaveLength(2);
+    expect(state.executionState.notifications).toHaveLength(2);
+
+    state.recordRepairAttempt("design-1");
+    state.recordRepairAttempt("design-1");
+    expect(state.progress._counters["repair_count:design-1"]).toBe(2);
   });
 
   it("routes markTaskStatus through execution subdomain view", () => {
