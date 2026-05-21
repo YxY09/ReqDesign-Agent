@@ -381,7 +381,7 @@ describe("MemoryStore", () => {
   });
 
   it("truncateTopicFile keeps only one truncation warning", () => {
-    const warning = "\n\n> memory file truncated to recent updates.\n";
+    const warning = "\n\n> 记忆文件已截断至最近的更新。\n";
     const oversized = [
       "---",
       "type: project",
@@ -409,7 +409,7 @@ describe("MemoryStore", () => {
     ].join("\n");
 
     const truncated = truncateTopicFile(oversized, 1200);
-    expect((truncated.match(/memory file truncated to recent updates\./g) ?? []).length).toBe(1);
+    expect((truncated.match(/记忆文件已截断至最近的更新。/g) ?? []).length).toBe(1);
   });
 
   it("persistMemoryWrites writes extracted entries through the global store", () => {
