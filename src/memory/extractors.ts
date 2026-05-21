@@ -12,7 +12,7 @@ import type {
   RuntimeAction,
   Artifact,
   Issue,
-} from "../agent/types.js";
+} from "../shared/types.js";
 import { getMemory } from "./store.js";
 
 // ---------------------------------------------------------------------------

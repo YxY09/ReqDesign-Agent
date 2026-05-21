@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { RepairTool } from "../src/tools/repair.js";
-import { createTask } from "../src/agent/types.js";
+import { createTask } from "../src/shared/types.js";
 
 function designRepairLlm(returnText: string = '{"patches":[{"op":"replace_section","section":"系统设计","content":"## 系统设计\n\nfixed content"}]}') {
   return {

@@ -14,7 +14,7 @@ import {
   createTask,
   createPlanMutation,
   createExecutionPlan,
-} from "../agent/types.js";
+} from "../shared/types.js";
 
 /** Merge dependency lists preserving order while ensuring required upstream tasks exist. */
 function mergeDeps(existing: string[], required: string[]): string[] {

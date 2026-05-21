@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SystemDesigner } from "../src/generators/design.js";
 import { GenerationTool } from "../src/tools/generation.js";
-import { createTask } from "../src/agent/types.js";
+import { createTask } from "../src/shared/types.js";
 
 describe("SystemDesigner.validateDesign", () => {
   it("should warn on missing required sections", () => {

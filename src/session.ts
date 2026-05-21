@@ -9,7 +9,7 @@ import {
   type PlanMutation,
   type Task,
   type Verdict,
-} from "./agent/types.js";
+} from "./shared/types.js";
 import {
   createTaskNotification,
   type TaskMessage,

@@ -9,7 +9,7 @@ import type { ToolCapabilities } from "./types.js";
 import {
   type Issue, type Task, type Verdict, type Scope,
   createIssue, createTask, createVerdict,
-} from "../agent/types.js";
+} from "../shared/types.js";
 import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import {

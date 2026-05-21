@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { EvaluationTool } from "../src/tools/evaluation.js";
-import { createIssue } from "../src/agent/types.js";
-import type { Issue } from "../src/agent/types.js";
+import { createIssue } from "../src/shared/types.js";
+import type { Issue } from "../src/shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Mock LLM stubs

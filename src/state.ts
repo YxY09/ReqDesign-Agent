@@ -18,7 +18,7 @@ import {
   type Verdict,
   createExecutionPlan,
   createTask,
-} from "./agent/types.js";
+} from "./shared/types.js";
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/snapshot.js";
 import { RequirementNormalizer } from "./shared/normalizer.js";

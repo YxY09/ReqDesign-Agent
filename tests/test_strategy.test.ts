@@ -11,8 +11,8 @@ import {
 } from "../src/orchestration/strategy.js";
 import type { StrategyName, StrategyDecision } from "../src/orchestration/strategy.js";
 import type { OrchestratorSnapshot } from "../src/orchestration/snapshot.js";
-import { createRuntimeAction } from "../src/agent/types.js";
-import type { RuntimeAction } from "../src/agent/types.js";
+import { createRuntimeAction } from "../src/shared/types.js";
+import type { RuntimeAction } from "../src/shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

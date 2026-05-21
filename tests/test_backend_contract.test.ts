@@ -14,7 +14,7 @@ import {
   SessionDescriptor,
   WorkerSession,
 } from "../src/session.js";
-import { createArtifact } from "../src/agent/types.js";
+import { createArtifact } from "../src/shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers — delay

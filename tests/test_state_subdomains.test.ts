@@ -6,7 +6,7 @@ import {
   createPlanMutation,
   createTask,
   createVerdict,
-} from "../src/agent/types.js";
+} from "../src/shared/types.js";
 import { WorkflowState } from "../src/state.js";
 
 describe("WorkflowState subdomain views", () => {

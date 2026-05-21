@@ -40,7 +40,7 @@ export function createStrategyDecision(overrides: Partial<StrategyDecision> & Pi
 // ActionCompiler — compiles strategies into runtime actions
 // ---------------------------------------------------------------------------
 
-import { createRuntimeAction, type RuntimeAction } from "../agent/types.js";
+import { createRuntimeAction, type RuntimeAction } from "../shared/types.js";
 import type { OrchestratorSnapshot } from "./snapshot.js";
 
 export class ActionCompiler {

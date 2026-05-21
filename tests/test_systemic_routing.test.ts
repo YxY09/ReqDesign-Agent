@@ -8,8 +8,8 @@
 import { describe, it, expect } from "vitest";
 
 import { EvaluationTool } from "../src/tools/evaluation.js";
-import { AgentOrchestrator } from "../src/agent/orchestrator.js";
-import { createIssue, createTask, createExecutionPlan, createArtifact } from "../src/agent/types.js";
+import { AgentOrchestrator } from "../src/orchestration/orchestrator.js";
+import { createIssue, createTask, createExecutionPlan, createArtifact } from "../src/shared/types.js";
 import { WorkflowState } from "../src/state.js";
 import { TaskMailbox, createTaskNotification } from "../src/messaging.js";
 

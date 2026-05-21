@@ -3,7 +3,7 @@ import type { EvaluationTool } from "./evaluation.js";
 import { GenerationTool } from "./generation.js";
 import type { PlanningTool } from "./planning.js";
 import { RepairTool } from "./repair.js";
-import { createArtifact, createTask, type Artifact, type ExecutionPlan, type Task } from "../agent/types.js";
+import { createArtifact, createTask, type Artifact, type ExecutionPlan, type Task } from "../shared/types.js";
 import type { TaskMessage, TaskNotification } from "../messaging.js";
 import { SessionContext, WorkerSession } from "../session.js";
 import { isRecord } from "../utils/isRecord.js";

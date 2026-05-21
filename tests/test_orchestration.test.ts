@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { AgentOrchestrator } from "../src/agent/orchestrator.js";
+import { AgentOrchestrator } from "../src/orchestration/orchestrator.js";
 import { WorkflowState } from "../src/state.js";
 import { TaskMailbox } from "../src/messaging.js";
 import {
@@ -8,7 +8,7 @@ import {
   createArtifact,
   createVerdict,
   createIssue,
-} from "../src/agent/types.js";
+} from "../src/shared/types.js";
 import type { LLMClient } from "../src/llmClient.js";
 import { getMemory, MemoryStore, setMemory } from "../src/memory/store.js";
 import { BudgetManager } from "../src/orchestration/budget.js";

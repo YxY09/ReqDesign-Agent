@@ -8,7 +8,7 @@ import { SystemDesigner } from "../generators/design.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { ArtifactPatcher, type PatchOp } from "./artifactPatcher.js";
-import type { Task } from "../agent/types.js";
+import type { Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
 
 export class RepairTool extends BaseTool {

@@ -6,18 +6,18 @@
 import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "../tools/base.js";
 import type { ToolCapabilities } from "../tools/types.js";
-import type { RuntimeAction } from "./types.js";
+import type { RuntimeAction } from "../shared/types.js";
 import type { WorkflowState } from "../state.js";
 import type { TaskMailbox } from "../messaging.js";
-import { ActionCompiler } from "../orchestration/strategy.js";
-import { PolicyGuard } from "../orchestration/policy.js";
-import { DeterministicPolicy } from "../orchestration/policy.js";
-import { StateReader } from "../orchestration/snapshot.js";
-import { StrategyBrain } from "../orchestration/strategyBrain.js";
+import { ActionCompiler } from "./strategy.js";
+import { PolicyGuard } from "./policy.js";
+import { DeterministicPolicy } from "./policy.js";
+import { StateReader } from "./snapshot.js";
+import { StrategyBrain } from "./strategyBrain.js";
 import {
   createStrategyDecision,
   type StrategyDecision,
-} from "../orchestration/strategy.js";
+} from "./strategy.js";
 
 export class AgentOrchestrator extends BaseTool {
   private readonly policyGuard: PolicyGuard;

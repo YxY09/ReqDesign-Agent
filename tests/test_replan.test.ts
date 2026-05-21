@@ -17,8 +17,8 @@ import {
   createExecutionPlan,
   createPlanMutation,
   createIssue,
-} from "../src/agent/types.js";
-import { AgentOrchestrator } from "../src/agent/orchestrator.js";
+} from "../src/shared/types.js";
+import { AgentOrchestrator } from "../src/orchestration/orchestrator.js";
 import { PlanningTool } from "../src/tools/planning.js";
 import {
   createTaskMessage,

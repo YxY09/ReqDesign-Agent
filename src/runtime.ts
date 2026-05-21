@@ -30,7 +30,7 @@ import { RunSummaryBuilder } from "./orchestration/runManager.js";
 import { OutputManager } from "./outputManager.js";
 import { SessionContext, SessionRegistry, type WorkerSession } from "./session.js";
 import { WorkflowState } from "./state.js";
-import { AgentOrchestrator } from "./agent/orchestrator.js";
+import { AgentOrchestrator } from "./orchestration/orchestrator.js";
 import { EvaluationTool } from "./tools/evaluation.js";
 import { GenerationTool } from "./tools/generation.js";
 import { AnalyzeMerger } from "./generators/merge.js";
@@ -45,7 +45,7 @@ import {
   type Task,
   type Verdict,
   type WorkerKind,
-} from "./agent/types.js";
+} from "./shared/types.js";
 import { InputLoader } from "./inputLoader.js";
 import { TraceLogger } from "./governance/traceLogger.js";
 import {

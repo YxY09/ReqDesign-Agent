@@ -8,7 +8,7 @@ import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { createToolError } from "./types.js";
-import { type Task, type Artifact, createArtifact } from "../agent/types.js";
+import { type Task, type Artifact, createArtifact } from "../shared/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
