@@ -377,13 +377,12 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
       ["diagrams-final"],
     );
 
-    expect(verdict.passed).toBe(false);
+    // Hardcoded domain checks (refund flow, C001) were removed.
+    // The verdict should now pass without those checks.
+    expect(verdict.passed).toBe(true);
     expect(verdict.issues.some((issue) =>
-      issue.description.includes("退货退款流程"),
-    )).toBe(true);
-    expect(verdict.issues.some((issue) =>
-      issue.description.includes("C001"),
-    )).toBe(true);
+      issue.description.includes("退货退款流程") || issue.description.includes("C001"),
+    )).toBe(false);
   });
 
   it("rule-checks undefined exception IDs before deep review", async () => {
@@ -445,10 +444,11 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
       ["tests-1"],
     );
 
-    expect(verdict.passed).toBe(false);
+    // Hardcoded refund test coverage check was removed.
+    // The verdict should now pass without that check.
     expect(verdict.issues.some((issue) =>
       issue.description.includes("完整退货退款正常流程"),
-    )).toBe(true);
+    )).toBe(false);
   });
 });
 

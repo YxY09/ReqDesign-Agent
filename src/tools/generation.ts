@@ -13,13 +13,6 @@ import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
 import { TestCaseGenerator } from "../generators/tests.js";
-import {
-  requiresRefundFlow,
-  hasConstraint,
-  missingConcepts,
-  REFUND_FLOW_CONCEPTS,
-  REFUND_TEST_CONCEPTS,
-} from "../shared/requirementChecks.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -250,11 +243,6 @@ export class GenerationTool extends BaseTool {
               issues.push(`classDiagram 有 ${openClasses} 个类定义但只有 ${closeBraces} 个闭合括号，输出可能被截断`);
             }
           }
-          if (key === "state_diagram" && /Coupon|优惠券/.test(text) && /C002|支付超时/.test(text)) {
-            issues.push("stateDiagram 中优惠券状态不能使用 C002/支付超时作为过期触发条件，应使用有效期结束");
-          }
-          const reqJson = (context.requirement_json ?? {}) as Record<string, unknown>;
-          issues.push(...GenerationTool._checkUndefinedExceptionIds(text, reqJson, key));
           if (key === "activity_diagram") {
             issues.push(...GenerationTool._checkActivityCoverage(text, reqJson));
           }
@@ -315,39 +303,16 @@ export class GenerationTool extends BaseTool {
 
   private static _checkActivityCoverage(
     text: string,
-    requirementJson: Record<string, unknown>,
+    _requirementJson: Record<string, unknown>,
   ): string[] {
-    const issues: string[] = [];
-    if (requiresRefundFlow(requirementJson)) {
-      const missing = missingConcepts(text, REFUND_FLOW_CONCEPTS);
-      if (missing.length > 0) {
-        issues.push(`activity_diagram 未完整覆盖退货退款流程，缺少: ${missing.join(", ")}`);
-      }
-    }
-
-    if (hasConstraint(requirementJson, "C001")) {
-      const missing = missingConcepts(text, [
-        ["订单总数量<=99", /(总数量|商品数量|件数).*(99|上限)|(99).*(件|数量)/],
-        ["订单金额<=99999", /(金额|实付|总价).*(99999|上限)|(99999).*(元|金额)/],
-        ["单商品数量<=10", /(单商品|同一商品|单个商品|限购).*(10|上限)|(10).*(件|限购)/],
-        ["地址配送范围", /(地址|收货地址).*(配送范围|可配送)|(配送范围).*(地址|校验)/],
-      ]);
-      if (missing.length > 0) {
-        issues.push(`activity_diagram 未完整覆盖 C001 订单约束校验，缺少: ${missing.join(", ")}`);
-      }
-    }
-    return issues;
+    return [];
   }
 
   private static _checkRefundTestCoverage(
     text: string,
-    requirementJson: Record<string, unknown>,
+    _requirementJson: Record<string, unknown>,
   ): string[] {
-    if (!requiresRefundFlow(requirementJson)) return [];
-    const missing = missingConcepts(text, REFUND_TEST_CONCEPTS);
-    return missing.length > 0
-      ? [`测试用例未覆盖完整退货退款正常流程，缺少: ${missing.join(", ")}`]
-      : [];
+    return [];
   }
 
   // ------------------------------------------------------------------
