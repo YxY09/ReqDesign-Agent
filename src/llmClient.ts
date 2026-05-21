@@ -236,6 +236,18 @@ export class LLMClient {
       : "";
     const inputChars = messages.reduce((total, message) => total + Array.from(message.content).length, 0);
 
+    // 为非流式调用创建 AbortController 超时控制
+    const abortController = new AbortController();
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    if (!shouldStream) {
+      const timeoutMs = (this.timeout ?? 120) * 1000;
+      timeoutHandle = setTimeout(() => {
+        abortController.abort();
+        this._logger.warn(`[LLMClient] Request timed out after ${this.timeout}s`);
+      }, timeoutMs);
+    }
+
     try {
       let resultText: string;
       let usage: LlmTokenUsage | undefined;
@@ -247,11 +259,17 @@ export class LLMClient {
           usage = response.usage;
         } else {
           resultText = await withRetry(
-            async () => await this._chatOpenai(messages, temperature),
+            async () => await this._chatOpenai(messages, temperature, abortController.signal),
             {
               maxRetries: this._retryConfig.maxRetries,
               baseDelayMs: this._retryConfig.retryDelayMs,
               maxDelayMs: this._retryConfig.maxDelayMs,
+              shouldRetry: (error) => {
+                if (error instanceof DOMException && error.name === "AbortError") {
+                  return this._retryConfig.retryOnTimeout;
+                }
+                return true;
+              },
               onRetry: (err, attempt) => {
                 this._logger.warn(
                   `[LLMClient] Retry attempt ${attempt + 1}/${this._retryConfig.maxRetries}: ${err instanceof Error ? err.message : String(err)}`,
@@ -308,6 +326,10 @@ export class LLMClient {
         this._emitStreamEvent(streamTag, "end", { text: `error: ${message}` });
       }
       throw error;
+    } finally {
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle);
+      }
     }
   }
 
@@ -438,6 +460,7 @@ export class LLMClient {
   private async _chatOpenai(
     messages: ChatMessage[],
     temperature?: number,
+    signal?: AbortSignal,
   ): Promise<string> {
     const client = this._client as OpenAI;
 
@@ -448,10 +471,7 @@ export class LLMClient {
         temperature: temperature ?? this.temperature,
         max_tokens: this.maxTokens,
       },
-      {
-        // Let the OpenAI SDK handle retries internally
-        maxRetries: this.config.retry.maxRetries,
-      },
+      signal ? { signal } : undefined,
     );
 
     const content = completion.choices[0]?.message?.content ?? "";
