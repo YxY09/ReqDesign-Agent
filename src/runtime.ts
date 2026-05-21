@@ -181,7 +181,6 @@ export class MultiAgentRuntime {
 
     this.mailbox = new TaskMailbox();
     this.sessions = new SessionRegistry();
-    this.coordinator = new AgentOrchestrator(this.llm);
     this.plannerTool = new PlanningTool(this.llm);
     this.generatorTool = new GenerationTool(this.llm);
     this.evaluatorTool = new EvaluationTool(this.llm);
@@ -200,6 +199,8 @@ export class MultiAgentRuntime {
       orchestrationRaw as Record<string, unknown>,
     );
     this.budget = new BudgetManager(orchestrationConfig);
+
+    this.coordinator = new AgentOrchestrator(this.llm, this.budget);
 
     const deps = new DependencyProvider({
       llm: this.llm,
@@ -249,13 +250,13 @@ export class MultiAgentRuntime {
     state.inputPath = inputPath;
     state.outputDir = outputDir;
 
-    // Set up real-time trace persistence
+    // 设置实时追踪持久化
     const traceDir = join(outputDir, "traces");
     this.trace.setPersistPath(join(traceDir, "llm_trace.json"));
     state.startTime = Date.now() / 1000;
 
-    // Open run log
-    // Open unified log file in logs/ directory
+    // 打开运行日志
+    // 在 logs/ 目录中打开统一日志文件
     try {
       const logDir = this.config.logging.logDir || "logs";
       mkdirSync(logDir, { recursive: true });
@@ -666,7 +667,7 @@ export class MultiAgentRuntime {
     if (state.taskStatus("evaluator") === "running") {
       return false;
     }
-    // Build previous issues from last verdict for incremental review
+    // 从上次的裁决构建之前的问题以进行增量审查
     const lastVerdict = state.latestVerdict;
     const previousIssues = lastVerdict?.issues?.map((i) => ({
       severity: i.severity,
@@ -786,9 +787,9 @@ export class MultiAgentRuntime {
     message.sessionId = sessionId;
     context.taskId = context.taskId || message.taskId;
 
-    // For repair messages, restore the previous session so RepairTool can access
-    // the last artifact's content. Without this, previousArtifact is always undefined
-    // and repair degrades to a full regeneration.
+    // 对于 repair 消息，恢复之前的会话以便 RepairTool 访问
+    // 上一个产物的内容。没有这个，previousArtifact 始终为 undefined，
+    // repair 会退化为完整重新生成。
     let session: WorkerSession;
     if (message.type === "repair") {
       const prevSession = this.sessions.latestSessionForTask(context.taskId);
@@ -811,7 +812,7 @@ export class MultiAgentRuntime {
       sessionId,
     };
 
-    // Submit with concurrency control (fire-and-forget)
+    // 提交（带并发控制，fire-and-forget）
     this.backend
       .submitSession(session, message, timeoutSeconds)
       .catch((error) => {
@@ -965,8 +966,8 @@ export class MultiAgentRuntime {
     }
     state.addArtifact(artifact);
 
-    // Post-generation validation: clean extra classes, ghost IDs, renames.
-    // Must run AFTER addArtifact so requirementJson is available.
+    // 生成后验证：清理多余的类、幽灵 ID、重命名。
+    // 必须在 addArtifact 之后运行，以便 requirementJson 可用。
     const cleaned = PostGenerationValidator.validate(
       state.requirementJson,
       artifact.type,
@@ -979,8 +980,8 @@ export class MultiAgentRuntime {
 
     state.markTaskStatus(taskId, "completed", notif.sessionId);
 
-    // If this is an analyze task, check if ALL analyze tasks are done.
-    // If so, run LLM merge to produce a unified requirementJson.
+    // 如果这是一个 analyze 任务，检查是否所有 analyze 任务都已完成。
+    // 如果是，运行 LLM 合并以生成统一的 requirementJson。
     if (artifact.type === "analyze") {
       await this.tryMergeAnalyzeResults(state);
     }
@@ -1022,7 +1023,7 @@ export class MultiAgentRuntime {
     const allDone = analyzeTasks.every((t) => state.isTaskCompleted(t.id));
     if (!allDone) return;
 
-    // Gather all analyze artifacts
+    // 收集所有 analyze 产物
     const artifacts = analyzeTasks
       .map((t) => {
         const art = state.artifactsState.artifacts[t.id];
@@ -1046,7 +1047,7 @@ export class MultiAgentRuntime {
       );
       state.setRequirementJson(RequirementNormalizer.normalize(merged));
 
-      // Persist merged result to disk
+      // 将合并结果持久化到磁盘
       const outputManager = new (this.outputManagerClass)(state.outputDir);
       outputManager.saveRequirementAnalysis(merged);
 
@@ -1069,7 +1070,7 @@ export class MultiAgentRuntime {
         goal: state.goal,
         phase: "merge",
       });
-      // Merge failed: last analyze result remains as requirementJson
+      // 合并失败：保留最后一个 analyze 结果作为 requirementJson
     }
   }
 
@@ -1282,7 +1283,7 @@ export class MultiAgentRuntime {
         data: this.snapshotState(state),
       });
 
-      // Score output quality
+      // 对输出质量进行评分
       try {
         const score = OutputScorer.score(
           state.requirementJson as Record<string, unknown>,
@@ -1435,13 +1436,13 @@ export class MultiAgentRuntime {
     message: string,
     extras: Partial<WorkflowEvent> = {},
   ): void {
-    // Log to unified log file — debug for high-frequency noise, info for the rest
+    // 记录到统一日志文件 — 高频噪声用 debug，其余用 info
     if (kind === "worker_heartbeat" || kind === "llm_chunk") {
       this.logger.debug(`${kind} | ${message}`);
     } else {
       this.logger.info(`${kind} | ${message}`);
     }
-    // Also emit as WorkflowEvent for console display
+    // 同时作为 WorkflowEvent 发出以供控制台显示
     if (!this.eventSink) return;
     this.eventSink(
       createWorkflowEvent({

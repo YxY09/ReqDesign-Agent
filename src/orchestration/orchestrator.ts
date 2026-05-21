@@ -1,5 +1,5 @@
 /**
- * AgentOrchestrator — single orchestration decision entry.
+ * AgentOrchestrator — 单一编排决策入口。
  * state + mailbox -> snapshot -> policy -> strategy brain -> guard -> compiler -> runtime action
  */
 
@@ -18,6 +18,7 @@ import {
   createStrategyDecision,
   type StrategyDecision,
 } from "./strategy.js";
+import { BudgetManager } from "./budget.js";
 
 export class AgentOrchestrator extends BaseTool {
   private readonly policyGuard: PolicyGuard;
@@ -25,9 +26,9 @@ export class AgentOrchestrator extends BaseTool {
   private readonly actionCompiler: ActionCompiler;
   private readonly strategyBrain: StrategyBrain | null;
 
-  constructor(llm: LLMClient | null) {
+  constructor(llm: LLMClient | null, budget: BudgetManager) {
     super(llm);
-    this.policyGuard = new PolicyGuard();
+    this.policyGuard = new PolicyGuard(budget);
     this.deterministicPolicy = new DeterministicPolicy(this.policyGuard);
     this.actionCompiler = new ActionCompiler();
     this.strategyBrain = llm ? new StrategyBrain(llm) : null;

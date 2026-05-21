@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 
 import { EvaluationTool } from "../src/tools/evaluation.js";
 import { AgentOrchestrator } from "../src/orchestration/orchestrator.js";
+import { BudgetManager } from "../src/orchestration/budget.js";
 import { createIssue, createTask, createExecutionPlan, createArtifact } from "../src/shared/types.js";
 import { WorkflowState } from "../src/state.js";
 import { TaskMailbox, createTaskNotification } from "../src/messaging.js";
@@ -94,7 +95,7 @@ describe("EvaluationTool._classifyIssueScope", () => {
 
 describe("AgentOrchestrator routing via decide()", () => {
   it("finishes when no requirement and no artifacts are loaded", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     // No requirementText set → requirementLoaded = false
     const mailbox = new TaskMailbox();
@@ -104,7 +105,7 @@ describe("AgentOrchestrator routing via decide()", () => {
   });
 
   it("routes to spawn when exactly one task is ready", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "Some requirement";
     state.plan = createExecutionPlan({
@@ -121,7 +122,7 @@ describe("AgentOrchestrator routing via decide()", () => {
   });
 
   it("routes to finish when output is saved", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "Some requirement";
     state.plan = createExecutionPlan({
@@ -142,7 +143,7 @@ describe("AgentOrchestrator routing via decide()", () => {
   });
 
   it("routes to spawn when plan still has ready pending tasks", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "Some requirement";
     state.plan = createExecutionPlan({

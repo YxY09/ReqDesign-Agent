@@ -19,6 +19,7 @@ import {
   createIssue,
 } from "../src/shared/types.js";
 import { AgentOrchestrator } from "../src/orchestration/orchestrator.js";
+import { BudgetManager } from "../src/orchestration/budget.js";
 import { PlanningTool } from "../src/tools/planning.js";
 import {
   createTaskMessage,
@@ -166,7 +167,7 @@ describe("Plan mutation", () => {
 
 describe("Coordinator replan fallback", () => {
   it("should choose replan when a task is stalled after repeated rejections", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("analyze-1", "analyze")]);
 
@@ -193,7 +194,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should handle globally stalled state", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
 
@@ -206,7 +207,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should wait instead of replanning when planner is already running", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
     state.progress.noProgressStreak = 4;
@@ -217,7 +218,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should stop replanning after repeated planner failures", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
     state.progress.noProgressStreak = 4;
@@ -230,7 +231,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should handle task with high rejection streak", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
 
@@ -256,7 +257,7 @@ describe("Coordinator replan fallback", () => {
   });
 
   it("should handle exhausted replan budget", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
     state.progress.planRevisionCount = 3; // at max

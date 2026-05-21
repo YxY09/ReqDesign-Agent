@@ -64,7 +64,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("advances ready work when plan exists with no artifacts", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -89,7 +89,7 @@ describe("AgentOrchestrator decisions", () => {
       reason: "multi-module requirement needs planning",
       confidence: 0.85,
     });
-    const coordinator = new AgentOrchestrator(mockLLM);
+    const coordinator = new AgentOrchestrator(mockLLM, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText =
       "Build a multi-module campus management system.";
@@ -121,7 +121,7 @@ describe("AgentOrchestrator decisions", () => {
         reason: "memory-informed planning",
         confidence: 0.9,
       });
-      const coordinator = new AgentOrchestrator(mockLLM);
+      const coordinator = new AgentOrchestrator(mockLLM, new BudgetManager(undefined));
       const state = new WorkflowState();
       state.requirementText = "Build a multi-module campus management system.";
 
@@ -143,7 +143,7 @@ describe("AgentOrchestrator decisions", () => {
       reason: "simple diagram-only request",
       confidence: 0.9,
     });
-    const coordinator = new AgentOrchestrator(mockLLM);
+    const coordinator = new AgentOrchestrator(mockLLM, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText =
       "Draw Mermaid diagrams for a simple login flow.";
@@ -156,7 +156,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("falls back to pause when no plan exists and no LLM available", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText =
       "Build a multi-module campus management system.";
@@ -172,7 +172,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("requires final review when tasks completed but review is not current", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -207,7 +207,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("requests save when final review is current and passed", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -242,7 +242,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("routes major final-review issues to repair", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -282,7 +282,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("does not rerun final review after a rejected final-output snapshot", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -335,7 +335,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("routes analyze upstream issues to replan, not repair", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -378,7 +378,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("escalates to replan after exhausting final review repair budget", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -419,7 +419,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("allows final-review repair within budget (before exhaustion)", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -458,7 +458,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("escalates past final-review major issues when repair budget exhausted and planner running", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -501,7 +501,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("waits when the rejected repair target is already running", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -574,7 +574,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("routes repeated diagram rejection to regenerate", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -623,7 +623,7 @@ describe("AgentOrchestrator decisions", () => {
   });
 
   it("regenerates a failed concrete plan task before replanning downstream work", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -644,7 +644,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("prefers replan-ready tasks over old rejected artifacts", () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
@@ -701,7 +701,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("increments decision count on each call", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
 
     await coordinator.decide(state, makeMailbox());
@@ -716,7 +716,7 @@ describe("AgentOrchestrator decisions", () => {
   // -----------------------------------------------------------------------
 
   it("finishes when output is already saved", async () => {
-    const coordinator = new AgentOrchestrator(null);
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
     state.plan = createExecutionPlan({
