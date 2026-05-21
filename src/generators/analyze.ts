@@ -1,5 +1,5 @@
 /**
- * RequirementAnalyzer — extracts structured JSON from natural language requirements.
+ * RequirementAnalyzer — 从自然语言需求中提取结构化 JSON。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -128,7 +128,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     }
     RequirementAnalyzer._normalizeFunctions(result);
     RequirementAnalyzer._normalizeEntities(result);
-    // Actor→entity enforcement removed; RequirementNormalizer handles role merging
+    // 已移除 Actor→entity 强制关联； RequirementNormalizer 负责角色合并
     return result;
   }
 

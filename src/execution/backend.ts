@@ -99,7 +99,7 @@ export class ThreadBackend extends EventEmitter implements ExecutionBackend {
     message: TaskMessage,
     timeoutSeconds: number,
   ): Promise<void> {
-    // Wait if at concurrency limit
+    // 达到并发上限时等待
     while (this.running.size >= this.maxConcurrency) {
       await new Promise<void>((resolve) => {
         this.submissionQueue.push(resolve);
@@ -215,8 +215,8 @@ export class ThreadBackend extends EventEmitter implements ExecutionBackend {
   }
 
   /**
-   * Wait for backend state to change (new notification or worker completion).
-   * Returns immediately if there's already pending work, otherwise waits up to timeoutMs.
+   * 等待后端状态变化（新通知或 Worker 完成）。
+   * 如果已有待处理任务则立即返回，否则最多等待 timeoutMs。
    */
   async waitForChange(timeoutMs = 5000): Promise<void> {
     if (this.pendingNotifications.length > 0) {

@@ -1,5 +1,5 @@
 /**
- * SystemDesigner — generates system design documents from requirement JSON.
+ * SystemDesigner — 根据需求 JSON 生成系统设计文档。
  */
 
 import type { LLMClient } from "../llmClient.js";

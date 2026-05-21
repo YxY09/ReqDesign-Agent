@@ -1,5 +1,5 @@
 /**
- * BaseGenerator — LLM 内容生产层 (Layer 1)
+ * BaseGenerator — LLM 内容生产层（Layer 1）
  *
  * 职责：加载 prompt 模板 → 调用 LLM → 返回结构化输出
  * 不涉及：状态管理、多步编排、后处理、评分
@@ -18,12 +18,12 @@ export abstract class BaseGenerator<TOutput> {
     this.llm = llm;
   }
 
-  /** Sanitize input text to prevent placeholder collision with prompt template */
+  /** 对输入文本进行清理，防止与 prompt 模板中的占位符发生冲突 */
   protected sanitizePlaceholder(text: string, placeholder: string): string {
     return text.replace(new RegExp(`\\{${placeholder}\\}`, "g"), "");
   }
 
-  /** Build final prompt by replacing all placeholders */
+  /** 替换所有占位符，构建最终 prompt */
   protected buildPrompt(
     template: string,
     replacements: Record<string, string>,
@@ -35,7 +35,7 @@ export abstract class BaseGenerator<TOutput> {
     return prompt;
   }
 
-  /** Unwrap {content: {...}} wrapper from LLM JSON responses */
+  /** 解除 LLM JSON 响应中 {content: {...}} 包装 */
   static unwrapContent(
     result: Record<string, unknown>,
   ): Record<string, unknown> {
@@ -46,7 +46,7 @@ export abstract class BaseGenerator<TOutput> {
     return result;
   }
 
-  /** Format items for contract/checklist inclusion in prompts */
+  /** 格式化列表项，用于在 prompt 中生成契约/检查清单 */
   static formatContractList(
     items: unknown,
     fields: string[],
@@ -62,9 +62,8 @@ export abstract class BaseGenerator<TOutput> {
     }).filter(Boolean);
   }
 
-  /**
-   * Retry wrapper for generateJson calls with type validation.
-   * Subclasses call this instead of manual retry loops.
+  /** generateJson 的重试包装器，带类型验证。
+   * 子类应调用此方法而非自行实现重试循环。
    */
   protected async generateJsonWithRetry(
     prompt: string,

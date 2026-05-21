@@ -1,5 +1,5 @@
 /**
- * TestCaseGenerator — normal/exception/boundary test case generation.
+ * TestCaseGenerator — 正常/异常/边界测试用例生成。
  */
 
 import type { LLMClient } from "../llmClient.js";

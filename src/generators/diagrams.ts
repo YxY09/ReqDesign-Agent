@@ -1,6 +1,6 @@
 /**
- * DiagramGenerator — generates Mermaid-format class/activity/state diagrams.
- * Supports parallel generation via Promise.all.
+ * DiagramGenerator — 生成 Mermaid 格式的类图/活动图/状态图。
+ * 支持通过 Promise.all 并行生成。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -53,7 +53,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
     let text = rawResponse.trim();
     const mermaidKeywords = ["classDiagram", "flowchart", "graph", "stateDiagram-v2", "stateDiagram"];
 
-    // Try ```mermaid code blocks
+    // 尝试 ```mermaid 代码块
     const blockRe = /```mermaid\s*\n([\s\S]*?)(?:\n```|```|$)/g;
     const blocks: string[] = [];
     let match;
@@ -72,10 +72,10 @@ export class DiagramGenerator extends BaseGenerator<string> {
       }
     }
 
-    // Direct mermaid
+    // 直接以 Mermaid 开始
     if (mermaidKeywords.some((kw) => text.startsWith(kw))) return DiagramGenerator._normalizeMermaid(text);
 
-    // Find keyword start
+    // 查找关键字起始位置
     for (const kw of mermaidKeywords) {
       const idx = text.indexOf(kw);
       if (idx >= 0) return DiagramGenerator._normalizeMermaid(text.slice(idx).trim());
@@ -147,7 +147,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
       const result = settled[i];
       if (result.status === "fulfilled") {
         let val = result.value;
-        // Retry empty results once
+        // 空结果重试一次
         if (!val?.trim()) {
           try { val = await tasks[i].fn(); } catch { /* keep empty */ }
         }

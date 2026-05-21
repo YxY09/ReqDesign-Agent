@@ -1,6 +1,6 @@
 /**
- * Mermaid syntax validator — structural checks, bracket matching, semantic analysis.
- * Pure synchronous validation, no LLM calls.
+ * Mermaid 语法校验器 — 结构检查、括号匹配、语义分析。
+ * 纯同步校验，无 LLM 调用。
  */
 
 import { tmpdir } from "node:os";
@@ -12,7 +12,7 @@ export class MermaidValidator {
   useCli: boolean;
 
   constructor(useCli = false) {
-    // Check if mmdc is available (simplified: always false by default)
+    // 检查 mmdc 是否可用（简化版：默认始终为 false）
     this.useCli = useCli;
   }
 
@@ -23,19 +23,19 @@ export class MermaidValidator {
 
     let content = mmdContent.trim().replace(/^\uFEFF/, "");
 
-    // 1. Structure check
+    // 1. 结构检查
     const struct = this._checkStructure(content, diagramType);
     if (!struct.valid) return struct;
 
-    // 2. Bracket matching
+    // 2. 括号匹配
     const brackets = this._checkBrackets(content);
     if (!brackets.valid) return brackets;
 
-    // 3. Semantic check
+    // 3. 语义检查
     const semantics = this._checkSemantics(content);
     if (!semantics.valid) return semantics;
 
-    // 4. CLI validation (if available)
+    // 4. CLI 校验（如果可用）
     if (this.useCli) {
       return this._validateWithCli(content);
     }
@@ -258,7 +258,7 @@ export class MermaidValidator {
     const tmpFile = join(tmpdir(), `mermaid-${randomUUID()}.mmd`);
     try {
       writeFileSync(tmpFile, content, "utf-8");
-      // CLI validation disabled in pure Node.js — would need child_process.spawn("mmdc")
+      // CLI 校验在纯 Node.js 环境下禁用 — 需要 child_process.spawn("mmdc")
       return { valid: true, message: "CLI校验通过 (mmdc not available)" };
     } catch {
       return { valid: false, message: "CLI校验异常" };

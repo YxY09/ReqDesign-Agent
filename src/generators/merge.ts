@@ -1,8 +1,8 @@
 /**
- * AnalyzeMerger — LLM-based merge of multiple analyze results.
+ * AnalyzeMerger — 基于 LLM 合并多份分析结果。
  *
- * Takes all analyze artifacts, sends them to the LLM with the merge prompt,
- * returns a clean, unified requirementJson.
+ * 接收所有分析产物，发送给 LLM 并使用合并 prompt，
+ * 返回一份干净、统一的需求 JSON。
  */
 
 import type { LLMClient } from "../llmClient.js";
@@ -38,12 +38,12 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       throw createToolError("MERGE_NO_RESULTS", "没有可合并的分析结果", { recoverable: false });
     }
 
-    // Single artifact: no merge needed, just return it
+    // 只有一个分析结果：无需合并，直接返回
     if (artifacts.length === 1) {
       return artifacts[0].content;
     }
 
-    // Format all artifacts for the prompt
+    // 将所有分析结果格式化后填入 prompt
     const resultsStr = artifacts
       .map((a, i) => {
         const json = JSON.stringify(a.content, null, 2);
