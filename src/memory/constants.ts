@@ -29,6 +29,25 @@ export const MAX_MEMORY_FILES = 200;
 export const MAX_TOPIC_BYTES = 12_000;
 export const MAX_MEMORY_AGE_DAYS = 90;
 
+/** 时效性平局决胜器的分母：mtime / SCALE 确保时效性仅作 tiebreaker。 */
+export const MTIME_TIEBREAKER_SCALE = 1e12;
+
+/**
+ * Agent 类型到记忆文件名前缀的映射。
+ *
+ * 控制各 Agent 在 load() / findRelevant() 中的可见范围：
+ * - planner 可看 planner + coordinator 的记忆（含路由规则）
+ * - repair 可看 generator + evaluator 的记忆（含失败模式 + 修正经验）
+ * - coordinator 可看 coordinator + planner 的记忆（路由 + 规划）
+ */
+export const AGENT_TYPE_PREFIXES: Record<string, readonly string[]> = {
+  planner: ["planner_", "coordinator_"],
+  generator: ["generator_"],
+  repair: ["generator_", "evaluator_"],
+  evaluator: ["evaluator_"],
+  coordinator: ["coordinator_", "planner_"],
+};
+
 /** 将 Agent 类型映射到其查询的记忆文件。 */
 export const AGENT_TYPE_MAP: Record<string, string> = {
   planner: "planner.md",

@@ -10,6 +10,7 @@ import {
   MAX_INDEX_BYTES,
   MEMORY_INDEX_NAME,
   MEMORY_TYPE_LABELS,
+  AGENT_TYPE_PREFIXES,
   type MemoryType,
   type MemoryEntry,
   type MemoryHeader,
@@ -325,15 +326,7 @@ export function headersForAgent(
   agentType: string,
   headers: MemoryHeader[],
 ): MemoryHeader[] {
-  const prefixMap: Record<string, readonly string[]> = {
-    planner: ["planner_", "coordinator_"],
-    generator: ["generator_"],
-    repair: ["generator_", "evaluator_"],
-    evaluator: ["evaluator_"],
-    coordinator: ["coordinator_", "planner_"],
-  };
-
-  const prefixes = prefixMap[agentType] ?? [`${agentType}_`];
+  const prefixes = AGENT_TYPE_PREFIXES[agentType] ?? [`${agentType}_`];
   const selected = headers.filter((h) =>
     prefixes.some((p) => h.filename.startsWith(p)),
   );

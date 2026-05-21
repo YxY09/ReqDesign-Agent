@@ -22,6 +22,7 @@ import {
   MAX_MEMORY_FILES,
   MAX_RELEVANT_MEMORIES,
   MAX_MEMORY_AGE_DAYS,
+  MTIME_TIEBREAKER_SCALE,
   MEMORY_TYPE_LABELS,
   type MemoryType,
   type MemoryEntry,
@@ -211,7 +212,7 @@ export class MemoryStore {
       }
 
       // 时效性仅作为平局决胜器；相关性应主导提示上下文。
-      const score = relevanceScore + header.mtime / 1e12;
+      const score = relevanceScore + header.mtime / MTIME_TIEBREAKER_SCALE;
       return { entry, score, relevanceScore };
     });
 
