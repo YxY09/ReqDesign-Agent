@@ -4,7 +4,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
-import { RequirementNormalizer } from "../tools/normalizer.js";
+import { RequirementNormalizer } from "../shared/normalizer.js";
 import { BaseGenerator } from "./base.js";
 
 export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> {

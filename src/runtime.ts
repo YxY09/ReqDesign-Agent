@@ -8,7 +8,7 @@ import { LLMClient, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
 import { isRecord } from "./utils/isRecord.js";
 import { OutputScorer } from "./tools/scorer.js";
-import { RequirementNormalizer } from "./tools/normalizer.js";
+import { RequirementNormalizer } from "./shared/normalizer.js";
 import { PostGenerationValidator } from "./tools/validator.js";
 import {
   TaskMailbox,

@@ -21,7 +21,7 @@ import {
 } from "./agent/types.js";
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/snapshot.js";
-import { RequirementNormalizer } from "./tools/normalizer.js";
+import { RequirementNormalizer } from "./shared/normalizer.js";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------

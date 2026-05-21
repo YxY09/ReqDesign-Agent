@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RequirementNormalizer } from "../src/tools/normalizer.js";
+import { RequirementNormalizer } from "../src/shared/normalizer.js";
 
 describe("RequirementNormalizer", () => {
   // ----------------------------------------------------------------
