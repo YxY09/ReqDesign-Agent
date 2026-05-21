@@ -4,6 +4,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { BaseGenerator } from "./base.js";
 
 const GENERIC_SUFFIXES = new Set([
   "Account",
@@ -168,24 +169,11 @@ function extractRequirementIds(designText: string, prefixes: string[]): string[]
   return [...new Set(designText.match(idRe) ?? [])];
 }
 
-function formatContractList(items: unknown, fields: string[]): string[] {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => {
-    if (typeof item !== "object" || item === null) return String(item);
-    const record = item as Record<string, unknown>;
-    return fields
-      .map((field) => String(record[field] ?? "").trim())
-      .filter(Boolean)
-      .join(" | ");
-  }).filter(Boolean);
-}
-
-export class SystemDesigner {
-  private llm: LLMClient;
+export class SystemDesigner extends BaseGenerator<string> {
   private promptTemplate: string;
 
   constructor(llm: LLMClient) {
-    this.llm = llm;
+    super(llm);
     this.promptTemplate = loadPrompt(
       "design_planner.md",
       "请根据以下需求分析结果和原始需求生成系统设计方案：\n\n结构化需求：\n{requirement_json}\n\n原始需求：\n{requirement_text}",
@@ -202,8 +190,9 @@ export class SystemDesigner {
     }
 
     let reqStr = JSON.stringify(requirementJson, null, 2);
-    reqStr = reqStr.replace(/\{requirement_json\}/g, "").replace(/\{design_text\}/g, "");
-    const safeText = (requirementText || "").replace(/\{requirement_text\}/g, "");
+    reqStr = this.sanitizePlaceholder(reqStr, "requirement_json");
+    reqStr = this.sanitizePlaceholder(reqStr, "design_text");
+    const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(
       /\{requirement_text\}/g,
@@ -215,19 +204,19 @@ export class SystemDesigner {
   }
 
   static buildDesignContract(requirementJson: Record<string, unknown>): string {
-    const functions = formatContractList(
+    const functions = BaseGenerator.formatContractList(
       requirementJson.functions,
       ["id", "name", "description"],
     );
-    const entities = formatContractList(
+    const entities = BaseGenerator.formatContractList(
       requirementJson.entities,
       ["name", "description"],
     );
-    const constraints = formatContractList(
+    const constraints = BaseGenerator.formatContractList(
       requirementJson.constraints,
       ["id", "description"],
     );
-    const exceptions = formatContractList(
+    const exceptions = BaseGenerator.formatContractList(
       requirementJson.exceptions,
       ["id", "description", "trigger", "handling"],
     );

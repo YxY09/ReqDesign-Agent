@@ -4,13 +4,13 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { BaseGenerator } from "./base.js";
 
-export class TestCaseGenerator {
-  private llm: LLMClient;
+export class TestCaseGenerator extends BaseGenerator<string> {
   private promptTemplate: string;
 
   constructor(llm: LLMClient) {
-    this.llm = llm;
+    super(llm);
     this.promptTemplate = loadPrompt(
       "test_case.md",
       "请根据以下需求和设计生成测试用例：\n\n{requirement_json}\n\n{design_text}",
@@ -31,8 +31,9 @@ export class TestCaseGenerator {
     designText = designText || "";
 
     let reqStr = JSON.stringify(requirementJson, null, 2);
-    reqStr = reqStr.replace(/\{design_text\}/g, "");
-    const safeDesign = designText.replace(/\{requirement_json\}/g, "").replace(/\{design_text\}/g, "");
+    reqStr = this.sanitizePlaceholder(reqStr, "design_text");
+    let safeDesign = this.sanitizePlaceholder(designText, "requirement_json");
+    safeDesign = this.sanitizePlaceholder(safeDesign, "design_text");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(
       /\{design_text\}/g,
@@ -44,24 +45,9 @@ export class TestCaseGenerator {
   }
 
   static buildTestContract(requirementJson: Record<string, unknown>): string {
-    const itemLines = (
-      items: unknown,
-      fields: string[],
-    ): string[] => {
-      if (!Array.isArray(items)) return [];
-      return items.map((item) => {
-        if (typeof item !== "object" || item === null) return String(item);
-        const record = item as Record<string, unknown>;
-        return fields
-          .map((field) => String(record[field] ?? "").trim())
-          .filter(Boolean)
-          .join(" | ");
-      }).filter(Boolean);
-    };
-
-    const functions = itemLines(requirementJson.functions, ["id", "name", "description"]);
-    const exceptions = itemLines(requirementJson.exceptions, ["id", "description", "trigger"]);
-    const constraints = itemLines(requirementJson.constraints, ["id", "description"]);
+    const functions = BaseGenerator.formatContractList(requirementJson.functions, ["id", "name", "description"]);
+    const exceptions = BaseGenerator.formatContractList(requirementJson.exceptions, ["id", "description", "trigger"]);
+    const constraints = BaseGenerator.formatContractList(requirementJson.constraints, ["id", "description"]);
 
     return [
       "## 测试生成合同（硬性约束）",

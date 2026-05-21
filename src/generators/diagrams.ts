@@ -5,13 +5,13 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { BaseGenerator } from "./base.js";
 
-export class DiagramGenerator {
-  private llm: LLMClient;
-  private prompts: Record<string, string>;
+export class DiagramGenerator extends BaseGenerator<string> {
+  protected prompts: Record<string, string> = {};
 
   constructor(llm: LLMClient) {
-    this.llm = llm;
+    super(llm);
     this.prompts = this._loadPrompts();
   }
 
@@ -41,8 +41,9 @@ export class DiagramGenerator {
       reqStr = JSON.stringify(requirementJson, null, 2);
     }
 
-    reqStr = reqStr.replace(/\{design_text\}/g, "");
-    const safeDesign = designText.replace(/\{requirement_json\}/g, "").replace(/\{design_text\}/g, "");
+    reqStr = this.sanitizePlaceholder(reqStr, "design_text");
+    let safeDesign = this.sanitizePlaceholder(designText, "requirement_json");
+    safeDesign = this.sanitizePlaceholder(safeDesign, "design_text");
     let prompt = template.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(/\{design_text\}/g, safeDesign);
     return prompt;

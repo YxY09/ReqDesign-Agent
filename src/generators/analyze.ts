@@ -5,16 +5,16 @@
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { RequirementNormalizer } from "../tools/normalizer.js";
+import { BaseGenerator } from "./base.js";
 
-export class RequirementAnalyzer {
+export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> {
   static readonly REQUIRED_FIELDS = ["actors", "functions", "entities"];
   static readonly OPTIONAL_FIELDS = ["constraints", "exceptions", "non_functional_requirements", "business_processes"];
 
-  private llm: LLMClient;
   private promptTemplate: string;
 
   constructor(llm: LLMClient) {
-    this.llm = llm;
+    super(llm);
     this.promptTemplate = loadPrompt(
       "requirement_analysis.md",
       "请从以下需求文档中抽取结构化的需求要素，以JSON格式输出：\n\n{requirement_text}",
@@ -37,40 +37,15 @@ export class RequirementAnalyzer {
       prefix = `## 已有的结构化需求结果（请在此基础上补充缺失内容、去重并统一命名）\n\`\`\`json\n${existingStr}\n\`\`\`\n\n`;
     }
 
-    const safeText = (requirementText || "").replace(/\{requirement_text\}/g, "");
+    const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
     const prompt = prefix + this.promptTemplate.replace(/\{requirement_text\}/g, safeText);
 
-    let result = await this._generateWithRetry(prompt, systemPrompt ?? "", maxRetries);
-    result = RequirementAnalyzer._unwrapContentResult(result);
+    let result = await this.generateJsonWithRetry(prompt, systemPrompt ?? "", maxRetries);
+    result = BaseGenerator.unwrapContent(result);
     result = RequirementAnalyzer._normalizeResult(result);
     result = RequirementNormalizer.normalize(result);
 
     return result;
-  }
-
-  private async _generateWithRetry(
-    prompt: string,
-    systemMsg: string,
-    maxRetries: number,
-  ): Promise<Record<string, unknown>> {
-    let lastError: Error | null = null;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const result = await this.llm.generateJson(prompt, systemMsg);
-        if (typeof result !== "object" || result === null || Array.isArray(result)) {
-          throw new Error(`LLM返回非字典类型: ${typeof result}`);
-        }
-        return result as Record<string, unknown>;
-      } catch (e) {
-        lastError = e instanceof Error ? e : new Error(String(e));
-        if (attempt < maxRetries) {
-          // retry
-        } else {
-          throw new Error(`需求分析结果解析失败: ${lastError.message}`);
-        }
-      }
-    }
-    throw lastError!;
   }
 
   static validateResult(result: Record<string, unknown>): string[] {
@@ -131,14 +106,6 @@ export class RequirementAnalyzer {
     }
 
     return warnings;
-  }
-
-  static _unwrapContentResult(result: Record<string, unknown>): Record<string, unknown> {
-    const content = result["content"];
-    if (typeof content === "object" && content !== null && !Array.isArray(content)) {
-      return content as Record<string, unknown>;
-    }
-    return result;
   }
 
   static _normalizeResult(result: Record<string, unknown>): Record<string, unknown> {
