@@ -170,20 +170,9 @@ function extractRequirementIds(designText: string, prefixes: string[]): string[]
   return [...new Set(designText.match(idRe) ?? [])];
 }
 
-function isSimpleRequirement(requirementJson: Record<string, unknown>): boolean {
-  const actors = Array.isArray(requirementJson.actors) ? requirementJson.actors.length : 0;
-  const functions = Array.isArray(requirementJson.functions) ? requirementJson.functions.length : 0;
-  const entities = Array.isArray(requirementJson.entities) ? requirementJson.entities.length : 0;
-  const processes = Array.isArray(requirementJson.business_processes) ? requirementJson.business_processes.length : 0;
-  return actors <= 2 && functions > 0 && functions <= 5 && entities <= 2 && processes <= 1;
-}
-
-function isMediumRequirement(requirementJson: Record<string, unknown>): boolean {
-  const actors = Array.isArray(requirementJson.actors) ? requirementJson.actors.length : 0;
-  const functions = Array.isArray(requirementJson.functions) ? requirementJson.functions.length : 0;
-  const entities = Array.isArray(requirementJson.entities) ? requirementJson.entities.length : 0;
-  return !isSimpleRequirement(requirementJson) && actors <= 3 && functions <= 15 && entities <= 5;
-}
+// isSimpleRequirement / isMediumRequirement removed — overdesign self-check
+// moved entirely to evaluation phase to avoid false positives from
+// "不采用X" / "未引入X" explanations in design text.
 
 export class SystemDesigner extends BaseGenerator<string> {
   private promptTemplate: string;
@@ -338,32 +327,12 @@ export class SystemDesigner extends BaseGenerator<string> {
       }
     }
 
-    if (isSimpleRequirement(requirementJson)) {
-      // Strip "不采用" explanation lines before checking for overdesign signals
-      const designBody = designText.replace(/不采用[^。]*[。\n]/g, "");
-      const overDesignSignals = [
-        /Repository|仓储|DAO|数据库|持久化|历史记录|审计|消息队列|微服务|分布式/i,
-        /Strategy|策略模式|策略接口/i,
-      ];
-      const matched = overDesignSignals.some((re) => re.test(designBody));
-      if (matched) {
-        warnings.push("简单需求设计出现无原文依据的复杂机制（如持久化、仓储、策略模式、微服务等）");
-      }
-    }
+    // NOTE: Overdesign signal check moved to evaluation phase only.
+    // Self-check cannot reliably distinguish "不采用X" explanations from actual
+    // usage of X, and the false positive rate is too high for deterministic checks.
+    // The evaluation LLM can judge intent correctly.
 
-    // Medium complexity: warn (not block) about overdesign signals
-    if (isMediumRequirement(requirementJson)) {
-      const designBody = designText.replace(/不采用[^。]*[。\n]/g, "");
-      const heavySignals = [
-        /微服务|分布式锁|消息队列|Redis Cluster|Elasticsearch|Kubernetes/i,
-        /Strategy|策略模式|策略接口|StrategyFactory/i,
-        /Repository|仓储模式|仓储接口|DAO模式/i,
-      ];
-      const matchedHeavy = heavySignals.some((re) => re.test(designBody));
-      if (matchedHeavy) {
-        warnings.push("中等复杂度需求使用了较重的技术架构（如微服务、分布式锁、消息队列、仓储模式），请确认原始需求中是否有明确的性能、并发或扩展性要求支撑这些选型");
-      }
-    }
+    // NOTE: Medium overdesign check also moved to evaluation phase for the same reason.
 
     const constraintIds = collectIds(requirementJson["constraints"]);
     if (constraintIds.length > 0) {
