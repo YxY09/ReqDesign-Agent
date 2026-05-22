@@ -175,7 +175,7 @@ function isSimpleRequirement(requirementJson: Record<string, unknown>): boolean 
   const functions = Array.isArray(requirementJson.functions) ? requirementJson.functions.length : 0;
   const entities = Array.isArray(requirementJson.entities) ? requirementJson.entities.length : 0;
   const processes = Array.isArray(requirementJson.business_processes) ? requirementJson.business_processes.length : 0;
-  return actors <= 2 && functions > 0 && functions <= 5 && entities <= 1 && processes === 0;
+  return actors <= 2 && functions > 0 && functions <= 5 && entities <= 2 && processes <= 1;
 }
 
 function isMediumRequirement(requirementJson: Record<string, unknown>): boolean {
@@ -339,11 +339,13 @@ export class SystemDesigner extends BaseGenerator<string> {
     }
 
     if (isSimpleRequirement(requirementJson)) {
+      // Strip "不采用" explanation lines before checking for overdesign signals
+      const designBody = designText.replace(/不采用[^。]*[。\n]/g, "");
       const overDesignSignals = [
         /Repository|仓储|DAO|数据库|持久化|历史记录|审计|消息队列|微服务|分布式/i,
         /Strategy|策略模式|策略接口/i,
       ];
-      const matched = overDesignSignals.some((re) => re.test(designText));
+      const matched = overDesignSignals.some((re) => re.test(designBody));
       if (matched) {
         warnings.push("简单需求设计出现无原文依据的复杂机制（如持久化、仓储、策略模式、微服务等）");
       }
@@ -351,12 +353,13 @@ export class SystemDesigner extends BaseGenerator<string> {
 
     // Medium complexity: warn (not block) about overdesign signals
     if (isMediumRequirement(requirementJson)) {
+      const designBody = designText.replace(/不采用[^。]*[。\n]/g, "");
       const heavySignals = [
         /微服务|分布式锁|消息队列|Redis Cluster|Elasticsearch|Kubernetes/i,
         /Strategy|策略模式|策略接口|StrategyFactory/i,
         /Repository|仓储模式|仓储接口|DAO模式/i,
       ];
-      const matchedHeavy = heavySignals.some((re) => re.test(designText));
+      const matchedHeavy = heavySignals.some((re) => re.test(designBody));
       if (matchedHeavy) {
         warnings.push("中等复杂度需求使用了较重的技术架构（如微服务、分布式锁、消息队列、仓储模式），请确认原始需求中是否有明确的性能、并发或扩展性要求支撑这些选型");
       }

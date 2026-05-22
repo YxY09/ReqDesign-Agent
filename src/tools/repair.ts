@@ -130,10 +130,45 @@ export class RepairTool extends BaseTool {
       }
     }
 
-    // 模式 2：类图中缺少实体 — "类图缺少需求分析中的核心实体: X, Y"
-    const missingEntityMatch = description.match(/类图缺少需求分析中的核心实体:\s*(.+)/);
-    if (missingEntityMatch && task.type === "diagrams") {
-      const entityNames = missingEntityMatch[1].split(", ").map((s) => s.trim()).filter(Boolean);
+    // 模式 2：类图中缺少实体 — broadened to match diverse LLM issue descriptions
+    // Matches patterns like:
+    //   - "类图缺少需求分析中的核心实体: X, Y"
+    //   - "类图未包含核心业务类 X"
+    //   - "缺失设计文本中定义的核心业务类 X 及模块结构"
+    //   - "类图中仅包含了 A，缺失了 B"
+    if (task.type === "diagrams") {
+      let entityNames: string[] = [];
+
+      // Sub-pattern 2a: canonical form
+      const canonicalMatch = description.match(/类图缺少需求分析中的核心实体:\s*(.+)/);
+      if (canonicalMatch) {
+        entityNames = canonicalMatch[1].split(", ").map((s) => s.trim()).filter(Boolean);
+      }
+
+      // Sub-pattern 2b: "缺失/未包含核心业务类 X" or "缺失了 X 类"
+      if (entityNames.length === 0) {
+        const missingClassMatch = description.matchAll(/(?:未包含|缺失了?)(?:核心业务类|核心类)?\s*([A-Z][A-Za-z0-9]*)/g);
+        for (const m of missingClassMatch) {
+          if (m[1] && !entityNames.includes(m[1])) entityNames.push(m[1]);
+        }
+      }
+
+      // Sub-pattern 2c: "类图中仅包含/仅有 A，缺失/缺少 B"
+      if (entityNames.length === 0) {
+        const onlyContainsMatch = description.match(/仅(?:包含|有)\s*[A-Za-z]+.*?(?:缺失|缺少|遗漏)\s*[了]?(?:核心业务类\s*)?([A-Z][A-Za-z0-9]*(?:\s*(?:[,、]|以及)\s*[A-Z][A-Za-z0-9]*)*)/);
+        if (onlyContainsMatch) {
+          entityNames = onlyContainsMatch[1].split(/\s*(?:[,、]|以及)\s*/).map((s) => s.trim()).filter(Boolean);
+        }
+      }
+
+      // Sub-pattern 2d: any capitalized class name after "缺失" or "遗漏"
+      if (entityNames.length === 0) {
+        const genericMissingMatch = description.matchAll(/(?:缺失|遗漏)(?:了?\s*(?:核心\w*\s*)?)([A-Z][A-Za-z0-9]+)/g);
+        for (const m of genericMissingMatch) {
+          if (m[1] && !entityNames.includes(m[1])) entityNames.push(m[1]);
+        }
+      }
+
       if (entityNames.length > 0) {
         return this._fixMissingClassDiagramEntities(task, currentContent, entityNames, context);
       }
