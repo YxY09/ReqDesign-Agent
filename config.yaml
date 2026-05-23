@@ -7,7 +7,7 @@ llm:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   temperature: 0.3
   max_tokens: 32768
-  timeout: 120
+  timeout: 300
 
 retry:
   max_retries: 3
