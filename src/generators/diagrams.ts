@@ -60,6 +60,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
     requirementJson: Record<string, unknown> | null,
     designText: string,
     requirementText = "",
+    isClassDiagram = false,
   ): string {
     designText = designText || "";
     let reqStr: string;
@@ -77,7 +78,52 @@ export class DiagramGenerator extends BaseGenerator<string> {
     safeDesign = this.sanitizePlaceholder(safeDesign, "design_text");
     let prompt = template.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(/\{design_text\}/g, safeDesign);
+
+    // For class diagrams, extract class names from design_text and inject as hard constraint
+    if (isClassDiagram && designText) {
+      const designClassNames = DiagramGenerator._extractDesignClassNames(designText);
+      if (designClassNames.length > 0) {
+        const nameList = designClassNames.join(", ");
+        prompt += `\n\n## 强制类名清单（最高优先级）\n设计文档中定义了以下核心类，类图必须使用这些精确名称，禁止改名或新增：\n${nameList}\n输出前逐一核对上述清单中的每个类名是否在类图中出现且拼写完全一致。`;
+      }
+    }
+
     return prompt;
+  }
+
+  /** Extract class names from design_text's "核心类/接口设计" section */
+  static _extractDesignClassNames(designText: string): string[] {
+    const names: string[] = [];
+    // Find the "核心类" section
+    const sectionMatch = designText.match(/核心类[^\n]*设计[\s\S]*?(?=\n##\s|\n##[^#]|$)/);
+    if (!sectionMatch) return names;
+    const section = sectionMatch[0];
+
+    // Source 1: markdown table rows | ClassName | ... |
+    const rows = section.split("\n");
+    for (const row of rows) {
+      const trimmed = row.trim();
+      if (!trimmed.startsWith("|")) continue;
+      if (trimmed.includes("---")) continue;
+      if (trimmed.match(/^\|\s*类名/) || trimmed.match(/^\|\s*-+/)) continue;
+      const cells = trimmed.split("|").map(c => c.trim()).filter(Boolean);
+      if (cells.length >= 1) {
+        const name = cells[0];
+        if (/^[A-Z][a-zA-Z0-9]+$/.test(name) && !names.includes(name)) {
+          names.push(name);
+        }
+      }
+    }
+
+    // Source 2: sub-headings like "### 1. 核心领域类：ClassName" or "### N. xxx类：ClassName"
+    const headingMatches = section.matchAll(/#{2,4}\s+\d*[.\s]*[^：]*[：:]\s*([A-Z][a-zA-Z0-9]+)/g);
+    for (const m of headingMatches) {
+      if (m[1] && !names.includes(m[1])) {
+        names.push(m[1]);
+      }
+    }
+
+    return names;
   }
 
   static _extractMermaid(rawResponse: string): string {
@@ -128,7 +174,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
     systemPrompt?: string,
     requirementText = "",
   ): Promise<string> {
-    const prompt = this._buildPrompt(this.prompts["class_diagram"], requirementJson, designText, requirementText);
+    const prompt = this._buildPrompt(this.prompts["class_diagram"], requirementJson, designText, requirementText, true);
     const raw = await this.llm.generateText(prompt, systemPrompt ?? "");
     return DiagramGenerator._extractMermaid(raw);
   }
