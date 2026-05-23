@@ -7,7 +7,7 @@ import type { LLMClient } from "../llmClient.js";
 import { SystemDesigner } from "../generators/design.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
-import { ArtifactPatcher, type PatchOp } from "./artifactPatcher.js";
+import { ArtifactPatcher, type PatchOp, type Section } from "./artifactPatcher.js";
 import type { Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
 
@@ -446,10 +446,10 @@ ${attrs}
     const patchedText = ArtifactPatcher.applyPatches(sections, patches);
 
     if (task.type === "diagrams") {
-      return ArtifactPatcher.reconstruct(
-        ArtifactPatcher.parseSections(patchedText, task.type),
-        task.type,
-      );
+      const patchedSections = ArtifactPatcher.parseSections(patchedText, task.type);
+      // Safety net: ensure no class definitions were lost during patching
+      RepairTool._preserveClassDefinitions(sections, patchedSections, this.logger, task.id);
+      return ArtifactPatcher.reconstruct(patchedSections, task.type);
     }
 
     this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
@@ -590,6 +590,77 @@ ${attrs}
     if (!diagramKind) diagramKind = RepairTool._inferDiagramKind(task, text);
     if (diagramKind) return { [diagramKind]: text };
     return { diagram: text };
+  }
+
+  // ------------------------------------------------------------------
+  // Patch 安全网：防止 class_diagram patch 丢失已有类定义
+  // ------------------------------------------------------------------
+
+  /**
+   * 比较 patch 前后的 class_diagram section，如果 patch 丢失了原始中已有的
+   * class 定义，自动从原始内容中补回缺失的类。
+   */
+  static _preserveClassDefinitions(
+    originalSections: Section[],
+    patchedSections: Section[],
+    logger: { info: (msg: string) => void },
+    taskId: string,
+  ): void {
+    const origClass = originalSections.find(s => s.key === "class_diagram");
+    const patchedClass = patchedSections.find(s => s.key === "class_diagram");
+    if (!origClass || !patchedClass) return;
+
+    const origNames = RepairTool._extractClassNames(origClass.content);
+    const patchedNames = RepairTool._extractClassNames(patchedClass.content);
+    if (origNames.length === 0) return;
+
+    const lost = origNames.filter(n => !patchedNames.includes(n));
+    if (lost.length === 0) return;
+
+    // Extract full class blocks from original and append to patched
+    const lostBlocks = RepairTool._extractClassBlocks(origClass.content, lost);
+    if (lostBlocks.length === 0) return;
+
+    // Find insertion point: before first relationship line, or append
+    const lines = patchedClass.content.split("\n");
+    const relIdx = lines.findIndex(l => /"\d*"\s*-->|-->\s*"\d*"/.test(l));
+    if (relIdx >= 0) {
+      lines.splice(relIdx, 0, ...lostBlocks);
+    } else {
+      lines.push(...lostBlocks);
+    }
+
+    patchedClass.content = lines.join("\n");
+    logger.info(
+      `repair: task=${taskId} safety net: restored ${lost.length} lost class(es): ${lost.join(", ")}`,
+    );
+  }
+
+  /** Extract all class names from a Mermaid classDiagram string. */
+  static _extractClassNames(mermaid: string): string[] {
+    const names: string[] = [];
+    const re = /^\s*class\s+(\w+)\s*\{/gm;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(mermaid)) !== null) {
+      if (m[1] && !names.includes(m[1])) names.push(m[1]);
+    }
+    // Also match shorthand: "class X {" not just but also "class X"
+    // already covered by above regex
+    return names;
+  }
+
+  /** Extract full class block (class X { ... }) for given names from a Mermaid string. */
+  static _extractClassBlocks(mermaid: string, names: string[]): string[] {
+    const blocks: string[] = [];
+    for (const name of names) {
+      const re = new RegExp(
+        `(^\\s*class\\s+${name}\\s*\\{[^}]*\\})`,
+        "m",
+      );
+      const m = re.exec(mermaid);
+      if (m) blocks.push(m[1]);
+    }
+    return blocks;
   }
 
   // ------------------------------------------------------------------
