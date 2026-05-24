@@ -514,16 +514,19 @@ export class RepairTool extends BaseTool {
     }
 
     const sections = ArtifactPatcher.parseSections(currentContent, task.type);
-    const patchedText = ArtifactPatcher.applyPatches(sections, patches);
 
     if (task.type === "diagrams") {
-      const patchedSections = ArtifactPatcher.parseSections(patchedText, task.type);
+      // Diagrams are Record<string, string>. Apply patches directly on sections
+      // to preserve key structure (class_diagram, activity_diagram, etc.).
+      // Do NOT go through applyPatches→string→parseSections which loses keys.
+      const patchedSections = ArtifactPatcher.applyPatchesDirect(sections, patches);
       // Safety net: ensure no class definitions were lost during patching
       RepairTool._preserveClassDefinitions(sections, patchedSections, this.logger, task.id);
       return ArtifactPatcher.reconstruct(patchedSections, task.type);
     }
 
     this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
+    const patchedText = ArtifactPatcher.applyPatches(sections, patches);
     return patchedText;
   }
 

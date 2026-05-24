@@ -147,6 +147,12 @@ export class ArtifactPatcher {
 
   /** 应用补丁操作到解析后的章节，返回拼接后的内容字符串。 */
   static applyPatches(sections: Section[], patches: PatchOp[]): string {
+    const result = ArtifactPatcher.applyPatchesDirect(sections, patches);
+    return result.map((s) => s.content).join("\n\n");
+  }
+
+  /** Apply patches directly on sections, returning modified Section[] (preserves keys). */
+  static applyPatchesDirect(sections: Section[], patches: PatchOp[]): Section[] {
     const result = sections.map((s) => ({ ...s }));
 
     for (const patch of patches) {
@@ -178,7 +184,7 @@ export class ArtifactPatcher {
       }
     }
 
-    return result.map((s) => s.content).join("\n\n");
+    return result;
   }
 
   private static _extractHeading(content: string): string {
