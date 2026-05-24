@@ -89,7 +89,10 @@ const OPENAI_COMPAT_PROVIDERS = new Set([
   "deepseek",
   "qwen",
   "minimax",
+  "kimi-coding",
+  "zhipu",
 ]);
+
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
   deepseek: "https://api.deepseek.com",
@@ -455,6 +458,9 @@ export class LLMClient {
       };
       if (baseUrl) {
         opts.baseURL = baseUrl;
+      }
+      if (this.provider === "kimi-coding") {
+        opts.defaultHeaders = { "User-Agent": "KimiCLI/1.5" };
       }
       this._logger.info(
         `LLMClient initialised: provider=${this.provider}, model=${this.model}` +

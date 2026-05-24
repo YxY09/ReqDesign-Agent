@@ -37,7 +37,7 @@ function snakeToCamel(obj: unknown): unknown {
 // =========================================================================
 
 const LlmConfigSchema = z.object({
-  provider: z.enum(["openai", "anthropic", "deepseek", "qwen", "minimax"]).default("openai"),
+  provider: z.enum(["openai", "anthropic", "deepseek", "qwen", "minimax", "kimi-coding", "zhipu"]).default("openai"),
   model: z.string().min(1).default("gpt-4o"),
   apiKey: z.string().optional().default(""),
   baseUrl: z.string().optional().default(""),
@@ -109,6 +109,8 @@ export const VALID_PROVIDERS = [
   "deepseek",
   "qwen",
   "minimax",
+  "kimi-coding",
+  "zhipu",
 ] as const;
 
 export const VALID_LOG_LEVELS = [
@@ -397,6 +399,8 @@ export class AgentConfig {
       deepseek: "DEEPSEEK_API_KEY",
       qwen: "QWEN_API_KEY",
       minimax: "MINIMAX_API_KEY",
+      "kimi-coding": "KIMI_API_KEY",
+      zhipu: "ZHIPU_API_KEY",
     };
 
     const providerKey = envMap[this.llm.provider];
