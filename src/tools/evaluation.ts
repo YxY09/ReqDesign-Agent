@@ -620,8 +620,6 @@ export class EvaluationTool extends BaseTool {
       : []);
     if (processes.length <= 1) return issues;
 
-    const processNames = processes.map(p => String(p.name ?? "").trim()).filter(Boolean);
-
     // Find activity diagram snapshot
     for (const [taskId, snapshot] of Object.entries(snapshots)) {
       const taskType = String(snapshot.type ?? "");
@@ -633,17 +631,32 @@ export class EvaluationTool extends BaseTool {
 
       // Check which process names (or recognizable keywords) appear in the activity diagram
       const missing: string[] = [];
-      for (const name of processNames) {
-        // Extract keywords from process name (PascalCase split)
-        const keywords = name.replace(/([a-z])([A-Z])/g, "$1 $2").split(/(?=[A-Z])/).join(" ").toLowerCase().split(/\s+/);
-        const mainKeywords = keywords.filter(k => k.length > 3); // filter out short words
+      const adLower = activityDiagram.toLowerCase();
 
-        if (mainKeywords.length > 0) {
-          const adLower = activityDiagram.toLowerCase();
-          const anyKeywordFound = mainKeywords.some(kw => adLower.includes(kw));
-          if (!anyKeywordFound) {
-            missing.push(name);
-          }
+      for (const proc of processes) {
+        const name = String(proc.name ?? "").trim();
+        if (!name) continue;
+
+        // Source 1: PascalCase keywords from process name (works for English diagrams)
+        const nameKeywords = name.replace(/([a-z])([A-Z])/g, "$1 $2").split(/(?=[A-Z])/).join(" ").toLowerCase().split(/\s+/);
+        const mainNameKeywords = nameKeywords.filter(k => k.length > 3);
+
+        // Source 2: Chinese keywords from process steps (works for Chinese diagrams)
+        const steps = Array.isArray(proc.steps) ? proc.steps as string[] : [];
+        const stepKeywords = steps.map(s => String(s).trim()).filter(s => s.length >= 2);
+
+        // Try name keywords first
+        let found = mainNameKeywords.length > 0 && mainNameKeywords.some(kw => adLower.includes(kw));
+
+        // If name keywords didn't match, try step keywords
+        if (!found && stepKeywords.length > 0) {
+          // A process is considered "covered" if >= 40% of its steps appear in the diagram
+          const matched = stepKeywords.filter(step => adLower.includes(step.toLowerCase()));
+          found = matched.length >= Math.ceil(stepKeywords.length * 0.4);
+        }
+
+        if (!found) {
+          missing.push(name);
         }
       }
 

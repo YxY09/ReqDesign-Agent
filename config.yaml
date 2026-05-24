@@ -1,10 +1,10 @@
 # LLM Provider Configuration (aligned with Python version)
 
 llm:
-  provider: zhipu
-  model: glm-4.7
+  provider: qwen
+  model: qwen3.6-flash
   api_key: ""
-  base_url: "https://open.bigmodel.cn/api/paas/v4"
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   temperature: 0.3
   max_tokens: 32768
   timeout: 300
