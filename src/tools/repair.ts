@@ -242,6 +242,7 @@ export class RepairTool extends BaseTool {
     return null;
   }
 
+
   private _fixMissingClassDiagramEntities(
     task: Task,
     currentContent: unknown,
@@ -256,7 +257,7 @@ export class RepairTool extends BaseTool {
     const classDiagram = String(obj.class_diagram ?? "");
     if (!classDiagram) return null;
 
-    // Build minimal class definitions from requirement entities
+    // Source 1: requirement entities (data entities)
     const reqEntities = (context.requirement_json as Record<string, unknown>)?.entities;
     const entityMap = new Map<string, Record<string, unknown>>();
     if (Array.isArray(reqEntities)) {
@@ -267,29 +268,99 @@ export class RepairTool extends BaseTool {
       }
     }
 
+    // Source 2: design_text core class table (service classes like Calculator, OrderService)
+    const designText = String(context.design_text ?? "");
+    const designClassMap = this._extractDesignClassDefinitions(designText);
+
     const newClasses: string[] = [];
     for (const name of entityNames) {
+      // Skip if class already exists in diagram
+      if (new RegExp(`class\s+${this._escapeRegex(name)}\s*\{`).test(classDiagram)) continue;
+
+      // Try requirement entity first
       const entity = entityMap.get(name);
-      const attrs = Array.isArray((entity as Record<string, unknown>)?.attributes)
-        ? ((entity as Record<string, unknown>).attributes as Array<Record<string, unknown>>).slice(0, 3).map(
-            (a) => `        -String ${(a as Record<string, unknown>).name ?? "id"}`,
-          ).join("\n")
-        : `        -Long id`;
-      newClasses.push(`    class ${name} {
-${attrs}
-    }`);
+      if (entity) {
+        const attrs = Array.isArray((entity as Record<string, unknown>)?.attributes)
+          ? ((entity as Record<string, unknown>).attributes as Array<Record<string, unknown>>).slice(0, 3).map(
+              (a) => `        -String ${(a as Record<string, unknown>).name ?? "id"}`,
+            ).join("\n")
+          : `        -Long id`;
+        newClasses.push(`    class ${name} {\n${attrs}\n    }`);
+        continue;
+      }
+
+      // Try design text definition
+      const designDef = designClassMap.get(name);
+      if (designDef) {
+        newClasses.push(designDef);
+        continue;
+      }
+
+      // Not found in either source — cannot generate a meaningful class
+      this.logger.info(`deterministic: class '${name}' not found in entities or design_text, cannot fix`);
+      return null; // let LLM repair + safety net handle it
+    }
+
+    if (newClasses.length === 0) {
+      return null;
     }
 
     // Insert before the first relationship line
     const lines = classDiagram.split("\n");
     const firstRelIdx = lines.findIndex((l) => /"\d*"\s*-->/.test(l));
     if (firstRelIdx === -1) {
-      // No relationships found, append
       const fixed = classDiagram + "\n" + newClasses.join("\n");
       return { ...obj, class_diagram: fixed };
     }
     lines.splice(firstRelIdx, 0, ...newClasses);
+    this.logger.info(`deterministic: added ${newClasses.length} class(es) to class_diagram`);
     return { ...obj, class_diagram: lines.join("\n") };
+  }
+
+  /**
+   * Extract class definitions from design_text's "核心类/接口设计" section.
+   * Returns a map of className -> full Mermaid class block string.
+   */
+  private _extractDesignClassDefinitions(designText: string): Map<string, string> {
+    const result = new Map<string, string>();
+    if (!designText) return result;
+
+    const sectionMatch = designText.match(/核心类[^\n]*设计[\s\S]*?(?=\n##\s[^#]|\n##[^#]|$)/);
+    if (!sectionMatch) return result;
+    const section = sectionMatch[0];
+
+    // Parse table rows: | ClassName | 职责 | 关键属性 | 关键方法 |
+    const rows = section.split("\n");
+    for (const row of rows) {
+      const trimmed = row.trim();
+      if (!trimmed.startsWith("|")) continue;
+      if (trimmed.includes("---")) continue;
+      if (/^\|\s*类名/.test(trimmed)) continue;
+      const cells = trimmed.split("|").map(c => c.trim()).filter(Boolean);
+      if (cells.length < 4) continue;
+      const className = cells[0];
+      if (!/^[A-Z][a-zA-Z0-9]+$/.test(className)) continue;
+
+      // Parse attributes: "attr1 (Type), attr2 (Type)"
+      const attrText = cells[2] || "";
+      const attrMatches = [...attrText.matchAll(/(\w+)\s*\((\w+)\)/g)];
+      const attrLines = attrMatches.length > 0
+        ? attrMatches.map(m => `        -${m[2]} ${m[1]}`).join("\n")
+        : "";
+
+      // Parse methods: "method1(), method2(Param)"
+      const methodText = cells[3] || "";
+      const methodMatches = [...methodText.matchAll(/(\w+\([^)]*\))/g)];
+      const methodLines = methodMatches.length > 0
+        ? methodMatches.map(m => `        +${m[1]}`).join("\n")
+        : "";
+
+      if (!attrLines && !methodLines) continue;
+      const block = `    class ${className} {\n${attrLines}${methodLines ? "\n" + methodLines : ""}\n    }`;
+      result.set(className, block);
+    }
+
+    return result;
   }
 
   /**
