@@ -119,3 +119,73 @@ describe("RepairTool._extractClassBlocks", () => {
     expect(blocks).toHaveLength(0);
   });
 });
+
+describe("ArtifactPatcher diagrams key preservation", () => {
+  it("applyPatchesDirect preserves diagram keys (class_diagram, activity_diagram)", async () => {
+    const { ArtifactPatcher } = await import("../src/tools/artifactPatcher.js");
+
+    const originalSections: Section[] = [
+      { key: "class_diagram", content: "classDiagram\n    class A {\n    }" },
+      { key: "activity_diagram", content: "flowchart TD\n    A-->B" },
+      { key: "state_diagram", content: "stateDiagram-v2\n    [*]-->S1" },
+    ];
+
+    const patches = [
+      { op: "replace_section" as const, section: "class_diagram", content: "classDiagram\n    class A {\n    }\n    class B {\n    }" },
+    ];
+
+    // applyPatchesDirect should return Section[] with preserved keys
+    const patched = ArtifactPatcher.applyPatchesDirect(originalSections, patches);
+
+    expect(patched).toHaveLength(3);
+    expect(patched[0].key).toBe("class_diagram");
+    expect(patched[0].content).toContain("class B");
+    expect(patched[1].key).toBe("activity_diagram");
+    expect(patched[2].key).toBe("state_diagram");
+  });
+
+  it("reconstruct with applyPatchesDirect produces correct diagram dict", async () => {
+    const { ArtifactPatcher } = await import("../src/tools/artifactPatcher.js");
+
+    const originalSections: Section[] = [
+      { key: "class_diagram", content: "classDiagram\n    class A {\n    }" },
+      { key: "activity_diagram", content: "flowchart TD\n    A-->B" },
+      { key: "state_diagram", content: "stateDiagram-v2\n    [*]-->S1" },
+    ];
+
+    const patches = [
+      { op: "replace_section" as const, section: "class_diagram", content: "classDiagram\n    class A {\n    }\n    class B {\n    }\n    A --> B" },
+    ];
+
+    const patched = ArtifactPatcher.applyPatchesDirect(originalSections, patches);
+    const result = ArtifactPatcher.reconstruct(patched, "diagrams");
+
+    // Result should be a dict with correct keys
+    expect(typeof result).toBe("object");
+    expect(result).not.toBeNull();
+    const dict = result as Record<string, string>;
+    expect(dict.class_diagram).toContain("class B");
+    expect(dict.activity_diagram).toBe("flowchart TD\n    A-->B");
+    expect(dict.state_diagram).toBe("stateDiagram-v2\n    [*]-->S1");
+    // Should NOT have a "diagram" key (the old bug)
+    expect(dict.diagram).toBeUndefined();
+  });
+
+  it("old applyPatches string path loses diagram keys", async () => {
+    const { ArtifactPatcher } = await import("../src/tools/artifactPatcher.js");
+
+    const originalSections: Section[] = [
+      { key: "class_diagram", content: "classDiagram\n    class A {\n    }" },
+      { key: "activity_diagram", content: "flowchart TD\n    A-->B" },
+    ];
+
+    // applyPatches returns string — this was the old bug path
+    const stringResult = ArtifactPatcher.applyPatches(originalSections, []);
+    expect(typeof stringResult).toBe("string");
+
+    // Re-parsing the string loses key structure
+    const reParsed = ArtifactPatcher.parseSections(stringResult, "diagrams");
+    expect(reParsed).toHaveLength(1);
+    expect(reParsed[0].key).toBe("diagram"); // Lost! All merged into "diagram"
+  });
+});
