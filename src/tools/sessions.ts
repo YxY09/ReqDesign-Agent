@@ -16,6 +16,7 @@ function normalizeFixInstructions(value: unknown): Array<Record<string, unknown>
 
 function isStrictSelfCheckFailure(artifact: Artifact): boolean {
   if (artifact.selfCheckPassed) return false;
+  if (artifact.type === "tests") return false;
   if (artifact.type === "analyze") return true;
 
   const strictPatterns = [

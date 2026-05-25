@@ -1095,7 +1095,25 @@ export class MultiAgentRuntime {
         goal: state.goal,
         phase: "merge",
       });
-      // 合并失败：保留最后一个 analyze 结果作为 requirementJson
+      // 合并失败：回退到程序化并集作为 requirementJson
+      try {
+        const fallback = this.analyzeMerger.preMerge(artifacts);
+        state.setRequirementJson(RequirementNormalizer.normalize(fallback));
+        RequirementNormalizer.normalizeAgainstSource(fallback, state.requirementText ?? "");
+        const outputManager = new (this.outputManagerClass)(state.outputDir);
+        outputManager.saveRequirementAnalysis(fallback);
+        this.emitRuntimeEvent("merge_failed_with_fallback", "merge failed, persisted preMerge fallback", {
+          goal: state.goal,
+          phase: "merge",
+          data: { fallbackReason: msg },
+        });
+      } catch (fallbackErr) {
+        const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        this.emitRuntimeEvent("merge_failed_fallback_error", `preMerge fallback also failed: ${fbMsg}`, {
+          goal: state.goal,
+          phase: "merge",
+        });
+      }
     }
   }
 
@@ -1158,9 +1176,7 @@ export class MultiAgentRuntime {
     artifact: Artifact,
   ): void {
     const manager = new this.outputManagerClass(state.outputDir);
-    if (artifact.type === "analyze" && isRecord(artifact.content)) {
-      manager.saveRequirementAnalysis(artifact.content);
-    } else if (
+    if (
       artifact.type === "design" &&
       typeof artifact.content === "string"
     ) {
