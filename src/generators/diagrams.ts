@@ -60,7 +60,8 @@ export class DiagramGenerator extends BaseGenerator<string> {
     requirementJson: Record<string, unknown> | null,
     designText: string,
     requirementText = "",
-    isClassDiagram = false,
+    diagramType = "",
+    classNames?: string[],
   ): string {
     designText = designText || "";
     let reqStr: string;
@@ -79,12 +80,37 @@ export class DiagramGenerator extends BaseGenerator<string> {
     let prompt = template.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(/\{design_text\}/g, safeDesign);
 
-    // For class diagrams, extract class names from design_text and inject as hard constraint
-    if (isClassDiagram && designText) {
-      const designClassNames = DiagramGenerator._extractDesignClassNames(designText);
-      if (designClassNames.length > 0) {
-        const nameList = designClassNames.join(", ");
-        prompt += `\n\n## 强制类名清单（最高优先级）\n设计文档中定义了以下核心类，类图必须使用这些精确名称，禁止改名或新增：\n${nameList}\n输出前逐一核对上述清单中的每个类名是否在类图中出现且拼写完全一致。`;
+    // Inject entity names as hard constraint for class/state diagrams,
+    // or when explicit classNames are provided (e.g. from class diagram extraction)
+    if (designText) {
+      const shouldExtract = diagramType === "class_diagram" || diagramType === "state_diagram";
+      const hasExplicit = classNames && classNames.length > 0;
+
+      if (shouldExtract || hasExplicit) {
+        const names = hasExplicit ? classNames! : DiagramGenerator._extractDesignClassNames(designText);
+        if (names.length > 0) {
+          const nameList = names.join(", ");
+          if (diagramType === "class_diagram") {
+            prompt += `
+
+## 强制类名清单（最高优先级）
+设计文档中定义了以下核心类，类图必须使用这些精确名称，禁止改名或新增：
+${nameList}
+输出前逐一核对上述清单中的每个类名是否在类图中出现且拼写完全一致。`;
+          } else if (diagramType === "state_diagram") {
+            prompt += `
+
+## 核心实体清单（来自设计文档）
+设计文档中定义了以下核心类，状态图必须为每个类生成独立状态机：
+${nameList}`;
+          } else if (hasExplicit) {
+            prompt += `
+
+## 核心实体清单（来自类图分析）
+系统设计中涉及以下核心实体：
+${nameList}`;
+          }
+        }
       }
     }
 
@@ -120,6 +146,39 @@ export class DiagramGenerator extends BaseGenerator<string> {
     for (const m of headingMatches) {
       if (m[1] && !names.includes(m[1])) {
         names.push(m[1]);
+      }
+    }
+
+    // Source 3: "关联实体" column — detect header index, then extract PascalCase names
+    let relatedColumnIndex = -1;
+    for (const row of rows) {
+      const trimmed = row.trim();
+      if (!trimmed.startsWith("|")) continue;
+      const cells = trimmed.split("|").map(c => c.trim()).filter(Boolean);
+      const headerIdx = cells.findIndex(c => c.includes("关联实体") || c === "关联");
+      if (headerIdx >= 0) {
+        relatedColumnIndex = headerIdx;
+        break;
+      }
+    }
+
+    if (relatedColumnIndex >= 0) {
+      for (const row of rows) {
+        const trimmed = row.trim();
+        if (!trimmed.startsWith("|")) continue;
+        if (trimmed.includes("---")) continue;
+        if (trimmed.match(/^\|\s*类名/) || trimmed.match(/^\|\s*-+/)) continue;
+        const cells = trimmed.split("|").map(c => c.trim()).filter(Boolean);
+        if (cells.length > relatedColumnIndex) {
+          const relatedRaw = cells[relatedColumnIndex];
+          const parts = relatedRaw.split(/[,;，、]/);
+          for (const part of parts) {
+            const name = part.trim();
+            if (/^[A-Z][a-zA-Z0-9]+$/.test(name) && !names.includes(name)) {
+              names.push(name);
+            }
+          }
+        }
       }
     }
 
@@ -174,7 +233,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
     systemPrompt?: string,
     requirementText = "",
   ): Promise<string> {
-    const prompt = this._buildPrompt(this.prompts["class_diagram"], requirementJson, designText, requirementText, true);
+    const prompt = this._buildPrompt(this.prompts["class_diagram"], requirementJson, designText, requirementText, "class_diagram");
     const raw = await this.llm.generateText(prompt, systemPrompt ?? "");
     return DiagramGenerator._extractMermaid(raw);
   }
@@ -184,8 +243,9 @@ export class DiagramGenerator extends BaseGenerator<string> {
     designText: string,
     systemPrompt?: string,
     requirementText = "",
+    classNames?: string[],
   ): Promise<string> {
-    const prompt = this._buildPrompt(this.prompts["activity_diagram"], requirementJson, designText, requirementText);
+    const prompt = this._buildPrompt(this.prompts["activity_diagram"], requirementJson, designText, requirementText, "activity_diagram", classNames);
     const raw = await this.llm.generateText(prompt, systemPrompt ?? "");
     return DiagramGenerator._extractMermaid(raw);
   }
@@ -195,8 +255,9 @@ export class DiagramGenerator extends BaseGenerator<string> {
     designText: string,
     systemPrompt?: string,
     requirementText = "",
+    classNames?: string[],
   ): Promise<string> {
-    const prompt = this._buildPrompt(this.prompts["state_diagram"], requirementJson, designText, requirementText);
+    const prompt = this._buildPrompt(this.prompts["state_diagram"], requirementJson, designText, requirementText, "state_diagram", classNames);
     const raw = await this.llm.generateText(prompt, systemPrompt ?? "");
     return DiagramGenerator._extractMermaid(raw);
   }
@@ -211,13 +272,38 @@ export class DiagramGenerator extends BaseGenerator<string> {
     const rt = requirementText;
     const results: Record<string, string> = {};
 
-    const tasks: Array<{ name: string; fn: () => Promise<string> }> = [
-      { name: "class_diagram", fn: () => this.generateClassDiagram(requirementJson, designText, sp, rt) },
-      { name: "activity_diagram", fn: () => this.generateActivityDiagram(requirementJson, designText, sp, rt) },
-      { name: "state_diagram", fn: () => this.generateStateDiagram(requirementJson, designText, sp, rt) },
+    // Phase 1: generate class diagram first (serial) to extract entity names
+    let classMermaid = "";
+    try {
+      classMermaid = await this.generateClassDiagram(requirementJson, designText, sp, rt);
+    } catch {
+      classMermaid = "";
+    }
+
+    if (!classMermaid?.trim()) {
+      try { classMermaid = await this.generateClassDiagram(requirementJson, designText, sp, rt); } catch { /* keep empty */ }
+    }
+    results["class_diagram"] = classMermaid || "";
+
+    // Extract class names from the generated class diagram mermaid
+    const extractedClassNames: string[] = [];
+    if (classMermaid?.trim()) {
+      const classRegex = /class\s+(\w+)/g;
+      let match: RegExpExecArray | null;
+      while ((match = classRegex.exec(classMermaid)) !== null) {
+        if (match[1] && !extractedClassNames.includes(match[1])) {
+          extractedClassNames.push(match[1]);
+        }
+      }
+    }
+
+    // Phase 2: generate activity and state diagrams in parallel, informed by class names
+    const phase2Tasks: Array<{ name: string; fn: () => Promise<string> }> = [
+      { name: "activity_diagram", fn: () => this.generateActivityDiagram(requirementJson, designText, sp, rt, extractedClassNames) },
+      { name: "state_diagram", fn: () => this.generateStateDiagram(requirementJson, designText, sp, rt, extractedClassNames) },
     ];
 
-    const settled = await Promise.allSettled(tasks.map((t) => t.fn()));
+    const settled = await Promise.allSettled(phase2Tasks.map((t) => t.fn()));
     const failed: string[] = [];
 
     for (let i = 0; i < settled.length; i++) {
@@ -226,17 +312,17 @@ export class DiagramGenerator extends BaseGenerator<string> {
         let val = result.value;
         // 空结果重试一次
         if (!val?.trim()) {
-          try { val = await tasks[i].fn(); } catch { /* 保持空值 */ }
+          try { val = await phase2Tasks[i].fn(); } catch { /* 保持空值 */ }
         }
         if (!val?.trim()) {
-          failed.push(tasks[i].name);
-          results[tasks[i].name] = "";
+          failed.push(phase2Tasks[i].name);
+          results[phase2Tasks[i].name] = "";
         } else {
-          results[tasks[i].name] = val;
+          results[phase2Tasks[i].name] = val;
         }
       } else {
-        failed.push(tasks[i].name);
-        results[tasks[i].name] = "";
+        failed.push(phase2Tasks[i].name);
+        results[phase2Tasks[i].name] = "";
       }
     }
 
