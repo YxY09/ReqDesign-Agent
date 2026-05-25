@@ -10,11 +10,13 @@
 
 1. **通读需求文档**，理解项目目标、涉及的角色、核心功能和约束条件
 2. **判断复杂度**：
-   - 简单需求（1-2 个角色，<5 个功能）：3-4 个任务
-   - 中等需求（2-3 个角色，5-15 个功能）：5-6 个任务
-   - 复杂需求（3+ 个角色，15+ 个功能，多模块）：7-8 个任务
+   - 简单需求（1-2 个角色，<5 个功能，文档<5000字）：3-4 个任务，analyze=1
+   - 中等需求（2-3 个角色，5-15 个功能，文档<30000字）：5-6 个任务，analyze=2
+   - 复杂需求（3+ 个角色，15+ 个功能或文档>30000字）：7-9 个任务，analyze=3-4
+   - 超大型文档（文档>50000字或包含5+个独立业务模块）：9-10 个任务，analyze=4-5
 3. **按业务领域拆分**：复杂需求必须拆分为多个子领域，每个子领域有独立的 analyze → design → diagrams 链路
 4. **注入上下文提示**：为每个任务提供具体的 context_hints，帮助后续 Agent 聚焦
+5. **预扫描**：在制定任务计划前，快速扫读原文的章节标题和关键段落，提取所有名词性概念（潜在实体）和动词性模块/编号（潜在功能）。这些将填入各 analyze 任务的 `suggested_entities` 和 `suggested_functions`。
 
 ## 拆分策略（重要）
 
@@ -32,6 +34,8 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 ```
 
 拆分原则：
+- **文档规模优先**：如果文档字数超过30000字，无论角色/功能数量如何，都必须至少分配3个analyze任务。超过50000字至少分配4个。
+- **按章节拆分**：如果文档有清晰的大章节划分（如一级标题），每个analyze任务应当覆盖1-2个一级章节，避免单个任务承载过多内容。
 - **只拆分 analyze**：按业务域拆（用户管理 vs 订单流转 vs 支付结算），可并行执行
 - **不要新增额外的“合并分析”任务**：系统会自动程序化合并各 analyze 结果（去重、拼接）
 - **design 不拆分**：基于合并后的 requirement_json 和原始 requirement_text，产出一份覆盖全系统的设计文档，并补全跨模块/跨实体关系
@@ -61,6 +65,8 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
       "depends_on": [],
       "context_hints": {
         "focus_areas": ["用户注册登录"],
+        "suggested_entities": ["User", "UserAccount", "AuthToken"],
+        "suggested_functions": ["RegisterUser", "LoginUser", "ResetPassword"],
         "note": "提取 User 及相关实体的属性和关系"
       }
     },
@@ -151,13 +157,15 @@ context_hints 帮助 GenerationTool 理解任务侧重点：
 - `focus_areas`: 需要特别关注的领域（如"权限控制"、"缓存策略"、"事务管理"）
 - `suggested_classes`: 建议的核心类名列表
 - `note`: 任何补充说明、注意事项
+- `suggested_entities`: 从原文中识别出的关键实体名列表（PascalCase）。planner 在通读原文时发现的每个核心业务对象都应该列在这里，帮助 analyze 任务做“核对清单”式提取。不要怕列多——宁可多列让 analyze 任务去验证，也不能漏列导致 analyze 任务没看到。
+- `suggested_functions`: 从原文章节标题/需求编号中识别出的功能名列表（PascalCase）。同理，原文每个独立功能模块都应该列在这里。
 - `diagram_types`: 对 diagrams 任务，指定需要的图表类型（如["class", "activity", "state"]）
 
 **不要写的 context_hints**：
 - 不要复述 task.description 已有的内容
 - 不要加入过度细节（GenerationTool 会自己补充）
 - 不要为空字典 {}（要么有值，要么省略该字段）
-- 不要在 analyze 任务里提前建议原文没有明确出现的实体名。例如简单计算器不能写“如 CalculationRecord”；电商订单如果原文写了“商品明细”，可以提示“注意明细行实体”，但不能凭空增加审计、风控、营销规则实体
+- **analyze 任务的 context_hints 必须包含原文中出现的实体名和功能名**。planner 通读了原文，知道文档里有哪些关键概念——必须把它们作为“提取清单”传给 analyze 任务。例如原文明确写了“订单包含商品明细”，context_hints 应当写上 `suggested_entities: ["Order", "OrderItem", "Product"]`。只有原文完全没有依据的概念才不能写进提示。
 - `suggested_classes` 只能用于 design 任务，且必须来自原始需求的实体、业务实体章节或明确名词性概念
 
 ## 质量标准

@@ -181,21 +181,19 @@ export class SystemDesigner extends BaseGenerator<string> {
     super(llm);
     this.promptTemplate = loadPrompt(
       "design_planner.md",
-      "请根据以下需求分析结果和原始需求生成系统设计方案：\n\n结构化需求：\n{requirement_json}\n\n原始需求：\n{requirement_text}",
+      "请根据以下需求分析结果生成系统设计方案：\n\n结构化需求：\n{requirement_json}",
     );
   }
 
   async generate(
     requirementJson: Record<string, unknown>,
-    requirementText = "",
     systemPrompt?: string,
   ): Promise<string> {
-    return this.generateDesign(requirementJson, requirementText, systemPrompt);
+    return this.generateDesign(requirementJson, systemPrompt);
   }
 
   async generateDesign(
     requirementJson: Record<string, unknown>,
-    requirementText = "",
     systemPrompt?: string,
   ): Promise<string> {
     if (!requirementJson || typeof requirementJson !== "object") {
@@ -205,11 +203,10 @@ export class SystemDesigner extends BaseGenerator<string> {
     let reqStr = JSON.stringify(requirementJson, null, 2);
     reqStr = this.sanitizePlaceholder(reqStr, "requirement_json");
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");
-    const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(
       /\{requirement_text\}/g,
-      `${SystemDesigner.buildDesignContract(requirementJson)}\n\n${safeText}`,
+      `${SystemDesigner.buildDesignContract(requirementJson)}`,
     );
 
     const result = await this.llm.generateText(prompt, systemPrompt ?? "");

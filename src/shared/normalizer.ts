@@ -430,7 +430,7 @@ export class RequirementNormalizer {
     requirementText: string,
   ): void {
     const LINE_ITEM_KEYWORDS =
-      /明细|行项|子项|条目|列表项|清单|order\s*item|line\s*item|detail/i;
+      /明细|行项|子项|条目|列表项|清单|order\s*item|line\s*item/i;
     if (!LINE_ITEM_KEYWORDS.test(requirementText)) return;
 
     const entities = RequirementNormalizer._getEntities(analysis);
@@ -464,9 +464,17 @@ export class RequirementNormalizer {
         // Check if source text mentions this specific aggregation relationship
         const rootKeywords = rootName.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
         const sourceLower = requirementText.toLowerCase();
-        const hasSpecificEvidence =
-          (sourceLower.includes(rootKeywords) || rootName === "Order" || rootName === "Prescription" || rootName === "Enrollment") &&
-          LINE_ITEM_KEYWORDS.test(requirementText);
+        const hasSpecificEvidence = (() => {
+          if (!sourceLower.includes(rootKeywords)) return false;
+          const sentences = requirementText.split(/[.\n]+/);
+          for (const sentence of sentences) {
+            const sentLower = sentence.toLowerCase();
+            if (sentLower.includes(rootKeywords) && LINE_ITEM_KEYWORDS.test(sentence)) {
+              return true;
+            }
+          }
+          return false;
+        })();
 
         if (!hasSpecificEvidence) continue;
 
