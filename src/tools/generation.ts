@@ -117,19 +117,29 @@ export class GenerationTool extends BaseTool {
 
   private async _generateAnalyze(
     ctx: Record<string, unknown>, hints: Record<string, unknown>,
-    desc: string, systemPrompt: string,
+    _desc: string, systemPrompt: string,
   ): Promise<Record<string, unknown>> {
     let text = (ctx.requirement_text as string) ?? "";
     const existingJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!text && !existingJson) throw createToolError("GEN_MISSING_INPUT", "缺少 requirement_text 和 requirement_json", { recoverable: false });
 
-    if (hints.focus_areas) {
-      const focus = (hints.focus_areas as string[]).join(", ");
-      text = `[重点关注: ${focus}]\n\n${text}`;
+    if (Array.isArray(hints.focus_areas) && hints.focus_areas.length > 0) {
+      const focus = hints.focus_areas.map(String).join(", ");
+      text = `[重点关注: ${focus}]\\n\\n${text}`;
     }
     if (hints.note) text = `[补充说明: ${hints.note}]\n\n${text}`;
-    if (desc) text = `[任务要求: ${desc}]\n\n${text}`;
+    if (Array.isArray(hints.suggested_entities) && hints.suggested_entities.length > 0) {
+      const entities = hints.suggested_entities.map(String).join(", ");
+      text = `[必须提取的实体（以下每个概念都必须作为独立实体出现在输出中，不得遗漏或合并）: ${entities}]\\n
 
+${text}`;
+    }
+    if (Array.isArray(hints.suggested_functions) && hints.suggested_functions.length > 0) {
+      const funcs = hints.suggested_functions.map(String).join(", ");
+      text = `[必须提取的功能（以下每个功能都必须作为独立功能项出现在输出中）: ${funcs}]\\n
+
+${text}`;
+    }
     if (this.llm) this.llm.streamTag = "[Generator:analyze]";
     const analyzer = this._getAnalyzer();
     const raw = await analyzer.analyze(text, 3, systemPrompt, existingJson);
@@ -137,19 +147,14 @@ export class GenerationTool extends BaseTool {
   }
 
   private async _generateDesign(
-    ctx: Record<string, unknown>, hints: Record<string, unknown>,
-    desc: string, systemPrompt: string,
+    ctx: Record<string, unknown>, _hints: Record<string, unknown>,
+    _desc: string, systemPrompt: string,
   ): Promise<string> {
     const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!reqJson) throw createToolError("GEN_MISSING_REQJSON", "缺少 requirement_json", { recoverable: false });
 
     if (this.llm) this.llm.streamTag = "[Generator:design]";
-    const requirementText = GenerationTool._augmentRequirementTextForTask(
-      (ctx.requirement_text as string) ?? "",
-      desc,
-      hints,
-    );
-    return this._getDesigner().generateDesign(reqJson, requirementText, systemPrompt);
+    return this._getDesigner().generateDesign(reqJson, systemPrompt);
   }
 
   private async _generateDiagrams(
@@ -159,7 +164,6 @@ export class GenerationTool extends BaseTool {
   ): Promise<Record<string, string>> {
     const reqJson = (ctx.requirement_json ?? {}) as Record<string, unknown>;
     const designText = (ctx.design_text as string) ?? "";
-    const reqText = (ctx.requirement_text as string) ?? "";
     const diagramKind = GenerationTool._diagramKindForTask(task, hints, desc);
 
     if (this.llm) this.llm.streamTag = "[Generator:diagrams]";
@@ -167,16 +171,16 @@ export class GenerationTool extends BaseTool {
 
     if (diagramKind) {
       const methodMap: Record<string, () => Promise<string>> = {
-        class_diagram: () => generator.generateClassDiagram(reqJson, designText, systemPrompt, reqText),
-        activity_diagram: () => generator.generateActivityDiagram(reqJson, designText, systemPrompt, reqText),
-        state_diagram: () => generator.generateStateDiagram(reqJson, designText, systemPrompt, reqText),
+        class_diagram: () => generator.generateClassDiagram(reqJson, designText, systemPrompt, ""),
+        activity_diagram: () => generator.generateActivityDiagram(reqJson, designText, systemPrompt, ""),
+        state_diagram: () => generator.generateStateDiagram(reqJson, designText, systemPrompt, ""),
       };
       const method = methodMap[diagramKind];
       if (!method) throw createToolError("GEN_UNKNOWN_DIAGRAM", `未知图表类型: ${diagramKind}`, { recoverable: false });
       const result = await method();
       return { [diagramKind]: result };
     }
-    return generator.generateAll(reqJson, designText, systemPrompt, reqText);
+    return generator.generateAll(reqJson, designText, systemPrompt, "");
   }
 
   private async _generateTests(
@@ -185,10 +189,8 @@ export class GenerationTool extends BaseTool {
   ): Promise<string> {
     const reqJson = (ctx.requirement_json ?? {}) as Record<string, unknown>;
     const designText = (ctx.design_text as string) ?? "";
-    const reqText = (ctx.requirement_text as string) ?? "";
-
     if (this.llm) this.llm.streamTag = "[Generator:tests]";
-    return this._getTestGen().generate(reqJson, designText, systemPrompt, reqText);
+    return this._getTestGen().generate(reqJson, designText, systemPrompt, "");
   }
 
   // ------------------------------------------------------------------
@@ -364,51 +366,6 @@ export class GenerationTool extends BaseTool {
     return raw;
   }
 
-  private static _augmentRequirementTextForTask(
-    requirementText: string,
-    description: string,
-    hints: Record<string, unknown>,
-  ): string {
-    const sections: string[] = [];
-    if (description.trim()) {
-      sections.push(`## 当前生成任务\n${description.trim()}`);
-    }
-
-    const focusAreas = Array.isArray(hints.focus_areas)
-      ? hints.focus_areas.map((item) => String(item)).filter(Boolean)
-      : [];
-    if (focusAreas.length > 0) {
-      sections.push(`## 重点覆盖范围\n${focusAreas.join(", ")}`);
-    }
-
-    const note = typeof hints.note === "string" ? hints.note.trim() : "";
-    if (note) {
-      sections.push(`## 任务补充说明\n${note}`);
-    }
-
-    const fixInstructions = Array.isArray(hints.fix_instructions)
-      ? hints.fix_instructions
-        .filter((item): item is Record<string, unknown> =>
-          typeof item === "object" && item !== null && !Array.isArray(item),
-        )
-        .slice(0, 20)
-      : [];
-    if (fixInstructions.length > 0) {
-      sections.push(
-        "## 必须处理的评审问题\n" +
-        fixInstructions.map((item, index) => {
-          const severity = String(item.severity ?? "");
-          const field = String(item.target_field ?? "");
-          const desc = String(item.description ?? "");
-          const suggestion = String(item.suggestion ?? "");
-          return `${index + 1}. [${severity}] ${field}: ${desc}${suggestion ? `；建议：${suggestion}` : ""}`;
-        }).join("\n"),
-      );
-    }
-
-    if (sections.length === 0) return requirementText;
-    return `${sections.join("\n\n")}\n\n## 原始需求\n${requirementText}`;
-  }
 
   private _getAnalyzer(): RequirementAnalyzer {
     if (!this._analyzer) this._analyzer = new RequirementAnalyzer(this.llm);
