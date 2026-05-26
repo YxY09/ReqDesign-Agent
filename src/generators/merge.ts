@@ -15,6 +15,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private promptTemplate: string;
   private relationshipPromptTemplate: string;
   private constraintPromptTemplate: string;
+  private dedupPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
@@ -28,6 +29,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     );
     this.constraintPromptTemplate = loadPrompt(
       "merge_constraints.md",
+      "",
+    );
+    this.dedupPromptTemplate = loadPrompt(
+      "merge_dedup_functions.md",
       "",
     );
   }
@@ -80,6 +85,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     // 约束补全：通过 LLM 扫描缺失的业务规则和异常流程
     const constraintPatches = await this._completeConstraints(merged, safeText);
     AnalyzeMerger._applyConstraintPatches(merged, constraintPatches);
+
+    // 防线2：LLM 语义去重
+    await this._dedupFunctions(merged, safeText, systemPrompt);
 
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
@@ -192,7 +200,58 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
     }
 
+    // 防线1：description 关键词重叠去重
+    if ((result.functions as Array<Record<string, unknown>>).length > 1) {
+      result.functions = AnalyzeMerger._dedupFunctionsByDescription(
+        result.functions as Array<Record<string, unknown>>,
+      );
+    }
+
     return result;
+  }
+
+  /**
+   * 防线1辅助：基于 description 关键词 Jaccard 相似度去重。
+   * 对每对 name 不同但 description 高度相似的功能进行合并。
+   */
+  private static _dedupFunctionsByDescription(
+    functions: Record<string, unknown>[],
+  ): Record<string, unknown>[] {
+    const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+      "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should",
+      "may", "might", "must", "can", "could", "to", "of", "in", "for", "on", "with",
+      "at", "by", "from", "as", "into", "through", "during", "before", "after",
+      "above", "below", "between", "under", "again", "further", "once",
+      "this", "that", "these", "those", "it", "its"]);
+
+    const getWords = (s: string) => {
+      const words = s.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+      return new Set(words);
+    };
+
+    const result = [...functions];
+    const merged = new Set<number>();
+
+    for (let i = 0; i < result.length; i++) {
+      if (merged.has(i)) continue;
+      const wi = getWords(String(result[i].description ?? ""));
+      for (let j = i + 1; j < result.length; j++) {
+        if (merged.has(j)) continue;
+        const wj = getWords(String(result[j].description ?? ""));
+        const intersection = [...wi].filter(x => wj.has(x)).length;
+        const union = new Set([...wi, ...wj]).size;
+        const similarity = union > 0 ? intersection / union : 0;
+        if (similarity > 0.7) {
+          // 保留 description 较长的那条
+          if (String(result[j].description ?? "").length > String(result[i].description ?? "").length) {
+            result[i] = result[j];
+          }
+          merged.add(j);
+        }
+      }
+    }
+
+    return result.filter((_, i) => !merged.has(i));
   }
 
   /**
@@ -351,6 +410,53 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       return { constraints: validConstraints, exceptions: validExceptions };
     } catch {
       return { constraints: [], exceptions: [] };
+    }
+  }
+
+  /**
+   * 防线2：LLM 语义去重 — 找出语义重复的功能并合并。
+   * 失败时不影响主流程，返回空数组。
+   */
+  private async _dedupFunctions(
+    merged: Record<string, unknown>,
+    requirementText: string,
+    systemPrompt?: string,
+  ): Promise<string[]> {
+    if (!this.dedupPromptTemplate) {
+      return [];
+    }
+
+    try {
+      const funcs = (merged.functions as Array<Record<string, unknown>>) ?? [];
+      if (funcs.length <= 1) return [];
+
+      // 只传 id + name + description 的精简列表
+      const summary = funcs.map(f => `${f.id || "?"}: ${f.name} - ${String(f.description ?? "").slice(0, 80)}`).join('\n');
+
+      const prompt = this.buildPrompt(this.dedupPromptTemplate, {
+        functions_summary: summary,
+        requirement_text: requirementText,
+      });
+
+      const raw = await this.llm.generateJson(prompt, systemPrompt ?? "");
+      const content = BaseGenerator.unwrapContent(raw);
+
+      if (Array.isArray(content)) {
+        // 返回要被删除的 function id 列表
+        const toRemove = new Set<string>();
+        for (const item of content) {
+          for (const m of (item.merge || [])) {
+            toRemove.add(String(m));
+          }
+        }
+        (merged.functions as Array<Record<string, unknown>>) =
+          funcs.filter(f => !toRemove.has(String(f.id ?? f.name ?? "")));
+
+        return content.map((c: any) => c.reason || "");
+      }
+      return [];
+    } catch {
+      return [];
     }
   }
 
