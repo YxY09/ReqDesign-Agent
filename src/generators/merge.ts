@@ -14,6 +14,7 @@ import { RequirementNormalizer } from "../shared/normalizer.js";
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private promptTemplate: string;
   private relationshipPromptTemplate: string;
+  private constraintPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
@@ -23,6 +24,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     );
     this.relationshipPromptTemplate = loadPrompt(
       "merge_relationships.md",
+      "",
+    );
+    this.constraintPromptTemplate = loadPrompt(
+      "merge_constraints.md",
       "",
     );
   }
@@ -71,6 +76,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     // 关系补全：通过 LLM 推断跨模块缺失关系，仅输出关系补丁并追加
     const patches = await this._completeRelationships(merged, safeText);
     AnalyzeMerger._applyRelationshipPatches(merged, patches);
+
+    // 约束补全：通过 LLM 扫描缺失的业务规则和异常流程
+    const constraintPatches = await this._completeConstraints(merged, safeText);
+    AnalyzeMerger._applyConstraintPatches(merged, constraintPatches);
 
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
@@ -273,6 +282,125 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       return patches;
     }
     return null;
+  }
+
+  /**
+   * 约束补全：传入合并后的结果和原始需求，LLM 扫描缺失的业务规则和异常流程。
+   * 失败时返回空对象，不影响主流程。
+   */
+  private async _completeConstraints(
+    merged: Record<string, unknown>,
+    requirementText: string,
+  ): Promise<{ constraints: Array<Record<string, unknown>>; exceptions: Array<Record<string, unknown>> }> {
+    if (!this.constraintPromptTemplate) {
+      return { constraints: [], exceptions: [] };
+    }
+
+    const constraints = merged.constraints as Array<Record<string, unknown>> | undefined;
+    const exceptions = merged.exceptions as Array<Record<string, unknown>> | undefined;
+    const entities = merged.entities as Array<Record<string, unknown>> | undefined;
+    const functions = merged.functions as Array<Record<string, unknown>> | undefined;
+
+    const existingConstraints = (constraints ?? [])
+      .map((c) => `- [${c.id ?? "?"}] ${c.description ?? ""}`)
+      .join("\n") || "（无）";
+    const existingExceptions = (exceptions ?? [])
+      .map((e) => `- [${e.id ?? "?"}] ${e.description ?? ""}`)
+      .join("\n") || "（无）";
+    const entityNames = (entities ?? [])
+      .map((e) => `- ${e.name ?? "?"}`)
+      .join("\n") || "（无）";
+    const functionNames = (functions ?? [])
+      .map((f) => `- [${f.id ?? "?"}] ${f.name ?? "?"}`)
+      .join("\n") || "（无）";
+
+    const prompt = this.buildPrompt(this.constraintPromptTemplate, {
+      existing_constraints: existingConstraints,
+      existing_exceptions: existingExceptions,
+      entity_names: entityNames,
+      function_names: functionNames,
+      requirement_text: requirementText,
+    });
+
+    try {
+      const result = await this.llm.generateJson(prompt, "");
+      const obj = typeof result === "object" && result !== null && !Array.isArray(result)
+        ? result as Record<string, unknown>
+        : null;
+      if (!obj) {
+        return { constraints: [], exceptions: [] };
+      }
+
+      const rawConstraints = Array.isArray(obj.constraints) ? obj.constraints : [];
+      const rawExceptions = Array.isArray(obj.exceptions) ? obj.exceptions : [];
+
+      const validConstraints: Array<Record<string, unknown>> = [];
+      for (const c of rawConstraints) {
+        if (typeof c === "object" && c !== null && "description" in c) {
+          validConstraints.push(c as Record<string, unknown>);
+        }
+      }
+
+      const validExceptions: Array<Record<string, unknown>> = [];
+      for (const e of rawExceptions) {
+        if (typeof e === "object" && e !== null && "description" in e) {
+          validExceptions.push(e as Record<string, unknown>);
+        }
+      }
+
+      return { constraints: validConstraints, exceptions: validExceptions };
+    } catch {
+      return { constraints: [], exceptions: [] };
+    }
+  }
+
+  /**
+   * 应用约束补丁到合并结果：遍历补丁，追加约束和异常（不删除已有）。
+   * 去重：按 description 相似度（完全相同则跳过）。
+   */
+  private static _applyConstraintPatches(
+    merged: Record<string, unknown>,
+    patches: { constraints: Array<Record<string, unknown>>; exceptions: Array<Record<string, unknown>> },
+  ): void {
+    if (!patches) return;
+
+    // 追加 constraints
+    if (patches.constraints && patches.constraints.length > 0) {
+      let mergedConstraints = merged.constraints as Array<Record<string, unknown>> | undefined;
+      if (!mergedConstraints) {
+        mergedConstraints = [];
+        merged.constraints = mergedConstraints;
+      }
+      const existingDescs = new Set(
+        mergedConstraints.map((c) => String(c.description ?? "").trim()),
+      );
+      for (const c of patches.constraints) {
+        const desc = String(c.description ?? "").trim();
+        if (desc && !existingDescs.has(desc)) {
+          existingDescs.add(desc);
+          mergedConstraints.push(c);
+        }
+      }
+    }
+
+    // 追加 exceptions
+    if (patches.exceptions && patches.exceptions.length > 0) {
+      let mergedExceptions = merged.exceptions as Array<Record<string, unknown>> | undefined;
+      if (!mergedExceptions) {
+        mergedExceptions = [];
+        merged.exceptions = mergedExceptions;
+      }
+      const existingDescs = new Set(
+        mergedExceptions.map((e) => String(e.description ?? "").trim()),
+      );
+      for (const e of patches.exceptions) {
+        const desc = String(e.description ?? "").trim();
+        if (desc && !existingDescs.has(desc)) {
+          existingDescs.add(desc);
+          mergedExceptions.push(e);
+        }
+      }
+    }
   }
 
   /**
