@@ -142,7 +142,8 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
       ["design-1"],
     );
 
-    expect(verdict.passed).toBe(false);
+    // majors no longer prevent pass; only blockers do
+    expect(verdict.passed).toBe(true);
     expect(verdict.issues.some((issue) => issue.severity === "major")).toBe(true);
   });
 
@@ -411,7 +412,8 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
       ["design-1"],
     );
 
-    expect(verdict.passed).toBe(false);
+    // majors no longer prevent pass; only blockers do
+    expect(verdict.passed).toBe(true);
     expect(verdict.issues.some((issue) =>
       issue.description.includes("未定义的异常 ID: E001"),
     )).toBe(true);

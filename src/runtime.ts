@@ -1243,6 +1243,12 @@ export class MultiAgentRuntime {
     state: WorkflowState,
     reason: string,
   ): boolean {
+    // 无论质量门通过与否，先保存 review result
+    if (Object.keys(state.reviewResult).length > 0) {
+      const manager = new (this.outputManagerClass)(state.outputDir);
+      manager.saveReviewReport("", state.reviewResult);
+    }
+
     const consistencyIssues = this.findOutputConsistencyIssues(state);
     if (consistencyIssues.length > 0) {
       for (const issue of consistencyIssues) {

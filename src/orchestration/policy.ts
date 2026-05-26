@@ -105,7 +105,8 @@ export class PolicyGuard {
     if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) return false;
     if (snapshot.planReady && !snapshot.planAllCompleted) return false;
     if (snapshot.unacceptedArtifacts.length > 0) return false;
-    if (!(snapshot.finalReviewCurrent && snapshot.finalReviewPassed)) return false;
+    if (!snapshot.finalReviewCurrent) return false;
+    if (snapshot.latestIssues.filter((issue) => issue["severity"] === "blocker").length > 0) return false;
     const finalMajorCount = snapshot.latestIssues.filter((issue) => issue["severity"] === "major").length;
     return finalMajorCount <= this.budget.maxFinalMajorIssues;
   }

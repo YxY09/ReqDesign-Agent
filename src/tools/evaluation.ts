@@ -91,7 +91,7 @@ export class EvaluationTool extends BaseTool {
     // 3. 判断通过/失败
     const blockers = issues.filter((i) => i.severity === "blocker");
     const majors = issues.filter((i) => i.severity === "major");
-    const passed = blockers.length === 0 && majors.length === 0;
+    const passed = blockers.length === 0;
     this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，majors=${majors.length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
 
     // 4. 构建修复任务
