@@ -16,6 +16,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
   private constraintPromptTemplate: string;
   private dedupPromptTemplate: string;
+  private completeAllPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
@@ -33,6 +34,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     );
     this.dedupPromptTemplate = loadPrompt(
       "merge_dedup_functions.md",
+      "",
+    );
+    this.completeAllPromptTemplate = loadPrompt(
+      "merge_complete_all.md",
       "",
     );
   }
@@ -78,20 +83,127 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     const merged = BaseGenerator.unwrapContent(result);
 
-    // 关系补全：通过 LLM 推断跨模块缺失关系，仅输出关系补丁并追加
-    const patches = await this._completeRelationships(merged, safeText);
-    AnalyzeMerger._applyRelationshipPatches(merged, patches);
-
-    // 约束补全：通过 LLM 扫描缺失的业务规则和异常流程
-    const constraintPatches = await this._completeConstraints(merged, safeText);
-    AnalyzeMerger._applyConstraintPatches(merged, constraintPatches);
-
-    // 防线2：LLM 语义去重
-    await this._dedupFunctions(merged, safeText, systemPrompt);
+    // 统一补全：关系补全 + 约束补全 + 功能去重（一次 LLM 调用）
+    await this._completeAll(merged, safeText, systemPrompt);
 
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     return merged;
+  }
+
+  /**
+   * 统一补全：一次 LLM 调用完成关系补全 + 约束补全 + 功能去重。
+   * 失败时静默返回，不影响主流程。
+   */
+  private async _completeAll(
+    merged: Record<string, unknown>,
+    requirementText: string,
+    systemPrompt?: string,
+  ): Promise<void> {
+    if (!this.completeAllPromptTemplate) {
+      return;
+    }
+
+    // 构造精简摘要
+    const entities = merged.entities as Array<Record<string, unknown>> | undefined;
+    const functions = merged.functions as Array<Record<string, unknown>> | undefined;
+    const constraints = merged.constraints as Array<Record<string, unknown>> | undefined;
+    const exceptions = merged.exceptions as Array<Record<string, unknown>> | undefined;
+
+    const entitySummaries = (entities ?? []).map((e) => {
+      const name = String(e.name ?? "").trim();
+      const desc = String(e.description ?? "").trim();
+      const existingRels = (e.relationships as Array<Record<string, unknown>> ?? [])
+        .map((r) => `${r.target}(${r.type})`)
+        .join(", ");
+      let summary = `- ${name}`;
+      if (desc) summary += `: ${desc}`;
+      if (existingRels) summary += ` [已有关系: ${existingRels}]`;
+      return summary;
+    }).join("\n") || "（无）";
+
+    const functionSummaries = (functions ?? []).map(
+      (f) => `${f.id || "?"}: ${f.name} - ${String(f.description ?? "").slice(0, 80)}`,
+    ).join("\n") || "（无）";
+
+    const existingConstraints = (constraints ?? [])
+      .map((c) => `- [${c.id ?? "?"}] ${c.description ?? ""}`)
+      .join("\n") || "（无）";
+
+    const existingExceptions = (exceptions ?? [])
+      .map((e) => `- [${e.id ?? "?"}] ${e.description ?? ""}`)
+      .join("\n") || "（无）";
+
+    const prompt = this.buildPrompt(this.completeAllPromptTemplate, {
+      merged_entities: entitySummaries,
+      functions_summary: functionSummaries,
+      existing_constraints: existingConstraints,
+      existing_exceptions: existingExceptions,
+      requirement_text: requirementText,
+    });
+
+    try {
+      const result = await this.llm.generateJson(prompt, systemPrompt ?? "");
+      const obj = typeof result === "object" && result !== null && !Array.isArray(result)
+        ? result as Record<string, unknown>
+        : null;
+      if (!obj) return;
+
+      // 1. 应用关系补丁
+      const relPatches = Array.isArray(obj.relationships) ? obj.relationships : [];
+      const typedRelPatches: Array<{ entity: string; target: string; type: string; description: string }> = [];
+      for (const p of relPatches) {
+        if (
+          typeof p === "object" && p !== null &&
+          "entity" in p && "target" in p && "type" in p &&
+          typeof (p as Record<string, unknown>).entity === "string" &&
+          typeof (p as Record<string, unknown>).target === "string" &&
+          typeof (p as Record<string, unknown>).type === "string"
+        ) {
+          typedRelPatches.push({
+            entity: (p as Record<string, unknown>).entity as string,
+            target: (p as Record<string, unknown>).target as string,
+            type: (p as Record<string, unknown>).type as string,
+            description: String((p as Record<string, unknown>).description ?? ""),
+          });
+        }
+      }
+      AnalyzeMerger._applyRelationshipPatches(merged, typedRelPatches);
+
+      // 2. 应用约束补丁
+      const constPatches = Array.isArray(obj.constraints) ? obj.constraints : [];
+      const excPatches = Array.isArray(obj.exceptions) ? obj.exceptions : [];
+      AnalyzeMerger._applyConstraintPatches(merged, {
+        constraints: constPatches.filter(
+          (c) => typeof c === "object" && c !== null && "description" in c,
+        ) as Array<Record<string, unknown>>,
+        exceptions: excPatches.filter(
+          (e) => typeof e === "object" && e !== null && "description" in e,
+        ) as Array<Record<string, unknown>>,
+      });
+
+      // 3. 应用功能去重
+      const dedupPatches = Array.isArray(obj.dedup_functions) ? obj.dedup_functions : [];
+      if (dedupPatches.length > 0 && functions && functions.length > 0) {
+        const toRemove = new Set<string>();
+        for (const item of dedupPatches) {
+          if (typeof item === "object" && item !== null && "merge" in item) {
+            const merges = (item as Record<string, unknown>).merge;
+            if (Array.isArray(merges)) {
+              for (const m of merges) {
+                toRemove.add(String(m));
+              }
+            }
+          }
+        }
+        if (toRemove.size > 0) {
+          (merged.functions as Array<Record<string, unknown>>) =
+            functions.filter((f) => !toRemove.has(String(f.id ?? f.name ?? "")));
+        }
+      }
+    } catch {
+      // 静默失败，不影响主流程
+    }
   }
 
   /**
@@ -257,7 +369,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   /**
    * 关系补全：传入合并后的实体列表和原始需求，LLM 仅输出关系补丁数组。
    * 失败时返回空数组，不影响主流程。
+   * @deprecated 已合并至 _completeAll，保留供未来单独使用。
    */
+  // @ts-expect-error TS6133 - preserved for future standalone use
   private async _completeRelationships(
     merged: Record<string, unknown>,
     requirementText: string,
@@ -346,7 +460,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   /**
    * 约束补全：传入合并后的结果和原始需求，LLM 扫描缺失的业务规则和异常流程。
    * 失败时返回空对象，不影响主流程。
+   * @deprecated 已合并至 _completeAll，保留供未来单独使用。
    */
+  // @ts-expect-error TS6133 - preserved for future standalone use
   private async _completeConstraints(
     merged: Record<string, unknown>,
     requirementText: string,
@@ -416,7 +532,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   /**
    * 防线2：LLM 语义去重 — 找出语义重复的功能并合并。
    * 失败时不影响主流程，返回空数组。
+   * @deprecated 已合并至 _completeAll，保留供未来单独使用。
    */
+  // @ts-expect-error TS6133 - preserved for future standalone use
   private async _dedupFunctions(
     merged: Record<string, unknown>,
     requirementText: string,
