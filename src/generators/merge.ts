@@ -13,12 +13,17 @@ import { RequirementNormalizer } from "../shared/normalizer.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private promptTemplate: string;
+  private relationshipPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
     this.promptTemplate = loadPrompt(
       "merge_analysis.md",
       "请合并以下多份需求分析结果：\n\n{analyze_results}",
+    );
+    this.relationshipPromptTemplate = loadPrompt(
+      "merge_relationships.md",
+      "",
     );
   }
 
@@ -62,6 +67,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     }
 
     const merged = BaseGenerator.unwrapContent(result);
+
+    // 关系补全：通过 LLM 推断跨模块缺失关系，仅输出关系补丁并追加
+    const patches = await this._completeRelationships(merged, safeText);
+    AnalyzeMerger._applyRelationshipPatches(merged, patches);
+
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     return merged;
@@ -174,5 +184,135 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     }
 
     return result;
+  }
+
+  /**
+   * 关系补全：传入合并后的实体列表和原始需求，LLM 仅输出关系补丁数组。
+   * 失败时返回空数组，不影响主流程。
+   */
+  private async _completeRelationships(
+    merged: Record<string, unknown>,
+    requirementText: string,
+  ): Promise<Array<{ entity: string; target: string; type: string; description: string }>> {
+    if (!this.relationshipPromptTemplate) {
+      return [];
+    }
+
+    const entities = merged.entities as Array<Record<string, unknown>> | undefined;
+    if (!entities || entities.length === 0) {
+      return [];
+    }
+
+    // 构造精简的实体摘要：只传实体名+描述，不传完整 JSON
+    const entitySummaries = entities.map((e) => {
+      const name = String(e.name ?? "").trim();
+      const desc = String(e.description ?? "").trim();
+      const existingRels = (e.relationships as Array<Record<string, unknown>> ?? [])
+        .map((r) => `${r.target}(${r.type})`)
+        .join(", ");
+      let summary = `- ${name}`;
+      if (desc) summary += `: ${desc}`;
+      if (existingRels) summary += ` [已有关系: ${existingRels}]`;
+      return summary;
+    }).join("\n");
+
+    const prompt = this.buildPrompt(this.relationshipPromptTemplate, {
+      merged_entities: entitySummaries,
+      requirement_text: requirementText,
+    });
+
+    try {
+      const result = await this.llm.generateJson(prompt, "");
+      const rawPatches = AnalyzeMerger._extractPatches(result);
+      if (!Array.isArray(rawPatches)) {
+        return [];
+      }
+      const patches: Array<{ entity: string; target: string; type: string; description: string }> = [];
+      for (const p of rawPatches) {
+        if (
+          typeof p === "object" &&
+          p !== null &&
+          "entity" in p &&
+          "target" in p &&
+          "type" in p &&
+          typeof (p as Record<string, unknown>).entity === "string" &&
+          typeof (p as Record<string, unknown>).target === "string" &&
+          typeof (p as Record<string, unknown>).type === "string"
+        ) {
+          patches.push({
+            entity: (p as Record<string, unknown>).entity as string,
+            target: (p as Record<string, unknown>).target as string,
+            type: (p as Record<string, unknown>).type as string,
+            description: String((p as Record<string, unknown>).description ?? ""),
+          });
+        }
+      }
+      return patches;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 从 LLM 返回结果中提取补丁数组。
+   * LLM 可能直接返回数组，也可能包裹在 {content: [...]} 中。
+   */
+  private static _extractPatches(
+    result: Record<string, unknown>,
+  ): Array<unknown> | null {
+    if (Array.isArray(result)) {
+      return result;
+    }
+    const content = result["content"];
+    if (Array.isArray(content)) {
+      return content;
+    }
+    // LLM 有时把数组放在 patches 字段里
+    const patches = result["patches"];
+    if (Array.isArray(patches)) {
+      return patches;
+    }
+    return null;
+  }
+
+  /**
+   * 应用关系补丁到合并结果：遍历补丁，找到对应实体，追加关系（不删除已有）。
+   * 去重：如果已有同名 target 的关系则跳过。
+   */
+  private static _applyRelationshipPatches(
+    merged: Record<string, unknown>,
+    patches: Array<{ entity: string; target: string; type: string; description: string }>,
+  ): void {
+    if (!patches || patches.length === 0) return;
+
+    const entities = merged.entities as Array<Record<string, unknown>> | undefined;
+    if (!entities || entities.length === 0) return;
+
+    for (const patch of patches) {
+      if (!patch.entity || !patch.target || !patch.type) continue;
+
+      const entity = entities.find(
+        (e) => String(e.name ?? "").trim() === patch.entity,
+      );
+      if (!entity) continue;
+
+      let relationships = entity.relationships as Array<Record<string, unknown>> | undefined;
+      if (!relationships) {
+        relationships = [];
+        entity.relationships = relationships;
+      }
+
+      // 去重：如果已有同名 target 的关系则跳过
+      const exists = relationships.some(
+        (r) => String(r.target ?? "").trim() === patch.target,
+      );
+      if (exists) continue;
+
+      relationships.push({
+        target: patch.target,
+        type: patch.type,
+        description: patch.description || "",
+      });
+    }
   }
 }

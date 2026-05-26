@@ -35,7 +35,8 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 
 拆分原则：
 - **文档规模优先**：如果文档字数超过30000字，无论角色/功能数量如何，都必须至少分配3个analyze任务。超过50000字至少分配4个。
-- **按章节拆分**：如果文档有清晰的大章节划分（如一级标题），每个analyze任务应当覆盖1-2个一级章节，避免单个任务承载过多内容。
+- **首先识别文档的结构边界**：XML 的 section/module 标签、markdown 的 ## 标题、编号章节。每个一级模块应作为独立 analyze 任务的覆盖范围。
+- **按章节拆分**：每个 analyze 任务必须覆盖 1-2 个一级章节，不允许跨越 3 个或更多一级章节。如果文档有清晰的大章节划分（如一级标题），必须严格按模块边界分配，避免单个任务承载过多内容。
 - **只拆分 analyze**：按业务域拆（用户管理 vs 订单流转 vs 支付结算），可并行执行
 - **不要新增额外的“合并分析”任务**：系统会自动程序化合并各 analyze 结果（去重、拼接）
 - **design 不拆分**：基于合并后的 requirement_json 和原始 requirement_text，产出一份覆盖全系统的设计文档，并补全跨模块/跨实体关系
@@ -159,6 +160,7 @@ context_hints 帮助 GenerationTool 理解任务侧重点：
 - `note`: 任何补充说明、注意事项
 - `suggested_entities`: 从原文中识别出的关键实体名列表（PascalCase）。planner 在通读原文时发现的每个核心业务对象都应该列在这里，帮助 analyze 任务做“核对清单”式提取。不要怕列多——宁可多列让 analyze 任务去验证，也不能漏列导致 analyze 任务没看到。
 - `suggested_functions`: 从原文章节标题/需求编号中识别出的功能名列表（PascalCase）。同理，原文每个独立功能模块都应该列在这里。
+- **跨模块共享实体**：跨模块共享的实体（如 User、Product）在每个相关 analyze 任务的 `suggested_entities` 中都要列入，确保各模块分析时不会遗漏对共享实体的属性提取。
 - `diagram_types`: 对 diagrams 任务，指定需要的图表类型（如["class", "activity", "state"]）
 
 **不要写的 context_hints**：
