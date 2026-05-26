@@ -16,7 +16,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
   private constraintPromptTemplate: string;
   private dedupPromptTemplate: string;
-  private completeAllPromptTemplate: string;
+  private postProcessPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
@@ -36,8 +36,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       "merge_dedup_functions.md",
       "",
     );
-    this.completeAllPromptTemplate = loadPrompt(
-      "merge_complete_all.md",
+    this.postProcessPromptTemplate = loadPrompt(
+      "merge_post_process.md",
       "",
     );
   }
@@ -84,7 +84,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const merged = BaseGenerator.unwrapContent(result);
 
     // 统一补全：关系补全 + 约束补全 + 功能去重（一次 LLM 调用）
-    await this._completeAll(merged, safeText, systemPrompt);
+    await this._postProcess(merged, safeText, systemPrompt);
 
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
@@ -95,12 +95,12 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
    * 统一补全：一次 LLM 调用完成关系补全 + 约束补全 + 功能去重。
    * 失败时静默返回，不影响主流程。
    */
-  private async _completeAll(
+  private async _postProcess(
     merged: Record<string, unknown>,
     requirementText: string,
     systemPrompt?: string,
   ): Promise<void> {
-    if (!this.completeAllPromptTemplate) {
+    if (!this.postProcessPromptTemplate) {
       return;
     }
 
@@ -110,35 +110,52 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const constraints = merged.constraints as Array<Record<string, unknown>> | undefined;
     const exceptions = merged.exceptions as Array<Record<string, unknown>> | undefined;
 
-    const entitySummaries = (entities ?? []).map((e) => {
+    const sections: string[] = [];
+
+    // 实体摘要
+    const entityLines = (entities ?? []).map((e) => {
       const name = String(e.name ?? "").trim();
       const desc = String(e.description ?? "").trim();
       const existingRels = (e.relationships as Array<Record<string, unknown>> ?? [])
         .map((r) => `${r.target}(${r.type})`)
         .join(", ");
-      let summary = `- ${name}`;
-      if (desc) summary += `: ${desc}`;
-      if (existingRels) summary += ` [已有关系: ${existingRels}]`;
-      return summary;
-    }).join("\n") || "（无）";
+      let line = `  - ${name}`;
+      if (desc) line += `: ${desc}`;
+      if (existingRels) line += ` [已有关系: ${existingRels}]`;
+      return line;
+    });
+    if (entityLines.length > 0) {
+      sections.push(`### 实体\n${entityLines.join("\n")}`);
+    }
 
-    const functionSummaries = (functions ?? []).map(
-      (f) => `${f.id || "?"}: ${f.name} - ${String(f.description ?? "").slice(0, 80)}`,
-    ).join("\n") || "（无）";
+    // 功能摘要
+    const funcLines = (functions ?? []).map(
+      (f) => `  - [${f.id || "?"}] ${f.name}: ${String(f.description ?? "").slice(0, 80)}`,
+    );
+    if (funcLines.length > 0) {
+      sections.push(`### 功能\n${funcLines.join("\n")}`);
+    }
 
-    const existingConstraints = (constraints ?? [])
-      .map((c) => `- [${c.id ?? "?"}] ${c.description ?? ""}`)
-      .join("\n") || "（无）";
+    // 已有约束
+    const constLines = (constraints ?? []).map(
+      (c) => `  - [${c.id ?? "?"}] ${c.description ?? ""}`,
+    );
+    if (constLines.length > 0) {
+      sections.push(`### 已有约束\n${constLines.join("\n")}`);
+    }
 
-    const existingExceptions = (exceptions ?? [])
-      .map((e) => `- [${e.id ?? "?"}] ${e.description ?? ""}`)
-      .join("\n") || "（无）";
+    // 已有异常
+    const excLines = (exceptions ?? []).map(
+      (e) => `  - [${e.id ?? "?"}] ${e.description ?? ""}`,
+    );
+    if (excLines.length > 0) {
+      sections.push(`### 已有异常\n${excLines.join("\n")}`);
+    }
 
-    const prompt = this.buildPrompt(this.completeAllPromptTemplate, {
-      merged_entities: entitySummaries,
-      functions_summary: functionSummaries,
-      existing_constraints: existingConstraints,
-      existing_exceptions: existingExceptions,
+    const mergedSummary = sections.length > 0 ? sections.join("\n\n") : "（无已合并结果）";
+
+    const prompt = this.buildPrompt(this.postProcessPromptTemplate, {
+      merged_summary: mergedSummary,
       requirement_text: requirementText,
     });
 
