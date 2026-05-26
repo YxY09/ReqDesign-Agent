@@ -44,7 +44,7 @@ export class SessionBackend extends EventEmitter {
   private readonly settledRuns = new Set<string>();
   private readonly sessionMap = new Map<string, WorkerSession>();
   private readonly pendingNotifications: TaskNotification[] = [];
-  private readonly submissionQueue: Array<() => void> = [];
+  private readonly submissionQueue: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
 
   constructor(options?: SessionBackendOptions) {
     super();
@@ -61,8 +61,8 @@ export class SessionBackend extends EventEmitter {
   ): Promise<void> {
     // 达到并发上限时等待
     while (this.running.size >= this.maxConcurrency) {
-      await new Promise<void>((resolve) => {
-        this.submissionQueue.push(resolve);
+      await new Promise<void>((resolve, reject) => {
+        this.submissionQueue.push({ resolve, reject });
       });
     }
 
@@ -154,7 +154,7 @@ export class SessionBackend extends EventEmitter {
   }
 
   hasInflight(): boolean {
-    return this.running.size > 0;
+    return this.running.size > 0 || this.submissionQueue.length > 0;
   }
 
   isRunning(sessionId: string): boolean {
@@ -169,8 +169,8 @@ export class SessionBackend extends EventEmitter {
     this.sessionMap.clear();
     this.settledRuns.clear();
     while (this.submissionQueue.length > 0) {
-      const nextSubmission = this.submissionQueue.shift();
-      nextSubmission?.();
+      const next = this.submissionQueue.shift();
+      next?.reject(new Error("Backend shutdown"));
     }
   }
 
@@ -288,9 +288,9 @@ export class SessionBackend extends EventEmitter {
   }
 
   private releaseSubmissionSlot(): void {
-    const nextSubmission = this.submissionQueue.shift();
-    if (nextSubmission) {
-      nextSubmission();
+    const next = this.submissionQueue.shift();
+    if (next) {
+      next.resolve();
     }
   }
 }
