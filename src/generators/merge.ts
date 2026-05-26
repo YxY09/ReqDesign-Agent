@@ -12,7 +12,6 @@ import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
-  private promptTemplate: string;
   private relationshipPromptTemplate: string;
   private constraintPromptTemplate: string;
   private dedupPromptTemplate: string;
@@ -20,10 +19,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
   constructor(llm: LLMClient) {
     super(llm);
-    this.promptTemplate = loadPrompt(
-      "merge_analysis.md",
-      "请合并以下多份需求分析结果：\n\n{analyze_results}",
-    );
     this.relationshipPromptTemplate = loadPrompt(
       "merge_relationships.md",
       "",
@@ -66,24 +61,13 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     // 程序化预合并：将所有分析结果按名称去重取并集
     const preMerged = this.preMerge(artifacts);
-
-    // 将预合并结果（而非原始分片）发给 LLM，LLM 仅做关系补全和冲突解决
-    const preMergedStr = JSON.stringify(preMerged, null, 2);
     const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
-    let prompt = this.buildPrompt(this.promptTemplate, {
-      analyze_results: `### 预合并结果（所有分析结果的并集，已按名称去重）\n\`\`\`json\n${preMergedStr}\n\`\`\`\n\n请基于以上并集和原始需求文档，解决命名冲突、补全跨模块关系、统一ID编号。不要删除任何实体或功能——它们是各自业务领域的核心概念。`,
-      requirement_text: safeText,
-    });
 
-    const result = await this.llm.generateJson(prompt, systemPrompt ?? "");
+    // 直接用 preMerge 结果（保全集），跳过 LLM merge
+    // LLM merge 会"优化"掉内容，preMerge 是程序化并集不会丢
+    const merged = preMerged;
 
-    if (typeof result !== "object" || result === null || Array.isArray(result)) {
-      throw createToolError("MERGE_NON_DICT", "merge 返回了非字典类型", { recoverable: false });
-    }
-
-    const merged = BaseGenerator.unwrapContent(result);
-
-    // 统一补全：关系补全 + 约束补全 + 功能去重（一次 LLM 调用）
+    // 统一补全：关系补全 + 约束补全 + 功能去重
     await this._postProcess(merged, safeText, systemPrompt);
 
     RequirementNormalizer.normalize(merged);
