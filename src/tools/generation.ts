@@ -140,8 +140,13 @@ ${text}`;
 
 ${text}`;
     }
+    // 检查是否为约束提取任务，选择对应的 prompt 模板
+    const note = String(hints.note ?? "").toLowerCase();
+    const isConstraintTask = note.includes("constraint") || note.includes("约束");
+    const analyzer = isConstraintTask
+      ? new RequirementAnalyzer(this.llm, "requirement_analysis_constraints.md")
+      : this._getAnalyzer();
     if (this.llm) this.llm.streamTag = "[Generator:analyze]";
-    const analyzer = this._getAnalyzer();
     const raw = await analyzer.analyze(text, 3, systemPrompt, existingJson);
     return GenerationTool._unwrapAnalyzeDict(raw);
   }

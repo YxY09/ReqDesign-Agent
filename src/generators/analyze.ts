@@ -14,10 +14,10 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
 
   private promptTemplate: string;
 
-  constructor(llm: LLMClient) {
+  constructor(llm: LLMClient, promptFilename = "requirement_analysis.md") {
     super(llm);
     this.promptTemplate = loadPrompt(
-      "requirement_analysis.md",
+      promptFilename,
       "请从以下需求文档中抽取结构化的需求要素，以JSON格式输出：\n\n{requirement_text}",
     );
   }
