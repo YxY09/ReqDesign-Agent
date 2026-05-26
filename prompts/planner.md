@@ -50,33 +50,34 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 | 中等 | 2 | 1 | 3 | 1 | 7 |
 | 复杂 | 3-4 | 1 | 3 | 1 | 8-9 |
 
-## 非功能需求约束/异常提取
+## 约束与异常全量提取
 
-如果文档中包含以下章节（任一）：
-- 非功能需求 / Non-Functional Requirements
-- 安全规范 / Security / Access Control
-- 性能要求 / Performance / Scalability
-- 可用性标准 / Usability / Availability
-- 审计要求 / Audit
-- 合规要求 / Compliance
+对于所有中等复杂度及以上（analyze ≥ 2）的需求，额外创建一个 analyze 任务，**全量提取约束(constraints)和异常(exceptions)**。
 
-则需要额外创建一个 analyze 任务，**专门提取约束(constraints)和异常(exceptions)**。
-该任务以约束和异常提取为主，同时提取与这些约束直接相关的实体和功能。
+约束不只出现在"非功能需求"章节——它们散布在全文中：
+- 功能描述中的"System must/shall..."句式
+- 数据完整性规则（唯一性、必填、格式）
+- 权限和访问控制规则
+- 性能和可用性要求
+- 异常处理和错误路径
+- 业务流程的前置条件和后置条件
 
 示例任务：
 ```json
 {
   "id": "analyze-constraints",
   "type": "analyze",
-  "description": "约束与异常提取：从非功能需求、安全规范、性能要求的章节中提取所有约束和异常",
+  "description": "全量约束与异常提取：通读全文，提取所有业务规则、数据约束、权限规则、异常路径",
   "context_hints": {
-    "suggested_entities": ["SecurityPolicy", "AuditTrail"],
+    "suggested_entities": ["SecurityPolicy", "AuditTrail", "AccessControl"],
     "suggested_functions": ["EnforceAccessControl", "LogAuditEvent"],
-    "focus_areas": ["非功能需求", "安全规范", "性能要求", "可用性标准"],
-    "note": "重点提取 constraints 和 exceptions。同时提取与安全、性能、审计直接相关的 entities 和 functions。"
+    "focus_areas": [],
+    "note": "通读全文提取 constraints 和 exceptions。不要局限于某个章节。每个包含 must/shall/only/required/prohibited 的句子都是潜在约束。同时提取与约束直接相关的 entities 和 functions。"
   }
 }
 ```
+
+关键：focus_areas 留空（不限制范围），note 强调"通读全文"。
 
 ## 输出格式
 
