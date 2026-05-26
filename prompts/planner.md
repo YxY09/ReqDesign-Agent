@@ -50,6 +50,34 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 | 中等 | 2 | 1 | 3 | 1 | 7 |
 | 复杂 | 3-4 | 1 | 3 | 1 | 8-9 |
 
+## 非功能需求约束/异常提取
+
+如果文档中包含以下章节（任一）：
+- 非功能需求 / Non-Functional Requirements
+- 安全规范 / Security / Access Control
+- 性能要求 / Performance / Scalability
+- 可用性标准 / Usability / Availability
+- 审计要求 / Audit
+- 合规要求 / Compliance
+
+则需要额外创建一个 analyze 任务，**专门提取约束(constraints)和异常(exceptions)**。
+该任务不提取实体和功能。
+
+示例任务：
+```json
+{
+  "id": "analyze-constraints",
+  "type": "analyze",
+  "description": "约束与异常提取：从非功能需求、安全规范、性能要求的章节中提取所有约束和异常",
+  "context_hints": {
+    "suggested_entities": [],
+    "suggested_functions": [],
+    "focus_areas": ["非功能需求", "安全规范", "性能要求", "可用性标准"],
+    "note": "只提取 constraints 和 exceptions。不要提取 entities 和 functions。"
+  }
+}
+```
+
 ## 输出格式
 
 严格输出 JSON，不要有任何其他文字：
