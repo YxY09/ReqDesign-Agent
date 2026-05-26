@@ -24,9 +24,30 @@
 {
   "project_name": "项目名",
   "project_overview": "简述",
-  "actors": [],
-  "entities": [/* 只提取与约束直接相关的实体 */],
-  "functions": [/* 只提取与约束直接相关的功能 */],
+  "actors": [
+    /* 至少包含与约束相关的 actor，例如 AdminUser、SuperUser、Auditor 等 */
+    { "name": "ActorName", "description": "角色说明" }
+  ],
+  "entities": [
+    /* 只提取与约束直接相关的实体，每个实体必须包含 attributes 数组 */
+    {
+      "id": "E001",
+      "name": "EntityName",
+      "description": "实体说明",
+      "attributes": [
+        { "name": "attr1", "type": "string", "required": true }
+      ]
+    }
+  ],
+  "functions": [
+    /* 只提取与约束直接相关的功能，每个功能必须包含 preconditions 字段 */
+    {
+      "id": "F001",
+      "name": "FunctionName",
+      "description": "功能说明",
+      "preconditions": "前置条件描述，无则填 \"None\""
+    }
+  ],
   "constraints": [
     {
       "id": "C001",
