@@ -70,7 +70,123 @@ export class DiagramGenerator extends BaseGenerator<string> {
       reqStr = requirementText.slice(0, 6000);
     } else if (!requirementJson) {
       reqStr = "{}";
+    } else if (diagramType === "class_diagram") {
+      // class_diagram: only entities (name, key attributes, relationships)
+      const entities = (Array.isArray(requirementJson["entities"]) ? requirementJson["entities"] as Array<Record<string, unknown>> : []);
+      const parts: string[] = [];
+
+      const entityBlocks = entities.map((e: Record<string, unknown>) => {
+        const name = String(e["name"] ?? "");
+        const desc = String(e["description"] ?? "");
+        const attrs = Array.isArray(e["attributes"]) ? e["attributes"] as Array<Record<string, unknown>> : [];
+        const rels = Array.isArray(e["relationships"]) ? e["relationships"] as Array<Record<string, unknown>> : [];
+
+        const attrLines = attrs.map((a: Record<string, unknown>) =>
+          `  - ${a["name"]}: ${a["type"]}${a["description"] ? " (" + a["description"] + ")" : ""}`
+        );
+        const relLines = rels.map((r: Record<string, unknown>) =>
+          `  ${name} → ${r["target"]} (${r["type"]})${r["description"] ? ": " + r["description"] : ""}`
+        );
+
+        let block = `## 实体：${name}`;
+        if (desc) block += `\n${desc}`;
+        if (attrLines.length > 0) block += `\n关键属性：\n${attrLines.join("\n")}`;
+        if (relLines.length > 0) block += `\n关联关系：\n${relLines.join("\n")}`;
+        return block;
+      });
+
+      if (entityBlocks.length > 0) {
+        parts.push(entityBlocks.join("\n\n"));
+        // Also inject entity name list for class name forcing (Bug 4)
+        const entityNames = entities.map((e: Record<string, unknown>) => String(e["name"] ?? "")).filter(Boolean);
+        if (entityNames.length > 0) {
+          parts.push(`## 需求实体清单\n${entityNames.join(", ")}`);
+        }
+      }
+
+      reqStr = parts.length > 0 ? parts.join("\n\n") : "{}";
+    } else if (diagramType === "activity_diagram") {
+      // activity_diagram: business_processes + functions + exceptions + constraints
+      const parts: string[] = [];
+
+      const processes = Array.isArray(requirementJson["business_processes"])
+        ? requirementJson["business_processes"] as Array<Record<string, unknown>> : [];
+      const functions = Array.isArray(requirementJson["functions"])
+        ? requirementJson["functions"] as Array<Record<string, unknown>> : [];
+      const exceptions = Array.isArray(requirementJson["exceptions"])
+        ? requirementJson["exceptions"] as Array<Record<string, unknown>> : [];
+      const constraints = Array.isArray(requirementJson["constraints"])
+        ? requirementJson["constraints"] as Array<Record<string, unknown>> : [];
+
+      if (processes.length > 0) {
+        const pLines = processes.map((p: Record<string, unknown>) => {
+          const steps = Array.isArray(p["steps"]) ? (p["steps"] as string[]).join(" → ") : "";
+          const actors = Array.isArray(p["actors"]) ? (p["actors"] as string[]).join(", ") : "";
+          let line = `## 业务流程：${p["name"] ?? ""}`;
+          if (actors) line += `\n角色：${actors}`;
+          if (steps) line += `\n步骤：${steps}`;
+          return line;
+        });
+        parts.push(pLines.join("\n\n"));
+      }
+
+      if (functions.length > 0) {
+        const fLines = functions.map((f: Record<string, unknown>) => {
+          let line = `## 功能：${f["id"] ?? ""} ${f["name"] ?? ""}`;
+          if (f["description"]) line += `\n${f["description"]}`;
+          const subs = Array.isArray(f["sub_capabilities"]) ? (f["sub_capabilities"] as string[]).filter(Boolean) : [];
+          if (subs.length > 0) line += `\n子能力：${subs.join(", ")}`;
+          return line;
+        });
+        parts.push(fLines.join("\n\n"));
+      }
+
+      if (constraints.length > 0) {
+        parts.push(`## 约束条件\n${constraints.map((c: Record<string, unknown>) => `- ${c["id"]}: ${c["description"]}`).join("\n")}`);
+      }
+
+      if (exceptions.length > 0) {
+        parts.push(`## 异常流程\n${exceptions.map((e: Record<string, unknown>) => {
+          let line = `- ${e["id"]}: ${e["description"] ?? ""}`;
+          if (e["trigger"]) line += ` (触发: ${e["trigger"]})`;
+          if (e["handling"]) line += ` → ${e["handling"]}`;
+          return line;
+        }).join("\n")}`);
+      }
+
+      reqStr = parts.length > 0 ? parts.join("\n\n") : "{}";
+    } else if (diagramType === "state_diagram") {
+      // state_diagram: entity name list + constraints + exceptions
+      const parts: string[] = [];
+
+      const entities = Array.isArray(requirementJson["entities"])
+        ? requirementJson["entities"] as Array<Record<string, unknown>> : [];
+      const exceptions = Array.isArray(requirementJson["exceptions"])
+        ? requirementJson["exceptions"] as Array<Record<string, unknown>> : [];
+      const constraints = Array.isArray(requirementJson["constraints"])
+        ? requirementJson["constraints"] as Array<Record<string, unknown>> : [];
+
+      const entityNames = entities.map((e: Record<string, unknown>) => String(e["name"] ?? "")).filter(Boolean);
+      if (entityNames.length > 0) {
+        parts.push(`## 核心实体\n${entityNames.join(", ")}`);
+      }
+
+      if (constraints.length > 0) {
+        parts.push(`## 约束条件\n${constraints.map((c: Record<string, unknown>) => `- ${c["id"]}: ${c["description"]}`).join("\n")}`);
+      }
+
+      if (exceptions.length > 0) {
+        parts.push(`## 异常流程\n${exceptions.map((e: Record<string, unknown>) => {
+          let line = `- ${e["id"]}: ${e["description"] ?? ""}`;
+          if (e["trigger"]) line += ` (触发: ${e["trigger"]})`;
+          if (e["handling"]) line += ` → ${e["handling"]}`;
+          return line;
+        }).join("\n")}`);
+      }
+
+      reqStr = parts.length > 0 ? parts.join("\n\n") : "{}";
     } else {
+      // Default (no diagramType): full JSON for backward compatibility
       reqStr = JSON.stringify(requirementJson, null, 2);
     }
 
