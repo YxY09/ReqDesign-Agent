@@ -61,7 +61,7 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 - 合规要求 / Compliance
 
 则需要额外创建一个 analyze 任务，**专门提取约束(constraints)和异常(exceptions)**。
-该任务不提取实体和功能。
+该任务以约束和异常提取为主，同时提取与这些约束直接相关的实体和功能。
 
 示例任务：
 ```json
@@ -70,10 +70,10 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
   "type": "analyze",
   "description": "约束与异常提取：从非功能需求、安全规范、性能要求的章节中提取所有约束和异常",
   "context_hints": {
-    "suggested_entities": [],
-    "suggested_functions": [],
+    "suggested_entities": ["SecurityPolicy", "AuditTrail"],
+    "suggested_functions": ["EnforceAccessControl", "LogAuditEvent"],
     "focus_areas": ["非功能需求", "安全规范", "性能要求", "可用性标准"],
-    "note": "只提取 constraints 和 exceptions。不要提取 entities 和 functions。"
+    "note": "重点提取 constraints 和 exceptions。同时提取与安全、性能、审计直接相关的 entities 和 functions。"
   }
 }
 ```

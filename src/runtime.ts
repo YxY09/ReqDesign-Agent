@@ -492,6 +492,7 @@ export class MultiAgentRuntime {
       if (!decision.taskId) {
         return { didDispatch: false, breakLoop: false, skipFinalSave: false };
       }
+      state.recordRegenerateAttempt(decision.taskId);
       return {
         didDispatch: this.submitGeneratorTask(
           state,
