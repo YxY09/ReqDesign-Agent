@@ -9,8 +9,9 @@ interface ParsedReqDoc {
 
 interface ParsedSection {
   title?: string;
-  text_body?: string;
+  text_body?: string | Record<string, unknown>;
   p?: ParsedSection[];
+  req?: ParsedSection[];
 }
 
 export function parseXmlRequirement(xmlPath: string): string {
@@ -54,6 +55,25 @@ export function parseXmlString(xml: string): string {
   return structureOverview + mdContent;
 }
 
+function extractText(textBody: string | Record<string, unknown> | undefined): string {
+  if (!textBody) return '';
+  if (typeof textBody === 'string') return textBody;
+  // 处理对象（含 itemize/enum）- 递归提取所有字符串值
+  const parts: string[] = [];
+  for (const val of Object.values(textBody)) {
+    if (typeof val === 'string') parts.push(val);
+    else if (Array.isArray(val)) {
+      for (const item of val) {
+        if (typeof item === 'string') parts.push(item);
+        else if (typeof item === 'object') parts.push(extractText(item as Record<string, unknown>));
+      }
+    } else if (typeof val === 'object') {
+      parts.push(extractText(val as Record<string, unknown>));
+    }
+  }
+  return parts.join('\n');
+}
+
 function flattenSections(
   paragraphs: ParsedSection[],
   depth: number,
@@ -67,12 +87,28 @@ function flattenSections(
     if (typeof p.title === "string") {
       title = p.title.trim();
     }
-    if (typeof p.text_body === "string") {
-      body = p.text_body.trim().replace(/\s+/g, " ");
+
+    // 处理 text_body（可能是对象（含 itemize/enum）或字符串）
+    const bodyText = extractText(p.text_body);
+    if (bodyText) {
+      body = bodyText.trim().replace(/\s+/g, " ");
     }
 
     if (title) {
       result.push({ depth, title, body });
+    }
+
+    // 处理 <req> 子元素
+    if (p.req) {
+      for (const req of p.req) {
+        const reqBody = extractText(req.text_body);
+        if (reqBody) {
+          result.push({ depth: depth + 1, title: reqBody.trim().replace(/\s+/g, " "), body: "" });
+        }
+        if (req.p) {
+          result.push(...flattenSections(req.p, depth + 1));
+        }
+      }
     }
 
     if (p.p) {
