@@ -16,7 +16,6 @@ import { assignCanonicalIds, fixCrossReferences } from "../shared/idAssigner.js"
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
   private constraintPromptTemplate: string;
-  private dedupPromptTemplate: string;
   private postProcessPromptTemplate: string;
 
   constructor(llm: LLMClient) {
@@ -27,10 +26,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     );
     this.constraintPromptTemplate = loadPrompt(
       "merge_constraints.md",
-      "",
-    );
-    this.dedupPromptTemplate = loadPrompt(
-      "merge_dedup_functions.md",
       "",
     );
     this.postProcessPromptTemplate = loadPrompt(
@@ -694,55 +689,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       return { constraints: validConstraints, exceptions: validExceptions };
     } catch {
       return { constraints: [], exceptions: [] };
-    }
-  }
-
-  /**
-   * 防线2：LLM 语义去重 — 找出语义重复的功能并合并。
-   * 失败时不影响主流程，返回空数组。
-   * @deprecated 已合并至 _completeAll，保留供未来单独使用。
-   */
-  // @ts-expect-error TS6133 - preserved for future standalone use
-  private async _dedupFunctions(
-    merged: Record<string, unknown>,
-    requirementText: string,
-    systemPrompt?: string,
-  ): Promise<string[]> {
-    if (!this.dedupPromptTemplate) {
-      return [];
-    }
-
-    try {
-      const funcs = (merged.functions as Array<Record<string, unknown>>) ?? [];
-      if (funcs.length <= 1) return [];
-
-      // 只传 id + name + description 的精简列表
-      const summary = funcs.map(f => `${f.id || "?"}: ${f.name} - ${String(f.description ?? "").slice(0, 80)}`).join('\n');
-
-      const prompt = this.buildPrompt(this.dedupPromptTemplate, {
-        functions_summary: summary,
-        requirement_text: requirementText,
-      });
-
-      const raw = await this.llm.generateJson(prompt, systemPrompt ?? "");
-      const content = BaseGenerator.unwrapContent(raw);
-
-      if (Array.isArray(content)) {
-        // 返回要被删除的 function id 列表
-        const toRemove = new Set<string>();
-        for (const item of content) {
-          for (const m of (item.merge || [])) {
-            toRemove.add(String(m));
-          }
-        }
-        (merged.functions as Array<Record<string, unknown>>) =
-          funcs.filter(f => !toRemove.has(String(f.id ?? f.name ?? "")));
-
-        return content.map((c: any) => c.reason || "");
-      }
-      return [];
-    } catch {
-      return [];
     }
   }
 

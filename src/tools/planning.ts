@@ -239,24 +239,42 @@ export class PlanningTool extends BaseTool {
     const addTasksRaw = (response.add_tasks as Array<Record<string, unknown>>) ?? [];
     const addTasks = addTasksRaw
       .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null)
-      .map((t) => createTask({
-        id: String(t.id || "").trim(),
-        type: (String(t.type || "analyze").trim()) as Task["type"],
-        description: String(t.description || "").trim(),
-        dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()) : [],
-        contextHints: (typeof t.context_hints === "object") ? t.context_hints as Record<string, unknown> : {},
-      }));
+      .map((t) => {
+        const rawMode = String(t.analysis_mode ?? t.analysisMode ?? "").trim();
+        const analysisMode: Task["analysisMode"] =
+          rawMode === "constraints" ? "constraints"
+          : rawMode === "domain" ? "domain"
+          : rawMode ? "domain"
+          : undefined;
+        return createTask({
+          id: String(t.id || "").trim(),
+          type: (String(t.type || "analyze").trim()) as Task["type"],
+          description: String(t.description || "").trim(),
+          dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()) : [],
+          contextHints: (typeof t.context_hints === "object") ? t.context_hints as Record<string, unknown> : {},
+          ...(analysisMode ? { analysisMode } : {}),
+        });
+      });
 
     const updateRaw = (response.update_tasks as Array<Record<string, unknown>>) ?? [];
     const updateTasks = updateRaw
       .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null)
-      .map((t) => createTask({
-        id: String(t.id || "").trim(),
-        type: (String(t.type || "analyze").trim()) as Task["type"],
-        description: String(t.description || "").trim(),
-        dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()) : [],
-        contextHints: (typeof t.context_hints === "object") ? t.context_hints as Record<string, unknown> : {},
-      }));
+      .map((t) => {
+        const rawMode = String(t.analysis_mode ?? t.analysisMode ?? "").trim();
+        const analysisMode: Task["analysisMode"] =
+          rawMode === "constraints" ? "constraints"
+          : rawMode === "domain" ? "domain"
+          : rawMode ? "domain"
+          : undefined;
+        return createTask({
+          id: String(t.id || "").trim(),
+          type: (String(t.type || "analyze").trim()) as Task["type"],
+          description: String(t.description || "").trim(),
+          dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()) : [],
+          contextHints: (typeof t.context_hints === "object") ? t.context_hints as Record<string, unknown> : {},
+          ...(analysisMode ? { analysisMode } : {}),
+        });
+      });
 
     const dropIds = ((response.drop_task_ids as string[]) ?? [])
       .map((d) => String(d).trim())

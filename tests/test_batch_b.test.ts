@@ -182,6 +182,94 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. _parseReplanResponse parses analysisMode with enum validation
+// ---------------------------------------------------------------------------
+
+describe("PlanningTool._parseReplanResponse analysisMode validation", () => {
+  const fakeLlm = { generateJson: async () => ({}) } as any;
+  const planner = new PlanningTool(fakeLlm);
+
+  it("parses analysis_mode in add_tasks", () => {
+    const response = {
+      reasoning: "test replan",
+      add_tasks: [
+        {
+          id: "analyze-2",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
+      ],
+      update_tasks: [],
+      drop_task_ids: [],
+    };
+    const mutation = planner._parseReplanResponse(response);
+    expect(mutation.addTasks[0].analysisMode).toBe("domain");
+  });
+
+  it("parses analysis_mode in update_tasks", () => {
+    const response = {
+      reasoning: "test replan",
+      add_tasks: [],
+      update_tasks: [
+        {
+          id: "analyze-1",
+          type: "analyze",
+          description: "constraint extraction",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "constraints",
+        },
+      ],
+      drop_task_ids: [],
+    };
+    const mutation = planner._parseReplanResponse(response);
+    expect(mutation.updateTasks[0].analysisMode).toBe("constraints");
+  });
+
+  it("falls back unknown analysisMode to 'domain' in replan", () => {
+    const response = {
+      reasoning: "test replan",
+      add_tasks: [
+        {
+          id: "analyze-3",
+          type: "analyze",
+          description: "unknown mode",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "something_else",
+        },
+      ],
+      update_tasks: [],
+      drop_task_ids: [],
+    };
+    const mutation = planner._parseReplanResponse(response);
+    expect(mutation.addTasks[0].analysisMode).toBe("domain");
+  });
+
+  it("sets analysisMode to undefined when not provided in replan", () => {
+    const response = {
+      reasoning: "test replan",
+      add_tasks: [
+        {
+          id: "design-1",
+          type: "design",
+          description: "no mode",
+          depends_on: [],
+          context_hints: {},
+        },
+      ],
+      update_tasks: [],
+      drop_task_ids: [],
+    };
+    const mutation = planner._parseReplanResponse(response);
+    expect(mutation.addTasks[0].analysisMode).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. _ensureConstraintTask auto-insertion
 // ---------------------------------------------------------------------------
 
