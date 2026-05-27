@@ -195,8 +195,8 @@ export class PlanningTool extends BaseTool {
       tasks = tasks.filter((t) => t.type === "analyze");
     }
     tasks = PlanningTool._splitDiagramTasks(tasks);
-    tasks = PlanningTool._ensureOrder(tasks);
     tasks = PlanningTool._ensureConstraintTask(tasks, goal);
+    tasks = PlanningTool._ensureOrder(tasks);
 
     return createExecutionPlan({
       tasks,

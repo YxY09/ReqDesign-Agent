@@ -201,6 +201,46 @@ describe("PlanningTool._ensureConstraintTask", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. _ensureConstraintTask + _ensureOrder interaction
+// ---------------------------------------------------------------------------
+
+describe("_ensureConstraintTask + _ensureOrder interaction", () => {
+  it("design task dependsOn includes auto-inserted constraint task ID after both passes", () => {
+    // Simulate the _parseResponse pipeline on raw task data that lacks a constraint task.
+    // The goal contains "design", so _ensureConstraintTask should auto-insert one.
+    // _ensureOrder must run AFTER so the new constraint ID is added to dependsOn.
+    const tasks: Task[] = [
+      createTask({ id: "analyze-1", type: "analyze", description: "domain" }),
+      createTask({ id: "design-1", type: "design", description: "design" }),
+    ];
+
+    // WRONG order (current bug): _ensureOrder first, then _ensureConstraintTask
+    const wrongOrder = PlanningTool._ensureConstraintTask(
+      PlanningTool._ensureOrder([...tasks.map((t) => ({ ...t, dependsOn: [...t.dependsOn] }))]),
+      "design",
+    );
+    const designWrong = wrongOrder.find((t) => t.id === "design-1")!;
+    const constraintWrong = wrongOrder.find(
+      (t) => t.analysisMode === "constraints",
+    );
+    // This demonstrates the bug: constraint task exists but design doesn't depend on it
+    expect(constraintWrong).toBeDefined();
+    expect(designWrong.dependsOn).not.toContain(constraintWrong!.id);
+
+    // CORRECT order: _ensureConstraintTask first, then _ensureOrder
+    const correctOrder = PlanningTool._ensureOrder(
+      PlanningTool._ensureConstraintTask([...tasks.map((t) => ({ ...t, dependsOn: [...t.dependsOn] }))], "design"),
+    );
+    const designCorrect = correctOrder.find((t) => t.id === "design-1")!;
+    const constraintCorrect = correctOrder.find(
+      (t) => t.analysisMode === "constraints",
+    );
+    expect(constraintCorrect).toBeDefined();
+    expect(designCorrect.dependsOn).toContain(constraintCorrect!.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. _fallbackPlan includes constraint task
 // ---------------------------------------------------------------------------
 
