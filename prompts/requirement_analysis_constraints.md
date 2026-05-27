@@ -39,7 +39,7 @@
   "project_overview": "简述",
   "actors": [
     /* 至少包含与约束相关的 actor，例如 AdminUser、SuperUser、Auditor 等 */
-    { "name": "ActorName", "description": "角色说明" }
+    { "actorRef": "A_ADMIN", "name": "ActorName", "description": "角色说明" }
   ],
   "entities": [
     /* 只提取与约束直接相关的实体，每个实体必须包含 attributes 数组 */
@@ -90,3 +90,18 @@
 ```
 
 约束数量没有上限。宁可多提取也不要遗漏。目标是从全文中找出每一条显式和隐式的约束。
+
+## source_text 规则（严格遵守）
+
+`source_text` 必须是需求文档中的**原文逐字摘录**。不要改写、不要概括、不要使用省略号（`...`或`…`）。
+
+**正确示例：**
+```
+"source_text": "The System must allow changes to security attributes for groups or users to be made only by super-user"
+```
+
+**错误示例：**
+```
+"source_text": "...Such configurations must be saved in the user profile."
+```
+上例错误地使用了省略号，且可能不是逐字摘录。

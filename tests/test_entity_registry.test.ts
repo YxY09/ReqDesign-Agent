@@ -118,7 +118,7 @@ describe("RegistryExtractor", () => {
     // Override promptTemplate to empty
     (extractor as any).promptTemplate = "";
     const result = await extractor.extract("some requirement text");
-    expect(result).toEqual({ entities: [], functions: [] });
+    expect(result).toEqual({ entities: [], functions: [], actors: [] });
   });
 
   it("extract calls LLM and returns parsed registry", async () => {
@@ -367,5 +367,224 @@ describe("buildRegistrySummary", () => {
     const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
     const summary = buildRegistrySummary({ entities: [], functions: [] });
     expect(summary).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fix 2: _getWords camelCase splitting
+// ---------------------------------------------------------------------------
+
+describe("AnalyzeMerger._getWords camelCase splitting", () => {
+  it("splits camelCase words into separate tokens", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    // Access private static method
+    const getWords = (AnalyzeMerger as any)._getWords as (s: string) => Set<string>;
+    const words = getWords("AdminUser");
+    expect(words.has("admin")).toBe(true);
+    expect(words.has("user")).toBe(true);
+  });
+
+  it("splits multi-word camelCase", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const getWords = (AnalyzeMerger as any)._getWords as (s: string) => Set<string>;
+    const words = getWords("SuperAdminUser");
+    expect(words.has("super")).toBe(true);
+    expect(words.has("admin")).toBe(true);
+    expect(words.has("user")).toBe(true);
+  });
+
+  it("merges camelCase actors with similar base names via Jaccard", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+    const artifacts = [
+      {
+        taskId: "a1",
+        content: {
+          entities: [],
+          functions: [],
+          actors: [{ name: "AdminUser", description: "Administrator user" }],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+      {
+        taskId: "a2",
+        content: {
+          entities: [],
+          functions: [],
+          actors: [{ name: "Admin", description: "System administrator with full access" }],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+    ];
+    const result = merger.preMerge(artifacts);
+    const actors = result.actors as Array<Record<string, unknown>>;
+    // AdminUser and Admin should be merged (Jaccard similarity via camelCase split)
+    const adminActors = actors.filter(
+      (a) => String(a.name).toLowerCase().includes("admin"),
+    );
+    expect(adminActors.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fix 5: RegistryActor type and actors in registry
+// ---------------------------------------------------------------------------
+
+describe("RegistryActor type", () => {
+  it("RegistryActor has required fields", async () => {
+    const actor: import("../src/shared/types.js").RegistryActor = {
+      id: "A_ADMIN",
+      canonicalName: "Admin",
+      displayName: "管理员",
+      aliases: ["Admin", "AdminUser", "Administrator", "管理员", "SuperUser"],
+    };
+    expect(actor.id).toBe("A_ADMIN");
+    expect(actor.canonicalName).toBe("Admin");
+    expect(actor.displayName).toBe("管理员");
+    expect(actor.aliases).toHaveLength(5);
+  });
+
+  it("EntityRegistry holds actors", async () => {
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      actors: [
+        {
+          id: "A_ADMIN",
+          canonicalName: "Admin",
+          displayName: "管理员",
+          aliases: ["Admin"],
+        },
+      ],
+    };
+    expect(registry.actors).toHaveLength(1);
+    expect(registry.actors![0].id).toBe("A_ADMIN");
+  });
+});
+
+describe("buildRegistrySummary with actors", () => {
+  it("includes actors section when actors present", async () => {
+    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      actors: [
+        { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin", "Administrator"] },
+      ],
+    };
+    const summary = buildRegistrySummary(registry);
+    expect(summary).toContain("A_ADMIN");
+    expect(summary).toContain("Admin");
+    expect(summary).toContain("管理员");
+  });
+});
+
+describe("AnalyzeMerger actorRef-based grouping", () => {
+  it("preMerge groups actors by actorRef when present", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+    const artifacts = [
+      {
+        taskId: "a1",
+        content: {
+          entities: [],
+          functions: [],
+          actors: [
+            { actorRef: "A_ADMIN", name: "Admin", description: "short" },
+          ],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+      {
+        taskId: "a2",
+        content: {
+          entities: [],
+          functions: [],
+          actors: [
+            { actorRef: "A_ADMIN", name: "Admin", description: "Administrator with full access" },
+          ],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+    ];
+    const result = merger.preMerge(artifacts);
+    const actors = result.actors as Array<Record<string, unknown>>;
+    const adminActors = actors.filter((a) => a.actorRef === "A_ADMIN" || String(a.name) === "Admin");
+    expect(adminActors.length).toBe(1);
+    expect(String(adminActors[0].description)).toContain("Administrator");
+  });
+
+  it("preMerge falls back to name+Jaccard for actors without actorRef", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+    const artifacts = [
+      {
+        taskId: "a1",
+        content: {
+          entities: [],
+          functions: [],
+          actors: [{ name: "Admin", description: "Admin user" }],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+      {
+        taskId: "a2",
+        content: {
+          entities: [],
+          functions: [],
+          actors: [{ name: "Admin", description: "System administrator" }],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+    ];
+    const result = merger.preMerge(artifacts);
+    const actors = result.actors as Array<Record<string, unknown>>;
+    const adminActors = actors.filter((a) => String(a.name) === "Admin");
+    expect(adminActors.length).toBe(1);
+  });
+});
+
+describe("RegistryExtractor with actors", () => {
+  it("extract returns actors from LLM response", async () => {
+    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
+    const mockRegistry = {
+      entities: [
+        { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case"] },
+      ],
+      functions: [
+        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register"] },
+      ],
+      actors: [
+        { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin"] },
+      ],
+    };
+    const mockLlm = {
+      generateJson: vi.fn().mockResolvedValue({ content: mockRegistry }),
+    };
+    const extractor = new RegistryExtractor(mockLlm);
+    (extractor as any).promptTemplate = "template {requirement_text}";
+    const result = await extractor.extract("requirement text");
+    expect(result.entities).toHaveLength(1);
+    expect(result.functions).toHaveLength(1);
+    expect(result.actors).toHaveLength(1);
+    expect(result.actors![0].id).toBe("A_ADMIN");
   });
 });

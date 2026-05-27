@@ -276,14 +276,44 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     };
   }
 
-  // --- Actors: merge by normalized name + Jaccard/containment similarity ---
+  // --- Actors: merge by actorRef first, then by normalized name + Jaccard/containment similarity ---
   private static _mergeActors(items: Record<string, unknown>[]): Record<string, unknown>[] {
-    // Phase 1: group by exact normalized name
-    const groups = new Map<string, Record<string, unknown>[]>();
+    // Phase 1: group by actorRef if present
+    const refGroups = new Map<string, Record<string, unknown>[]>();
+    const noRefItems: Record<string, unknown>[] = [];
+
     for (const item of items) {
+      const ref = String(item.actorRef ?? "").trim();
+      if (ref) {
+        let group = refGroups.get(ref);
+        if (!group) { group = []; refGroups.set(ref, group); }
+        group.push(item);
+      } else {
+        noRefItems.push(item);
+      }
+    }
+
+    const result: Record<string, unknown>[] = [];
+
+    // Merge actorRef groups — keep actor with longest description
+    for (const [_ref, group] of refGroups) {
+      if (group.length === 1) {
+        result.push(group[0]);
+        continue;
+      }
+      group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
+      result.push(group[0]);
+    }
+
+    // Phase 2: group remaining items by exact normalized name
+    const groups = new Map<string, Record<string, unknown>[]>();
+    // Store original (pre-lowercase) name for camelCase-aware Jaccard comparison
+    const originalNames = new Map<string, string>();
+    for (const item of noRefItems) {
       const name = String(item.name ?? "").trim();
       if (!name) continue;
       const key = name.toLowerCase();
+      if (!originalNames.has(key)) originalNames.set(key, name);
       let group = groups.get(key);
       if (!group) { group = []; groups.set(key, group); }
       group.push(item);
@@ -303,8 +333,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     for (let i = 0; i < groupKeys.length; i++) {
       for (let j = i + 1; j < groupKeys.length; j++) {
-        const wordsI = AnalyzeMerger._getWords(groupKeys[i]);
-        const wordsJ = AnalyzeMerger._getWords(groupKeys[j]);
+        const wordsI = AnalyzeMerger._getWords(originalNames.get(groupKeys[i]) ?? groupKeys[i]);
+        const wordsJ = AnalyzeMerger._getWords(originalNames.get(groupKeys[j]) ?? groupKeys[j]);
         const sim = AnalyzeMerger._jaccard(wordsI, wordsJ);
         const contained = AnalyzeMerger._isContained(wordsI, wordsJ);
         if (sim >= 0.7 || contained) {
@@ -323,7 +353,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     }
 
     // Phase 3: within each merged group, keep actor with longest description
-    const result: Record<string, unknown>[] = [];
     for (const [_root, groupItems] of mergedGroups) {
       if (groupItems.length === 1) {
         result.push(groupItems[0]);
@@ -598,7 +627,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   ]);
 
   private static _getWords(s: string): Set<string> {
-    const words = s.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/)
+    const words = s
+      .replace(/([a-z])([A-Z])/g, "$1 $2")  // camelCase split
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, " ")
+      .split(/\s+/)
       .map((w) => w.replace(/s$/, "")) // basic singular normalization
       .filter((w) => w.length > 1 && !AnalyzeMerger._STOP_WORDS.has(w));
     return new Set(words);
@@ -923,6 +956,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private static _normalizeForMatch(text: string): string {
     return text
       .toLowerCase()
+      .replace(/\.\.\./g, "")
+      .replace(/…/g, "")
       .replace(/\s+/g, "")
       .trim();
   }

@@ -179,6 +179,59 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
     const plan = planner._parseResponse(response, "design");
     expect(plan.tasks[0].analysisMode).toBeUndefined();
   });
+
+  // context_hints fallback for analysisMode
+  it("reads analysisMode from context_hints when top-level missing", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-c",
+          type: "analyze",
+          description: "constraint extraction",
+          depends_on: [],
+          context_hints: { analysisMode: "constraints" },
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    expect(plan.tasks[0].analysisMode).toBe("constraints");
+  });
+
+  it("reads analysis_mode from context_hints (snake_case)", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: { analysis_mode: "domain" },
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    expect(plan.tasks[0].analysisMode).toBe("domain");
+  });
+
+  it("prefers top-level analysis_mode over context_hints", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-1",
+          type: "analyze",
+          description: "both",
+          depends_on: [],
+          context_hints: { analysisMode: "domain" },
+          analysis_mode: "constraints",
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    expect(plan.tasks[0].analysisMode).toBe("constraints");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -266,6 +319,45 @@ describe("PlanningTool._parseReplanResponse analysisMode validation", () => {
     };
     const mutation = planner._parseReplanResponse(response);
     expect(mutation.addTasks[0].analysisMode).toBeUndefined();
+  });
+
+  // context_hints fallback in replan
+  it("reads analysisMode from context_hints in add_tasks", () => {
+    const response = {
+      reasoning: "test replan",
+      add_tasks: [
+        {
+          id: "analyze-c",
+          type: "analyze",
+          description: "constraint extraction",
+          depends_on: [],
+          context_hints: { analysisMode: "constraints" },
+        },
+      ],
+      update_tasks: [],
+      drop_task_ids: [],
+    };
+    const mutation = planner._parseReplanResponse(response);
+    expect(mutation.addTasks[0].analysisMode).toBe("constraints");
+  });
+
+  it("reads analysis_mode from context_hints in update_tasks (snake_case)", () => {
+    const response = {
+      reasoning: "test replan",
+      add_tasks: [],
+      update_tasks: [
+        {
+          id: "analyze-1",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: { analysis_mode: "domain" },
+        },
+      ],
+      drop_task_ids: [],
+    };
+    const mutation = planner._parseReplanResponse(response);
+    expect(mutation.updateTasks[0].analysisMode).toBe("domain");
   });
 });
 
@@ -587,6 +679,40 @@ describe("AnalyzeMerger._verifySourceRefs", () => {
       merged,
       requirementText,
     );
+    expect(unverifiedCount).toBe(0);
+  });
+
+  // Fix 3: ellipsis handling
+  it("ignores ellipsis (...) in source_text when matching", () => {
+    const req = "The System must allow changes to security attributes for groups or users to be made only by super-user";
+    const merged = {
+      constraints: [
+        {
+          id: "C001",
+          description: "security constraint",
+          source_text: "...must allow changes to security attributes for groups or users...",
+        },
+      ],
+      exceptions: [],
+    };
+    const unverifiedCount = AnalyzeMerger._verifySourceRefs(merged, req);
+    expect(unverifiedCount).toBe(0);
+    expect((merged.constraints as any[])[0].unverified).toBeUndefined();
+  });
+
+  it("ignores unicode ellipsis (…) in source_text when matching", () => {
+    const req = "用户必须年满18岁才能注册";
+    const merged = {
+      constraints: [
+        {
+          id: "C001",
+          description: "age constraint",
+          source_text: "…年满18岁才能注册…",
+        },
+      ],
+      exceptions: [],
+    };
+    const unverifiedCount = AnalyzeMerger._verifySourceRefs(merged, req);
     expect(unverifiedCount).toBe(0);
   });
 });

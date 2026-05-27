@@ -54,6 +54,7 @@
   "project_overview": "项目概述，1-2句话",
   "actors": [
     {
+      "actorRef": "A_ADMIN",
       "name": "角色名称",
       "description": "角色描述"
     }
