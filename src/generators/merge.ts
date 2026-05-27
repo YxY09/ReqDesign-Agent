@@ -320,11 +320,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       const shorterContained = AnalyzeMerger._isContained(words0, words1);
 
       if (sim < 0.3 && !shorterContained && words0.size > 0 && words1.size > 0) {
-        // Descriptions are completely unrelated — keep both with suffix
+        // Descriptions are completely unrelated — keep all with suffix
         const baseName = String(group[0].name ?? "").trim();
-        const first = { ...group[0], name: `${baseName}_${suffixCounter++}` };
-        const second = { ...group[1], name: `${baseName}_${suffixCounter++}` };
-        result.push(first, second);
+        for (const member of group) {
+          result.push({ ...member, name: `${baseName}_${suffixCounter++}` });
+        }
       } else {
         // Merge: longer description, attribute union, relationship union
         const merged = { ...group[0] };

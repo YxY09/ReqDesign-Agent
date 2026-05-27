@@ -237,6 +237,65 @@ describe("preMerge entity dissimilar handling", () => {
     const hasSuffix = names.some((n) => n !== "Account");
     expect(hasSuffix).toBe(true);
   });
+
+  it("keeps ALL entities when group.length > 2 and first two are dissimilar (bug fix)", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    // Three artifacts, each with an entity named "Account" but mutually dissimilar descriptions
+    const a1 = artifact({
+      entities: [
+        {
+          name: "Account",
+          description: "Bank account with balance and transaction history",
+          attributes: [{ name: "balance", type: "Decimal", description: "Current balance" }],
+          relationships: [],
+        },
+      ],
+    });
+    const a2 = artifact({
+      entities: [
+        {
+          name: "Account",
+          description: "User login credentials and authentication settings",
+          attributes: [{ name: "password", type: "String", description: "Hashed password" }],
+          relationships: [],
+        },
+      ],
+    });
+    const a3 = artifact({
+      entities: [
+        {
+          name: "Account",
+          description: "Cloud subscription billing and usage tracking",
+          attributes: [{ name: "plan", type: "String", description: "Subscription plan" }],
+          relationships: [],
+        },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2, a3]);
+    const entities = merged.entities as Array<Record<string, unknown>>;
+
+    // BUG: previously only 2 were kept (group[0] and group[1]); group[2] was dropped
+    // Fix: ALL 3 must be kept with suffixed names
+    expect(entities.length).toBe(3);
+    // All should have the base name "Account" (possibly with suffix)
+    const names = entities.map((e) => String(e.name));
+    for (const name of names) {
+      expect(name).toMatch(/^Account/);
+    }
+    // At least some should have suffixes to disambiguate
+    const suffixCount = names.filter((n) => n !== "Account").length;
+    expect(suffixCount).toBeGreaterThanOrEqual(2);
+    // Verify each entity's attributes are preserved (not merged)
+    const allAttrs = entities.map(
+      (e) => (e.attributes as Array<Record<string, unknown>>).map((a) => String(a.name)),
+    );
+    // Since they are kept separate, each should have only its own attributes
+    const attrFlat = allAttrs.flat();
+    expect(attrFlat).toContain("balance");
+    expect(attrFlat).toContain("password");
+    expect(attrFlat).toContain("plan");
+  });
 });
 
 // ---------------------------------------------------------------------------
