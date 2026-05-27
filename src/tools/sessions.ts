@@ -122,6 +122,9 @@ export class GenerationSession extends WorkerSession {
     if (Object.keys(this.context.hints).length > 0) {
       ctx._hints = { ...this.context.hints };
     }
+    if (this.context.registry) {
+      ctx.registry = this.context.registry;
+    }
     return ctx;
   }
 }

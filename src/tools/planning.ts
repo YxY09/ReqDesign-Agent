@@ -4,6 +4,7 @@
  */
 
 import type { LLMClient } from "../llmClient.js";
+import { RegistryExtractor } from "../generators/registryExtractor.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import {
@@ -61,8 +62,19 @@ export class PlanningTool extends BaseTool {
     }
 
     this.logger.info(`plan: 开始规划，目标=${goal}，需求长度=${requirementText.length}`);
+
+    // Extract entity registry before building prompt
+    let registry: EntityRegistry | undefined;
+    try {
+      const extractor = new RegistryExtractor(this.llm);
+      registry = await extractor.extract(requirementText);
+      this.logger.info(`plan: registry 提取完成，entities=${registry.entities.length}，functions=${registry.functions.length}`);
+    } catch (e) {
+      this.logger.warn(`plan: registry 提取失败，继续无 registry 规划: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
     const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
-    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex);
+    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex, registry);
 
     let plan: ExecutionPlan;
     try {
@@ -76,6 +88,10 @@ export class PlanningTool extends BaseTool {
     }
 
     plan = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+    // Attach registry to plan for downstream consumers
+    if (registry) {
+      plan.registry = registry;
+    }
     return plan;
   }
 

@@ -981,6 +981,10 @@ export class MultiAgentRuntime {
       return;
     }
 
+    // Copy registry from plan to state for downstream consumers
+    if (state.plan?.registry) {
+      state.registry = state.plan.registry;
+    }
     state.markTaskStatus("planner", "completed", notif.sessionId);
     this.emitRuntimeEvent("planning_completed", "planner completed", {
       goal: state.goal,

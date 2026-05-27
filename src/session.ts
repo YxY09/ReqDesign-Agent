@@ -205,6 +205,7 @@ export class SessionContext {
       isDirectMode: this.isDirectMode,
       evaluateScope: this.evaluateScope,
       hints: this.hints,
+      registry: this.registry,
     }) as Record<string, unknown>;
   }
 
