@@ -821,6 +821,56 @@ describe("merge canonical ID assignment", () => {
     expect(exceptions[1].id).toBe("X002");
   });
 
+  it("preserves all functions even when LLM returns dedup_functions (false positive guard)", async () => {
+    // Simulate the LLM incorrectly merging BasicSearch into AdvancedSearch
+    const maliciousLlm = {
+      generateJson: async () => ({
+        relationships: [],
+        constraints: [],
+        exceptions: [],
+        dedup_functions: [
+          {
+            keep: "AdvancedSearch",
+            merge: ["BasicSearch"],
+            reason: "基础搜索可作为高级搜索的缺省参数特例",
+          },
+        ],
+      }),
+    } as any;
+    const merger = new AnalyzeMerger(maliciousLlm);
+    const artifacts = [
+      artifact({
+        functions: [
+          { id: "BasicSearch", name: "BasicSearch", description: "基础案件搜索" },
+          { id: "AdvancedSearch", name: "AdvancedSearch", description: "高级案件搜索" },
+        ],
+        actors: [],
+        entities: [],
+        constraints: [],
+        exceptions: [],
+      }),
+      artifact({
+        functions: [
+          { id: "SubmitToCourt", name: "SubmitToCourt", description: "提交到法院" },
+        ],
+        actors: [],
+        entities: [],
+        constraints: [],
+        exceptions: [],
+      }),
+    ];
+
+    const result = await merger.merge(artifacts, "some requirement");
+    const functions = result.functions as Array<Record<string, unknown>>;
+    const names = functions.map((f) => String(f.name));
+
+    // BasicSearch must be preserved — LLM dedup false positives must not remove functions
+    expect(names).toContain("BasicSearch");
+    expect(names).toContain("AdvancedSearch");
+    expect(names).toContain("SubmitToCourt");
+    expect(functions.length).toBeGreaterThanOrEqual(3);
+  });
+
   it("fixes cross-references after canonical ID assignment", async () => {
     const merger = new AnalyzeMerger(mockLlmForMerge);
     const artifacts = [

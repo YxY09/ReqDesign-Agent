@@ -196,25 +196,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         ) as Array<Record<string, unknown>>,
       });
 
-      // 3. 应用功能去重
-      const dedupPatches = Array.isArray(obj.dedup_functions) ? obj.dedup_functions : [];
-      if (dedupPatches.length > 0 && functions && functions.length > 0) {
-        const toRemove = new Set<string>();
-        for (const item of dedupPatches) {
-          if (typeof item === "object" && item !== null && "merge" in item) {
-            const merges = (item as Record<string, unknown>).merge;
-            if (Array.isArray(merges)) {
-              for (const m of merges) {
-                toRemove.add(String(m));
-              }
-            }
-          }
-        }
-        if (toRemove.size > 0) {
-          (merged.functions as Array<Record<string, unknown>>) =
-            functions.filter((f) => !toRemove.has(String(f.id ?? f.name ?? "")));
-        }
-      }
+      // 3. 应用功能去重 — 已禁用。
+      // LLM dedup 不可靠，曾误删 BasicSearch（被错误合并到 AdvancedSearch）。
+      // preMerge 已按名称合并功能，无需 LLM 再判断语义重复。
+      // 保留此注释块以便将来需要时恢复。
     } catch {
       // 静默失败，不影响主流程
     }

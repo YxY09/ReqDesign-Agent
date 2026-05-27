@@ -548,12 +548,16 @@ export class MultiAgentRuntime {
           "finish action reached after outputs were already persisted",
         );
       }
+      // finish 前保存 review result，防止最终保存被跳过时丢失审查结果
+      this.saveReviewIfPresent(state);
       return { didDispatch: true, breakLoop: true, skipFinalSave: true };
     }
 
     if (decision.action === "pause") {
       RunManager.markPaused(state);
       this.logger.info("Workflow paused: " + (decision.reason || "user requested"));
+      // 暂停前保存 review result，防止最终保存被跳过时丢失审查结果
+      this.saveReviewIfPresent(state);
       return { didDispatch: true, breakLoop: true, skipFinalSave: true };
     }
 
@@ -1257,6 +1261,20 @@ export class MultiAgentRuntime {
     state.persisted = true;
     state.persistStatus = "final_saved";
     return true;
+  }
+
+  /** 如果 reviewResult 有内容则立即保存，用于 pause/finish 等提前退出的路径。 */
+  private saveReviewIfPresent(state: WorkflowState): void {
+    if (Object.keys(state.reviewResult).length > 0) {
+      try {
+        const manager = new (this.outputManagerClass)(state.outputDir);
+        manager.saveReviewReport("", state.reviewResult);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to save review before pause/finish: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
   }
 
   private actionSaveIfQualityGatePassed(

@@ -9,6 +9,7 @@ import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { createToolError } from "./types.js";
 import { type Task, type Artifact, createArtifact } from "../shared/types.js";
+import { loadPrompt } from "../promptLoader.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
@@ -100,7 +101,12 @@ export class GenerationTool extends BaseTool {
     const hints = (task.contextHints ?? {}) as Record<string, unknown>;
     const desc = task.description ?? "";
     const queryCtx = `${task.type}: ${desc.slice(0, 200)}`;
-    const injectedPrompt = await this._getSystemPrompt("generator.md", "", queryCtx);
+    let injectedPrompt: string;
+    if (task.analysisMode === "constraints") {
+      injectedPrompt = loadPrompt("constraint_system.md", "");
+    } else {
+      injectedPrompt = await this._getSystemPrompt("generator.md", "", queryCtx);
+    }
 
     switch (task.type) {
       case "analyze":
