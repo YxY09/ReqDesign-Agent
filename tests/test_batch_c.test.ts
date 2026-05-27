@@ -694,3 +694,132 @@ describe("_dedupFunctionsByDescription removed", () => {
     ).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 10. merge canonical ID assignment + cross-reference fixing
+// ---------------------------------------------------------------------------
+
+const mockLlmForMerge = {
+  generateJson: async () => ({}),
+} as any;
+
+describe("merge canonical ID assignment", () => {
+  it("assigns canonical IDs after merge", async () => {
+    const merger = new AnalyzeMerger(mockLlmForMerge);
+    const artifacts = [
+      artifact({
+        entities: [
+          { name: "Order", attributes: [], relationships: [{ target: "Customer", type: "belongs_to", description: "" }] },
+          { name: "Customer", attributes: [], relationships: [] },
+        ],
+        functions: [
+          { name: "DeleteOrder", description: "Delete an order" },
+          { name: "CreateOrder", description: "Create an order" },
+        ],
+        constraints: [
+          { id: "C005", description: "Fifth constraint" },
+          { id: "C001", description: "First constraint" },
+        ],
+        exceptions: [
+          { id: "X010", description: "Payment gateway timeout after thirty seconds", trigger: "t", handling: "h" },
+          { id: "X002", description: "Database connection pool exhausted", trigger: "t", handling: "h" },
+        ],
+      }),
+      artifact({
+        entities: [{ name: "Product", attributes: [], relationships: [] }],
+        functions: [{ name: "SearchProduct", description: "Search products" }],
+        constraints: [{ id: "C003", description: "Third constraint" }],
+        exceptions: [],
+      }),
+    ];
+
+    const result = await merger.merge(artifacts, "some requirement");
+
+    // Entities sorted by name: Customer -> Order -> Product
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities).toHaveLength(3);
+    expect(entities[0].id).toBe("E001");
+    expect(entities[0].name).toBe("Customer");
+    expect(entities[1].id).toBe("E002");
+    expect(entities[1].name).toBe("Order");
+    expect(entities[2].id).toBe("E003");
+    expect(entities[2].name).toBe("Product");
+
+    // Functions sorted by name: CreateOrder -> DeleteOrder -> SearchProduct
+    const functions = result.functions as Array<Record<string, unknown>>;
+    expect(functions).toHaveLength(3);
+    expect(functions[0].id).toBe("F001");
+    expect(functions[0].name).toBe("CreateOrder");
+    expect(functions[1].id).toBe("F002");
+    expect(functions[1].name).toBe("DeleteOrder");
+
+    // Constraints sorted by old id: C001 -> C003 -> C005
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints).toHaveLength(3);
+    expect(constraints[0].id).toBe("C001");
+    expect(constraints[1].id).toBe("C002");
+    expect(constraints[2].id).toBe("C003");
+
+    // Exceptions sorted by old id: X002 -> X010
+    const exceptions = result.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions).toHaveLength(2);
+    expect(exceptions[0].id).toBe("X001");
+    expect(exceptions[1].id).toBe("X002");
+  });
+
+  it("fixes cross-references after canonical ID assignment", async () => {
+    const merger = new AnalyzeMerger(mockLlmForMerge);
+    const artifacts = [
+      artifact({
+        entities: [
+          {
+            name: "Order",
+            attributes: [],
+            relationships: [{ target: "Customer", type: "belongs_to", description: "" }],
+          },
+          { name: "Customer", attributes: [], relationships: [] },
+        ],
+        functions: [],
+        constraints: [
+          {
+            id: "C_old",
+            description: "test",
+            related_functions: [],
+            related_entities: ["Customer"],
+          },
+        ],
+        exceptions: [
+          {
+            id: "X_old",
+            description: "d",
+            trigger: "t",
+            handling: "h",
+            related_constraints: ["C_old"],
+          },
+        ],
+      }),
+      artifact({
+        entities: [],
+        functions: [],
+        constraints: [],
+        exceptions: [],
+      }),
+    ];
+
+    const result = await merger.merge(artifacts, "some requirement");
+
+    // Entities: Customer (E001), Order (E002)
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const order = entities.find((e) => e.name === "Order")!;
+    const rels = order.relationships as Array<Record<string, unknown>>;
+    expect(rels[0].target).toBe("E001"); // Customer → E001
+
+    // Constraint related_entities: Customer → E001
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints[0].related_entities).toEqual(["E001"]);
+
+    // Exception related_constraints: C_old → C001
+    const exceptions = result.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions[0].related_constraints).toEqual(["C001"]);
+  });
+});

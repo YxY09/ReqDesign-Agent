@@ -11,6 +11,7 @@ import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { checkAnalysisQuality } from "../shared/analysisQualityGate.js";
+import { assignCanonicalIds, fixCrossReferences } from "../shared/idAssigner.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
@@ -79,7 +80,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const qualityResult = checkAnalysisQuality(merged, requirementText);
     (merged as Record<string, unknown>).__qualityGate = qualityResult;
 
-    return merged;
+    const { result, idMap } = assignCanonicalIds(merged);
+    fixCrossReferences(result, idMap);
+
+    return result;
   }
 
   /**
