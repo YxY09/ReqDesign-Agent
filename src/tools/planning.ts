@@ -29,6 +29,12 @@ function mergeDeps(existing: string[], required: string[]): string[] {
   return merged;
 }
 
+/** Return the number of assignedSections in a task's contextHints. */
+function getAssignedCount(task: Task): number {
+  const sections = task.contextHints?.assignedSections;
+  return Array.isArray(sections) ? sections.length : 0;
+}
+
 export class PlanningTool extends BaseTool {
   constructor(llm: LLMClient) {
     super(llm);
@@ -67,6 +73,7 @@ export class PlanningTool extends BaseTool {
       plan = PlanningTool._fallbackPlan(requirementText, goal);
     }
 
+    plan = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
     return plan;
   }
 
@@ -575,5 +582,67 @@ export class PlanningTool extends BaseTool {
       }
     }
     return tasks;
+  }
+
+  /**
+   * After parsing, verify all sections from sectionIndex are assigned to at least
+   * one analyze task. Unassigned sections are appended to the analyze task with
+   * the fewest assigned sections. Returns the plan as-is when sectionIndex is
+   * not provided or there are no analyze tasks.
+   */
+  static _ensureSectionCoverage(
+    plan: ExecutionPlan,
+    sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
+  ): ExecutionPlan {
+    if (!sectionIndex || sectionIndex.length === 0) return plan;
+
+    const analyzeTasks = plan.tasks.filter((t) => t.type === "analyze");
+    if (analyzeTasks.length === 0) return plan;
+
+    // Collect all section IDs that must be covered
+    const requiredIds = new Set(sectionIndex.map((s) => s.id));
+
+    // Collect all already-assigned section IDs across analyze tasks
+    const assignedSet = new Set<string>();
+    for (const task of analyzeTasks) {
+      const sections = task.contextHints?.assignedSections;
+      if (Array.isArray(sections)) {
+        for (const id of sections) {
+          assignedSet.add(id);
+        }
+      }
+    }
+
+    // Find unassigned sections
+    const unassigned: string[] = [];
+    for (const id of requiredIds) {
+      if (!assignedSet.has(id)) {
+        unassigned.push(id);
+      }
+    }
+
+    if (unassigned.length === 0) return plan;
+
+    // Find the analyze task with the fewest assigned sections (lightest)
+    let lightest = analyzeTasks[0];
+    let lightestCount = getAssignedCount(lightest);
+    for (let i = 1; i < analyzeTasks.length; i++) {
+      const count = getAssignedCount(analyzeTasks[i]);
+      if (count < lightestCount) {
+        lightest = analyzeTasks[i];
+        lightestCount = count;
+      }
+    }
+
+    // Append unassigned sections to the lightest task
+    const existing = (Array.isArray(lightest.contextHints?.assignedSections)
+      ? lightest.contextHints!.assignedSections as string[]
+      : []) as string[];
+    lightest.contextHints = {
+      ...lightest.contextHints,
+      assignedSections: [...existing, ...unassigned],
+    };
+
+    return plan;
   }
 }
