@@ -10,6 +10,7 @@ import { loadPrompt } from "../promptLoader.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
+import { checkAnalysisQuality } from "../shared/analysisQualityGate.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
@@ -73,6 +74,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     AnalyzeMerger._verifySourceRefs(merged, requirementText);
+
+    // Quality gate: attach result without blocking
+    const qualityResult = checkAnalysisQuality(merged, requirementText);
+    (merged as Record<string, unknown>).__qualityGate = qualityResult;
+
     return merged;
   }
 
@@ -209,163 +215,332 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   }
 
   /**
-   * Programmatic pre-merge: union all arrays from analyze results.
-   * Deduplicates by exact name match. The LLM merge step then refines
-   * (resolves naming conflicts, adds cross-relationships) rather than
-   * reconstructing everything from scratch.
+   * Lossless pre-merge: union all arrays with smart Jaccard-based merging.
+   *
+   * Key invariants:
+   *  - Total items (entities + functions + constraints + exceptions) never decrease
+   *  - Constraints/exceptions: dedup by description similarity, NOT by ID
+   *  - Entities: merge same-name (attributes union, longer description)
+   *  - Functions: merge same-name (sub_capabilities union, longer description)
    */
   preMerge(
     artifacts: Array<{ taskId: string; content: Record<string, unknown> }>,
   ): Record<string, unknown> {
-    const result: Record<string, unknown> = {
-      project_name: "",
-      project_overview: "",
-      actors: [] as Array<Record<string, unknown>>,
-      functions: [] as Array<Record<string, unknown>>,
-      entities: [] as Array<Record<string, unknown>>,
-      constraints: [] as Array<Record<string, unknown>>,
-      exceptions: [] as Array<Record<string, unknown>>,
-      non_functional_requirements: [] as Array<Record<string, unknown>>,
-      business_processes: [] as Array<Record<string, unknown>>,
-    };
-
-    const seenActors = new Set<string>();
-    const seenFunctions = new Set<string>();
-    const seenEntities = new Set<string>();
-    const seenConstraints = new Set<string>();
-    const seenExceptions = new Set<string>();
-    const seenNFR = new Set<string>();
-    const seenBP = new Set<string>();
+    // Collect all items from all artifacts, grouped by type
+    const allActors: Record<string, unknown>[] = [];
+    const allFunctions: Record<string, unknown>[] = [];
+    const allEntities: Record<string, unknown>[] = [];
+    const allConstraints: Record<string, unknown>[] = [];
+    const allExceptions: Record<string, unknown>[] = [];
+    const allNFR: Record<string, unknown>[] = [];
+    const allBP: Record<string, unknown>[] = [];
+    let projectName = "";
+    let projectOverview = "";
 
     for (const artifact of artifacts) {
       const c = artifact.content;
 
-      // project_name / overview: take from first artifact that has it
-      if (!result.project_name && typeof c.project_name === "string" && c.project_name) {
-        result.project_name = c.project_name;
+      if (!projectName && typeof c.project_name === "string" && c.project_name) {
+        projectName = c.project_name;
       }
-      if (!result.project_overview && typeof c.project_overview === "string" && c.project_overview) {
-        result.project_overview = c.project_overview;
-      }
-
-      // actors
-      for (const item of (c.actors as Array<Record<string, unknown>>) ?? []) {
-        const name = String(item.name ?? "").trim();
-        if (name && !seenActors.has(name)) {
-          seenActors.add(name);
-          (result.actors as Array<Record<string, unknown>>).push(item);
-        }
+      if (!projectOverview && typeof c.project_overview === "string" && c.project_overview) {
+        projectOverview = c.project_overview;
       }
 
-      // functions (dedup by id, fallback to name)
-      for (const item of (c.functions as Array<Record<string, unknown>>) ?? []) {
-        const id = String(item.id ?? "").trim();
-        const name = String(item.name ?? "").trim();
-        const key = id || name;
-        if (key && !seenFunctions.has(key)) {
-          seenFunctions.add(key);
-          (result.functions as Array<Record<string, unknown>>).push(item);
-        }
-      }
-
-      // entities (dedup by name)
-      for (const item of (c.entities as Array<Record<string, unknown>>) ?? []) {
-        const name = String(item.name ?? "").trim();
-        if (name && !seenEntities.has(name)) {
-          seenEntities.add(name);
-          (result.entities as Array<Record<string, unknown>>).push(item);
-        }
-      }
-
-      // constraints (dedup by id)
-      for (const item of (c.constraints as Array<Record<string, unknown>>) ?? []) {
-        const id = String(item.id ?? "").trim();
-        if (id && !seenConstraints.has(id)) {
-          seenConstraints.add(id);
-          (result.constraints as Array<Record<string, unknown>>).push(item);
-        }
-      }
-
-      // exceptions (dedup by id)
-      for (const item of (c.exceptions as Array<Record<string, unknown>>) ?? []) {
-        const id = String(item.id ?? "").trim();
-        if (id && !seenExceptions.has(id)) {
-          seenExceptions.add(id);
-          (result.exceptions as Array<Record<string, unknown>>).push(item);
-        }
-      }
-
-      // non_functional_requirements (dedup by category)
-      for (const item of (c.non_functional_requirements as Array<Record<string, unknown>>) ?? []) {
-        const cat = String(item.category ?? "").trim();
-        if (cat && !seenNFR.has(cat)) {
-          seenNFR.add(cat);
-          (result.non_functional_requirements as Array<Record<string, unknown>>).push(item);
-        }
-      }
-
-      // business_processes (dedup by name)
-      for (const item of (c.business_processes as Array<Record<string, unknown>>) ?? []) {
-        const name = String(item.name ?? "").trim();
-        if (name && !seenBP.has(name)) {
-          seenBP.add(name);
-          (result.business_processes as Array<Record<string, unknown>>).push(item);
-        }
-      }
+      for (const item of (c.actors as Array<Record<string, unknown>>) ?? []) allActors.push(item);
+      for (const item of (c.functions as Array<Record<string, unknown>>) ?? []) allFunctions.push(item);
+      for (const item of (c.entities as Array<Record<string, unknown>>) ?? []) allEntities.push(item);
+      for (const item of (c.constraints as Array<Record<string, unknown>>) ?? []) allConstraints.push(item);
+      for (const item of (c.exceptions as Array<Record<string, unknown>>) ?? []) allExceptions.push(item);
+      for (const item of (c.non_functional_requirements as Array<Record<string, unknown>>) ?? []) allNFR.push(item);
+      for (const item of (c.business_processes as Array<Record<string, unknown>>) ?? []) allBP.push(item);
     }
 
-    // 防线1：description 关键词重叠去重
-    if ((result.functions as Array<Record<string, unknown>>).length > 1) {
-      result.functions = AnalyzeMerger._dedupFunctionsByDescription(
-        result.functions as Array<Record<string, unknown>>,
-      );
+    // --- Phase 2: Smart merge each type ---
+
+    const mergedActors = AnalyzeMerger._mergeActors(allActors);
+    const mergedEntities = AnalyzeMerger._mergeEntities(allEntities);
+    const mergedFunctions = AnalyzeMerger._mergeFunctions(allFunctions);
+    const mergedConstraints = AnalyzeMerger._mergeByDescriptionSimilarity(allConstraints);
+    const mergedExceptions = AnalyzeMerger._mergeByDescriptionSimilarity(allExceptions);
+    const mergedNFR = AnalyzeMerger._mergeByCategory(allNFR);
+    const mergedBP = AnalyzeMerger._mergeByName(allBP);
+
+    return {
+      project_name: projectName,
+      project_overview: projectOverview,
+      actors: mergedActors,
+      functions: mergedFunctions,
+      entities: mergedEntities,
+      constraints: mergedConstraints,
+      exceptions: mergedExceptions,
+      non_functional_requirements: mergedNFR,
+      business_processes: mergedBP,
+    };
+  }
+
+  // --- Actors: dedup by normalized name ---
+  private static _mergeActors(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const item of items) {
+      const name = String(item.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, item);
+    }
+    return [...seen.values()];
+  }
+
+  // --- Entities: merge by normalized name ---
+  private static _mergeEntities(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const groups = new Map<string, Record<string, unknown>[]>();
+
+    for (const item of items) {
+      const name = String(item.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      let group = groups.get(key);
+      if (!group) { group = []; groups.set(key, group); }
+      group.push(item);
+    }
+
+    const result: Record<string, unknown>[] = [];
+    let suffixCounter = 1;
+
+    for (const [_key, group] of groups) {
+      if (group.length === 1) {
+        result.push(group[0]);
+        continue;
+      }
+
+      // Check if descriptions are too dissimilar (Jaccard < 0.3 AND no containment)
+      const words0 = AnalyzeMerger._getWords(String(group[0].description ?? ""));
+      const words1 = AnalyzeMerger._getWords(String(group[1].description ?? ""));
+      const sim = AnalyzeMerger._jaccard(words0, words1);
+      const shorterContained = AnalyzeMerger._isContained(words0, words1);
+
+      if (sim < 0.3 && !shorterContained && words0.size > 0 && words1.size > 0) {
+        // Descriptions are completely unrelated — keep both with suffix
+        const baseName = String(group[0].name ?? "").trim();
+        const first = { ...group[0], name: `${baseName}_${suffixCounter++}` };
+        const second = { ...group[1], name: `${baseName}_${suffixCounter++}` };
+        result.push(first, second);
+      } else {
+        // Merge: longer description, attribute union, relationship union
+        const merged = { ...group[0] };
+        for (let i = 1; i < group.length; i++) {
+          AnalyzeMerger._mergeEntityInPlace(merged, group[i]);
+        }
+        // Cap attributes at 20
+        const attrs = merged.attributes as Array<Record<string, unknown>> | undefined;
+        if (Array.isArray(attrs) && attrs.length > 20) {
+          merged.attributes = attrs.slice(0, 20);
+        }
+        result.push(merged);
+      }
     }
 
     return result;
   }
 
-  /**
-   * 防线1辅助：基于 description 关键词 Jaccard 相似度去重。
-   * 对每对 name 不同但 description 高度相似的功能进行合并。
-   */
-  private static _dedupFunctionsByDescription(
-    functions: Record<string, unknown>[],
-  ): Record<string, unknown>[] {
-    const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-      "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should",
-      "may", "might", "must", "can", "could", "to", "of", "in", "for", "on", "with",
-      "at", "by", "from", "as", "into", "through", "during", "before", "after",
-      "above", "below", "between", "under", "again", "further", "once",
-      "this", "that", "these", "those", "it", "its"]);
+  /** Merge entity `source` into `target` in-place. */
+  private static _mergeEntityInPlace(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+  ): void {
+    // Description: keep longer
+    const tDesc = String(target.description ?? "");
+    const sDesc = String(source.description ?? "");
+    if (sDesc.length > tDesc.length) target.description = sDesc;
 
-    const getWords = (s: string) => {
-      const words = s.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
-      return new Set(words);
-    };
-
-    const result = [...functions];
-    const merged = new Set<number>();
-
-    for (let i = 0; i < result.length; i++) {
-      if (merged.has(i)) continue;
-      const wi = getWords(String(result[i].description ?? ""));
-      for (let j = i + 1; j < result.length; j++) {
-        if (merged.has(j)) continue;
-        const wj = getWords(String(result[j].description ?? ""));
-        const intersection = [...wi].filter(x => wj.has(x)).length;
-        const union = new Set([...wi, ...wj]).size;
-        const similarity = union > 0 ? intersection / union : 0;
-        if (similarity > 0.7) {
-          // 保留 description 较长的那条
-          if (String(result[j].description ?? "").length > String(result[i].description ?? "").length) {
-            result[i] = result[j];
-          }
-          merged.add(j);
+    // Attributes: union by name, keep longer description version
+    const tAttrs = (Array.isArray(target.attributes) ? target.attributes : []) as Record<string, unknown>[];
+    const sAttrs = (Array.isArray(source.attributes) ? source.attributes : []) as Record<string, unknown>[];
+    const attrMap = new Map<string, Record<string, unknown>>();
+    for (const a of tAttrs) {
+      const n = String(a.name ?? "").trim();
+      if (n) attrMap.set(n.toLowerCase(), a);
+    }
+    for (const a of sAttrs) {
+      const n = String(a.name ?? "").trim();
+      if (!n) continue;
+      const key = n.toLowerCase();
+      const existing = attrMap.get(key);
+      if (!existing) {
+        attrMap.set(key, a);
+      } else {
+        // Keep version with longer description
+        if (String(a.description ?? "").length > String(existing.description ?? "").length) {
+          attrMap.set(key, a);
         }
       }
     }
+    target.attributes = [...attrMap.values()];
 
-    return result.filter((_, i) => !merged.has(i));
+    // Relationships: union by target+type
+    const tRels = (Array.isArray(target.relationships) ? target.relationships : []) as Record<string, unknown>[];
+    const sRels = (Array.isArray(source.relationships) ? source.relationships : []) as Record<string, unknown>[];
+    const relKeys = new Set<string>();
+    const mergedRels: Record<string, unknown>[] = [];
+    for (const r of [...tRels, ...sRels]) {
+      const relKey = `${String(r.target ?? "")}|${String(r.type ?? "")}`;
+      if (!relKeys.has(relKey)) {
+        relKeys.add(relKey);
+        mergedRels.push(r);
+      }
+    }
+    target.relationships = mergedRels;
+  }
+
+  // --- Functions: merge by normalized name ---
+  private static _mergeFunctions(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const groups = new Map<string, Record<string, unknown>[]>();
+
+    for (const item of items) {
+      const name = String(item.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      let group = groups.get(key);
+      if (!group) { group = []; groups.set(key, group); }
+      group.push(item);
+    }
+
+    const result: Record<string, unknown>[] = [];
+
+    for (const group of groups.values()) {
+      if (group.length === 1) {
+        result.push(group[0]);
+        continue;
+      }
+
+      // Same name: merge — longer description, union sub_capabilities & acceptance_criteria
+      const merged = { ...group[0] };
+      for (let i = 1; i < group.length; i++) {
+        const src = group[i];
+        // Description: keep longer
+        if (String(src.description ?? "").length > String(merged.description ?? "").length) {
+          merged.description = src.description;
+        }
+        // Union sub_capabilities
+        merged.sub_capabilities = AnalyzeMerger._unionStringArrays(
+          merged.sub_capabilities, src.sub_capabilities,
+        );
+        // Union acceptance_criteria
+        merged.acceptance_criteria = AnalyzeMerger._unionStringArrays(
+          merged.acceptance_criteria, src.acceptance_criteria,
+        );
+      }
+      result.push(merged);
+    }
+
+    return result;
+  }
+
+  // --- Constraints / Exceptions: merge by description similarity ---
+  private static _mergeByDescriptionSimilarity(
+    items: Record<string, unknown>[],
+  ): Record<string, unknown>[] {
+    if (items.length <= 1) return [...items];
+
+    const result: Record<string, unknown>[] = [];
+    const used = new Set<number>();
+
+    for (let i = 0; i < items.length; i++) {
+      if (used.has(i)) continue;
+      let best = items[i];
+      const bestWords = AnalyzeMerger._getWords(String(best.description ?? ""));
+
+      for (let j = i + 1; j < items.length; j++) {
+        if (used.has(j)) continue;
+        const jWords = AnalyzeMerger._getWords(String(items[j].description ?? ""));
+        const sim = AnalyzeMerger._jaccard(bestWords, jWords);
+
+        if (sim >= 0.7) {
+          // Keep the version with longer description
+          if (String(items[j].description ?? "").length > String(best.description ?? "").length) {
+            best = items[j];
+          }
+          used.add(j);
+        }
+      }
+
+      result.push(best);
+    }
+
+    return result;
+  }
+
+  // --- NFR: dedup by category ---
+  private static _mergeByCategory(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const item of items) {
+      const cat = String(item.category ?? "").trim();
+      if (!cat) continue;
+      const key = cat.toLowerCase();
+      if (!seen.has(key)) seen.set(key, item);
+    }
+    return [...seen.values()];
+  }
+
+  // --- Business processes: dedup by name ---
+  private static _mergeByName(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const item of items) {
+      const name = String(item.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, item);
+    }
+    return [...seen.values()];
+  }
+
+  // --- Shared Jaccard helpers ---
+
+  private static readonly _STOP_WORDS = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should",
+    "may", "might", "must", "can", "could", "to", "of", "in", "for", "on", "with",
+    "at", "by", "from", "as", "into", "through", "during", "before", "after",
+    "above", "below", "between", "under", "again", "further", "once",
+    "this", "that", "these", "those", "it", "its",
+  ]);
+
+  private static _getWords(s: string): Set<string> {
+    const words = s.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/)
+      .map((w) => w.replace(/s$/, "")) // basic singular normalization
+      .filter((w) => w.length > 1 && !AnalyzeMerger._STOP_WORDS.has(w));
+    return new Set(words);
+  }
+
+  private static _jaccard(a: Set<string>, b: Set<string>): number {
+    if (a.size === 0 && b.size === 0) return 1;
+    let inter = 0;
+    for (const x of a) { if (b.has(x)) inter++; }
+    const union = new Set([...a, ...b]).size;
+    return union > 0 ? inter / union : 0;
+  }
+
+  /** Check if the shorter word set is fully contained in the longer one. */
+  private static _isContained(a: Set<string>, b: Set<string>): boolean {
+    const [shorter, longer] = a.size <= b.size ? [a, b] : [b, a];
+    if (shorter.size === 0) return false;
+    for (const w of shorter) {
+      if (!longer.has(w)) return false;
+    }
+    return true;
+  }
+
+  private static _unionStringArrays(a: unknown, b: unknown): string[] {
+    const set = new Set<string>();
+    for (const arr of [a, b]) {
+      if (Array.isArray(arr)) {
+        for (const item of arr) {
+          const s = String(item).trim();
+          if (s) set.add(s);
+        }
+      }
+    }
+    return [...set];
   }
 
   /**
