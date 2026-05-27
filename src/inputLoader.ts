@@ -6,7 +6,7 @@
 
 import { readFileSync, existsSync, lstatSync } from "node:fs";
 import { extname } from "node:path";
-import { parseXmlRequirement } from "./xmlParser.js";
+import { parseXmlRequirement, extractSectionIndex, type SectionIndex } from "./xmlParser.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +30,28 @@ export class InputLoader {
   ]);
   static readonly MAX_FILE_SIZE = 512 * 1024; // 512KB
   static readonly MAX_CHARS = 100_000;
+
+  /**
+   * 读取需求文档，返回文本和可选的章节索引。
+   *
+   * @param filePath - 输入文件的路径。
+   * @returns 包含 text 和可选 sectionIndex 的对象。
+   */
+  static loadWithSections(filePath: string): { text: string; sectionIndex?: SectionIndex[] } {
+    const text = InputLoader.load(filePath);
+    const ext = extname(filePath).toLowerCase();
+    if (ext === ".xml") {
+      try {
+        const raw = readFileSync(filePath, "utf8");
+        const sectionIndex = extractSectionIndex(raw);
+        return { text, sectionIndex };
+      } catch {
+        // Non-fatal: return text without index
+        return { text };
+      }
+    }
+    return { text };
+  }
 
   /**
    * 读取需求文档，返回清理后的文本。

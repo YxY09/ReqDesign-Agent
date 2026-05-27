@@ -32,6 +32,7 @@ import {
   createExecutionPlan,
   createTask,
 } from "./shared/types.js";
+import type { SectionIndex } from "./xmlParser.js";
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/snapshot.js";
 import { RequirementNormalizer } from "./shared/normalizer.js";
@@ -100,6 +101,7 @@ export class WorkflowState {
 
   // --- Input --------------------------------------------------------------
   requirementText: string = "";
+  sectionIndex: SectionIndex[] = [];
 
   // --- Plan ---------------------------------------------------------------
   plan: ExecutionPlan | null = null;

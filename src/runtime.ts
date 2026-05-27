@@ -48,6 +48,7 @@ import {
   type WorkerKind,
 } from "./shared/types.js";
 import { InputLoader } from "./inputLoader.js";
+import { sliceBySections } from "./xmlParser.js";
 import { TraceLogger } from "./traceLogger.js";
 import {
   createWorkflowEvent,
@@ -210,6 +211,7 @@ export class MultiAgentRuntime {
     this.backend = new SessionBackend({
       factory: this.factory,
       heartbeatInterval: 0.25,
+      maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? "", 10) || 5,
       onNotification: (session, notification) => {
         this.emitBackendNotification(
           session.workerType as "planner" | "generator" | "evaluator" | "repair",
@@ -273,6 +275,13 @@ export class MultiAgentRuntime {
     let skipFinalSave = false;
     try {
       state.requirementText = this.inputLoader.load(inputPath);
+      // Load section index for XML inputs
+      try {
+        const loadResult = this.inputLoader.loadWithSections(inputPath);
+        state.sectionIndex = loadResult.sectionIndex ?? [];
+      } catch {
+        state.sectionIndex = [];
+      }
       this.trace.log("system", "input_loaded", { inputPath, goal });
       this.emitRuntimeEvent("input_loaded", `loaded input ${inputPath}`, {
         goal,
@@ -633,7 +642,10 @@ export class MultiAgentRuntime {
       artifactSummary: state.artifactSummary(),
       artifactSnapshots: state.artifactSnapshots(),
       isDirectMode: state.isDirectMode,
-      hints: decision.replanContext,
+      hints: {
+        ...(decision.replanContext ?? {}),
+        sectionIndex: state.sectionIndex.length > 0 ? state.sectionIndex : undefined,
+      },
     });
     const message = createTaskMessage({
       type: messageType,
@@ -1155,12 +1167,19 @@ export class MultiAgentRuntime {
   }
 
   private buildTaskContext(state: WorkflowState, task: Task): SessionContext {
+    // When task has assignedSections and we have a section index, slice the requirement text
+    let effectiveText = state.requirementText;
+    const assignedSections = task.contextHints?.assignedSections;
+    if (Array.isArray(assignedSections) && assignedSections.length > 0 && state.sectionIndex.length > 0) {
+      effectiveText = sliceBySections(state.requirementText, state.sectionIndex, assignedSections as string[]);
+    }
+
     return new SessionContext({
       taskId: task.id,
       taskType: task.type,
       taskDescription: task.description,
       goal: state.goal,
-      requirementText: state.requirementText,
+      requirementText: effectiveText,
       requirementJson: state.requirementJson,
       designText: state.designText,
       diagrams: state.diagrams,
