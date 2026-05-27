@@ -1,6 +1,18 @@
 import { readFileSync } from "node:fs";
 import { XMLParser } from "fast-xml-parser";
 
+// ---------------------------------------------------------------------------
+// SectionIndex — structured section metadata for slicing
+// ---------------------------------------------------------------------------
+
+export interface SectionIndex {
+  id: string;
+  depth: number;
+  title: string;
+  body: string;
+  charRange: [number, number];
+}
+
 interface ParsedReqDoc {
   req_document: {
     p?: ParsedSection[];
@@ -78,6 +90,13 @@ function flattenSections(
   paragraphs: ParsedSection[],
   depth: number,
 ): Array<{ depth: number; title: string; body: string }> {
+  return flattenSectionsRaw(paragraphs, depth);
+}
+
+function flattenSectionsRaw(
+  paragraphs: ParsedSection[],
+  depth: number,
+): Array<{ depth: number; title: string; body: string }> {
   const result: Array<{ depth: number; title: string; body: string }> = [];
 
   for (const p of paragraphs) {
@@ -106,13 +125,13 @@ function flattenSections(
           result.push({ depth: depth + 1, title: reqBody.trim().replace(/\s+/g, " "), body: "" });
         }
         if (req.p) {
-          result.push(...flattenSections(req.p, depth + 1));
+          result.push(...flattenSectionsRaw(req.p, depth + 1));
         }
       }
     }
 
     if (p.p) {
-      result.push(...flattenSections(p.p, depth + 1));
+      result.push(...flattenSectionsRaw(p.p, depth + 1));
     }
   }
 
@@ -126,4 +145,81 @@ function formatSection(s: { depth: number; title: string; body: string }): strin
     text += `\n\n${s.body}`;
   }
   return text;
+}
+
+// ---------------------------------------------------------------------------
+// extractSectionIndex — build section metadata from raw XML
+// ---------------------------------------------------------------------------
+
+export function extractSectionIndex(xml: string): SectionIndex[] {
+  const parser = new XMLParser({
+    ignoreAttributes: true,
+    isArray: (name) => name === "p",
+  });
+
+  const doc = parser.parse(xml) as ParsedReqDoc;
+  const paragraphs = doc.req_document?.p ?? [];
+  const rawSections = flattenSectionsRaw(paragraphs, 1);
+
+  if (rawSections.length === 0) return [];
+
+  // Build the same markdown that parseXmlString returns (with structure overview)
+  const structureOverview = extractStructure(rawSections);
+  const mdContent = rawSections.map(formatSection).join("\n\n");
+  const fullMd = structureOverview + mdContent;
+
+  // Compute char ranges within the full markdown
+  let currentPos = structureOverview.length; // skip the overview prefix
+  const indices: SectionIndex[] = [];
+  const depthCounters: Record<number, number> = {};
+
+  for (let i = 0; i < rawSections.length; i++) {
+    const s = rawSections[i];
+    const sectionMd = formatSection(s);
+    const start = fullMd.indexOf(sectionMd, currentPos);
+    const actualStart = start >= 0 ? start : currentPos;
+    const end = actualStart + sectionMd.length;
+    currentPos = end;
+
+    // Generate stable ID: s{depth}-{counter}
+    if (!depthCounters[s.depth]) depthCounters[s.depth] = 0;
+    depthCounters[s.depth]++;
+    const id = `s${s.depth}-${depthCounters[s.depth]}`;
+
+    indices.push({
+      id,
+      depth: s.depth,
+      title: s.title,
+      body: s.body,
+      charRange: [actualStart, end],
+    });
+  }
+
+  return indices;
+}
+
+// ---------------------------------------------------------------------------
+// sliceBySections — extract specific sections from markdown
+// ---------------------------------------------------------------------------
+
+export function sliceBySections(
+  markdown: string,
+  sections: SectionIndex[],
+  sectionIds?: string[],
+): string {
+  if (!sectionIds || sectionIds.length === 0) {
+    return markdown;
+  }
+
+  const idSet = new Set(sectionIds);
+  const parts: string[] = [];
+
+  for (const section of sections) {
+    if (idSet.has(section.id)) {
+      const [start, end] = section.charRange;
+      parts.push(markdown.slice(start, end));
+    }
+  }
+
+  return parts.join("\n\n");
 }
