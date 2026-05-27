@@ -250,7 +250,10 @@ export class PlanningSession extends WorkerSession {
       return this.runReplan(message);
     }
 
-    const plan = await this.agent.plan(this.context.requirementText, this.context.goal);
+    const sectionIndex = Array.isArray(this.context.hints?.sectionIndex)
+      ? this.context.hints.sectionIndex as Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>
+      : undefined;
+    const plan = await this.agent.plan(this.context.requirementText, this.context.goal, sectionIndex);
     this.markHeartbeat();
     this.state.intermediateState.last_plan = plan;
     this.logger.info(`run: 规划完成，${plan.tasks.length} 个任务`);

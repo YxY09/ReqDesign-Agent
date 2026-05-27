@@ -46,7 +46,7 @@ export class PlanningTool extends BaseTool {
   // 公开 API
   // ------------------------------------------------------------------
 
-  async plan(requirementText: string, goal = "design"): Promise<ExecutionPlan> {
+  async plan(requirementText: string, goal = "design", sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>): Promise<ExecutionPlan> {
     if (!requirementText?.trim()) {
       this.logger.warn("plan: 需求文本为空，返回空计划");
       return createExecutionPlan({ tasks: [], goal, reasoning: "需求文本为空" });
@@ -54,7 +54,7 @@ export class PlanningTool extends BaseTool {
 
     this.logger.info(`plan: 开始规划，目标=${goal}，需求长度=${requirementText.length}`);
     const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
-    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal);
+    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex);
 
     let plan: ExecutionPlan;
     try {
@@ -115,15 +115,34 @@ export class PlanningTool extends BaseTool {
     return await this._loadPromptWithConstitution("planner_replan.md", "", queryContext);
   }
 
-  static _buildUserPrompt(requirementText: string, goal: string): string {
+  static _buildUserPrompt(
+    requirementText: string,
+    goal: string,
+    sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
+  ): string {
+    const taskSection = goal.toLowerCase().includes("analyze")
+      ? "\n## 特殊要求\n因为目标是 analyze（仅需求分析），请只规划 analyze 任务，不需要 design/diagrams/tests。"
+      : "";
+
+    if (sectionIndex && sectionIndex.length > 0) {
+      // TOC mode: build chapter directory + per-chapter summary
+      const tocLines: string[] = [];
+      for (const s of sectionIndex) {
+        const indent = "  ".repeat(Math.max(0, s.depth - 1));
+        const charCount = s.body.length;
+        const summary = s.body.length > 150 ? s.body.slice(0, 150) + "..." : s.body;
+        tocLines.push(`${indent}- [${s.id}] ${s.title} (${charCount}字)${summary ? " — " + summary : ""}`);
+      }
+      const toc = tocLines.join("\n");
+
+      return `## 需求文档章节目录（共${sectionIndex.length}个章节）\n\n${toc}\n\n---\n\n请根据上述章节目录，为每个 analyze 任务分配 assignedSections（章节 ID 列表），使各 analyze 任务分工明确。\n约束/异常提取任务不需要 assignedSections（拿全文）。\n${taskSection}\n\n请输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}, "assignedSections": ["s1-1", "s2-1"]}]}\n\`\`\``;
+    }
+
+    // Fallback: truncate
     let text = requirementText.slice(0, 8000);
     if (requirementText.length > 8000) {
       text += "\n\n...(后续内容已截断，核心功能点已覆盖)";
     }
-
-    const taskSection = goal.toLowerCase().includes("analyze")
-      ? "\n## 特殊要求\n因为目标是 analyze（仅需求分析），请只规划 analyze 任务，不需要 design/diagrams/tests。"
-      : "";
 
     return `## 需求文档\n\n${text}\n${taskSection}\n\n请根据上述需求文档，输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}}]}\n\`\`\``;
   }
@@ -180,12 +199,23 @@ export class PlanningTool extends BaseTool {
             : rawMode === "domain" ? "domain"
             : rawMode ? "domain"
             : undefined;
+
+          // Read assignedSections from LLM output (camelCase or snake_case)
+          const contextHints: Record<string, unknown> =
+            (typeof t.context_hints === "object" && t.context_hints !== null) ? t.context_hints as Record<string, unknown> : {};
+          const assignedSections = Array.isArray(t.assignedSections ?? t.assigned_sections)
+            ? ((t.assignedSections ?? t.assigned_sections) as unknown[]).map(String).filter(Boolean)
+            : undefined;
+          if (assignedSections && assignedSections.length > 0) {
+            contextHints.assignedSections = assignedSections;
+          }
+
           return createTask({
             id: String(t.id || "").trim(),
             type: (String(t.type || "analyze").trim()) as Task["type"],
             description: String(t.description || "").trim(),
             dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()).filter(Boolean) : [],
-            contextHints: (typeof t.context_hints === "object" && t.context_hints !== null) ? t.context_hints as Record<string, unknown> : {},
+            contextHints,
             ...(analysisMode ? { analysisMode } : {}),
           });
         });
