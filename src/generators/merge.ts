@@ -58,7 +58,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     // 只有一个分析结果：无需合并，直接返回
     if (artifacts.length === 1) {
-      return artifacts[0].content;
+      const { result, idMap } = assignCanonicalIds(artifacts[0].content);
+      fixCrossReferences(result, idMap);
+      return result;
     }
 
     // 程序化预合并：将所有分析结果按名称去重取并集

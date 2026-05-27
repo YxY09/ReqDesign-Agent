@@ -126,6 +126,43 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
     expect(plan.tasks[0].analysisMode).toBe("domain");
   });
 
+  it("parses analysisMode (camelCase) from LLM response", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-1",
+          type: "analyze",
+          description: "constraint extraction via camelCase",
+          depends_on: [],
+          context_hints: {},
+          analysisMode: "constraints",
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    expect(plan.tasks[0].analysisMode).toBe("constraints");
+  });
+
+  it("prefers snake_case analysis_mode when both present", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-1",
+          type: "analyze",
+          description: "both modes",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "constraints",
+          analysisMode: "domain",
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    expect(plan.tasks[0].analysisMode).toBe("constraints");
+  });
+
   it("sets analysisMode to undefined when not provided", () => {
     const response = {
       reasoning: "test",

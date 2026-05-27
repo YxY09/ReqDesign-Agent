@@ -767,6 +767,60 @@ describe("merge canonical ID assignment", () => {
     expect(exceptions[1].id).toBe("X002");
   });
 
+  it("assigns canonical IDs for single artifact (early return path)", async () => {
+    const merger = new AnalyzeMerger(mockLlmForMerge);
+    const artifacts = [
+      artifact({
+        entities: [
+          { name: "Order", attributes: [], relationships: [{ target: "Customer", type: "belongs_to", description: "" }] },
+          { name: "Customer", attributes: [], relationships: [] },
+        ],
+        functions: [
+          { name: "DeleteOrder", description: "Delete an order" },
+          { name: "CreateOrder", description: "Create an order" },
+        ],
+        constraints: [
+          { id: "C005", description: "Fifth constraint" },
+          { id: "C001", description: "First constraint" },
+        ],
+        exceptions: [
+          { id: "X010", description: "Payment gateway timeout", trigger: "t", handling: "h" },
+          { id: "X002", description: "Database pool exhausted", trigger: "t", handling: "h" },
+        ],
+      }),
+    ];
+
+    const result = await merger.merge(artifacts, "some requirement");
+
+    // Entities sorted by name: Customer -> Order
+    const entities = result.entities as Array<Record<string, unknown>>;
+    expect(entities).toHaveLength(2);
+    expect(entities[0].id).toBe("E001");
+    expect(entities[0].name).toBe("Customer");
+    expect(entities[1].id).toBe("E002");
+    expect(entities[1].name).toBe("Order");
+
+    // Functions sorted by name: CreateOrder -> DeleteOrder
+    const functions = result.functions as Array<Record<string, unknown>>;
+    expect(functions).toHaveLength(2);
+    expect(functions[0].id).toBe("F001");
+    expect(functions[0].name).toBe("CreateOrder");
+    expect(functions[1].id).toBe("F002");
+    expect(functions[1].name).toBe("DeleteOrder");
+
+    // Constraints sorted by old id: C001 -> C005
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints).toHaveLength(2);
+    expect(constraints[0].id).toBe("C001");
+    expect(constraints[1].id).toBe("C002");
+
+    // Exceptions sorted by old id: X002 -> X010
+    const exceptions = result.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions).toHaveLength(2);
+    expect(exceptions[0].id).toBe("X001");
+    expect(exceptions[1].id).toBe("X002");
+  });
+
   it("fixes cross-references after canonical ID assignment", async () => {
     const merger = new AnalyzeMerger(mockLlmForMerge);
     const artifacts = [

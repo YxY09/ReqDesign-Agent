@@ -193,7 +193,7 @@ export class PlanningTool extends BaseTool {
       tasks = tasksRaw
         .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null && !Array.isArray(t))
         .map((t) => {
-          const rawMode = String(t.analysis_mode ?? "").trim();
+          const rawMode = String(t.analysis_mode ?? t.analysisMode ?? "").trim();
           const analysisMode: Task["analysisMode"] =
             rawMode === "constraints" ? "constraints"
             : rawMode === "domain" ? "domain"
