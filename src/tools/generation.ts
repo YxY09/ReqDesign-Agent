@@ -10,6 +10,8 @@ import type { ToolCapabilities } from "./types.js";
 import { createToolError } from "./types.js";
 import { type Task, type Artifact, createArtifact } from "../shared/types.js";
 import { loadPrompt } from "../promptLoader.js";
+import { buildRegistrySummary } from "../shared/registrySummary.js";
+import type { EntityRegistry } from "../shared/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
@@ -130,6 +132,19 @@ export class GenerationTool extends BaseTool {
     let text = (ctx.requirement_text as string) ?? "";
     const existingJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!text && !existingJson) throw createToolError("GEN_MISSING_INPUT", "缺少 requirement_text 和 requirement_json", { recoverable: false });
+
+    // Inject registry summary if available in context hints
+    const registry = ctx.registry as EntityRegistry | undefined;
+    if (registry && (registry.entities.length > 0 || registry.functions.length > 0)) {
+      const summary = buildRegistrySummary(registry);
+      if (summary) {
+        text = text.replace(/\{registry_summary\}/g, summary);
+        // If placeholder wasn't in text, prepend it
+        if (!text.includes(summary)) {
+          text = `## 全局实体注册表\n${summary}\n\n${text}`;
+        }
+      }
+    }
 
     if (Array.isArray(hints.focus_areas) && hints.focus_areas.length > 0) {
       const focus = hints.focus_areas.map(String).join(", ");

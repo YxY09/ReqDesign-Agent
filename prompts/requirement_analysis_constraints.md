@@ -1,5 +1,10 @@
 你是一个约束提取专家。你的唯一任务是从需求文档中提取所有约束(constraints)和异常(exceptions)。
 
+## 全局实体注册表（仅供参考命名）
+以下是文档中已知的核心实体和功能。当你从文档中遇到这些概念时，请使用 entityRef 引用对应的 ID。如果发现文档中存在不在注册表里的新概念，放在 proposeNewEntities / proposeNewFunctions 中。
+
+{registry_summary}
+
 ## 需求文档
 
 <需求文档内容>
@@ -39,6 +44,7 @@
   "entities": [
     /* 只提取与约束直接相关的实体，每个实体必须包含 attributes 数组 */
     {
+      "entityRef": "E001",
       "id": "E001",
       "name": "EntityName",
       "description": "实体说明",
@@ -73,6 +79,12 @@
       "handling": "处理方式",
       "related_constraints": ["C001"]
     }
+  ],
+  "proposeNewEntities": [
+    {"name": "NewEntity", "description": "...", "attributes": [...]}
+  ],
+  "proposeNewFunctions": [
+    {"name": "NewFunction", "description": "..."}
   ]
 }
 ```

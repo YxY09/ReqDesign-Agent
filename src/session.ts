@@ -182,6 +182,7 @@ export class SessionContext {
   evaluateScope: string[] = [];
   hints: Record<string, unknown> = {};
   previousIssues: Array<{ severity: string; description: string; location?: string }> = [];
+  registry?: import("./shared/types.js").EntityRegistry = undefined;
 
   constructor(init?: Partial<SessionContext>) {
     Object.assign(this, init);

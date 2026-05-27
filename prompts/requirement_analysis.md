@@ -1,5 +1,10 @@
 你是一个资深的软件需求分析师。请从以下需求文档中抽取结构化的需求要素。
 
+## 全局实体注册表（仅供参考命名）
+以下是文档中已知的核心实体和功能。当你从文档中遇到这些概念时，请使用 entityRef 引用对应的 ID。如果发现文档中存在不在注册表里的新概念，放在 proposeNewEntities / proposeNewFunctions 中。
+
+{registry_summary}
+
 ## 分析方法论（严格遵循）
 
 不要凭直觉提取。按以下四步系统扫描文档：
@@ -67,6 +72,7 @@
   ],
   "entities": [
     {
+      "entityRef": "E_CASE",
       "name": "实体名称",
       "description": "实体描述",
       "attributes": [
@@ -113,6 +119,12 @@
       "steps": ["查询图书", "选择图书", "确认借阅", "更新库存"],
       "actors": ["学生"]
     }
+  ],
+  "proposeNewEntities": [
+    {"name": "NewEntity", "description": "...", "attributes": [...]}
+  ],
+  "proposeNewFunctions": [
+    {"name": "NewFunction", "description": "..."}
   ]
 }
 ```

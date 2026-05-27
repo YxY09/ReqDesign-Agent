@@ -11,10 +11,12 @@ import {
   type PlanMutation,
   type Task,
   type Issue,
+  type EntityRegistry,
   createTask,
   createPlanMutation,
   createExecutionPlan,
 } from "../shared/types.js";
+import { buildRegistrySummary } from "../shared/registrySummary.js";
 
 /** 合并依赖列表，保持顺序的同时确保必需的 upstream 任务存在。 */
 function mergeDeps(existing: string[], required: string[]): string[] {
@@ -126,10 +128,20 @@ export class PlanningTool extends BaseTool {
     requirementText: string,
     goal: string,
     sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
+    registry?: EntityRegistry,
   ): string {
     const taskSection = goal.toLowerCase().includes("analyze")
       ? "\n## 特殊要求\n因为目标是 analyze（仅需求分析），请只规划 analyze 任务，不需要 design/diagrams/tests。"
       : "";
+
+    // Registry summary section
+    let registrySection = "";
+    if (registry) {
+      const summary = buildRegistrySummary(registry);
+      if (summary) {
+        registrySection = `\n## 全局实体注册表\n以下是已识别的核心实体和功能，规划时请参考这些术语。\n\n${summary}\n`;
+      }
+    }
 
     if (sectionIndex && sectionIndex.length > 0) {
       // TOC mode: build chapter directory + per-chapter summary
@@ -142,7 +154,7 @@ export class PlanningTool extends BaseTool {
       }
       const toc = tocLines.join("\n");
 
-      return `## 需求文档章节目录（共${sectionIndex.length}个章节）\n\n${toc}\n\n---\n\n请根据上述章节目录，为每个 analyze 任务分配 assignedSections（章节 ID 列表），使各 analyze 任务分工明确。\n约束/异常提取任务不需要 assignedSections（拿全文）。\n${taskSection}\n\n请输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}, "assignedSections": ["s1-1", "s2-1"]}]}\n\`\`\``;
+      return `${registrySection}## 需求文档章节目录（共${sectionIndex.length}个章节）\n\n${toc}\n\n---\n\n请根据上述章节目录，为每个 analyze 任务分配 assignedSections（章节 ID 列表），使各 analyze 任务分工明确。\n约束/异常提取任务不需要 assignedSections（拿全文）。\n${taskSection}\n\n请输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}, "assignedSections": ["s1-1", "s2-1"]}]}\n\`\`\``;
     }
 
     // Fallback: truncate
@@ -151,7 +163,7 @@ export class PlanningTool extends BaseTool {
       text += "\n\n...(后续内容已截断，核心功能点已覆盖)";
     }
 
-    return `## 需求文档\n\n${text}\n${taskSection}\n\n请根据上述需求文档，输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}}]}\n\`\`\``;
+    return `${registrySection}## 需求文档\n\n${text}\n${taskSection}\n\n请根据上述需求文档，输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}}]}\n\`\`\``;
   }
 
   static _buildReplanUserPrompt(

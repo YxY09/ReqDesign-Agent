@@ -1206,6 +1206,7 @@ export class MultiAgentRuntime {
       artifactSnapshots: state.artifactSnapshots(),
       hints: task.contextHints,
       isDirectMode: state.isDirectMode,
+      registry: state.registry ?? undefined,
     });
   }
 

@@ -34,6 +34,31 @@ export type Severity = "blocker" | "major" | "minor";
 export type Scope = "local" | "upstream" | "systemic" | "";
 
 // ---------------------------------------------------------------------------
+// Registry types
+// ---------------------------------------------------------------------------
+
+/** A core entity in the global entity registry. */
+export interface RegistryEntity {
+  id: string;            // "E_CASE"
+  canonicalName: string; // "Case"
+  displayName: string;   // "案件"
+  aliases: string[];     // ["Case", "案件", "Police Case", "Case Record"]
+}
+
+/** A function in the global entity registry. */
+export interface RegistryFunction {
+  id: string;            // "F_REGISTER_COMPLAINT"
+  canonicalName: string; // "RegisterComplaint"
+  aliases: string[];     // ["RegisterComplaint", "注册投诉"]
+}
+
+/** Global entity registry — maps all known entities and functions. */
+export interface EntityRegistry {
+  entities: RegistryEntity[];
+  functions: RegistryFunction[];
+}
+
+// ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
 
@@ -64,6 +89,8 @@ export interface ExecutionPlan {
   tasks: Task[];
   goal: string;
   reasoning: string;
+  /** Global entity registry extracted during planning. */
+  registry?: EntityRegistry;
 }
 
 /** A generated artifact. */

@@ -103,6 +103,9 @@ export class WorkflowState {
   requirementText: string = "";
   sectionIndex: SectionIndex[] = [];
 
+  // --- Registry ------------------------------------------------------------
+  registry: import("./shared/types.js").EntityRegistry | null = null;
+
   // --- Plan ---------------------------------------------------------------
   plan: ExecutionPlan | null = null;
 

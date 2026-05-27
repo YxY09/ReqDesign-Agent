@@ -221,6 +221,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const allExceptions: Record<string, unknown>[] = [];
     const allNFR: Record<string, unknown>[] = [];
     const allBP: Record<string, unknown>[] = [];
+    const allProposedEntities: Record<string, unknown>[] = [];
+    const allProposedFunctions: Record<string, unknown>[] = [];
     let projectName = "";
     let projectOverview = "";
 
@@ -241,6 +243,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       for (const item of (c.exceptions as Array<Record<string, unknown>>) ?? []) allExceptions.push(item);
       for (const item of (c.non_functional_requirements as Array<Record<string, unknown>>) ?? []) allNFR.push(item);
       for (const item of (c.business_processes as Array<Record<string, unknown>>) ?? []) allBP.push(item);
+      for (const item of (c.proposeNewEntities as Array<Record<string, unknown>>) ?? []) allProposedEntities.push(item);
+      for (const item of (c.proposeNewFunctions as Array<Record<string, unknown>>) ?? []) allProposedFunctions.push(item);
     }
 
     // --- Phase 2: Smart merge each type ---
@@ -253,6 +257,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const mergedNFR = AnalyzeMerger._mergeByCategory(allNFR);
     const mergedBP = AnalyzeMerger._mergeByName(allBP);
 
+    // Collect proposed new entities/functions, dedup by name
+    const proposedEntities = AnalyzeMerger._dedupByName(allProposedEntities);
+    const proposedFunctions = AnalyzeMerger._dedupByName(allProposedFunctions);
+
     return {
       project_name: projectName,
       project_overview: projectOverview,
@@ -263,6 +271,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       exceptions: mergedExceptions,
       non_functional_requirements: mergedNFR,
       business_processes: mergedBP,
+      proposeNewEntities: proposedEntities,
+      proposeNewFunctions: proposedFunctions,
     };
   }
 
@@ -330,23 +340,55 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     return result;
   }
 
-  // --- Entities: merge by normalized name ---
+  // --- Entities: merge by entityRef first, then by normalized name ---
   private static _mergeEntities(items: Record<string, unknown>[]): Record<string, unknown>[] {
-    const groups = new Map<string, Record<string, unknown>[]>();
+    // Phase 1: group by entityRef if present
+    const refGroups = new Map<string, Record<string, unknown>[]>();
+    const noRefItems: Record<string, unknown>[] = [];
 
     for (const item of items) {
-      const name = String(item.name ?? "").trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      let group = groups.get(key);
-      if (!group) { group = []; groups.set(key, group); }
-      group.push(item);
+      const ref = String(item.entityRef ?? "").trim();
+      if (ref) {
+        let group = refGroups.get(ref);
+        if (!group) { group = []; refGroups.set(ref, group); }
+        group.push(item);
+      } else {
+        noRefItems.push(item);
+      }
     }
 
     const result: Record<string, unknown>[] = [];
-    let suffixCounter = 1;
 
-    for (const [_key, group] of groups) {
+    // Merge entityRef groups
+    for (const [_ref, group] of refGroups) {
+      if (group.length === 1) {
+        result.push(group[0]);
+        continue;
+      }
+      const merged = { ...group[0] };
+      for (let i = 1; i < group.length; i++) {
+        AnalyzeMerger._mergeEntityInPlace(merged, group[i]);
+      }
+      const attrs = merged.attributes as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(attrs) && attrs.length > 20) {
+        merged.attributes = attrs.slice(0, 20);
+      }
+      result.push(merged);
+    }
+
+    // Phase 2: merge remaining items by normalized name (legacy compat)
+    const nameGroups = new Map<string, Record<string, unknown>[]>();
+    for (const item of noRefItems) {
+      const name = String(item.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      let group = nameGroups.get(key);
+      if (!group) { group = []; nameGroups.set(key, group); }
+      group.push(item);
+    }
+
+    let suffixCounter = 1;
+    for (const [_key, group] of nameGroups) {
       if (group.length === 1) {
         result.push(group[0]);
         continue;
@@ -370,7 +412,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         for (let i = 1; i < group.length; i++) {
           AnalyzeMerger._mergeEntityInPlace(merged, group[i]);
         }
-        // Cap attributes at 20
         const attrs = merged.attributes as Array<Record<string, unknown>> | undefined;
         if (Array.isArray(attrs) && attrs.length > 20) {
           merged.attributes = attrs.slice(0, 20);
@@ -526,6 +567,18 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const seen = new Map<string, Record<string, unknown>>();
     for (const item of items) {
       const name = String(item.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, item);
+    }
+    return [...seen.values()];
+  }
+
+  // --- Dedup by canonicalName for proposed entities/functions ---
+  private static _dedupByName(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const item of items) {
+      const name = String(item.name ?? item.canonicalName ?? "").trim();
       if (!name) continue;
       const key = name.toLowerCase();
       if (!seen.has(key)) seen.set(key, item);
