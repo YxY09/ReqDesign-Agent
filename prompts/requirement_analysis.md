@@ -89,7 +89,8 @@
     {
       "id": "C001",
       "description": "约束描述",
-      "related_functions": ["相关功能"]
+      "related_functions": ["相关功能"],
+      "source_text": "文档原文片段"
     }
   ],
   "exceptions": [

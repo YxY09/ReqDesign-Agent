@@ -54,6 +54,9 @@ export interface Task {
     targetArtifactId: string;
     targetSections?: string[];
   };
+
+  /** Analysis mode for analyze tasks: domain extraction or constraint extraction. */
+  analysisMode?: "domain" | "constraints";
 }
 
 /** PlanningTool output. */

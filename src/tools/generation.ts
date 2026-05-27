@@ -13,6 +13,7 @@ import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
 import { TestCaseGenerator } from "../generators/tests.js";
+import { validateConstraintAnalysisResult } from "../shared/constraintSchema.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -103,7 +104,7 @@ export class GenerationTool extends BaseTool {
 
     switch (task.type) {
       case "analyze":
-        return await this._generateAnalyze(context, hints, desc, injectedPrompt);
+        return await this._generateAnalyze(context, hints, desc, injectedPrompt, task.analysisMode);
       case "design":
         return await this._generateDesign(context, hints, desc, injectedPrompt);
       case "diagrams":
@@ -118,6 +119,7 @@ export class GenerationTool extends BaseTool {
   private async _generateAnalyze(
     ctx: Record<string, unknown>, hints: Record<string, unknown>,
     _desc: string, systemPrompt: string,
+    analysisMode?: "domain" | "constraints",
   ): Promise<Record<string, unknown>> {
     let text = (ctx.requirement_text as string) ?? "";
     const existingJson = ctx.requirement_json as Record<string, unknown> | undefined;
@@ -140,9 +142,9 @@ ${text}`;
 
 ${text}`;
     }
-    // 检查是否为约束提取任务，选择对应的 prompt 模板
+    // 检查是否为约束提取任务：优先检查 analysisMode，fallback 到 note 匹配
     const note = String(hints.note ?? "").toLowerCase();
-    const isConstraintTask = note.includes("constraint") || note.includes("约束");
+    const isConstraintTask = analysisMode === "constraints" || (!analysisMode && (note.includes("constraint") || note.includes("约束")));
     const analyzer = isConstraintTask
       ? new RequirementAnalyzer(this.llm, "requirement_analysis_constraints.md")
       : this._getAnalyzer();
@@ -235,10 +237,18 @@ ${text}`;
       if (typeof content !== "object" || content === null || Array.isArray(content))
         return ["需求分析结果格式错误（非 dict）"];
       const c = content as Record<string, unknown>;
-      if (!c.actors) issues.push("缺少 actors 字段");
-      if (!c.functions) issues.push("缺少 functions 字段");
-      if (!c.entities) issues.push("缺少 entities 字段");
-      issues.push(...RequirementAnalyzer.validateResult(c));
+
+      if (task.analysisMode === "constraints") {
+        // Use constraint-specific validator
+        const cResult = validateConstraintAnalysisResult(c);
+        if (!cResult.valid) issues.push(...cResult.errors);
+      } else {
+        // Standard full validator
+        if (!c.actors) issues.push("缺少 actors 字段");
+        if (!c.functions) issues.push("缺少 functions 字段");
+        if (!c.entities) issues.push("缺少 entities 字段");
+        issues.push(...RequirementAnalyzer.validateResult(c));
+      }
     }
     else if (taskType === "design") {
       if (typeof content !== "string" || !content.trim())

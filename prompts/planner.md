@@ -67,6 +67,7 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
 {
   "id": "analyze-constraints",
   "type": "analyze",
+  "analysisMode": "constraints",
   "description": "全量约束与异常提取：通读全文，提取所有业务规则、数据约束、权限规则、异常路径",
   "context_hints": {
     "suggested_entities": ["SecurityPolicy", "AuditTrail", "AccessControl"],
@@ -92,6 +93,7 @@ analyze-3（库存/物流域）  ─┘              →  diagrams-activity
       "id": "analyze-1",
       "type": "analyze",
       "description": "需求分析任务的具体要求",
+      "analysisMode": "domain",
       "depends_on": [],
       "context_hints": {
         "focus_areas": ["用户注册登录"],

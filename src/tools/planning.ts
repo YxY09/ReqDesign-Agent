@@ -173,13 +173,22 @@ export class PlanningTool extends BaseTool {
     if (tasksRaw) {
       tasks = tasksRaw
         .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null && !Array.isArray(t))
-        .map((t) => createTask({
-          id: String(t.id || "").trim(),
-          type: (String(t.type || "analyze").trim()) as Task["type"],
-          description: String(t.description || "").trim(),
-          dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()).filter(Boolean) : [],
-          contextHints: (typeof t.context_hints === "object" && t.context_hints !== null) ? t.context_hints as Record<string, unknown> : {},
-        }));
+        .map((t) => {
+          const rawMode = String(t.analysis_mode ?? "").trim();
+          const analysisMode: Task["analysisMode"] =
+            rawMode === "constraints" ? "constraints"
+            : rawMode === "domain" ? "domain"
+            : rawMode ? "domain"
+            : undefined;
+          return createTask({
+            id: String(t.id || "").trim(),
+            type: (String(t.type || "analyze").trim()) as Task["type"],
+            description: String(t.description || "").trim(),
+            dependsOn: Array.isArray(t.depends_on) ? t.depends_on.map((d) => String(d).trim()).filter(Boolean) : [],
+            contextHints: (typeof t.context_hints === "object" && t.context_hints !== null) ? t.context_hints as Record<string, unknown> : {},
+            ...(analysisMode ? { analysisMode } : {}),
+          });
+        });
     }
 
     if (goal.toLowerCase().includes("analyze")) {
@@ -187,6 +196,7 @@ export class PlanningTool extends BaseTool {
     }
     tasks = PlanningTool._splitDiagramTasks(tasks);
     tasks = PlanningTool._ensureOrder(tasks);
+    tasks = PlanningTool._ensureConstraintTask(tasks, goal);
 
     return createExecutionPlan({
       tasks,
@@ -255,7 +265,8 @@ export class PlanningTool extends BaseTool {
     return createExecutionPlan({
       tasks: [
         createTask({ id: "analyze-1", type: "analyze", description: "提取角色、功能、实体、约束等结构化信息" }),
-        createTask({ id: "design-1", type: "design", description: "生成模块划分、核心类、接口与数据流", dependsOn: ["analyze-1"] }),
+        createTask({ id: "analyze-constraints", type: "analyze", description: "约束提取：扫描全文提取所有业务约束和异常", analysisMode: "constraints", contextHints: { focus_areas: [], note: "约束提取：扫描全文提取所有业务约束和异常" } }),
+        createTask({ id: "design-1", type: "design", description: "生成模块划分、核心类、接口与数据流", dependsOn: ["analyze-1", "analyze-constraints"] }),
         createTask({ id: "diagrams-class", type: "diagrams", description: "生成 Mermaid 类图", dependsOn: ["design-1"], contextHints: { diagram_kind: "class_diagram" } }),
         createTask({ id: "diagrams-activity", type: "diagrams", description: "生成 Mermaid 活动图", dependsOn: ["design-1"], contextHints: { diagram_kind: "activity_diagram" } }),
         createTask({ id: "diagrams-state", type: "diagrams", description: "生成 Mermaid 状态图", dependsOn: ["design-1"], contextHints: { diagram_kind: "state_diagram" } }),
@@ -459,6 +470,48 @@ export class PlanningTool extends BaseTool {
       }
     }
     return result;
+  }
+
+  static _ensureConstraintTask(tasks: Task[], goal: string): Task[] {
+    // Only inject for design goals
+    if (!goal.toLowerCase().includes("design")) return tasks;
+
+    // Check if a constraints task already exists
+    const hasConstraintTask = tasks.some(
+      (t) => t.type === "analyze" && t.analysisMode === "constraints",
+    );
+    if (hasConstraintTask) return tasks;
+
+    // Find a unique id for the constraint task
+    const existingIds = new Set(tasks.map((t) => t.id));
+    let constraintId = "analyze-constraints";
+    if (existingIds.has(constraintId)) {
+      for (let i = 1; i < 100; i++) {
+        constraintId = `analyze-constraints-${i}`;
+        if (!existingIds.has(constraintId)) break;
+      }
+    }
+
+    // Insert before the first design task
+    const constraintTask = createTask({
+      id: constraintId,
+      type: "analyze",
+      description: "约束提取：扫描全文提取所有业务约束和异常",
+      analysisMode: "constraints",
+      contextHints: {
+        focus_areas: [],
+        note: "约束提取：扫描全文提取所有业务约束和异常",
+      },
+    });
+
+    const designIdx = tasks.findIndex((t) => t.type === "design");
+    if (designIdx >= 0) {
+      tasks.splice(designIdx, 0, constraintTask);
+    } else {
+      tasks.push(constraintTask);
+    }
+
+    return tasks;
   }
 
   static _ensureOrder(tasks: Task[]): Task[] {

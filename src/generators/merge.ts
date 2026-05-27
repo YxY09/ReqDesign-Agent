@@ -72,6 +72,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
+    AnalyzeMerger._verifySourceRefs(merged, requirementText);
     return merged;
   }
 
@@ -667,5 +668,44 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         description: patch.description || "",
       });
     }
+  }
+
+  /**
+   * Verify source_text references in constraints and exceptions against the
+   * original requirement text. Marks unmatched entries with `unverified: true`.
+   * Returns the count of unverified entries.
+   */
+  static _verifySourceRefs(
+    merged: Record<string, unknown>,
+    requirementText: string,
+  ): number {
+    if (!requirementText) return 0;
+    const normalizedSource = AnalyzeMerger._normalizeForMatch(requirementText);
+    let unverifiedCount = 0;
+
+    for (const listKey of ["constraints", "exceptions"] as const) {
+      const list = merged[listKey];
+      if (!Array.isArray(list)) continue;
+      for (const item of list) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const sourceText = String(rec.source_text ?? "").trim();
+        if (!sourceText) continue;
+        const normalized = AnalyzeMerger._normalizeForMatch(sourceText);
+        if (!normalizedSource.includes(normalized)) {
+          rec.unverified = true;
+          unverifiedCount++;
+        }
+      }
+    }
+
+    return unverifiedCount;
+  }
+
+  private static _normalizeForMatch(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .trim();
   }
 }
