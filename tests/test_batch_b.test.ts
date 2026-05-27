@@ -490,4 +490,9 @@ describe("Prompt files contain analysisMode and source_text", () => {
     const content = readPrompt("requirement_analysis_constraints.md");
     expect(content).toContain("source_text");
   });
+
+  it("requirement_analysis_constraints.md includes {requirement_text} placeholder", () => {
+    const content = readPrompt("requirement_analysis_constraints.md");
+    expect(content).toContain("{requirement_text}");
+  });
 });
