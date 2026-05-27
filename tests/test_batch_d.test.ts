@@ -20,6 +20,8 @@ import {
 } from "../src/xmlParser.js";
 import { InputLoader } from "../src/inputLoader.js";
 import { PlanningTool } from "../src/tools/planning.js";
+import { createExecutionPlan, createTask } from "../src/shared/types.js";
+import { buildSectionToc } from "../src/runtime.js";
 
 // ---------------------------------------------------------------------------
 // Temp dir helpers
@@ -334,5 +336,166 @@ describe("Step 6c: PlanningTool._parseResponse reads assignedSections", () => {
     const plan = planner._parseResponse(response, "design");
     const task = plan.tasks.find((t) => t.id === "analyze-1");
     expect(task!.contextHints!.assignedSections).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step 6d: planner — _ensureSectionCoverage
+// ---------------------------------------------------------------------------
+
+describe("Step 6d: PlanningTool._ensureSectionCoverage", () => {
+  it("appends unassigned sections to the analyze task with fewest assigned sections", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1-1", depth: 1, title: "用户管理", body: "注册和登录", charRange: [0, 10] },
+      { id: "s1-2", depth: 1, title: "订单管理", body: "创建和查看订单", charRange: [10, 20] },
+      { id: "s1-3", depth: 1, title: "支付管理", body: "支付和退款", charRange: [20, 30] },
+    ];
+
+    // s1-3 is missing from all tasks
+    const plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-1", type: "analyze", description: "first", contextHints: { assignedSections: ["s1-1"] } }),
+        createTask({ id: "analyze-2", type: "analyze", description: "second", contextHints: { assignedSections: ["s1-2"] } }),
+      ],
+      goal: "design",
+      reasoning: "test",
+    });
+
+    const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+
+    // s1-3 should be appended to the task with fewest sections (both have 1, pick first = analyze-1)
+    const a1 = result.tasks.find((t) => t.id === "analyze-1")!;
+    const a2 = result.tasks.find((t) => t.id === "analyze-2")!;
+    expect(a1.contextHints!.assignedSections).toContain("s1-3");
+    expect(a2.contextHints!.assignedSections).not.toContain("s1-3");
+  });
+
+  it("returns plan unchanged when all sections are covered", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1-1", depth: 1, title: "用户管理", body: "注册和登录", charRange: [0, 10] },
+      { id: "s1-2", depth: 1, title: "订单管理", body: "创建和查看订单", charRange: [10, 20] },
+    ];
+
+    const plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-1", type: "analyze", description: "first", contextHints: { assignedSections: ["s1-1", "s1-2"] } }),
+      ],
+      goal: "design",
+      reasoning: "test",
+    });
+
+    const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+    const a1 = result.tasks.find((t) => t.id === "analyze-1")!;
+    expect(a1.contextHints!.assignedSections).toEqual(["s1-1", "s1-2"]);
+  });
+
+  it("handles analyze tasks with no assignedSections by treating them as empty", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1-1", depth: 1, title: "用户管理", body: "注册和登录", charRange: [0, 10] },
+    ];
+
+    const plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-1", type: "analyze", description: "first", contextHints: {} }),
+      ],
+      goal: "design",
+      reasoning: "test",
+    });
+
+    const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+    const a1 = result.tasks.find((t) => t.id === "analyze-1")!;
+    expect(a1.contextHints!.assignedSections).toEqual(["s1-1"]);
+  });
+
+  it("does nothing when sectionIndex is undefined", () => {
+    const plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-1", type: "analyze", description: "first", contextHints: { assignedSections: ["s1-1"] } }),
+      ],
+      goal: "design",
+      reasoning: "test",
+    });
+
+    const result = PlanningTool._ensureSectionCoverage(plan, undefined);
+    expect(result).toBe(plan);
+  });
+
+  it("does nothing when there are no analyze tasks", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1-1", depth: 1, title: "用户管理", body: "注册和登录", charRange: [0, 10] },
+    ];
+
+    const plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "design-1", type: "design", description: "design task" }),
+      ],
+      goal: "design",
+      reasoning: "test",
+    });
+
+    const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+    expect(result).toBe(plan);
+  });
+
+  it("appends multiple unassigned sections to the lightest task", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1-1", depth: 1, title: "A", body: "x", charRange: [0, 1] },
+      { id: "s1-2", depth: 1, title: "B", body: "yy", charRange: [1, 3] },
+      { id: "s1-3", depth: 1, title: "C", body: "zzz", charRange: [3, 6] },
+      { id: "s1-4", depth: 1, title: "D", body: "w", charRange: [6, 7] },
+    ];
+
+    // Only s1-1 is assigned, s1-2, s1-3, s1-4 are missing
+    const plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-1", type: "analyze", description: "first", contextHints: { assignedSections: ["s1-1"] } }),
+        createTask({ id: "analyze-2", type: "analyze", description: "second", contextHints: {} }),
+      ],
+      goal: "design",
+      reasoning: "test",
+    });
+
+    const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+
+    // analyze-2 has 0 sections (fewest), so all unassigned go there
+    const a2 = result.tasks.find((t) => t.id === "analyze-2")!;
+    expect(a2.contextHints!.assignedSections).toEqual(expect.arrayContaining(["s1-2", "s1-3", "s1-4"]));
+    expect(a2.contextHints!.assignedSections).toHaveLength(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSectionToc: section TOC generation for global context
+// ---------------------------------------------------------------------------
+
+describe("buildSectionToc", () => {
+  it("generates a TOC from sectionIndex with depth-based indentation", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1", depth: 1, title: "用户管理", body: "", charRange: [0, 10] },
+      { id: "s1-1", depth: 2, title: "注册", body: "", charRange: [10, 20] },
+      { id: "s1-2", depth: 2, title: "登录", body: "", charRange: [20, 30] },
+      { id: "s2", depth: 1, title: "订单管理", body: "", charRange: [30, 40] },
+    ];
+
+    const toc = buildSectionToc(sectionIndex);
+    expect(toc).toContain("[文档章节目录]");
+    expect(toc).toContain("- 用户管理");
+    expect(toc).toContain("  - 注册");
+    expect(toc).toContain("  - 登录");
+    expect(toc).toContain("- 订单管理");
+  });
+
+  it("returns empty string for empty sectionIndex", () => {
+    expect(buildSectionToc([])).toBe("");
+  });
+
+  it("handles single-level sections with no nesting", () => {
+    const sectionIndex: SectionIndex[] = [
+      { id: "s1", depth: 1, title: "A", body: "", charRange: [0, 1] },
+      { id: "s2", depth: 1, title: "B", body: "", charRange: [1, 2] },
+    ];
+    const toc = buildSectionToc(sectionIndex);
+    expect(toc).toContain("- A");
+    expect(toc).toContain("- B");
   });
 });

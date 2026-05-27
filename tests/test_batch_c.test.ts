@@ -927,3 +927,83 @@ describe("merge canonical ID assignment", () => {
     expect(exceptions[0].related_constraints).toEqual(["C001"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Actor merge: Jaccard similarity and containment-based dedup
+// ---------------------------------------------------------------------------
+
+describe("preMerge actor merging", () => {
+  it("merges actors with identical name (case-insensitive)", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      actors: [{ name: "Police", description: "Law enforcement officer" }],
+    });
+    const a2 = artifact({
+      actors: [{ name: "police", description: "Law enforcement agency responsible for maintaining public order" }],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const actors = merged.actors as Array<Record<string, unknown>>;
+    expect(actors).toHaveLength(1);
+    // Should keep the longer description
+    expect(String(actors[0].description)).toContain("maintaining public order");
+  });
+
+  it("merges actors with similar names via Jaccard >= 0.7", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      actors: [{ name: "Police", description: "Law enforcement officer" }],
+    });
+    const a2 = artifact({
+      actors: [{ name: "Police Personnel", description: "Law enforcement agency staff responsible for public safety and order" }],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const actors = merged.actors as Array<Record<string, unknown>>;
+    // "Police" and "Police Personnel" share the word "police" — should merge
+    expect(actors).toHaveLength(1);
+    expect(String(actors[0].description)).toContain("public safety");
+  });
+
+  it("merges actors when one name contains the other", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      actors: [{ name: "Admin", description: "System administrator" }],
+    });
+    const a2 = artifact({
+      actors: [{ name: "System Admin User", description: "Administrator with full system access and configuration privileges" }],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const actors = merged.actors as Array<Record<string, unknown>>;
+    // "admin" is contained in "system admin user" — should merge
+    expect(actors).toHaveLength(1);
+  });
+
+  it("keeps both actors when names are dissimilar", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      actors: [{ name: "Customer", description: "End user who purchases products" }],
+    });
+    const a2 = artifact({
+      actors: [{ name: "Warehouse Manager", description: "Manages inventory and logistics" }],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const actors = merged.actors as Array<Record<string, unknown>>;
+    // Completely different names — should keep both
+    expect(actors).toHaveLength(2);
+  });
+
+  it("keeps longer description when merging similar actors", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const shortDesc = "Police officer";
+    const longDesc = "Police personnel responsible for law enforcement, crime prevention, and public safety operations across all jurisdictions";
+    const a1 = artifact({
+      actors: [{ name: "Police", description: shortDesc }],
+    });
+    const a2 = artifact({
+      actors: [{ name: "Police Personnel", description: longDesc }],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const actors = merged.actors as Array<Record<string, unknown>>;
+    expect(actors).toHaveLength(1);
+    expect(String(actors[0].description)).toBe(longDesc);
+  });
+});

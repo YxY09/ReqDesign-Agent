@@ -48,7 +48,7 @@ import {
   type WorkerKind,
 } from "./shared/types.js";
 import { InputLoader } from "./inputLoader.js";
-import { sliceBySections } from "./xmlParser.js";
+import { sliceBySections, type SectionIndex } from "./xmlParser.js";
 import { TraceLogger } from "./traceLogger.js";
 import {
   createWorkflowEvent,
@@ -121,6 +121,17 @@ function isPlanMutationResult(value: unknown): value is PlanMutation {
     Array.isArray(value.dropTaskIds) &&
     isRecord(value.reorderEdges)
   );
+}
+
+/** Build a section TOC string from sectionIndex for global context prepending. */
+export function buildSectionToc(sectionIndex: SectionIndex[]): string {
+  if (sectionIndex.length === 0) return "";
+  const lines = ["[文档章节目录]"];
+  for (const section of sectionIndex) {
+    const indent = "  ".repeat(section.depth - 1);
+    lines.push(`${indent}- ${section.title}`);
+  }
+  return lines.join("\n");
 }
 
 export interface RuntimeRunOptions {
@@ -1175,7 +1186,10 @@ export class MultiAgentRuntime {
     let effectiveText = state.requirementText;
     const assignedSections = task.contextHints?.assignedSections;
     if (Array.isArray(assignedSections) && assignedSections.length > 0 && state.sectionIndex.length > 0) {
-      effectiveText = sliceBySections(state.requirementText, state.sectionIndex, assignedSections as string[]);
+      // Prepend global context (section TOC) so each analyze shard sees the full document structure
+      const toc = buildSectionToc(state.sectionIndex);
+      const sliced = sliceBySections(state.requirementText, state.sectionIndex, assignedSections as string[]);
+      effectiveText = toc + "\n\n" + sliced;
     }
 
     return new SessionContext({

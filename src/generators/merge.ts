@@ -266,16 +266,68 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     };
   }
 
-  // --- Actors: dedup by normalized name ---
+  // --- Actors: merge by normalized name + Jaccard/containment similarity ---
   private static _mergeActors(items: Record<string, unknown>[]): Record<string, unknown>[] {
-    const seen = new Map<string, Record<string, unknown>>();
+    // Phase 1: group by exact normalized name
+    const groups = new Map<string, Record<string, unknown>[]>();
     for (const item of items) {
       const name = String(item.name ?? "").trim();
       if (!name) continue;
       const key = name.toLowerCase();
-      if (!seen.has(key)) seen.set(key, item);
+      let group = groups.get(key);
+      if (!group) { group = []; groups.set(key, group); }
+      group.push(item);
     }
-    return [...seen.values()];
+
+    // Phase 2: merge groups that have similar names (Jaccard >= 0.7 or containment)
+    const groupKeys = [...groups.keys()];
+    // Union-Find to track which groups should be merged
+    const parent = new Map<string, string>();
+    for (const key of groupKeys) parent.set(key, key);
+    const find = (k: string): string => {
+      let cur = k;
+      while (parent.get(cur) !== cur) { cur = parent.get(cur)!; }
+      return cur;
+    };
+    const union = (a: string, b: string) => { parent.set(find(a), find(b)); };
+
+    for (let i = 0; i < groupKeys.length; i++) {
+      for (let j = i + 1; j < groupKeys.length; j++) {
+        const wordsI = AnalyzeMerger._getWords(groupKeys[i]);
+        const wordsJ = AnalyzeMerger._getWords(groupKeys[j]);
+        const sim = AnalyzeMerger._jaccard(wordsI, wordsJ);
+        const contained = AnalyzeMerger._isContained(wordsI, wordsJ);
+        if (sim >= 0.7 || contained) {
+          union(groupKeys[i], groupKeys[j]);
+        }
+      }
+    }
+
+    // Collect merged groups
+    const mergedGroups = new Map<string, Record<string, unknown>[]>();
+    for (const key of groupKeys) {
+      const root = find(key);
+      let arr = mergedGroups.get(root);
+      if (!arr) { arr = []; mergedGroups.set(root, arr); }
+      arr.push(...groups.get(key)!);
+    }
+
+    // Phase 3: within each merged group, keep actor with longest description
+    const result: Record<string, unknown>[] = [];
+    for (const [_root, groupItems] of mergedGroups) {
+      if (groupItems.length === 1) {
+        result.push(groupItems[0]);
+        continue;
+      }
+      // Sort by description length descending, pick the one with longest desc
+      groupItems.sort((a, b) => {
+        const lenA = String(a.description ?? "").length;
+        const lenB = String(b.description ?? "").length;
+        return lenB - lenA;
+      });
+      result.push(groupItems[0]);
+    }
+    return result;
   }
 
   // --- Entities: merge by normalized name ---
