@@ -49,7 +49,7 @@ export class SessionBackend extends EventEmitter {
   constructor(options?: SessionBackendOptions) {
     super();
     this.heartbeatInterval = options?.heartbeatInterval ?? 0.25;
-    this.maxConcurrency = options?.maxConcurrency ?? 3;
+    this.maxConcurrency = options?.maxConcurrency ?? 5;
     this.onLifecycle = options?.onLifecycle;
     this.onNotification = options?.onNotification;
   }
