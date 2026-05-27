@@ -73,12 +73,13 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     AnalyzeMerger._verifySourceRefs(merged, requirementText);
 
-    // Quality gate: attach result without blocking
-    const qualityResult = checkAnalysisQuality(merged, requirementText);
-    (merged as Record<string, unknown>).__qualityGate = qualityResult;
-
+    // Assign canonical IDs BEFORE quality gate so id_format check validates final IDs
     const { result, idMap } = assignCanonicalIds(merged);
     fixCrossReferences(result, idMap);
+
+    // Quality gate: attach result without blocking
+    const qualityResult = checkAnalysisQuality(result, requirementText);
+    (result as Record<string, unknown>).__qualityGate = qualityResult;
 
     return result;
   }

@@ -11,6 +11,6 @@
 
 ## 输出格式
 {"relationships":[{"entity":"X","target":"Y","type":"o2m","description":"..."}],
- "constraints":[{"id":"Cxxx","description":"...","related_functions":["F001"]}],
+ "constraints":[{"id":"Cxxx","description":"...","related_functions":["F001"],"source_text":"文档中触发此约束的原文片段"}],
  "exceptions":[{"id":"Xxxx","description":"...","trigger":"...","handling":"..."}]}
 空字段传空数组即可。
