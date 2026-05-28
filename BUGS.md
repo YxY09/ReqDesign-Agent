@@ -26,20 +26,20 @@
 - 文件: src/generators/merge.ts
 - 根因: Jaccard 对中英混合无效
 - 修复: 比较 source_text 是否指向同一段原文
-- 状态: TODO
+- 状态: DONE
 
 ### BUG-5: NFR 中英重复
 - 文件: src/generators/merge.ts
 - 根因: _mergeByCategory 按原文 category 去重
 - 修复: 加中英文映射
-- 状态: TODO
+- 状态: DONE
 
 ## Round 3
 
 ### BUG-6: Help Module 缺失
 - 根因: Registry 没覆盖 Help 章节
-- 状态: TODO
+- 状态: DONE
 
 ### BUG-7: Design 约束覆盖不全
 - 根因: 提示词问题
-- 状态: TODO
+- 状态: DONE
