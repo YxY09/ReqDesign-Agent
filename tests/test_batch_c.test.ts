@@ -802,6 +802,48 @@ describe("checkAnalysisQuality", () => {
     expect(check!.passed).toBe(true);
   });
 
+  it("passes cross-reference integrity when relationship targets match entityRef (production shape)", () => {
+    // Production entities use entityRef, not id. The quality gate must also
+    // match relationship targets against entityRef values.
+    const analysis = {
+      ...validAnalysis,
+      entities: [
+        {
+          entityRef: "E_CASE",
+          name: "Case",
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [{ target: "E_DOCUMENT", type: "one-to-many", description: "contains documents" }],
+        },
+        {
+          entityRef: "E_DOCUMENT",
+          name: "Document",
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [],
+        },
+      ],
+    };
+    const result = checkAnalysisQuality(analysis);
+    const check = result.checks.find((c) => c.name === "cross_reference_integrity");
+    expect(check!.passed).toBe(true);
+  });
+
+  it("fails cross-reference integrity when entityRef target does not exist", () => {
+    const analysis = {
+      ...validAnalysis,
+      entities: [
+        {
+          entityRef: "E_CASE",
+          name: "Case",
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [{ target: "E_MISSING", type: "one-to-many", description: "broken ref" }],
+        },
+      ],
+    };
+    const result = checkAnalysisQuality(analysis);
+    const check = result.checks.find((c) => c.name === "cross_reference_integrity");
+    expect(check!.passed).toBe(false);
+  });
+
   it("fails source_ref coverage when < 30% constraints have source_text", () => {
     const analysis = {
       ...validAnalysis,

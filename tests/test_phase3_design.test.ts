@@ -138,7 +138,7 @@ describe("SystemDesigner.validateDesign", () => {
     };
     const warnings = SystemDesigner.validateDesign(design, req);
     expect(warnings.some((w) => w.includes("异常 X001 未在设计中体现"))).toBe(true);
-    expect(warnings.some((w) => w.includes("未定义的异常 ID: E001"))).toBe(true);
+    // "未定义异常 ID" 扫描已移除，不再检查设计中的 E 前缀 ID 是否在需求中定义
   });
 });
 

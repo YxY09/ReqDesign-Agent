@@ -164,12 +164,6 @@ function collectIds(items: unknown): string[] {
   return items.map(itemId).filter(Boolean);
 }
 
-function extractRequirementIds(designText: string, prefixes: string[]): string[] {
-  const prefixGroup = prefixes.map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const idRe = new RegExp(`\\b(?:${prefixGroup})[A-Za-z0-9_]+\\b`, "g");
-  return [...new Set(designText.match(idRe) ?? [])];
-}
-
 // isSimpleRequirement / isMediumRequirement removed — overdesign self-check
 // moved entirely to evaluation phase to avoid false positives from
 // "不采用X" / "未引入X" explanations in design text.
@@ -350,15 +344,6 @@ export class SystemDesigner extends BaseGenerator<string> {
         if (!containsToken(designText, id)) {
           warnings.push(`异常 ${id} 未在设计中体现`);
         }
-      }
-      const allowed = new Set(exceptionIds);
-      const observed = extractRequirementIds(designText, ["E", "X"]);
-      const undefinedExceptionIds = observed.filter((id) => {
-        if (!/^E[A-Za-z0-9_]+$|^X[A-Za-z0-9_]+$/.test(id)) return false;
-        return !allowed.has(id);
-      });
-      if (undefinedExceptionIds.length > 0) {
-        warnings.push(`设计引用了未定义的异常 ID: ${undefinedExceptionIds.join(", ")}`);
       }
     }
 

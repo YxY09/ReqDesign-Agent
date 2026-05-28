@@ -142,7 +142,7 @@ export function checkAnalysisQuality(
   {
     const entities = arrVal(analysis, "entities");
     const entityNames = new Set(entities.map((e) => String(e.name ?? "").trim()));
-    const entityIds = new Set(entities.map((e) => String(e.id ?? "").trim()));
+    const entityIds = new Set(entities.map((e) => String(e.id ?? e.entityRef ?? "").trim()));
     let brokenCount = 0;
     for (const entity of entities) {
       const rels = Array.isArray(entity.relationships) ? entity.relationships as Rec[] : [];
