@@ -68,6 +68,20 @@ export interface EntityRegistry {
 }
 
 // ---------------------------------------------------------------------------
+// Runtime-internal types
+// ---------------------------------------------------------------------------
+
+/** Tracks an in-flight worker session for event streaming context resolution. */
+export interface InflightWorker {
+  sessionId: string;
+  workerType: WorkerKind;
+  taskId: string;
+  messageType: "spawn" | "repair" | "replan";
+  evaluateScope: string[];
+  decision?: RuntimeAction;
+}
+
+// ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
 

@@ -26,28 +26,16 @@ import {
   type Artifact,
   type ExecutionPlan,
   type PlanMutation,
-  type Task,
   type TaskType,
   type Verdict,
-  createExecutionPlan,
-  createTask,
 } from "./shared/types.js";
 import type { SectionIndex } from "./xmlParser.js";
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/snapshot.js";
-import { RequirementNormalizer } from "./shared/normalizer.js";
-import { createHash } from "node:crypto";
-
-// ---------------------------------------------------------------------------
-// Task-type → aggregate-field mapping
-// ---------------------------------------------------------------------------
-
-const TASK_TYPE_TO_ARTIFACT_KEY: Record<string, string> = {
-  analyze: "requirement_json",
-  design: "design_text",
-  diagrams: "diagrams",
-  tests: "test_cases",
-};
+import { TaskLifecycleManager } from "./runtime/TaskLifecycleManager.js";
+import { PlanMutator } from "./runtime/PlanMutator.js";
+import { ArtifactManager } from "./runtime/ArtifactManager.js";
+import { ReviewManager } from "./runtime/ReviewManager.js";
 
 export interface ArtifactsState {
   artifacts: Record<string, Artifact>;
@@ -167,9 +155,9 @@ export class WorkflowState {
 
   // --- Progress tracking --------------------------------------------------
   progress: ProgressSnapshot = new ProgressSnapshot();
-  private _lastArtifactContents: Record<string, unknown> = {};
-  private latestArtifactTaskByType: Record<string, string> = {};
-  private diagramSourcesByKey: Record<string, string> = {};
+  _lastArtifactContents: Record<string, unknown> = {};
+  latestArtifactTaskByType: Record<string, string> = {};
+  diagramSourcesByKey: Record<string, string> = {};
   artifactRevisionsByTask: Record<string, number> = {};
   evaluatedRevisionsByTask: Record<string, number> = {};
   acceptedRevisionsByTask: Record<string, number> = {};
@@ -182,11 +170,19 @@ export class WorkflowState {
   // --- Action history (for trace export) ----------------------------------
   actionHistory: Record<string, unknown>[] = [];
 
+  private readonly _taskLifecycleManager: TaskLifecycleManager;
+  private readonly _planMutator: PlanMutator;
+  private readonly _artifactManager: ArtifactManager;
+  private readonly _reviewManager: ReviewManager;
   private readonly _artifactsStateView: ArtifactsState;
   private readonly _executionStateView: ExecutionState;
   private readonly _reviewStateView: ReviewState;
 
   constructor() {
+    this._taskLifecycleManager = new TaskLifecycleManager(this);
+    this._planMutator = new PlanMutator(this);
+    this._artifactManager = new ArtifactManager(this, () => this.majorPendingTaskIds.clear());
+    this._reviewManager = new ReviewManager(this);
     this._artifactsStateView = this._createArtifactsStateView();
     this._executionStateView = this._createExecutionStateView();
     this._reviewStateView = this._createReviewStateView();
@@ -462,641 +458,169 @@ export class WorkflowState {
   }
 
   // ------------------------------------------------------------------
-  // Artifact management
+  // Artifact management (delegated to ArtifactManager)
   // ------------------------------------------------------------------
 
-  /** Add an artifact, sync aggregate fields, and track progress. */
   addArtifact(artifact: Artifact): void {
-    const artifactsState = this.artifactsState;
-
-    const revision = (artifactsState.artifactRevisionsByTask[artifact.taskId] ?? 0) + 1;
-    artifact.revision = revision;
-    artifactsState.artifactRevisionsByTask[artifact.taskId] = revision;
-    artifactsState.artifacts[artifact.taskId] = artifact;
-    this.latestArtifactTaskByType[artifact.type] = artifact.taskId;
-    this._syncAggregate(artifact);
-    // Clear all major pending — artifacts changed, need fresh evaluation
-    this.reviewState.majorPendingTaskIds.clear();
-    // Note: do NOT reset finalReviewDone here — repair adds artifacts which
-    // is part of the review-repair cycle. Only clearReviewContext resets it.
-    this.qualityStatus = "unknown";
-    // Track progress: compare with previous content
-    this.progress.recordArtifact(artifact.taskId, artifact.content);
-    this._lastArtifactContents[artifact.taskId] = artifact.content;
-  }
-
-  /**
-   * Sync aggregate fields from an artifact.
-   *
-   * For analyze type: rebuilds the aggregate from all current analyze artifacts.
-   * This preserves multi-analyze intermediate state and avoids stale data when
-   * an analyze task is regenerated.
-   *
-   * For other types: keeps the latest task output as the aggregate field.
-   */
-  private _syncAggregate(artifact: Artifact): void {
-    const artifactsState = this.artifactsState;
-    const key = TASK_TYPE_TO_ARTIFACT_KEY[artifact.type] ?? "";
-    const content = artifact.content;
-
-    if (!key || content === null || content === undefined) return;
-
-    if (key === "requirement_json" && typeof content === "object" && !Array.isArray(content)) {
-      const raw = this._rebuildRequirementAggregate();
-      artifactsState.requirementJson = RequirementNormalizer.normalize(raw);
-    } else if (key === "design_text" && typeof content === "string") {
-      if (content) {
-        artifactsState.designText = content;
-      }
-    } else if (key === "diagrams" && typeof content === "object" && !Array.isArray(content)) {
-      const existing: Record<string, unknown> = artifactsState.diagrams ?? {};
-      for (const [diagramKey, diagramValue] of Object.entries(content as Record<string, unknown>)) {
-        existing[diagramKey] = diagramValue;
-        this.diagramSourcesByKey[diagramKey] = artifact.taskId;
-      }
-      artifactsState.diagrams = existing;
-    } else if (key === "test_cases" && typeof content === "string") {
-      if (content) {
-        artifactsState.testCases = content;
-      }
-    }
-  }
-
-  private _rebuildRequirementAggregate(): Record<string, unknown> {
-    const aggregate: Record<string, unknown> = {};
-
-    for (const artifact of Object.values(this.artifactsState.artifacts)) {
-      if (artifact.type !== "analyze") continue;
-      if (!artifact.content || typeof artifact.content !== "object" || Array.isArray(artifact.content)) {
-        continue;
-      }
-      this._mergeRequirementValue(aggregate, artifact.content as Record<string, unknown>);
-    }
-
-    return aggregate;
-  }
-
-  private _mergeRequirementValue(
-    target: Record<string, unknown>,
-    source: Record<string, unknown>,
-  ): void {
-    for (const [field, value] of Object.entries(source)) {
-      const existing = target[field];
-      if (Array.isArray(existing) && Array.isArray(value)) {
-        target[field] = this._mergeRequirementArrays(existing, value);
-      } else if (this._isPlainObject(existing) && this._isPlainObject(value)) {
-        const nestedTarget = { ...(existing as Record<string, unknown>) };
-        this._mergeRequirementValue(nestedTarget, value as Record<string, unknown>);
-        target[field] = nestedTarget;
-      } else if (Array.isArray(value)) {
-        target[field] = this._mergeRequirementArrays([], value);
-      } else if (this._isPlainObject(value)) {
-        const nestedTarget: Record<string, unknown> = {};
-        this._mergeRequirementValue(nestedTarget, value as Record<string, unknown>);
-        target[field] = nestedTarget;
-      } else {
-        target[field] = value;
-      }
-    }
-  }
-
-  private _mergeRequirementArrays(left: unknown[], right: unknown[]): unknown[] {
-    const seen = new Set<string>();
-    const merged: unknown[] = [];
-
-    for (const item of [...left, ...right]) {
-      const key = this._stableRequirementKey(item);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(item);
-    }
-
-    return merged;
-  }
-
-  private _stableRequirementKey(value: unknown): string {
-    if (Array.isArray(value)) {
-      return JSON.stringify(value.map((item) => this._stableRequirementKey(item)));
-    }
-    if (this._isPlainObject(value)) {
-      const entries = Object.entries(value as Record<string, unknown>)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, item]) => [key, this._stableRequirementKey(item)]);
-      return JSON.stringify(entries);
-    }
-    return JSON.stringify(value);
-  }
-
-  private _isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+    return this._artifactManager.addArtifact(artifact);
   }
 
   // ------------------------------------------------------------------
-  // Verdict management
+  // Verdict management (delegated to ReviewManager)
   // ------------------------------------------------------------------
 
-  /** Record a verdict. */
   addVerdict(verdict: Verdict): void {
-    const reviewState = this.reviewState;
-    const blockerTaskIds = new Set<string>();
-    const majorTaskIds = new Set<string>();
-    for (const issue of verdict.issues) {
-      if (issue.severity === "blocker" && issue.targetTaskId) {
-        blockerTaskIds.add(issue.targetTaskId);
-      }
-      if (issue.severity === "major" && issue.targetTaskId) {
-        majorTaskIds.add(issue.targetTaskId);
-      }
-    }
-
-    for (const [taskId, revision] of Object.entries(verdict.evaluatedRevisions)) {
-      const current = reviewState.evaluatedRevisionsByTask[taskId] ?? 0;
-      if (revision >= current) {
-        // Don't downgrade an already-accepted revision to "rejected"
-        const acceptedRev = reviewState.acceptedRevisionsByTask[taskId] ?? 0;
-        if (revision <= acceptedRev) {
-          continue;
-        }
-        reviewState.evaluatedRevisionsByTask[taskId] = revision;
-        const status: string = blockerTaskIds.has(taskId) ? "rejected" : "passed";
-        reviewState.reviewStatusByTask[taskId] = status;
-        if (status === "passed") {
-          reviewState.acceptedRevisionsByTask[taskId] = revision;
-        }
-      }
-    }
-
-    // Track tasks with major issues that passed (no blockers)
-    // so the coordinator can attempt one repair round
-    reviewState.majorPendingTaskIds = new Set(
-      [...majorTaskIds].filter((id) => !blockerTaskIds.has(id)),
-    );
-    if (reviewState.majorPendingTaskIds.size > 0) {
-      // Reset major repair tracking in progress (mirrors Python's _counters)
-      this.progress.recordNoProgress();
-    }
-
-    reviewState.verdicts.push(verdict);
-
-    // Update convergence tracker with latest evaluation issues
-    if (verdict.issues.length > 0) {
-      this.convergence.addRound({
-        issues: verdict.issues.map((issue) => ({
-          fingerprint: ConvergenceTracker.fingerprint(issue.description),
-          severity: issue.severity,
-        })),
-      });
-    }
-
-    this.reviewResult = {
-      passed: verdict.passed,
-      isFinalReview: verdict.isFinalReview,
-      evaluatedTaskIds: [...verdict.evaluatedTaskIds],
-      evaluatedRevisions: { ...verdict.evaluatedRevisions },
-      reviewStatusByTask: { ...reviewState.reviewStatusByTask },
-      issues: verdict.issues.map((i) => ({
-        severity: i.severity,
-        target: i.targetTaskId,
-        targetType: i.targetTaskType,
-        description: i.description,
-        suggestion: i.suggestion,
-        scope: i.scope,
-      })),
-    };
-
-    if (verdict.isFinalReview) {
-      reviewState.finalReviewDone = true;
-      reviewState.finalReviewPassed = verdict.passed;
-      reviewState.finalReviewRevisions = { ...verdict.evaluatedRevisions };
-      this.qualityStatus = verdict.passed ? "passed" : "rejected";
-    }
-
-    // Track evaluator activity
-    if (verdict.passed) {
-      this.progress.recordScore(1.0);
-      for (const taskId of Object.keys(
-        this.progress.rejectionStreakByTask,
-      )) {
-        this.progress.recordAcceptance(taskId);
-      }
-    } else {
-      this.progress.recordScore(0.0);
-    }
+    return this._reviewManager.addVerdict(verdict);
   }
 
   // ------------------------------------------------------------------
-  // Notification history
+  // Notification history (delegated to TaskLifecycleManager)
   // ------------------------------------------------------------------
 
-  /** Record a notification for trace/observability. */
   recordNotification(notif: Record<string, unknown>): void {
-    const executionState = this.executionState;
-    executionState.notifications.push(notif);
+    return this._taskLifecycleManager.recordNotification(notif);
   }
 
-  /** Record that a repair attempt was completed for a task. */
   recordRepairAttempt(taskId: string): void {
-    if (!taskId) return;
-    const key = `repair_count:${taskId}`;
-    this.progress._counters[key] = (this.progress._counters[key] ?? 0) + 1;
+    return this._taskLifecycleManager.recordRepairAttempt(taskId);
   }
 
-  /** Record that a task was regenerated from scratch. */
   recordRegenerateAttempt(taskId: string): void {
-    if (!taskId) return;
-    const key = `regenerate_count:${taskId}`;
-    this.progress._counters[key] = (this.progress._counters[key] ?? 0) + 1;
+    return this._taskLifecycleManager.recordRegenerateAttempt(taskId);
   }
 
-  /** Record a planner failure for orchestration budget guards. */
   recordPlannerFailure(): void {
-    const key = "planner_spawn_fail";
-    this.progress._counters[key] = (this.progress._counters[key] ?? 0) + 1;
+    return this._taskLifecycleManager.recordPlannerFailure();
   }
 
-  /** Record the current lifecycle status for a task. */
-  markTaskStatus(
-    taskId: string,
-    status: string,
-    sessionId: string = "",
-    details?: Record<string, unknown> | null,
-  ): void {
-    if (!taskId) return;
-    const executionState = this.executionState;
-    executionState.taskStatuses[taskId] = status;
+  // ------------------------------------------------------------------
+  // Task lifecycle (delegated to TaskLifecycleManager)
+  // ------------------------------------------------------------------
 
-    // Track planner failures for budget guards
-    if (taskId === "planner" && status === "failed") {
-      this.recordPlannerFailure();
-    }
-    if (sessionId) {
-      executionState.taskSessions[taskId] = sessionId;
-    }
-    const entry: Record<string, unknown> = {
-      taskId,
-      status,
-      timestamp: Date.now() / 1000,
-    };
-    if (sessionId) {
-      entry["sessionId"] = sessionId;
-    }
-    if (details) {
-      entry["details"] = details;
-    }
-    this.taskHistory.push(entry);
+  markTaskStatus(taskId: string, status: string, sessionId: string = "", details?: Record<string, unknown> | null): void {
+    return this._taskLifecycleManager.markTaskStatus(taskId, status, sessionId, details);
   }
 
-  /** Get the lifecycle status of a task (defaults to `"pending"`). */
   taskStatus(taskId: string): string {
-    return this.taskStatuses[taskId] ?? "pending";
+    return this._taskLifecycleManager.taskStatus(taskId);
   }
 
-  /** Whether a task is completed. */
   isTaskCompleted(taskId: string): boolean {
-    return this.taskStatus(taskId) === "completed";
+    return this._taskLifecycleManager.isTaskCompleted(taskId);
   }
 
-  /** Whether a task is running. */
   isTaskRunning(taskId: string): boolean {
-    return this.taskStatus(taskId) === "running";
+    return this._taskLifecycleManager.isTaskRunning(taskId);
   }
 
-  /** Sorted list of completed task IDs. */
   getCompletedTaskIds(): string[] {
-    return Object.entries(this.taskStatuses)
-      .filter(([, status]) => status === "completed")
-      .map(([taskId]) => taskId)
-      .sort();
+    return this._taskLifecycleManager.getCompletedTaskIds();
   }
 
-  /** Sorted list of running task IDs. */
   getRunningTaskIds(): string[] {
-    return Object.entries(this.taskStatuses)
-      .filter(([, status]) => status === "running")
-      .map(([taskId]) => taskId)
-      .sort();
+    return this._taskLifecycleManager.getRunningTaskIds();
   }
 
-  /** Sorted list of failed task IDs. */
   getFailedTaskIds(): string[] {
-    return Object.entries(this.taskStatuses)
-      .filter(([, status]) => status === "failed")
-      .map(([taskId]) => taskId)
-      .sort();
+    return this._taskLifecycleManager.getFailedTaskIds();
   }
 
-  /** All task IDs from the current plan. */
   getPlanTaskIds(): string[] {
-    if (!this.plan) return [];
-    return this.plan.tasks.map((t) => t.id);
+    return this._taskLifecycleManager.getPlanTaskIds();
   }
 
-  /** Task IDs from the plan that are completed. */
   getCompletedPlanTaskIds(): string[] {
-    const planTaskIds = new Set(this.getPlanTaskIds());
-    return Object.entries(this.taskStatuses)
-      .filter(([taskId, status]) => planTaskIds.has(taskId) && status === "completed")
-      .map(([taskId]) => taskId)
-      .sort();
+    return this._taskLifecycleManager.getCompletedPlanTaskIds();
   }
 
-  /**
-   * Plan tasks whose dependencies are complete and that are not already
-   * running, completed, rejected, cancelled, or failed.
-   */
   getReadyTaskIds(): string[] {
-    if (!this.plan) return [];
-    const ready: string[] = [];
-    const terminalStatuses = new Set([
-      "running",
-      "completed",
-      "rejected",
-      "cancelled",
-      "failed",
-    ]);
-    for (const task of this.plan.tasks) {
-      const status = this.taskStatus(task.id);
-      if (terminalStatuses.has(status)) continue;
-      if (task.dependsOn.every((dep) => this.isTaskCompleted(dep))) {
-        ready.push(task.id);
-      }
-    }
-    return ready;
+    return this._taskLifecycleManager.getReadyTaskIds();
   }
 
-  /** Plan tasks that have not started yet (status is `"pending"`). */
   getPendingTaskIds(): string[] {
-    if (!this.plan) return [];
-    return this.plan.tasks
-      .filter((t) => this.taskStatus(t.id) === "pending")
-      .map((t) => t.id);
+    return this._taskLifecycleManager.getPendingTaskIds();
   }
 
-  /** Plan tasks that are waiting on unfinished dependencies. */
   getBlockedTaskIds(): string[] {
-    if (!this.plan) return [];
-    const readySet = new Set(this.getReadyTaskIds());
-    const blocked: string[] = [];
-    for (const task of this.plan.tasks) {
-      if (readySet.has(task.id)) continue;
-      if (this.taskStatus(task.id) === "pending" && task.dependsOn.length > 0) {
-        blocked.push(task.id);
-      }
-    }
-    return blocked;
+    return this._taskLifecycleManager.getBlockedTaskIds();
   }
 
   // ------------------------------------------------------------------
-  // Derived properties
+  // Derived properties (delegated to ReviewManager where applicable)
   // ------------------------------------------------------------------
 
-  /** The most recently added verdict, or `null`. */
   get latestVerdict(): Verdict | null {
-    return this.verdicts.length > 0 ? this.verdicts[this.verdicts.length - 1] : null;
+    return this._reviewManager.latestVerdict;
   }
 
-  /** Total number of artifacts stored. */
+  // --- Artifact-derived properties (delegated to ArtifactManager) ---
+
   get totalArtifacts(): number {
-    return Object.keys(this.artifacts).length;
+    return this._artifactManager.totalArtifacts;
   }
 
-  /** Summary dict of all artifacts (type, revision, self-check, size). */
   artifactSummary(): Record<string, Record<string, unknown>> {
-    const result: Record<string, Record<string, unknown>> = {};
-    for (const [taskId, a] of Object.entries(this.artifacts)) {
-      result[taskId] = {
-        type: a.type,
-        revision: a.revision,
-        selfCheckPassed: a.selfCheckPassed,
-        selfCorrectRounds: a.selfCorrectRounds,
-        size: a.content !== null && a.content !== undefined ? String(a.content).length : 0,
-      };
-    }
-    return result;
+    return this._artifactManager.artifactSummary();
   }
 
-  /**
-   * Snapshot dict of artifacts for the given task IDs (or all if omitted).
-   * Only includes tasks that have an artifact.
-   */
-  artifactSnapshots(
-    taskIds?: string[],
-  ): Record<string, Record<string, unknown>> {
-    const ids = taskIds ?? Object.keys(this.artifacts);
-    const snapshots: Record<string, Record<string, unknown>> = {};
-    for (const taskId of ids) {
-      const artifact = this.artifacts[taskId];
-      if (artifact === undefined) continue;
-      snapshots[taskId] = {
-        taskId: artifact.taskId,
-        type: artifact.type,
-        revision: artifact.revision,
-        content: artifact.content,
-        selfCheckPassed: artifact.selfCheckPassed,
-        selfCheckIssues: [...artifact.selfCheckIssues],
-      };
-    }
-    return snapshots;
+  artifactSnapshots(taskIds?: string[]): Record<string, Record<string, unknown>> {
+    return this._artifactManager.artifactSnapshots(taskIds);
   }
 
-  /** Snapshot of the effective final outputs, not every historical task artifact. */
   finalArtifactSnapshots(): Record<string, Record<string, unknown>> {
-    const snapshots: Record<string, Record<string, unknown>> = {};
-
-    if (this.requirementJson && Object.keys(this.requirementJson).length > 0) {
-      snapshots["analyze-final"] = {
-        taskId: "analyze-final",
-        type: "analyze",
-        revision: this._contentRevision(this.requirementJson),
-        content: this.requirementJson,
-        selfCheckPassed: true,
-        selfCheckIssues: [],
-        sourceRevisions: this._sourceRevisionsForType("analyze"),
-      };
-    }
-
-    const latestDesign = this._latestArtifactOfType("design");
-    if (latestDesign) {
-      snapshots[latestDesign.taskId] = {
-        taskId: latestDesign.taskId,
-        type: latestDesign.type,
-        revision: latestDesign.revision,
-        content: latestDesign.content,
-        selfCheckPassed: latestDesign.selfCheckPassed,
-        selfCheckIssues: [...latestDesign.selfCheckIssues],
-      };
-    }
-
-    if (this.diagrams && Object.keys(this.diagrams).length > 0) {
-      snapshots["diagrams-final"] = {
-        taskId: "diagrams-final",
-        type: "diagrams",
-        revision: this._contentRevision(this.diagrams),
-        content: this.diagrams,
-        selfCheckPassed: true,
-        selfCheckIssues: [],
-        sourceTaskIds: [...new Set(Object.values(this.diagramSourcesByKey))].sort(),
-        sourceRevisions: this._sourceRevisionsForTaskIds(
-          [...new Set(Object.values(this.diagramSourcesByKey))],
-        ),
-      };
-    }
-
-    const latestTests = this._latestArtifactOfType("tests");
-    if (latestTests) {
-      snapshots[latestTests.taskId] = {
-        taskId: latestTests.taskId,
-        type: latestTests.type,
-        revision: latestTests.revision,
-        content: latestTests.content,
-        selfCheckPassed: latestTests.selfCheckPassed,
-        selfCheckIssues: [...latestTests.selfCheckIssues],
-      };
-    }
-
-    return snapshots;
-  }
-
-  private _latestArtifactOfType(type: string): Artifact | null {
-    const latestTaskId = this.latestArtifactTaskByType[type];
-    if (latestTaskId && this.artifacts[latestTaskId]) {
-      return this.artifacts[latestTaskId];
-    }
-    let latest: Artifact | null = null;
-    for (const artifact of Object.values(this.artifacts)) {
-      if (artifact.type !== type) continue;
-      latest = artifact;
-    }
-    return latest;
+    return this._artifactManager.finalArtifactSnapshots();
   }
 
   latestArtifactTaskIdOfType(type: string): string {
-    const latestTaskId = this.latestArtifactTaskByType[type];
-    if (latestTaskId && this.artifacts[latestTaskId]) return latestTaskId;
-    const latest = this._latestArtifactOfType(type);
-    return latest?.taskId ?? "";
+    return this._artifactManager.latestArtifactTaskIdOfType(type);
   }
 
   diagramSourceTaskId(diagramKey: string): string {
-    const normalized = diagramKey.trim();
-    if (normalized && this.diagramSourcesByKey[normalized]) {
-      return this.diagramSourcesByKey[normalized];
-    }
-    for (const [key, taskId] of Object.entries(this.diagramSourcesByKey)) {
-      if (normalized && key.includes(normalized)) return taskId;
-    }
-    return this.latestArtifactTaskIdOfType("diagrams");
+    return this._artifactManager.diagramSourceTaskId(diagramKey);
   }
 
-  private _contentRevision(content: unknown): number {
-    const text = JSON.stringify(content, (_key, value) => {
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        return Object.fromEntries(
-          Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-            a.localeCompare(b),
-          ),
-        );
-      }
-      return value;
-    });
-    const hex = createHash("sha256").update(text ?? "", "utf8").digest("hex").slice(0, 12);
-    return parseInt(hex, 16) || 1;
-  }
-
-  private _sourceRevisionsForType(type: string): Record<string, number> {
-    const revisions: Record<string, number> = {};
-    for (const artifact of Object.values(this.artifacts)) {
-      if (artifact.type !== type) continue;
-      revisions[artifact.taskId] = this.currentArtifactRevision(artifact.taskId);
-    }
-    return revisions;
-  }
-
-  private _sourceRevisionsForTaskIds(taskIds: string[]): Record<string, number> {
-    const revisions: Record<string, number> = {};
-    for (const taskId of taskIds) {
-      const revision = this.currentArtifactRevision(taskId);
-      if (revision > 0) revisions[taskId] = revision;
-    }
-    return revisions;
-  }
-
-  /** Current revision number for a task's artifact (0 if none). */
   currentArtifactRevision(taskId: string): number {
-    return this.artifactRevisionsByTask[taskId] ?? 0;
+    return this._artifactManager.currentArtifactRevision(taskId);
   }
 
-  /** Latest revision that has been evaluated by the reviewer (0 if none). */
   latestEvaluatedRevision(taskId: string): number {
-    return this.evaluatedRevisionsByTask[taskId] ?? 0;
+    return this._reviewManager.latestEvaluatedRevision(taskId);
   }
 
-  /**
-   * Review status of a task's current artifact revision.
-   * Returns `"unknown"` if the current revision hasn't been evaluated yet.
-   */
   currentReviewStatus(taskId: string): string {
-    const currentRevision = this.currentArtifactRevision(taskId);
-    if (currentRevision === 0) return "unknown";
-    if (this.latestEvaluatedRevision(taskId) !== currentRevision) return "unknown";
-    return this.reviewStatusByTask[taskId] ?? "unknown";
+    return this._reviewManager.currentReviewStatus(taskId);
   }
 
-  /** Whether the current artifact revision for a task has been accepted. */
   isCurrentArtifactAccepted(taskId: string): boolean {
-    const currentRevision = this.currentArtifactRevision(taskId);
-    if (currentRevision === 0) return false;
-    return (
-      this.latestEvaluatedRevision(taskId) === currentRevision &&
-      this.reviewStatusByTask[taskId] === "passed" &&
-      this.acceptedRevisionsByTask[taskId] === currentRevision
-    );
+    return this._reviewManager.isCurrentArtifactAccepted(taskId);
   }
 
-  /** Task IDs whose latest artifact revision has not been evaluated yet. */
   getUnevaluatedArtifactTaskIds(): string[] {
-    return Object.keys(this.artifacts)
-      .filter(
-        (taskId) =>
-          this.currentArtifactRevision(taskId) > this.latestEvaluatedRevision(taskId),
-      )
-      .sort();
+    return this._reviewManager.getUnevaluatedArtifactTaskIds();
   }
 
-  /** Task IDs whose current artifact was rejected. */
   getRejectedArtifactTaskIds(): string[] {
-    return Object.keys(this.artifacts)
-      .filter((taskId) => this.currentReviewStatus(taskId) === "rejected")
-      .sort();
+    return this._reviewManager.getRejectedArtifactTaskIds();
   }
 
-  /** Task IDs whose current artifact has not been accepted. */
   getUnacceptedArtifactTaskIds(): string[] {
-    return Object.keys(this.artifacts)
-      .filter((taskId) => !this.isCurrentArtifactAccepted(taskId))
-      .sort();
+    return this._reviewManager.getUnacceptedArtifactTaskIds();
   }
 
-  /** Tasks that passed (no blockers) but have major issues worth fixing. */
   getMajorPendingTaskIds(): string[] {
-    return [...this.majorPendingTaskIds]
-      .filter((tid) => tid in this.artifacts)
-      .sort();
+    return this._reviewManager.getMajorPendingTaskIds();
   }
 
-  /** Clear the set of major-pending task IDs. */
   clearMajorPending(): void {
-    this.majorPendingTaskIds.clear();
+    return this._reviewManager.clearMajorPending();
   }
 
-  /** Whether any artifact exists with the given task type. */
   hasArtifactOfType(taskType: string): boolean {
-    return Object.values(this.artifacts).some((a) => a.type === taskType);
+    return this._artifactManager.hasArtifactOfType(taskType);
   }
 
-  /** All artifacts matching the given task type. */
   getArtifactsByType(taskType: string): Artifact[] {
-    return Object.values(this.artifacts).filter((a) => a.type === taskType);
+    return this._artifactManager.getArtifactsByType(taskType);
   }
 
   /** Elapsed seconds since start (or between start and end). */
@@ -1110,324 +634,38 @@ export class WorkflowState {
     return 0.0;
   }
 
-  /**
-   * Look up a task from the plan by its id.
-   * Returns a plain-object snapshot or `null`.
-   */
-  getTaskById(
-    taskId: string,
-  ): {
+  // ------------------------------------------------------------------
+  // Plan mutation (delegated to PlanMutator)
+  // ------------------------------------------------------------------
+
+  setPlan(plan: ExecutionPlan): void {
+    return this._planMutator.setPlan(plan);
+  }
+
+  setRequirementJson(json: Record<string, unknown>): void {
+    return this._planMutator.setRequirementJson(json);
+  }
+
+  setQualityStatus(status: QualityStatus): void {
+    return this._planMutator.setQualityStatus(status);
+  }
+
+  getTaskById(taskId: string): {
     id: string;
     type: TaskType;
     description: string;
     dependsOn: string[];
     contextHints: Record<string, unknown>;
   } | null {
-    if (!this.plan) return null;
-    for (const t of this.plan.tasks) {
-      if (t.id === taskId) {
-        return {
-          id: t.id,
-          type: t.type,
-          description: t.description,
-          dependsOn: t.dependsOn,
-          contextHints: t.contextHints,
-        };
-      }
-    }
-    return null;
+    return this._planMutator.getTaskById(taskId);
   }
 
-  // ------------------------------------------------------------------
-  // Plan mutation
-  // ------------------------------------------------------------------
-
-  /**
-   * Set (or replace) the execution plan.
-   *
-   * Initialises lifecycle task statuses for every task in the new plan
-   * whose status is not already tracked, defaulting to {@code "pending"}.
-   *
-   * Prefer this over direct {@code state.plan = ...} assignment so that
-   * task statuses stay in sync with the plan.
-   */
-  setPlan(plan: ExecutionPlan): void {
-    this.plan = plan;
-    for (const task of plan.tasks) {
-      if (!this.taskStatuses[task.id]) {
-        this.taskStatuses[task.id] = "pending";
-      }
-    }
-  }
-
-  /** Set the merged requirement JSON. Prefer this over direct assignment. */
-  setRequirementJson(json: Record<string, unknown>): void {
-    this.requirementJson = json;
-  }
-
-  /** Set the final quality status. Prefer this over direct assignment. */
-  setQualityStatus(status: QualityStatus): void {
-    this.qualityStatus = status;
-  }
-
-  /**
-   * Apply a {@link PlanMutation} to the current plan.
-   *
-   * Validates:
-   * - Task type validity
-   * - Completed tasks are not dropped or illegally modified
-   * - New task IDs are unique
-   * - Dependency graph is a DAG (acyclic)
-   * - No dangling dependencies
-   *
-   * @returns Array of validation error strings (empty = success).
-   */
   mutatePlan(mutation: PlanMutation): string[] {
-    if (this.plan === null) {
-      return ["cannot mutate: no plan exists"];
-    }
-
-    const errors: string[] = [];
-
-    // --- Validate: new task types must be valid ---
-    const validTypes = new Set<string>(["analyze", "design", "diagrams", "tests"]);
-    for (const task of mutation.addTasks) {
-      if (!validTypes.has(task.type)) {
-        errors.push(`invalid task type '${task.type}' for '${task.id}'`);
-      }
-    }
-    for (const task of mutation.updateTasks) {
-      if (!validTypes.has(task.type)) {
-        errors.push(`invalid task type '${task.type}' for '${task.id}'`);
-      }
-    }
-    for (const taskId of mutation.dropTaskIds) {
-      if (this.isTaskCompleted(taskId)) {
-        errors.push(`cannot drop completed task '${taskId}'`);
-      }
-    }
-
-    // --- Validate: completed tasks cannot be meaningfully updated ---
-    for (const task of mutation.updateTasks) {
-      if (this.isTaskCompleted(task.id)) {
-        const existing = this.getTaskById(task.id);
-        if (
-          existing &&
-          (task.type !== existing.type ||
-            JSON.stringify(task.dependsOn) !==
-              JSON.stringify(existing.dependsOn))
-        ) {
-          errors.push(
-            `cannot change type/dependsOn of completed task '${task.id}'`,
-          );
-        }
-      }
-    }
-
-    // --- Validate: new task IDs must be unique ---
-    const existingIds = new Set(this.plan.tasks.map((t) => t.id));
-    const dropSet = new Set(mutation.dropTaskIds);
-    for (const task of mutation.addTasks) {
-      if (existingIds.has(task.id) && !dropSet.has(task.id)) {
-        errors.push(`new task id '${task.id}' conflicts with existing task`);
-      }
-    }
-    // Check duplicates within addTasks itself
-    const newIdSet = new Set(mutation.addTasks.map((t) => t.id));
-    if (newIdSet.size !== mutation.addTasks.length) {
-      errors.push("duplicate task ids in addTasks");
-    }
-
-    // --- Build the new task list ---
-    if (errors.length > 0) {
-      return errors;
-    }
-
-    // Start with existing tasks, applying mutations
-    interface TaskInfo {
-      id: string;
-      type: TaskType;
-      description: string;
-      dependsOn: string[];
-      contextHints: Record<string, unknown>;
-    }
-
-    const taskMap = new Map<string, TaskInfo>();
-    for (const t of this.plan.tasks) {
-      taskMap.set(t.id, {
-        id: t.id,
-        type: t.type,
-        description: t.description,
-        dependsOn: [...t.dependsOn],
-        contextHints:
-          t.contextHints && Object.keys(t.contextHints).length > 0
-            ? { ...t.contextHints }
-            : {},
-      });
-    }
-
-    // Drop tasks
-    for (const taskId of mutation.dropTaskIds) {
-      taskMap.delete(taskId);
-      delete this.taskStatuses[taskId];
-    }
-
-    // Update tasks
-    for (const task of mutation.updateTasks) {
-      const info = taskMap.get(task.id);
-      if (info) {
-        info.description = task.description;
-        info.contextHints =
-          task.contextHints && Object.keys(task.contextHints).length > 0
-            ? { ...task.contextHints }
-            : {};
-        if (!this.isTaskCompleted(task.id)) {
-          info.dependsOn = [...task.dependsOn];
-        }
-      }
-    }
-
-    // Add new tasks
-    for (const task of mutation.addTasks) {
-      taskMap.set(task.id, {
-        id: task.id,
-        type: task.type,
-        description: task.description,
-        dependsOn: [...task.dependsOn],
-        contextHints:
-          task.contextHints && Object.keys(task.contextHints).length > 0
-            ? { ...task.contextHints }
-            : {},
-      });
-      // Initialize status for new tasks
-      this.taskStatuses[task.id] = "pending";
-    }
-
-    // Reorder edges
-    for (const [taskId, newDeps] of Object.entries(mutation.reorderEdges)) {
-      const info = taskMap.get(taskId);
-      if (info && !this.isTaskCompleted(taskId)) {
-        info.dependsOn = [...newDeps];
-      }
-    }
-
-    // Reconstruct tasks list, preserving original order for existing tasks
-    const preservedOrder = this.plan.tasks
-      .map((t) => t.id)
-      .filter((id) => taskMap.has(id));
-    const newTaskIds = mutation.addTasks.map((t) => t.id);
-    const orderedIds = [
-      ...preservedOrder,
-      ...newTaskIds.filter((tid) => !preservedOrder.includes(tid)),
-    ];
-
-    const newTasks: Task[] = [];
-    for (const tid of orderedIds) {
-      const info = taskMap.get(tid)!;
-      newTasks.push(
-        createTask({
-          id: info.id,
-          type: info.type,
-          description: info.description,
-          dependsOn: info.dependsOn,
-          contextHints: info.contextHints,
-        }),
-      );
-    }
-
-    // --- Validate: dependency acyclicity ---
-    const depGraph = new Map<string, Set<string>>();
-    for (const t of newTasks) {
-      depGraph.set(t.id, new Set(t.dependsOn));
-    }
-    const cycleErrors = WorkflowState.checkDag(depGraph);
-    if (cycleErrors.length > 0) {
-      return cycleErrors;
-    }
-
-    // --- Validate: no dangling dependencies ---
-    const allIds = new Set(newTasks.map((t) => t.id));
-    for (const t of newTasks) {
-      for (const dep of t.dependsOn) {
-        if (!allIds.has(dep)) {
-          errors.push(
-            `task '${t.id}' depends on non-existent task '${dep}'`,
-          );
-        }
-      }
-    }
-
-    if (errors.length > 0) {
-      return errors;
-    }
-
-    // Apply
-    this.plan = createExecutionPlan({
-      tasks: newTasks,
-      goal: this.plan.goal,
-      reasoning: this.plan.reasoning
-        ? `${this.plan.reasoning} | replan: ${mutation.reasoning}`
-        : mutation.reasoning,
-    });
-    this.progress.recordPlanMutation();
-    return [];
+    return this._planMutator.mutatePlan(mutation);
   }
 
-  // ------------------------------------------------------------------
-  // DAG validation (static)
-  // ------------------------------------------------------------------
-
-  /**
-   * Check that the dependency graph is a DAG (no cycles).
-   *
-   * Uses DFS with three-color marking (WHITE / GRAY / BLACK).
-   *
-   * @param depGraph - Map of node → set of its dependencies.
-   * @returns Array of cycle description strings (empty = valid DAG).
-   */
   static checkDag(depGraph: Map<string, Set<string>>): string[] {
-    const WHITE = 0;
-    const GRAY = 1;
-    const BLACK = 2;
-
-    const color = new Map<string, number>();
-    for (const node of depGraph.keys()) {
-      color.set(node, WHITE);
-    }
-
-    const cycles: string[] = [];
-
-    function dfs(node: string, path: string[]): void {
-      color.set(node, GRAY);
-      path.push(node);
-
-      const deps = depGraph.get(node) ?? new Set<string>();
-      for (const dep of deps) {
-        if (!color.has(dep)) {
-          // Dependency on a node not in the graph — skip
-          continue;
-        }
-        const depColor = color.get(dep)!;
-        if (depColor === GRAY) {
-          const cycleStart = path.indexOf(dep);
-          const cycle = path.slice(cycleStart).concat(dep);
-          cycles.push(cycle.join(" → "));
-        } else if (depColor === WHITE) {
-          dfs(dep, path);
-        }
-      }
-
-      path.pop();
-      color.set(node, BLACK);
-    }
-
-    for (const node of depGraph.keys()) {
-      if (color.get(node) === WHITE) {
-        dfs(node, []);
-      }
-    }
-
-    return cycles.map((c) => `dependency cycle detected: ${c}`);
+    return PlanMutator.checkDag(depGraph);
   }
 }
 

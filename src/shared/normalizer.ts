@@ -465,12 +465,19 @@ export class RequirementNormalizer {
         const rootKeywords = rootName.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
         const sourceLower = requirementText.toLowerCase();
         const hasSpecificEvidence = (() => {
-          if (!sourceLower.includes(rootKeywords)) return false;
           const sentences = requirementText.split(/[.\n]+/);
           for (const sentence of sentences) {
             const sentLower = sentence.toLowerCase();
-            if (sentLower.includes(rootKeywords) && LINE_ITEM_KEYWORDS.test(sentence)) {
-              return true;
+            if (LINE_ITEM_KEYWORDS.test(sentence)) {
+              // When entity name appears in source, require it in same sentence
+              if (sourceLower.includes(rootKeywords)) {
+                if (sentLower.includes(rootKeywords)) return true;
+                // entity name elsewhere but not in this sentence — keep looking
+              } else {
+                // Language mismatch: entity names absent from source,
+                // but line-item keywords confirmed by outer guard
+                return true;
+              }
             }
           }
           return false;
