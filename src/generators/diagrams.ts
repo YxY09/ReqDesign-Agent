@@ -15,13 +15,20 @@ export class DiagramGenerator extends BaseGenerator<string> {
     this.prompts = this._loadPrompts();
   }
 
-  async generate(
-    requirementJson: Record<string, unknown> | null,
-    designText: string,
-    diagramType = "class_diagram",
-    systemPrompt?: string,
-    requirementText = "",
-  ): Promise<string> {
+  async generate(input: unknown): Promise<string> {
+    const {
+      requirementJson = null,
+      designText,
+      diagramType = "class_diagram",
+      systemPrompt,
+      requirementText = "",
+    } = input as {
+      requirementJson?: Record<string, unknown> | null;
+      designText: string;
+      diagramType?: string;
+      systemPrompt?: string;
+      requirementText?: string;
+    };
     if (diagramType === "activity_diagram") {
       return this.generateActivityDiagram(
         requirementJson,
@@ -392,12 +399,13 @@ ${nameList}`;
     let classMermaid = "";
     try {
       classMermaid = await this.generateClassDiagram(requirementJson, designText, sp, rt);
-    } catch {
+    } catch (e) {
+      console.warn("[DiagramGenerator] 图表生成失败:", e);
       classMermaid = "";
     }
 
     if (!classMermaid?.trim()) {
-      try { classMermaid = await this.generateClassDiagram(requirementJson, designText, sp, rt); } catch { /* keep empty */ }
+      try { classMermaid = await this.generateClassDiagram(requirementJson, designText, sp, rt); } catch (e) { console.warn("[DiagramGenerator] 图表生成失败:", e); /* keep empty */ }
     }
     results["class_diagram"] = classMermaid || "";
 
@@ -428,7 +436,7 @@ ${nameList}`;
         let val = result.value;
         // 空结果重试一次
         if (!val?.trim()) {
-          try { val = await phase2Tasks[i].fn(); } catch { /* 保持空值 */ }
+          try { val = await phase2Tasks[i].fn(); } catch (e) { console.warn("[DiagramGenerator] 图表生成失败:", e); /* 保持空值 */ }
         }
         if (!val?.trim()) {
           failed.push(phase2Tasks[i].name);

@@ -385,4 +385,38 @@ describe("SessionBackend", () => {
     backend.shutdown();
     // No assertion needed — just that no error is thrown
   });
+
+  it("submission queue should timeout when all workers are stuck", async () => {
+    const backend = new SessionBackend({
+      maxConcurrency: 1,
+      submissionTimeoutSeconds: 1,
+      heartbeatInterval: 0,
+    });
+
+    // Fill the pool with a stuck session
+    const stuckSession = makeSession(StuckSession, "design-1");
+    const msg1 = createTaskMessage({
+      type: "spawn",
+      taskId: "design-1",
+      sessionId: stuckSession.sessionId,
+    });
+    backend.submitSession(stuckSession, msg1, 300);
+
+    await delay(50);
+    expect(backend.hasInflight()).toBe(true);
+
+    // Second submission should timeout on queue wait
+    const session2 = makeSession(FastSession, "design-2");
+    const msg2 = createTaskMessage({
+      type: "spawn",
+      taskId: "design-2",
+      sessionId: session2.sessionId,
+    });
+
+    await expect(
+      backend.submitSession(session2, msg2, 300),
+    ).rejects.toThrow("提交超时：所有 worker 都在忙碌中");
+
+    backend.shutdown();
+  });
 });

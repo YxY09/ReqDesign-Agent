@@ -34,11 +34,12 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     );
   }
 
-  async generate(
-    artifacts: Array<{ taskId: string; content: Record<string, unknown> }>,
-    requirementText: string,
-    systemPrompt?: string,
-  ): Promise<Record<string, unknown>> {
+  async generate(input: unknown): Promise<Record<string, unknown>> {
+    const { artifacts, requirementText, systemPrompt } = input as {
+      artifacts: Array<{ taskId: string; content: Record<string, unknown> }>;
+      requirementText: string;
+      systemPrompt?: string;
+    };
     return this.merge(artifacts, requirementText, systemPrompt);
   }
 

@@ -185,10 +185,11 @@ export class SystemDesigner extends BaseGenerator<string> {
     );
   }
 
-  async generate(
-    requirementJson: Record<string, unknown>,
-    systemPrompt?: string,
-  ): Promise<string> {
+  async generate(input: unknown): Promise<string> {
+    const { requirementJson, systemPrompt } = input as {
+      requirementJson: Record<string, unknown>;
+      systemPrompt?: string;
+    };
     return this.generateDesign(requirementJson, systemPrompt);
   }
 

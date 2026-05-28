@@ -18,12 +18,13 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     );
   }
 
-  async generate(
-    requirementJson: Record<string, unknown>,
-    designText: string,
-    systemPrompt?: string,
-    requirementText = "",
-  ): Promise<string> {
+  async generate(input: unknown): Promise<string> {
+    let { requirementJson, designText, systemPrompt, requirementText = "" } = input as {
+      requirementJson: Record<string, unknown>;
+      designText: string;
+      systemPrompt?: string;
+      requirementText?: string;
+    };
     if (!requirementJson && requirementText) {
       requirementJson = { _direct_mode: true, raw_requirement: requirementText };
     } else if (!requirementJson || typeof requirementJson !== "object") {

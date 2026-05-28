@@ -22,12 +22,13 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     );
   }
 
-  async generate(
-    requirementText: string,
-    maxRetries = 3,
-    systemPrompt?: string,
-    existingJson?: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
+  async generate(input: unknown): Promise<Record<string, unknown>> {
+    const { requirementText, maxRetries = 3, systemPrompt, existingJson } = input as {
+      requirementText: string;
+      maxRetries?: number;
+      systemPrompt?: string;
+      existingJson?: Record<string, unknown>;
+    };
     return this.analyze(requirementText, maxRetries, systemPrompt, existingJson);
   }
 

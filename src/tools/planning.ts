@@ -220,6 +220,22 @@ export class PlanningTool extends BaseTool {
   // 解析响应
   // ------------------------------------------------------------------
 
+  /** 从任务记录中解析 analysisMode，支持 4 级优先级回退：analysis_mode → analysisMode → context_hints.analysisMode → context_hints.analysis_mode */
+  private _parseAnalysisMode(ctx: Record<string, unknown>): Task["analysisMode"] {
+    let rawMode = String(ctx.analysis_mode ?? ctx.analysisMode ?? "").trim();
+    if (!rawMode) {
+      const ch = ctx.context_hints;
+      if (typeof ch === "object" && ch !== null) {
+        const hints = ch as Record<string, unknown>;
+        rawMode = String(hints.analysisMode ?? hints.analysis_mode ?? "").trim();
+      }
+    }
+    return rawMode === "constraints" ? "constraints"
+      : rawMode === "domain" ? "domain"
+      : rawMode ? "domain"
+      : undefined;
+  }
+
   _parseResponse(response: Record<string, unknown>, goal: string): ExecutionPlan {
     const tasksRaw = response.tasks as Array<Record<string, unknown>> | undefined;
     let tasks: Task[] = [];
@@ -228,12 +244,7 @@ export class PlanningTool extends BaseTool {
       tasks = tasksRaw
         .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null && !Array.isArray(t))
         .map((t) => {
-          const rawMode = String(t.analysis_mode ?? t.analysisMode ?? (t.context_hints as any)?.analysisMode ?? (t.context_hints as any)?.analysis_mode ?? "").trim();
-          const analysisMode: Task["analysisMode"] =
-            rawMode === "constraints" ? "constraints"
-            : rawMode === "domain" ? "domain"
-            : rawMode ? "domain"
-            : undefined;
+          const analysisMode = this._parseAnalysisMode(t);
 
           // Read assignedSections from LLM output (camelCase or snake_case)
           const contextHints: Record<string, unknown> =
@@ -275,12 +286,7 @@ export class PlanningTool extends BaseTool {
     const addTasks = addTasksRaw
       .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null)
       .map((t) => {
-        const rawMode = String(t.analysis_mode ?? t.analysisMode ?? (t.context_hints as any)?.analysisMode ?? (t.context_hints as any)?.analysis_mode ?? "").trim();
-        const analysisMode: Task["analysisMode"] =
-          rawMode === "constraints" ? "constraints"
-          : rawMode === "domain" ? "domain"
-          : rawMode ? "domain"
-          : undefined;
+        const analysisMode = this._parseAnalysisMode(t);
         return createTask({
           id: String(t.id || "").trim(),
           type: (String(t.type || "analyze").trim()) as Task["type"],
@@ -295,12 +301,7 @@ export class PlanningTool extends BaseTool {
     const updateTasks = updateRaw
       .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null)
       .map((t) => {
-        const rawMode = String(t.analysis_mode ?? t.analysisMode ?? (t.context_hints as any)?.analysisMode ?? (t.context_hints as any)?.analysis_mode ?? "").trim();
-        const analysisMode: Task["analysisMode"] =
-          rawMode === "constraints" ? "constraints"
-          : rawMode === "domain" ? "domain"
-          : rawMode ? "domain"
-          : undefined;
+        const analysisMode = this._parseAnalysisMode(t);
         return createTask({
           id: String(t.id || "").trim(),
           type: (String(t.type || "analyze").trim()) as Task["type"],

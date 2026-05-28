@@ -88,5 +88,5 @@ export abstract class BaseGenerator<TOutput> {
     throw lastError!;
   }
 
-  abstract generate(...args: any[]): Promise<TOutput>;
+  abstract generate(input: unknown): Promise<TOutput>;
 }

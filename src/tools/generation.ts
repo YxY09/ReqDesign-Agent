@@ -218,7 +218,7 @@ ${text}`;
     const reqJson = (ctx.requirement_json ?? {}) as Record<string, unknown>;
     const designText = (ctx.design_text as string) ?? "";
     if (this.llm) this.llm.streamTag = "[Generator:tests]";
-    return this._getTestGen().generate(reqJson, designText, systemPrompt, "");
+    return this._getTestGen().generate({ requirementJson: reqJson, designText, systemPrompt, requirementText: "" });
   }
 
   // ------------------------------------------------------------------

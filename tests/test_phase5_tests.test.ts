@@ -208,10 +208,13 @@ describe("TestCaseGenerator.generate", () => {
     const llm = { generateText: vi.fn().mockResolvedValue("| 编号 | 类型 |") };
     const generator = new TestCaseGenerator(llm as any);
     await generator.generate({
-      functions: [{ id: "F001", name: "CreateOrder", description: "下单" }],
-      exceptions: [{ id: "X001", description: "支付失败", trigger: "余额不足" }],
-      constraints: [{ id: "C001", description: "订单金额限制" }],
-    }, "## 设计");
+      requirementJson: {
+        functions: [{ id: "F001", name: "CreateOrder", description: "下单" }],
+        exceptions: [{ id: "X001", description: "支付失败", trigger: "余额不足" }],
+        constraints: [{ id: "C001", description: "订单金额限制" }],
+      },
+      designText: "## 设计",
+    });
 
     const prompt = llm.generateText.mock.calls[0][0] as string;
     expect(prompt).toContain("测试生成合同");

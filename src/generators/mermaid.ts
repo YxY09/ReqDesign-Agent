@@ -3,18 +3,8 @@
  * 纯同步校验，无 LLM 调用。
  */
 
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { writeFileSync, unlinkSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-
 export class MermaidValidator {
-  useCli: boolean;
-
-  constructor(useCli = false) {
-    // 检查 mmdc 是否可用（简化版：默认始终为 false）
-    this.useCli = useCli;
-  }
+  constructor() {}
 
   validate(mmdContent: string, diagramType = ""): { valid: boolean; message: string } {
     if (!mmdContent?.trim()) {
@@ -34,11 +24,6 @@ export class MermaidValidator {
     // 3. 语义检查
     const semantics = this._checkSemantics(content);
     if (!semantics.valid) return semantics;
-
-    // 4. CLI 校验（如果可用）
-    if (this.useCli) {
-      return this._validateWithCli(content);
-    }
 
     return { valid: true, message: "语法校验通过" };
   }
@@ -252,19 +237,6 @@ export class MermaidValidator {
       }
     }
     return positions;
-  }
-
-  private _validateWithCli(content: string): { valid: boolean; message: string } {
-    const tmpFile = join(tmpdir(), `mermaid-${randomUUID()}.mmd`);
-    try {
-      writeFileSync(tmpFile, content, "utf-8");
-      // CLI 校验在纯 Node.js 环境下禁用 — 需要 child_process.spawn("mmdc")
-      return { valid: true, message: "CLI校验通过 (mmdc not available)" };
-    } catch {
-      return { valid: false, message: "CLI校验异常" };
-    } finally {
-      try { unlinkSync(tmpFile); } catch { /* 忽略错误 */ }
-    }
   }
 
   validateAndReport(mmdContent: string, diagramType = ""): string {

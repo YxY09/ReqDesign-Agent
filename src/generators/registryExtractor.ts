@@ -18,8 +18,11 @@ export class RegistryExtractor extends BaseGenerator<EntityRegistry> {
     this.promptTemplate = loadPrompt("registry_extraction.md", "");
   }
 
-  async generate(...args: any[]): Promise<EntityRegistry> {
-    const [requirementText, systemPrompt] = args as [string, string?];
+  async generate(input: unknown): Promise<EntityRegistry> {
+    const { requirementText, systemPrompt } = input as {
+      requirementText: string;
+      systemPrompt?: string;
+    };
     return this.extract(requirementText, systemPrompt);
   }
 

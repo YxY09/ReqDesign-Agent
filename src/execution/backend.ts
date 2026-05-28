@@ -21,6 +21,7 @@ export type SessionBackendOptions = {
   factory?: { restore: (descriptor: SessionDescriptor) => WorkerSession } | null;
   heartbeatInterval?: number;
   maxConcurrency?: number;
+  submissionTimeoutSeconds?: number;
   onLifecycle?: (session: WorkerSession, event: string, summary: string, status: string, sequence: number) => void;
   onNotification?: (session: WorkerSession, notification: TaskNotification) => void;
 };
@@ -40,6 +41,7 @@ export class SessionBackend extends EventEmitter {
     notification: TaskNotification,
   ) => void;
   private readonly maxConcurrency: number;
+  private readonly submissionTimeoutMs: number;
   private readonly running = new Map<string, RunningMeta>();
   private readonly settledRuns = new Set<string>();
   private readonly sessionMap = new Map<string, WorkerSession>();
@@ -50,6 +52,7 @@ export class SessionBackend extends EventEmitter {
     super();
     this.heartbeatInterval = options?.heartbeatInterval ?? 0.25;
     this.maxConcurrency = options?.maxConcurrency ?? 5;
+    this.submissionTimeoutMs = (options?.submissionTimeoutSeconds ?? 120) * 1000;
     this.onLifecycle = options?.onLifecycle;
     this.onNotification = options?.onNotification;
   }
@@ -61,9 +64,31 @@ export class SessionBackend extends EventEmitter {
   ): Promise<void> {
     // 达到并发上限时等待
     while (this.running.size >= this.maxConcurrency) {
-      await new Promise<void>((resolve, reject) => {
-        this.submissionQueue.push({ resolve, reject });
+      const waitEntry: { resolve: () => void; reject: (error: Error) => void } = {
+        resolve: () => {},
+        reject: () => {},
+      };
+      this.submissionQueue.push(waitEntry);
+
+      const waitPromise = new Promise<void>((resolve, reject) => {
+        waitEntry.resolve = resolve;
+        waitEntry.reject = reject;
       });
+
+      let timeoutId: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const idx = this.submissionQueue.indexOf(waitEntry);
+          if (idx >= 0) this.submissionQueue.splice(idx, 1);
+          reject(new Error("提交超时：所有 worker 都在忙碌中"));
+        }, this.submissionTimeoutMs);
+      });
+
+      try {
+        await Promise.race([waitPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
     }
 
     this.sessionMap.set(session.sessionId, session);
@@ -266,6 +291,7 @@ export class SessionBackend extends EventEmitter {
     meta.settled = true;
     this.clearTimers(meta);
     this.running.delete(meta.session.sessionId);
+    this.releaseSubmissionSlot();
     this.settledRuns.add(meta.runKey);
     if (notification) {
       this.enqueueNotification(meta.session, notification);

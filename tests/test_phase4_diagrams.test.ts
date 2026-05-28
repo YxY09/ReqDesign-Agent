@@ -30,7 +30,7 @@ function makeGen(
 // ═══════════════════════════════════════════════════════
 
 describe("MermaidValidator", () => {
-  const validator = new MermaidValidator(false);
+  const validator = new MermaidValidator();
 
   it("rejects empty content", () => {
     const r = validator.validate("");
@@ -313,23 +313,3 @@ describe("DiagramGenerator._buildPrompt", () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════
-//  MermaidValidator — CLI path
-// ═══════════════════════════════════════════════════════
-
-describe("MermaidValidator — CLI path", () => {
-  it("structure check runs before CLI and rejects missing header", () => {
-    const v = new MermaidValidator(false);
-    const r = v.validate("no header here\n    class A");
-    expect(r.valid).toBe(false);
-    expect(r.message).toContain("图类型声明");
-  });
-
-  it("_validateWithCli returns success (mmdc not available)", () => {
-    const v = new MermaidValidator(true);
-    // Direct call to the private method — in TS source it always returns success
-    // because mmdc is not actually invoked
-    const r = (v as any)._validateWithCli("classDiagram\n    class A");
-    expect(r.valid).toBe(true);
-  });
-});
