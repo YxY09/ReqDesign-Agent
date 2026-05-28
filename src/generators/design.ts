@@ -146,7 +146,7 @@ function isHelperClassName(name: string): boolean {
 function containsToken(text: string, token: string): boolean {
   const trimmed = token.trim();
   if (!trimmed) return false;
-  if (/^[A-Za-z]\d+$/.test(trimmed)) {
+  if (/^[A-Za-z][A-Za-z0-9_]+$/.test(trimmed)) {
     return new RegExp(`\\b${trimmed}\\b`).test(text);
   }
   return text.includes(trimmed);
@@ -166,7 +166,7 @@ function collectIds(items: unknown): string[] {
 
 function extractRequirementIds(designText: string, prefixes: string[]): string[] {
   const prefixGroup = prefixes.map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const idRe = new RegExp(`\\b(?:${prefixGroup})\\d{3,}\\b`, "g");
+  const idRe = new RegExp(`\\b(?:${prefixGroup})[A-Za-z0-9_]+\\b`, "g");
   return [...new Set(designText.match(idRe) ?? [])];
 }
 
@@ -354,7 +354,7 @@ export class SystemDesigner extends BaseGenerator<string> {
       const allowed = new Set(exceptionIds);
       const observed = extractRequirementIds(designText, ["E", "X"]);
       const undefinedExceptionIds = observed.filter((id) => {
-        if (!/^E\d{3,}$|^X\d{3,}$/.test(id)) return false;
+        if (!/^E[A-Za-z0-9_]+$|^X[A-Za-z0-9_]+$/.test(id)) return false;
         return !allowed.has(id);
       });
       if (undefinedExceptionIds.length > 0) {

@@ -2,9 +2,8 @@ import { describe, it, expect } from "vitest";
 import { checkAnalysisQuality } from "../src/shared/analysisQualityGate.js";
 
 // ---------------------------------------------------------------------------
-// Regression test: id_format check should pass on canonical IDs
-// (E001, F001, C001, X001) — the quality gate now runs AFTER assignCanonicalIds
-// so it validates the final output, not pre-canonical IDs.
+// Regression test: id_format check should pass on valid ID formats.
+// Tests the quality gate pattern directly with manually constructed data.
 // ---------------------------------------------------------------------------
 
 describe("checkAnalysisQuality id_format check", () => {
@@ -36,13 +35,13 @@ describe("checkAnalysisQuality id_format check", () => {
     const analysis = {
       actors: [{ name: "Admin" }],
       entities: [
-        { id: "E_bad", name: "User", attributes: [] },
+        { id: "bad", name: "User", attributes: [] },
       ],
       functions: [
-        { id: "F3", name: "Login", description: "Login" },
+        { id: "123", name: "Login", description: "Login" },
       ],
       constraints: [
-        { id: "Cxxx", description: "Some constraint" },
+        { id: "_BAD", description: "Some constraint" },
       ],
       exceptions: [],
     };

@@ -11,7 +11,6 @@ import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { checkAnalysisQuality } from "../shared/analysisQualityGate.js";
-import { assignCanonicalIds, fixCrossReferences } from "../shared/idAssigner.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
@@ -54,9 +53,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     // 只有一个分析结果：无需合并，直接返回
     if (artifacts.length === 1) {
-      const { result, idMap } = assignCanonicalIds(artifacts[0].content);
-      fixCrossReferences(result, idMap);
-      return result;
+      return artifacts[0].content;
     }
 
     // 程序化预合并：将所有分析结果按名称去重取并集
@@ -74,15 +71,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     AnalyzeMerger._verifySourceRefs(merged, requirementText);
 
-    // Assign canonical IDs BEFORE quality gate so id_format check validates final IDs
-    const { result, idMap } = assignCanonicalIds(merged);
-    fixCrossReferences(result, idMap);
-
     // Quality gate: attach result without blocking
-    const qualityResult = checkAnalysisQuality(result, requirementText);
-    (result as Record<string, unknown>).__qualityGate = qualityResult;
+    const qualityResult = checkAnalysisQuality(merged, requirementText);
+    (merged as Record<string, unknown>).__qualityGate = qualityResult;
 
-    return result;
+    return merged;
   }
 
   /**
@@ -253,8 +246,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const mergedActors = AnalyzeMerger._mergeActors(allActors);
     const mergedEntities = AnalyzeMerger._mergeEntities(allEntities);
     const mergedFunctions = AnalyzeMerger._mergeFunctions(allFunctions);
-    const mergedConstraints = AnalyzeMerger._mergeByDescriptionSimilarity(allConstraints);
-    const mergedExceptions = AnalyzeMerger._mergeByDescriptionSimilarity(allExceptions);
+    const mergedConstraints = AnalyzeMerger._mergeByConstraintRef(allConstraints);
+    const mergedExceptions = AnalyzeMerger._mergeByExceptionRef(allExceptions);
     const mergedNFR = AnalyzeMerger._mergeByCategory(allNFR);
     const mergedBP = AnalyzeMerger._mergeByName(allBP);
 
@@ -277,7 +270,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     };
   }
 
-  // --- Actors: merge by actorRef first, then by normalized name + Jaccard/containment similarity ---
+  // --- Actors: merge by actorRef first, then by normalized name ---
   private static _mergeActors(items: Record<string, unknown>[]): Record<string, unknown>[] {
     // Phase 1: group by actorRef if present
     const refGroups = new Map<string, Record<string, unknown>[]>();
@@ -306,60 +299,23 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       result.push(group[0]);
     }
 
-    // Phase 2: group remaining items by exact normalized name
+    // Phase 2: group remaining items by normalized name (case-insensitive, no Jaccard)
     const groups = new Map<string, Record<string, unknown>[]>();
-    // Store original (pre-lowercase) name for camelCase-aware Jaccard comparison
-    const originalNames = new Map<string, string>();
     for (const item of noRefItems) {
       const name = String(item.name ?? "").trim();
       if (!name) continue;
       const key = name.toLowerCase();
-      if (!originalNames.has(key)) originalNames.set(key, name);
       let group = groups.get(key);
       if (!group) { group = []; groups.set(key, group); }
       group.push(item);
     }
 
-    // Phase 2: merge groups that have similar names (Jaccard >= 0.7 or containment)
-    const groupKeys = [...groups.keys()];
-    // Union-Find to track which groups should be merged
-    const parent = new Map<string, string>();
-    for (const key of groupKeys) parent.set(key, key);
-    const find = (k: string): string => {
-      let cur = k;
-      while (parent.get(cur) !== cur) { cur = parent.get(cur)!; }
-      return cur;
-    };
-    const union = (a: string, b: string) => { parent.set(find(a), find(b)); };
-
-    for (let i = 0; i < groupKeys.length; i++) {
-      for (let j = i + 1; j < groupKeys.length; j++) {
-        const wordsI = AnalyzeMerger._getWords(originalNames.get(groupKeys[i]) ?? groupKeys[i]);
-        const wordsJ = AnalyzeMerger._getWords(originalNames.get(groupKeys[j]) ?? groupKeys[j]);
-        const sim = AnalyzeMerger._jaccard(wordsI, wordsJ);
-        const contained = AnalyzeMerger._isContained(wordsI, wordsJ);
-        if (sim >= 0.7 || contained) {
-          union(groupKeys[i], groupKeys[j]);
-        }
-      }
-    }
-
-    // Collect merged groups
-    const mergedGroups = new Map<string, Record<string, unknown>[]>();
-    for (const key of groupKeys) {
-      const root = find(key);
-      let arr = mergedGroups.get(root);
-      if (!arr) { arr = []; mergedGroups.set(root, arr); }
-      arr.push(...groups.get(key)!);
-    }
-
-    // Phase 3: within each merged group, keep actor with longest description
-    for (const [_root, groupItems] of mergedGroups) {
+    // Within each name group, keep actor with longest description
+    for (const [_key, groupItems] of groups) {
       if (groupItems.length === 1) {
         result.push(groupItems[0]);
         continue;
       }
-      // Sort by description length descending, pick the one with longest desc
       groupItems.sort((a, b) => {
         const lenA = String(a.description ?? "").length;
         const lenB = String(b.description ?? "").length;
@@ -546,72 +502,114 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     return result;
   }
 
-  // --- Constraints / Exceptions: merge by description similarity (union-find) ---
-  private static _mergeByDescriptionSimilarity(
+  // --- Constraints: merge by constraintRef first, fallback to source_text dedup ---
+  private static _mergeByConstraintRef(
     items: Record<string, unknown>[],
   ): Record<string, unknown>[] {
     if (items.length <= 1) return [...items];
 
-    // Pre-compute words and source_text for all items
-    const wordsList = items.map((item) =>
-      AnalyzeMerger._getWords(String(item.description ?? "")),
-    );
-    const sourceList = items.map((item) =>
-      AnalyzeMerger._normalizeForMatch(String(item.source_text ?? "")),
-    );
+    // Group by constraintRef
+    const refGroups = new Map<string, Record<string, unknown>[]>();
+    const noRefItems: Record<string, unknown>[] = [];
 
-    // Union-Find for transitive closure of similarity
-    const parent = new Map<number, number>();
-    for (let i = 0; i < items.length; i++) parent.set(i, i);
-    const find = (k: number): number => {
-      let cur = k;
-      while (parent.get(cur) !== cur) {
-        cur = parent.get(cur)!;
+    for (const item of items) {
+      const ref = String(item.constraintRef ?? "").trim();
+      if (ref) {
+        let group = refGroups.get(ref);
+        if (!group) { group = []; refGroups.set(ref, group); }
+        group.push(item);
+      } else {
+        noRefItems.push(item);
       }
-      return cur;
-    };
-    const union = (a: number, b: number) => {
-      parent.set(find(a), find(b));
-    };
+    }
 
-    // Compare ALL pairs and union if similar
-    for (let i = 0; i < items.length; i++) {
-      for (let j = i + 1; j < items.length; j++) {
-        // Check source_text match (handles cross-language duplicates)
-        const sameSource = sourceList[i].length > 0 && sourceList[i] === sourceList[j];
+    const result: Record<string, unknown>[] = [];
 
-        // Check Jaccard similarity on description
-        const sim = AnalyzeMerger._jaccard(wordsList[i], wordsList[j]);
+    // Keep longest description per ref group
+    for (const [_ref, group] of refGroups) {
+      if (group.length === 1) {
+        result.push(group[0]);
+      } else {
+        group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
+        result.push(group[0]);
+      }
+    }
 
-        if (sameSource || sim >= 0.7) {
-          union(i, j);
+    // Fallback: group by normalized source_text; items without source_text stay separate
+    if (noRefItems.length > 0) {
+      const sourceGroups = new Map<string, Record<string, unknown>[]>();
+      let uniqueCounter = 0;
+      for (const item of noRefItems) {
+        const normalized = AnalyzeMerger._normalizeForMatch(String(item.source_text ?? ""));
+        const key = normalized || `__item_${uniqueCounter++}`;
+        let group = sourceGroups.get(key);
+        if (!group) { group = []; sourceGroups.set(key, group); }
+        group.push(item);
+      }
+      for (const [_key, group] of sourceGroups) {
+        if (group.length === 1) {
+          result.push(group[0]);
+        } else {
+          group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
+          result.push(group[0]);
         }
       }
     }
 
-    // Collect groups by root
-    const groups = new Map<number, Record<string, unknown>[]>();
-    for (let i = 0; i < items.length; i++) {
-      const root = find(i);
-      let arr = groups.get(root);
-      if (!arr) {
-        arr = [];
-        groups.set(root, arr);
+    return result;
+  }
+
+  // --- Exceptions: merge by exceptionRef first, fallback to source_text dedup ---
+  private static _mergeByExceptionRef(
+    items: Record<string, unknown>[],
+  ): Record<string, unknown>[] {
+    if (items.length <= 1) return [...items];
+
+    // Group by exceptionRef
+    const refGroups = new Map<string, Record<string, unknown>[]>();
+    const noRefItems: Record<string, unknown>[] = [];
+
+    for (const item of items) {
+      const ref = String(item.exceptionRef ?? "").trim();
+      if (ref) {
+        let group = refGroups.get(ref);
+        if (!group) { group = []; refGroups.set(ref, group); }
+        group.push(item);
+      } else {
+        noRefItems.push(item);
       }
-      arr.push(items[i]);
     }
 
-    // For each group, pick the item with the longest description
     const result: Record<string, unknown>[] = [];
-    for (const groupItems of groups.values()) {
-      if (groupItems.length === 1) {
-        result.push(groupItems[0]);
+
+    // Keep longest description per ref group
+    for (const [_ref, group] of refGroups) {
+      if (group.length === 1) {
+        result.push(group[0]);
       } else {
-        groupItems.sort(
-          (a, b) =>
-            String(b.description ?? "").length - String(a.description ?? "").length,
-        );
-        result.push(groupItems[0]);
+        group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
+        result.push(group[0]);
+      }
+    }
+
+    // Fallback: group by normalized source_text; items without source_text stay separate
+    if (noRefItems.length > 0) {
+      const sourceGroups = new Map<string, Record<string, unknown>[]>();
+      let uniqueCounter = 0;
+      for (const item of noRefItems) {
+        const normalized = AnalyzeMerger._normalizeForMatch(String(item.source_text ?? ""));
+        const key = normalized || `__item_${uniqueCounter++}`;
+        let group = sourceGroups.get(key);
+        if (!group) { group = []; sourceGroups.set(key, group); }
+        group.push(item);
+      }
+      for (const [_key, group] of sourceGroups) {
+        if (group.length === 1) {
+          result.push(group[0]);
+        } else {
+          group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
+          result.push(group[0]);
+        }
       }
     }
 

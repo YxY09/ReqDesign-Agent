@@ -376,7 +376,7 @@ describe("preMerge function merging", () => {
 // ---------------------------------------------------------------------------
 
 describe("preMerge constraint merging", () => {
-  it("merges constraints with Jaccard >= 0.7 description similarity", () => {
+  it("keeps constraints separate without source_text (no Jaccard)", () => {
     const merger = new AnalyzeMerger(fakeLlm);
     const a1 = artifact({
       constraints: [
@@ -391,12 +391,9 @@ describe("preMerge constraint merging", () => {
 
     const merged = merger.preMerge([a1, a2]);
 
-    // Should merge into 1 (very similar descriptions)
+    // Without constraintRef or source_text, each is a separate item
     const constraints = merged.constraints as Array<Record<string, unknown>>;
-    expect(constraints.length).toBe(1);
-    // Keeps the more complete version
-    const desc = String(constraints[0].description);
-    expect(desc.length).toBeGreaterThan(0);
+    expect(constraints.length).toBe(2);
   });
 
   it("keeps constraints with Jaccard < 0.7 as separate", () => {
@@ -479,11 +476,9 @@ describe("preMerge constraint merging", () => {
     expect((merged.constraints as unknown[]).length).toBe(2);
   });
 
-  it("merges N-way similar constraints via transitive Jaccard closure (BUG-9)", () => {
+  it("keeps N-way constraints separate without source_text (no transitive Jaccard)", () => {
     const merger = new AnalyzeMerger(fakeLlm);
-    // A vs B: Jaccard ~0.67 (< 0.7), A vs C: ~0.88 (>= 0.7), B vs C: ~0.78 (>= 0.7)
-    // Greedy pairwise: A absorbs C, B stays separate → 2 results (BUG)
-    // Union-find: A-C-B all transitively connected → 1 result (correct)
+    // Without constraintRef or source_text, no merging occurs
     const a1 = artifact({
       constraints: [
         { id: "C001", description: "User password must contain uppercase letters and lowercase letters" },
@@ -503,19 +498,16 @@ describe("preMerge constraint merging", () => {
     const merged = merger.preMerge([a1, a2, a3]);
     const constraints = merged.constraints as Array<Record<string, unknown>>;
 
-    // All 3 should be merged into 1 via transitive closure
-    expect(constraints.length).toBe(1);
-    // Should keep the longest description
-    const desc = String(constraints[0].description);
-    expect(desc).toContain("security");
+    // All 3 kept separate without constraintRef or source_text
+    expect(constraints.length).toBe(3);
   });
 
-  it("merges N-way constraints with mixed source_text and Jaccard matches", () => {
+  it("merges only by source_text (no Jaccard transitive closure)", () => {
     const merger = new AnalyzeMerger(fakeLlm);
     // E1 vs E2: same source_text → match
-    // E2 vs E3: Jaccard >= 0.7 → match
-    // E1 vs E3: neither source_text nor Jaccard → no direct match
-    // Union-find should connect all 3 transitively
+    // E2 vs E3: no constraintRef/source_text → no match
+    // E1 vs E3: no constraintRef/source_text → no match
+    // Result: E1+E2 merged, E3 separate → 2 total
     const a1 = artifact({
       constraints: [
         { id: "C001", description: "安全属性只能超管修改", source_text: "Only super admin can modify security attributes" },
@@ -535,8 +527,8 @@ describe("preMerge constraint merging", () => {
     const merged = merger.preMerge([a1, a2, a3]);
     const constraints = merged.constraints as Array<Record<string, unknown>>;
 
-    // All 3 should merge via transitive closure (C1-C2 by source_text, C2-C3 by Jaccard)
-    expect(constraints.length).toBe(1);
+    // C1+C2 merge by source_text, C3 stays separate
+    expect(constraints.length).toBe(2);
   });
 });
 
@@ -582,7 +574,7 @@ describe("preMerge entity attribute cap", () => {
 // ---------------------------------------------------------------------------
 
 describe("preMerge exception merging", () => {
-  it("merges exceptions with similar descriptions", () => {
+  it("keeps exceptions separate without source_text (no Jaccard)", () => {
     const merger = new AnalyzeMerger(fakeLlm);
     const a1 = artifact({
       exceptions: [
@@ -596,7 +588,8 @@ describe("preMerge exception merging", () => {
     });
 
     const merged = merger.preMerge([a1, a2]);
-    expect((merged.exceptions as unknown[]).length).toBe(1);
+    // Without exceptionRef or source_text, each is separate
+    expect((merged.exceptions as unknown[]).length).toBe(2);
   });
 
   it("keeps different exceptions", () => {
@@ -785,8 +778,8 @@ describe("checkAnalysisQuality", () => {
   });
 
   it("passes cross-reference integrity when relationship targets are canonical IDs", () => {
-    // After fixCrossReferences, targets become canonical IDs (E001, E002) instead of names.
-    // This should NOT be flagged as broken.
+    // Relationship targets that are canonical IDs (E001, E002) should NOT be flagged as broken.
+    // After the 大简化 refactor, entity IDs are Registry IDs directly.
     const analysis = {
       ...validAnalysis,
       entities: [
@@ -890,240 +883,7 @@ describe("_dedupFunctionsByDescription removed", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 10. merge canonical ID assignment + cross-reference fixing
-// ---------------------------------------------------------------------------
-
-const mockLlmForMerge = {
-  generateJson: async () => ({}),
-} as any;
-
-describe("merge canonical ID assignment", () => {
-  it("assigns canonical IDs after merge", async () => {
-    const merger = new AnalyzeMerger(mockLlmForMerge);
-    const artifacts = [
-      artifact({
-        entities: [
-          { name: "Order", attributes: [], relationships: [{ target: "Customer", type: "belongs_to", description: "" }] },
-          { name: "Customer", attributes: [], relationships: [] },
-        ],
-        functions: [
-          { name: "DeleteOrder", description: "Delete an order" },
-          { name: "CreateOrder", description: "Create an order" },
-        ],
-        constraints: [
-          { id: "C005", description: "Fifth constraint" },
-          { id: "C001", description: "First constraint" },
-        ],
-        exceptions: [
-          { id: "X010", description: "Payment gateway timeout after thirty seconds", trigger: "t", handling: "h" },
-          { id: "X002", description: "Database connection pool exhausted", trigger: "t", handling: "h" },
-        ],
-      }),
-      artifact({
-        entities: [{ name: "Product", attributes: [], relationships: [] }],
-        functions: [{ name: "SearchProduct", description: "Search products" }],
-        constraints: [{ id: "C003", description: "Third constraint" }],
-        exceptions: [],
-      }),
-    ];
-
-    const result = await merger.merge(artifacts, "some requirement");
-
-    // Entities sorted by name: Customer -> Order -> Product
-    const entities = result.entities as Array<Record<string, unknown>>;
-    expect(entities).toHaveLength(3);
-    expect(entities[0].id).toBe("E001");
-    expect(entities[0].name).toBe("Customer");
-    expect(entities[1].id).toBe("E002");
-    expect(entities[1].name).toBe("Order");
-    expect(entities[2].id).toBe("E003");
-    expect(entities[2].name).toBe("Product");
-
-    // Functions sorted by name: CreateOrder -> DeleteOrder -> SearchProduct
-    const functions = result.functions as Array<Record<string, unknown>>;
-    expect(functions).toHaveLength(3);
-    expect(functions[0].id).toBe("F001");
-    expect(functions[0].name).toBe("CreateOrder");
-    expect(functions[1].id).toBe("F002");
-    expect(functions[1].name).toBe("DeleteOrder");
-
-    // Constraints sorted by old id: C001 -> C003 -> C005
-    const constraints = result.constraints as Array<Record<string, unknown>>;
-    expect(constraints).toHaveLength(3);
-    expect(constraints[0].id).toBe("C001");
-    expect(constraints[1].id).toBe("C002");
-    expect(constraints[2].id).toBe("C003");
-
-    // Exceptions sorted by old id: X002 -> X010
-    const exceptions = result.exceptions as Array<Record<string, unknown>>;
-    expect(exceptions).toHaveLength(2);
-    expect(exceptions[0].id).toBe("X001");
-    expect(exceptions[1].id).toBe("X002");
-  });
-
-  it("assigns canonical IDs for single artifact (early return path)", async () => {
-    const merger = new AnalyzeMerger(mockLlmForMerge);
-    const artifacts = [
-      artifact({
-        entities: [
-          { name: "Order", attributes: [], relationships: [{ target: "Customer", type: "belongs_to", description: "" }] },
-          { name: "Customer", attributes: [], relationships: [] },
-        ],
-        functions: [
-          { name: "DeleteOrder", description: "Delete an order" },
-          { name: "CreateOrder", description: "Create an order" },
-        ],
-        constraints: [
-          { id: "C005", description: "Fifth constraint" },
-          { id: "C001", description: "First constraint" },
-        ],
-        exceptions: [
-          { id: "X010", description: "Payment gateway timeout", trigger: "t", handling: "h" },
-          { id: "X002", description: "Database pool exhausted", trigger: "t", handling: "h" },
-        ],
-      }),
-    ];
-
-    const result = await merger.merge(artifacts, "some requirement");
-
-    // Entities sorted by name: Customer -> Order
-    const entities = result.entities as Array<Record<string, unknown>>;
-    expect(entities).toHaveLength(2);
-    expect(entities[0].id).toBe("E001");
-    expect(entities[0].name).toBe("Customer");
-    expect(entities[1].id).toBe("E002");
-    expect(entities[1].name).toBe("Order");
-
-    // Functions sorted by name: CreateOrder -> DeleteOrder
-    const functions = result.functions as Array<Record<string, unknown>>;
-    expect(functions).toHaveLength(2);
-    expect(functions[0].id).toBe("F001");
-    expect(functions[0].name).toBe("CreateOrder");
-    expect(functions[1].id).toBe("F002");
-    expect(functions[1].name).toBe("DeleteOrder");
-
-    // Constraints sorted by old id: C001 -> C005
-    const constraints = result.constraints as Array<Record<string, unknown>>;
-    expect(constraints).toHaveLength(2);
-    expect(constraints[0].id).toBe("C001");
-    expect(constraints[1].id).toBe("C002");
-
-    // Exceptions sorted by old id: X002 -> X010
-    const exceptions = result.exceptions as Array<Record<string, unknown>>;
-    expect(exceptions).toHaveLength(2);
-    expect(exceptions[0].id).toBe("X001");
-    expect(exceptions[1].id).toBe("X002");
-  });
-
-  it("preserves all functions even when LLM returns dedup_functions (false positive guard)", async () => {
-    // Simulate the LLM incorrectly merging BasicSearch into AdvancedSearch
-    const maliciousLlm = {
-      generateJson: async () => ({
-        relationships: [],
-        constraints: [],
-        exceptions: [],
-        dedup_functions: [
-          {
-            keep: "AdvancedSearch",
-            merge: ["BasicSearch"],
-            reason: "基础搜索可作为高级搜索的缺省参数特例",
-          },
-        ],
-      }),
-    } as any;
-    const merger = new AnalyzeMerger(maliciousLlm);
-    const artifacts = [
-      artifact({
-        functions: [
-          { id: "BasicSearch", name: "BasicSearch", description: "基础案件搜索" },
-          { id: "AdvancedSearch", name: "AdvancedSearch", description: "高级案件搜索" },
-        ],
-        actors: [],
-        entities: [],
-        constraints: [],
-        exceptions: [],
-      }),
-      artifact({
-        functions: [
-          { id: "SubmitToCourt", name: "SubmitToCourt", description: "提交到法院" },
-        ],
-        actors: [],
-        entities: [],
-        constraints: [],
-        exceptions: [],
-      }),
-    ];
-
-    const result = await merger.merge(artifacts, "some requirement");
-    const functions = result.functions as Array<Record<string, unknown>>;
-    const names = functions.map((f) => String(f.name));
-
-    // BasicSearch must be preserved — LLM dedup false positives must not remove functions
-    expect(names).toContain("BasicSearch");
-    expect(names).toContain("AdvancedSearch");
-    expect(names).toContain("SubmitToCourt");
-    expect(functions.length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("fixes cross-references after canonical ID assignment", async () => {
-    const merger = new AnalyzeMerger(mockLlmForMerge);
-    const artifacts = [
-      artifact({
-        entities: [
-          {
-            name: "Order",
-            attributes: [],
-            relationships: [{ target: "Customer", type: "belongs_to", description: "" }],
-          },
-          { name: "Customer", attributes: [], relationships: [] },
-        ],
-        functions: [],
-        constraints: [
-          {
-            id: "C_old",
-            description: "test",
-            related_functions: [],
-            related_entities: ["Customer"],
-          },
-        ],
-        exceptions: [
-          {
-            id: "X_old",
-            description: "d",
-            trigger: "t",
-            handling: "h",
-            related_constraints: ["C_old"],
-          },
-        ],
-      }),
-      artifact({
-        entities: [],
-        functions: [],
-        constraints: [],
-        exceptions: [],
-      }),
-    ];
-
-    const result = await merger.merge(artifacts, "some requirement");
-
-    // Entities: Customer (E001), Order (E002)
-    const entities = result.entities as Array<Record<string, unknown>>;
-    const order = entities.find((e) => e.name === "Order")!;
-    const rels = order.relationships as Array<Record<string, unknown>>;
-    expect(rels[0].target).toBe("E001"); // Customer → E001
-
-    // Constraint related_entities: Customer → E001
-    const constraints = result.constraints as Array<Record<string, unknown>>;
-    expect(constraints[0].related_entities).toEqual(["E001"]);
-
-    // Exception related_constraints: C_old → C001
-    const exceptions = result.exceptions as Array<Record<string, unknown>>;
-    expect(exceptions[0].related_constraints).toEqual(["C001"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Actor merge: Jaccard similarity and containment-based dedup
+// Actor merge: actorRef-based + name fallback
 // ---------------------------------------------------------------------------
 
 describe("preMerge actor merging", () => {
@@ -1142,7 +902,7 @@ describe("preMerge actor merging", () => {
     expect(String(actors[0].description)).toContain("maintaining public order");
   });
 
-  it("merges actors with similar names via Jaccard >= 0.7", () => {
+  it("keeps actors with different names separate even if words overlap", () => {
     const merger = new AnalyzeMerger(fakeLlm);
     const a1 = artifact({
       actors: [{ name: "Police", description: "Law enforcement officer" }],
@@ -1152,12 +912,11 @@ describe("preMerge actor merging", () => {
     });
     const merged = merger.preMerge([a1, a2]);
     const actors = merged.actors as Array<Record<string, unknown>>;
-    // "Police" and "Police Personnel" share the word "police" — should merge
-    expect(actors).toHaveLength(1);
-    expect(String(actors[0].description)).toContain("public safety");
+    // "Police" and "Police Personnel" are different names — should stay separate
+    expect(actors).toHaveLength(2);
   });
 
-  it("merges actors when one name contains the other", () => {
+  it("keeps actors separate when names differ (no substring merging)", () => {
     const merger = new AnalyzeMerger(fakeLlm);
     const a1 = artifact({
       actors: [{ name: "Admin", description: "System administrator" }],
@@ -1167,8 +926,8 @@ describe("preMerge actor merging", () => {
     });
     const merged = merger.preMerge([a1, a2]);
     const actors = merged.actors as Array<Record<string, unknown>>;
-    // "admin" is contained in "system admin user" — should merge
-    expect(actors).toHaveLength(1);
+    // Different names — should stay separate without Jaccard
+    expect(actors).toHaveLength(2);
   });
 
   it("keeps both actors when names are dissimilar", () => {
@@ -1185,7 +944,7 @@ describe("preMerge actor merging", () => {
     expect(actors).toHaveLength(2);
   });
 
-  it("keeps longer description when merging similar actors", () => {
+  it("keeps longer description when merging same-name actors (case-insensitive)", () => {
     const merger = new AnalyzeMerger(fakeLlm);
     const shortDesc = "Police officer";
     const longDesc = "Police personnel responsible for law enforcement, crime prevention, and public safety operations across all jurisdictions";
@@ -1193,7 +952,7 @@ describe("preMerge actor merging", () => {
       actors: [{ name: "Police", description: shortDesc }],
     });
     const a2 = artifact({
-      actors: [{ name: "Police Personnel", description: longDesc }],
+      actors: [{ name: "POLICE", description: longDesc }],
     });
     const merged = merger.preMerge([a1, a2]);
     const actors = merged.actors as Array<Record<string, unknown>>;

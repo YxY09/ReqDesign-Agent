@@ -124,7 +124,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     const extractRefs = (text: string, prefix: string): string[] => {
       const refs = new Set<string>();
       const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(`\\b${escaped}\\d{3,}\\b`, "g");
+      const re = new RegExp(`\\b${escaped}[A-Za-z0-9_]+\\b`, "g");
       for (const match of text.matchAll(re)) {
         refs.add(match[0]);
       }
@@ -143,7 +143,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
 
     const extractUnknownRequirementRefs = (text: string, allowedIds: Set<string>, prefixes: string[]): string[] => {
       const prefixGroup = prefixes.map((prefix) => prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-      const re = new RegExp(`\\b(?:${prefixGroup})\\d{3,}\\b`, "g");
+      const re = new RegExp(`\\b(?:${prefixGroup})[A-Za-z0-9_]+\\b`, "g");
       return [...new Set(text.match(re) ?? [])].filter((id) => !allowedIds.has(id));
     };
 
@@ -309,7 +309,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       if (!text.includes(eid)) warnings.push(`异常 ${eid} 未被测试用例覆盖`);
     }
 
-    const unknownRefs = [...new Set(text.match(/\b[FCEX]\d{3,}\b/g) ?? [])]
+    const unknownRefs = [...new Set(text.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [])]
       .filter((id) => !allowedRequirementIds.has(id));
     for (const id of unknownRefs) {
       const kind = id.startsWith("F") ? "功能" : "需求";

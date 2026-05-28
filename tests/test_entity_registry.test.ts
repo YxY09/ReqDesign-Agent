@@ -393,7 +393,7 @@ describe("AnalyzeMerger._getWords camelCase splitting", () => {
     expect(words.has("user")).toBe(true);
   });
 
-  it("merges camelCase actors with similar base names via Jaccard", async () => {
+  it("merges camelCase actors with same lowercased name", async () => {
     const { AnalyzeMerger } = await import("../src/generators/merge.js");
     const merger = new (AnalyzeMerger as any)(null);
     const artifacts = [
@@ -414,7 +414,7 @@ describe("AnalyzeMerger._getWords camelCase splitting", () => {
         content: {
           entities: [],
           functions: [],
-          actors: [{ name: "Admin", description: "System administrator with full access" }],
+          actors: [{ name: "ADMINUSER", description: "System administrator with full access" }],
           constraints: [],
           exceptions: [],
           non_functional_requirements: [],
@@ -424,7 +424,7 @@ describe("AnalyzeMerger._getWords camelCase splitting", () => {
     ];
     const result = merger.preMerge(artifacts);
     const actors = result.actors as Array<Record<string, unknown>>;
-    // AdminUser and Admin should be merged (Jaccard similarity via camelCase split)
+    // adminuser and ADMINUSER are same name case-insensitively — should merge
     const adminActors = actors.filter(
       (a) => String(a.name).toLowerCase().includes("admin"),
     );

@@ -115,7 +115,7 @@ export function checkAnalysisQuality(
 
   // 5. ID format check
   {
-    const idPattern = /^[EFCX]\d+$/;
+    const idPattern = /^[EFCX][A-Za-z0-9_]+$/;
     const allItems = [
       ...arrVal(analysis, "entities"),
       ...arrVal(analysis, "functions"),
