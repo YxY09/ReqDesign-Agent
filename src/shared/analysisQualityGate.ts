@@ -113,27 +113,34 @@ export function checkAnalysisQuality(
     });
   }
 
-  // 5. ID format check
+  // 5. ID format check (per-type prefixes)
   {
-    const idPattern = /^[EFCX][A-Za-z0-9_]+$/;
-    const allItems = [
-      ...arrVal(analysis, "entities"),
-      ...arrVal(analysis, "functions"),
-      ...arrVal(analysis, "constraints"),
-      ...arrVal(analysis, "exceptions"),
+    const typePatterns: { key: string; pattern: RegExp }[] = [
+      { key: "entities",    pattern: /^E_[A-Za-z0-9_]+$/ },
+      { key: "actors",      pattern: /^A_[A-Za-z0-9_]+$/ },
+      { key: "functions",   pattern: /^FUN_[A-Za-z0-9_]+$/ },
+      { key: "constraints",  pattern: /^CON_[A-Za-z0-9_]+$/ },
+      { key: "exceptions",  pattern: /^EXC_[A-Za-z0-9_]+$/ },
     ];
-    const itemsWithId = allItems.filter((item) => typeof item.id === "string" && item.id.trim().length > 0);
-    const validIds = itemsWithId.filter((item) => idPattern.test(String(item.id)));
-    const passed = itemsWithId.length === 0 || validIds.length === itemsWithId.length;
-    const invalidExamples = itemsWithId
-      .filter((item) => !idPattern.test(String(item.id)))
-      .map((item) => String(item.id))
-      .slice(0, 3);
+    const allInvalid: string[] = [];
+    let totalWithId = 0;
+    for (const { key, pattern } of typePatterns) {
+      const items = arrVal(analysis, key);
+      const itemsWithId = items.filter((item) => typeof item.id === "string" && item.id.trim().length > 0);
+      totalWithId += itemsWithId.length;
+      for (const item of itemsWithId) {
+        if (!pattern.test(String(item.id))) {
+          allInvalid.push(String(item.id));
+        }
+      }
+    }
+    const passed = totalWithId === 0 || allInvalid.length === 0;
+    const invalidExamples = allInvalid.slice(0, 5);
     checks.push({
       name: "id_format",
       passed,
       detail: passed
-        ? `All ${itemsWithId.length} IDs valid`
+        ? `All ${totalWithId} IDs valid`
         : `${invalidExamples.length} invalid IDs: ${invalidExamples.join(", ")}`,
     });
   }

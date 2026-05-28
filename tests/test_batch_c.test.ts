@@ -673,7 +673,7 @@ describe("checkAnalysisQuality", () => {
     actors: [{ name: "User" }],
     functions: [
       {
-        id: "F001",
+        id: "FUN_LOGIN",
         name: "Login",
         description: "User authentication and login",
         sub_capabilities: [],
@@ -682,7 +682,7 @@ describe("checkAnalysisQuality", () => {
     ],
     entities: [
       {
-        id: "E001",
+        id: "E_USER",
         name: "User",
         description: "User account",
         attributes: [
@@ -693,7 +693,7 @@ describe("checkAnalysisQuality", () => {
     ],
     constraints: [
       {
-        id: "C001",
+        id: "CON_MUST_BE_18",
         description: "Must be 18+",
         source_text: "users must be at least 18 years old",
       },
