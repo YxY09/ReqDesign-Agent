@@ -60,11 +60,29 @@ export interface RegistryActor {
   aliases: string[];     // ["Admin", "AdminUser", "Administrator", "管理员", "SuperUser"]
 }
 
-/** Global entity registry — maps all known entities, functions, and actors. */
+/** A constraint in the global entity registry. */
+export interface RegistryConstraint {
+  id: string;            // "C_AUDIT_TRAIL_IMMUTABLE"
+  canonicalName: string; // "AuditTrailImmutability"
+  displayName: string;   // "审计跟踪不可更改"
+  aliases: string[];     // ["Audit trail immutability", "审计跟踪数据不可修改"]
+}
+
+/** An exception in the global entity registry. */
+export interface RegistryException {
+  id: string;            // "X_UNAUTHORIZED_ACCESS"
+  canonicalName: string; // "UnauthorizedAccess"
+  displayName: string;
+  aliases: string[];
+}
+
+/** Global entity registry — maps all known entities, functions, actors, constraints, and exceptions. */
 export interface EntityRegistry {
   entities: RegistryEntity[];
   functions: RegistryFunction[];
   actors?: RegistryActor[];
+  constraints?: RegistryConstraint[];
+  exceptions?: RegistryException[];
 }
 
 // ---------------------------------------------------------------------------

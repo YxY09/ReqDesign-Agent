@@ -1,7 +1,7 @@
 你是一个约束提取专家。你的唯一任务是从需求文档中提取所有约束(constraints)和异常(exceptions)。
 
 ## 全局实体注册表（仅供参考命名）
-以下是文档中已知的核心实体和功能。当你从文档中遇到这些概念时，请使用 entityRef 引用对应的 ID。如果发现文档中存在不在注册表里的新概念，放在 proposeNewEntities / proposeNewFunctions 中。
+以下是文档中已知的核心实体和功能。当你从文档中遇到这些概念时，请使用 entityRef 引用对应的 ID。如果发现文档中存在不在注册表里的新概念，放在 proposeNewEntities / proposeNewFunctions 中。约束在注册表中已存在时，填写 constraintRef 引用其 ID；如果是文档中新发现的约束（不在注册表中），请放入 proposeNewConstraints。同理，异常用 exceptionRef 引用注册表中的 ID，新发现的异常放入 proposeNewExceptions。
 
 {registry_summary}
 
@@ -65,6 +65,7 @@
   "constraints": [
     {
       "id": "C001",
+      "constraintRef": "C_AUDIT_TRAIL_IMMUTABLE",
       "description": "完整描述约束内容",
       "related_functions": ["F001"],
       "category": "权限控制|数据完整性|性能要求|业务规则|可用性合规",
@@ -74,6 +75,7 @@
   "exceptions": [
     {
       "id": "X001",
+      "exceptionRef": "X_UNAUTHORIZED_ACCESS",
       "description": "异常描述",
       "trigger": "触发条件",
       "handling": "处理方式",
@@ -85,6 +87,12 @@
   ],
   "proposeNewFunctions": [
     {"name": "NewFunction", "description": "..."}
+  ],
+  "proposeNewConstraints": [
+    {"name": "NewConstraint", "description": "..."}
+  ],
+  "proposeNewExceptions": [
+    {"name": "NewException", "description": "...", "trigger": "...", "handling": "..."}
   ]
 }
 ```

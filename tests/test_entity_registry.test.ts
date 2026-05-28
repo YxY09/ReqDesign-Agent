@@ -118,7 +118,7 @@ describe("RegistryExtractor", () => {
     // Override promptTemplate to empty
     (extractor as any).promptTemplate = "";
     const result = await extractor.extract("some requirement text");
-    expect(result).toEqual({ entities: [], functions: [], actors: [] });
+    expect(result).toEqual({ entities: [], functions: [], actors: [], constraints: [], exceptions: [] });
   });
 
   it("extract calls LLM and returns parsed registry", async () => {
@@ -586,5 +586,221 @@ describe("RegistryExtractor with actors", () => {
     expect(result.functions).toHaveLength(1);
     expect(result.actors).toHaveLength(1);
     expect(result.actors![0].id).toBe("A_ADMIN");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step 1: RegistryConstraint and RegistryException types
+// ---------------------------------------------------------------------------
+
+describe("RegistryConstraint type", () => {
+  it("RegistryConstraint has required fields", () => {
+    const constraint: import("../src/shared/types.js").RegistryConstraint = {
+      id: "C_AUDIT_TRAIL_IMMUTABLE",
+      canonicalName: "AuditTrailImmutability",
+      displayName: "审计跟踪不可更改",
+      aliases: ["Audit trail immutability", "审计跟踪数据不可修改"],
+    };
+    expect(constraint.id).toBe("C_AUDIT_TRAIL_IMMUTABLE");
+    expect(constraint.canonicalName).toBe("AuditTrailImmutability");
+    expect(constraint.displayName).toBe("审计跟踪不可更改");
+    expect(constraint.aliases).toHaveLength(2);
+  });
+});
+
+describe("RegistryException type", () => {
+  it("RegistryException has required fields", () => {
+    const exception: import("../src/shared/types.js").RegistryException = {
+      id: "X_UNAUTHORIZED_ACCESS",
+      canonicalName: "UnauthorizedAccess",
+      displayName: "未授权访问",
+      aliases: ["unauthorized access", "未授权访问异常"],
+    };
+    expect(exception.id).toBe("X_UNAUTHORIZED_ACCESS");
+    expect(exception.canonicalName).toBe("UnauthorizedAccess");
+    expect(exception.displayName).toBe("未授权访问");
+    expect(exception.aliases).toHaveLength(2);
+  });
+});
+
+describe("EntityRegistry with constraints and exceptions", () => {
+  it("EntityRegistry holds constraints and exceptions", () => {
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      constraints: [
+        {
+          id: "C_AUDIT_TRAIL_IMMUTABLE",
+          canonicalName: "AuditTrailImmutability",
+          displayName: "审计跟踪不可更改",
+          aliases: ["Audit trail immutability"],
+        },
+      ],
+      exceptions: [
+        {
+          id: "X_UNAUTHORIZED_ACCESS",
+          canonicalName: "UnauthorizedAccess",
+          displayName: "未授权访问",
+          aliases: ["unauthorized access"],
+        },
+      ],
+    };
+    expect(registry.constraints).toHaveLength(1);
+    expect(registry.constraints![0].id).toBe("C_AUDIT_TRAIL_IMMUTABLE");
+    expect(registry.exceptions).toHaveLength(1);
+    expect(registry.exceptions![0].id).toBe("X_UNAUTHORIZED_ACCESS");
+  });
+});
+
+describe("buildRegistrySummary with constraints and exceptions", () => {
+  it("includes constraints section when constraints present", async () => {
+    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      constraints: [
+        {
+          id: "C_AUDIT_TRAIL_IMMUTABLE",
+          canonicalName: "AuditTrailImmutability",
+          displayName: "审计跟踪不可更改",
+          aliases: ["Audit trail immutability", "审计跟踪数据不可修改"],
+        },
+      ],
+    };
+    const summary = buildRegistrySummary(registry);
+    expect(summary).toContain("### 约束");
+    expect(summary).toContain("C_AUDIT_TRAIL_IMMUTABLE");
+    expect(summary).toContain("AuditTrailImmutability");
+    expect(summary).toContain("审计跟踪不可更改");
+    expect(summary).toContain("别名: Audit trail immutability, 审计跟踪数据不可修改");
+  });
+
+  it("includes exceptions section when exceptions present", async () => {
+    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      exceptions: [
+        {
+          id: "X_UNAUTHORIZED_ACCESS",
+          canonicalName: "UnauthorizedAccess",
+          displayName: "未授权访问",
+          aliases: ["unauthorized access", "未授权访问异常"],
+        },
+      ],
+    };
+    const summary = buildRegistrySummary(registry);
+    expect(summary).toContain("### 异常");
+    expect(summary).toContain("X_UNAUTHORIZED_ACCESS");
+    expect(summary).toContain("UnauthorizedAccess");
+    expect(summary).toContain("未授权访问");
+    expect(summary).toContain("别名: unauthorized access, 未授权访问异常");
+  });
+
+  it("handles empty constraints and exceptions gracefully", async () => {
+    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      constraints: [],
+      exceptions: [],
+    };
+    const summary = buildRegistrySummary(registry);
+    expect(summary).toBe("");
+  });
+
+  it("renders constraints without aliases correctly", async () => {
+    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [],
+      constraints: [
+        {
+          id: "C_SIMPLE",
+          canonicalName: "SimpleRule",
+          displayName: "简单规则",
+          aliases: [],
+        },
+      ],
+    };
+    const summary = buildRegistrySummary(registry);
+    expect(summary).toContain("### 约束");
+    expect(summary).toContain("C_SIMPLE");
+    expect(summary).not.toContain("别名");
+  });
+});
+
+describe("RegistryExtractor with constraints and exceptions", () => {
+  it("extract returns constraints and exceptions from LLM response", async () => {
+    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
+    const mockRegistry = {
+      entities: [
+        { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case"] },
+      ],
+      functions: [
+        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register"] },
+      ],
+      constraints: [
+        { id: "C_AUDIT_TRAIL_IMMUTABLE", canonicalName: "AuditTrailImmutability", displayName: "审计跟踪不可更改", aliases: ["Audit trail immutability"] },
+      ],
+      exceptions: [
+        { id: "X_UNAUTHORIZED_ACCESS", canonicalName: "UnauthorizedAccess", displayName: "未授权访问", aliases: ["unauthorized access"] },
+      ],
+    };
+    const mockLlm = {
+      generateJson: vi.fn().mockResolvedValue({ content: mockRegistry }),
+    };
+    const extractor = new RegistryExtractor(mockLlm);
+    (extractor as any).promptTemplate = "template {requirement_text}";
+    const result = await extractor.extract("requirement text");
+    expect(result.entities).toHaveLength(1);
+    expect(result.functions).toHaveLength(1);
+    expect(result.constraints).toHaveLength(1);
+    expect(result.constraints![0].id).toBe("C_AUDIT_TRAIL_IMMUTABLE");
+    expect(result.exceptions).toHaveLength(1);
+    expect(result.exceptions![0].id).toBe("X_UNAUTHORIZED_ACCESS");
+  });
+
+  it("extract handles missing constraints and exceptions gracefully", async () => {
+    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
+    const mockRegistry = {
+      entities: [],
+      functions: [],
+    };
+    const mockLlm = {
+      generateJson: vi.fn().mockResolvedValue({ content: mockRegistry }),
+    };
+    const extractor = new RegistryExtractor(mockLlm);
+    (extractor as any).promptTemplate = "template {requirement_text}";
+    const result = await extractor.extract("requirement text");
+    expect(result.constraints).toEqual([]);
+    expect(result.exceptions).toEqual([]);
+  });
+
+  it("extract returns empty constraints and exceptions when prompt template is empty", async () => {
+    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
+    const mockLlm = {
+      generateJson: vi.fn(),
+    } as any;
+    const extractor = new RegistryExtractor(mockLlm);
+    (extractor as any).promptTemplate = "";
+    const result = await extractor.extract("some requirement text");
+    expect(result).toEqual({ entities: [], functions: [], actors: [], constraints: [], exceptions: [] });
+  });
+});
+
+describe("Registry extraction prompt includes constraints and exceptions", () => {
+  it("prompt file contains constraint and exception extraction rules", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const promptPath = path.resolve(__dirname, "..", "prompts", "registry_extraction.md");
+    const content = fs.readFileSync(promptPath, "utf-8");
+    expect(content).toContain("约束");
+    expect(content).toContain("异常");
+    expect(content).toContain("constraints");
+    expect(content).toContain("exceptions");
   });
 });

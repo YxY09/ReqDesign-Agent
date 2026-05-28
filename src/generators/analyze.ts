@@ -124,6 +124,8 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     const listFields = [
       "actors", "functions", "entities", "constraints",
       "exceptions", "non_functional_requirements", "business_processes",
+      "proposeNewEntities", "proposeNewFunctions",
+      "proposeNewConstraints", "proposeNewExceptions",
     ];
     for (const field of listFields) {
       const val = result[field];

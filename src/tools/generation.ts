@@ -135,7 +135,8 @@ export class GenerationTool extends BaseTool {
 
     // Inject registry summary if available in context hints
     const registry = ctx.registry as EntityRegistry | undefined;
-    if (registry && (registry.entities.length > 0 || registry.functions.length > 0)) {
+    if (registry && (registry.entities.length > 0 || registry.functions.length > 0
+        || (registry.constraints?.length ?? 0) > 0 || (registry.exceptions?.length ?? 0) > 0)) {
       const summary = buildRegistrySummary(registry);
       if (summary) {
         text = text.replace(/\{registry_summary\}/g, summary);
@@ -239,7 +240,7 @@ ${text}`;
     if (typeof content !== "object" || content === null || Array.isArray(content)) return content;
     const c = content as Record<string, unknown>;
     const patched = { ...c };
-    for (const field of ["actors", "functions", "entities", "constraints", "exceptions", "non_functional_requirements", "business_processes"] as const) {
+    for (const field of ["actors", "functions", "entities", "constraints", "exceptions", "non_functional_requirements", "business_processes", "proposeNewEntities", "proposeNewFunctions", "proposeNewConstraints", "proposeNewExceptions"] as const) {
       if (patched[field] === undefined || patched[field] === null) {
         patched[field] = [];
       }

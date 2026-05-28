@@ -472,6 +472,17 @@ describe("RequirementAnalyzer normalization", () => {
     const entities = normalized.entities as Array<Record<string, unknown>>;
     expect(entities.some((entity) => entity.name === "Merchant")).toBe(false);
   });
+
+  it("normalizes missing proposeNewConstraints/proposeNewExceptions to empty arrays", () => {
+    const normalized = RequirementAnalyzer._normalizeResult({
+      actors: [],
+      functions: [],
+      entities: [],
+    });
+
+    expect(normalized.proposeNewConstraints).toEqual([]);
+    expect(normalized.proposeNewExceptions).toEqual([]);
+  });
 });
 
 // ===========================================================================
