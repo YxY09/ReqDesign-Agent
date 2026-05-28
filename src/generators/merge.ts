@@ -561,10 +561,17 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
       for (let j = i + 1; j < items.length; j++) {
         if (used.has(j)) continue;
+
+        // Check source_text match (handles cross-language duplicates)
+        const srcI = AnalyzeMerger._normalizeForMatch(String(best.source_text ?? ""));
+        const srcJ = AnalyzeMerger._normalizeForMatch(String(items[j].source_text ?? ""));
+        const sameSource = srcI.length > 0 && srcI === srcJ;
+
+        // Also check Jaccard similarity on description
         const jWords = AnalyzeMerger._getWords(String(items[j].description ?? ""));
         const sim = AnalyzeMerger._jaccard(bestWords, jWords);
 
-        if (sim >= 0.7) {
+        if (sameSource || sim >= 0.7) {
           // Keep the version with longer description
           if (String(items[j].description ?? "").length > String(best.description ?? "").length) {
             best = items[j];
@@ -579,13 +586,26 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     return result;
   }
 
+  /** Chinese → English NFR category mapping for cross-language dedup. */
+  private static readonly _NFR_CATEGORY_ZH_EN: Record<string, string> = {
+    "性能": "performance",
+    "安全": "security",
+    "可用性": "availability",
+    "可扩展性": "scalability",
+    "可维护性": "maintainability",
+    "可靠性": "reliability",
+    "易用性": "usability",
+    "兼容性": "compatibility",
+  };
+
   // --- NFR: dedup by category ---
   private static _mergeByCategory(items: Record<string, unknown>[]): Record<string, unknown>[] {
     const seen = new Map<string, Record<string, unknown>>();
     for (const item of items) {
       const cat = String(item.category ?? "").trim();
       if (!cat) continue;
-      const key = cat.toLowerCase();
+      const normalized = AnalyzeMerger._NFR_CATEGORY_ZH_EN[cat] ?? cat;
+      const key = normalized.toLowerCase();
       if (!seen.has(key)) seen.set(key, item);
     }
     return [...seen.values()];
@@ -638,7 +658,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   }
 
   private static _jaccard(a: Set<string>, b: Set<string>): number {
-    if (a.size === 0 && b.size === 0) return 1;
+    if (a.size === 0 && b.size === 0) return 0;
     let inter = 0;
     for (const x of a) { if (b.has(x)) inter++; }
     const union = new Set([...a, ...b]).size;

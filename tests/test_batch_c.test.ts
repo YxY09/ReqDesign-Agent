@@ -438,6 +438,46 @@ describe("preMerge constraint merging", () => {
     // All 4 should be preserved (completely different descriptions)
     expect((merged.constraints as unknown[]).length).toBe(4);
   });
+
+  it("dedupes cross-language constraints with same source_text", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      constraints: [
+        { id: "C001", description: "搜索响应时间", source_text: "Search response time must be under 2 seconds" },
+      ],
+    });
+    const a2 = artifact({
+      constraints: [
+        { id: "C002", description: "search response time", source_text: "Search response time must be under 2 seconds" },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2]);
+
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+    // Should dedupe into 1 because source_text is identical
+    expect(constraints.length).toBe(1);
+    // Should keep the more complete description (longer one)
+    const desc = String(constraints[0].description);
+    expect(desc.length).toBeGreaterThan(0);
+  });
+
+  it("keeps constraints separate when source_text differs", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      constraints: [
+        { id: "C001", description: "搜索响应时间", source_text: "Search response time must be under 2 seconds" },
+      ],
+    });
+    const a2 = artifact({
+      constraints: [
+        { id: "C002", description: "订单审批流程", source_text: "Order approval workflow requires manager sign-off" },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2]);
+    expect((merged.constraints as unknown[]).length).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1030,5 +1070,80 @@ describe("preMerge actor merging", () => {
     const actors = merged.actors as Array<Record<string, unknown>>;
     expect(actors).toHaveLength(1);
     expect(String(actors[0].description)).toBe(longDesc);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NFR category dedup: Chinese ↔ English normalization
+// ---------------------------------------------------------------------------
+
+describe("preMerge NFR dedup: Chinese/English category normalization", () => {
+  it("deduplicates NFRs with equivalent Chinese and English categories", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      non_functional_requirements: [
+        { category: "性能", description: "Response time under 200ms", metric: "latency" },
+      ],
+    });
+    const a2 = artifact({
+      non_functional_requirements: [
+        { category: "performance", description: "System must be fast", metric: "throughput" },
+      ],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const nfrs = merged.non_functional_requirements as Array<Record<string, unknown>>;
+    // Both NFRs refer to the same category (性能 = performance) — should keep only one
+    expect(nfrs).toHaveLength(1);
+  });
+
+  it("keeps NFRs with genuinely different categories", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      non_functional_requirements: [
+        { category: "性能", description: "Response time under 200ms" },
+      ],
+    });
+    const a2 = artifact({
+      non_functional_requirements: [
+        { category: "安全", description: "All data encrypted at rest" },
+      ],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const nfrs = merged.non_functional_requirements as Array<Record<string, unknown>>;
+    // 性能 and 安全 are different categories — should keep both
+    expect(nfrs).toHaveLength(2);
+  });
+
+  it("deduplicates all known Chinese NFR category mappings", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    // All mapped Chinese categories paired with their English equivalents
+    const a1 = artifact({
+      non_functional_requirements: [
+        { category: "性能" },
+        { category: "安全" },
+        { category: "可用性" },
+        { category: "可扩展性" },
+        { category: "可维护性" },
+        { category: "可靠性" },
+        { category: "易用性" },
+        { category: "兼容性" },
+      ],
+    });
+    const a2 = artifact({
+      non_functional_requirements: [
+        { category: "performance" },
+        { category: "security" },
+        { category: "availability" },
+        { category: "scalability" },
+        { category: "maintainability" },
+        { category: "reliability" },
+        { category: "usability" },
+        { category: "compatibility" },
+      ],
+    });
+    const merged = merger.preMerge([a1, a2]);
+    const nfrs = merged.non_functional_requirements as Array<Record<string, unknown>>;
+    // Each Chinese-English pair should be deduplicated to one entry each = 8 total
+    expect(nfrs).toHaveLength(8);
   });
 });
