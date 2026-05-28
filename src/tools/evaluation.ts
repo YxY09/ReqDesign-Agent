@@ -770,7 +770,7 @@ export class EvaluationTool extends BaseTool {
   ): Issue[] {
     const defined = new Set(
       ((requirementJson.exceptions ?? []) as Array<Record<string, unknown>>)
-        .map((item) => String(item.id ?? "").trim())
+        .flatMap((item) => [String(item.id ?? "").trim(), String(item.displayId ?? "").trim()])
         .filter(Boolean),
     );
     if (defined.size === 0) return [];

@@ -558,3 +558,47 @@ describe("RegistryExtractor with actors", () => {
     expect(result.actors![0].id).toBe("A_ADMIN");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: merge() must clean entity id to entityRef before canonicalize
+// ---------------------------------------------------------------------------
+
+describe("AnalyzeMerger merge — entity id cleaned from entityRef", () => {
+  it("overwrites stale LLM-assigned entity id with entityRef after merge", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+
+    // Simulate a single artifact with entity having entityRef but wrong id
+    const artifacts = [
+      {
+        taskId: "a1",
+        content: {
+          entities: [
+            {
+              id: "E002",
+              entityRef: "E_CASE",
+              name: "Case",
+              description: "案件实体",
+              attributes: [{ name: "id", type: "String", description: "ID" }],
+              relationships: [],
+            },
+          ],
+          functions: [],
+          actors: [],
+          constraints: [],
+          exceptions: [],
+          non_functional_requirements: [],
+          business_processes: [],
+        },
+      },
+    ];
+
+    const result = await merger.merge(artifacts, "requirement text");
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const caseEntity = entities.find((e) => e.entityRef === "E_CASE");
+
+    expect(caseEntity).toBeDefined();
+    // The stale id "E002" should be replaced with entityRef "E_CASE"
+    expect(caseEntity!.id).toBe("E_CASE");
+  });
+});

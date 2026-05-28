@@ -531,3 +531,46 @@ describe("EvaluationTool evaluate — LLM failure", () => {
     ).rejects.toThrow("invalid review json");
   });
 });
+
+// -----------------------------------------------------------------------
+// Regression: _checkUndefinedExceptionIds must match displayId, not just canonicalId
+// -----------------------------------------------------------------------
+
+describe("EvaluationTool — exception ID displayId matching regression", () => {
+  it("does not flag displayId as undefined when canonicalId is present", async () => {
+    const evaluator = new EvaluationTool(noopLlm());
+
+    const verdict = await evaluator.evaluate(
+      "requirement",
+      {
+        functions: [{ id: "F001", name: "PayOrder" }],
+        exceptions: [{
+          id: "EXC_2XTJ9S00",
+          displayId: "X001",
+          description: "支付失败",
+        }],
+      },
+      "",
+      {},
+      "",
+      { "design-1": { type: "design", revision: 1 } },
+      {
+        "design-1": {
+          task_id: "design-1",
+          type: "design",
+          revision: 1,
+          content: "## 模块划分\n支付失败按 X001 处理。\n## 核心类\nUser\n## 数据流\nOrder -> Payment",
+        },
+      },
+      "design",
+      false,
+      ["design-1"],
+    );
+
+    // X001 is a valid displayId for EXC_2XTJ9S00, so should NOT be flagged as undefined
+    const undefinedIdIssues = verdict.issues.filter((issue) =>
+      issue.description.includes("未定义的异常 ID"),
+    );
+    expect(undefinedIdIssues).toHaveLength(0);
+  });
+});

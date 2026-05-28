@@ -55,6 +55,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     // 只有一个分析结果：无需合并，但仍需 canonicalize
     if (artifacts.length === 1) {
       const single = artifacts[0].content as Record<string, unknown>;
+      // 清理实体 ID：用 entityRef 覆盖旧 id
+      for (const e of (single.entities as Array<Record<string, unknown>> | undefined) ?? []) {
+        if (e.entityRef) e.id = e.entityRef;
+      }
       canonicalizeAndLink(single);
       return single;
     }
@@ -73,6 +77,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     AnalyzeMerger._verifySourceRefs(merged, requirementText);
+
+    // 清理实体 ID：用 entityRef 覆盖旧 id
+    for (const e of (merged.entities as Array<Record<string, unknown>> | undefined) ?? []) {
+      if (e.entityRef) e.id = e.entityRef;
+    }
 
     // Canonicalize IDs & resolve cross-references
     canonicalizeAndLink(merged);
