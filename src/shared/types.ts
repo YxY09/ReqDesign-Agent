@@ -45,13 +45,6 @@ export interface RegistryEntity {
   aliases: string[];     // ["Case", "案件", "Police Case", "Case Record"]
 }
 
-/** A function in the global entity registry. */
-export interface RegistryFunction {
-  id: string;            // "F_REGISTER_COMPLAINT"
-  canonicalName: string; // "RegisterComplaint"
-  aliases: string[];     // ["RegisterComplaint", "注册投诉"]
-}
-
 /** An actor in the global entity registry. */
 export interface RegistryActor {
   id: string;            // "A_ADMIN"
@@ -60,29 +53,10 @@ export interface RegistryActor {
   aliases: string[];     // ["Admin", "AdminUser", "Administrator", "管理员", "SuperUser"]
 }
 
-/** A constraint in the global entity registry. */
-export interface RegistryConstraint {
-  id: string;            // "C_AUDIT_TRAIL_IMMUTABLE"
-  canonicalName: string; // "AuditTrailImmutability"
-  displayName: string;   // "审计跟踪不可更改"
-  aliases: string[];     // ["Audit trail immutability", "审计跟踪数据不可修改"]
-}
-
-/** An exception in the global entity registry. */
-export interface RegistryException {
-  id: string;            // "X_UNAUTHORIZED_ACCESS"
-  canonicalName: string; // "UnauthorizedAccess"
-  displayName: string;
-  aliases: string[];
-}
-
-/** Global entity registry — maps all known entities, functions, actors, constraints, and exceptions. */
+/** Global entity registry — maps all known entities and actors. */
 export interface EntityRegistry {
   entities: RegistryEntity[];
-  functions: RegistryFunction[];
   actors?: RegistryActor[];
-  constraints?: RegistryConstraint[];
-  exceptions?: RegistryException[];
 }
 
 // ---------------------------------------------------------------------------

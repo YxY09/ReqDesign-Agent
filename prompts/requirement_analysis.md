@@ -1,7 +1,7 @@
 你是一个资深的软件需求分析师。请从以下需求文档中抽取结构化的需求要素。
 
 ## 全局实体注册表（仅供参考命名）
-以下是文档中已知的核心实体和功能。当你从文档中遇到这些概念时，请使用 entityRef 引用对应的 ID。如果发现文档中存在不在注册表里的新概念，放在 proposeNewEntities / proposeNewFunctions 中。约束在注册表中已存在时，填写 constraintRef 引用其 ID；如果是文档中新发现的约束（不在注册表中），请放入 proposeNewConstraints。同理，异常用 exceptionRef 引用注册表中的 ID，新发现的异常放入 proposeNewExceptions。
+以下是文档中已知的核心实体和角色。当你从文档中遇到这些概念时，请使用 entityRef 引用对应的实体 ID，使用 actorRef 引用对应的角色 ID。如果发现文档中存在不在注册表里的新概念，放在 proposeNewEntities 中。功能、约束、异常直接从文档提取，不需要 ref 引用注册表。
 
 {registry_summary}
 
@@ -95,7 +95,6 @@
   "constraints": [
     {
       "id": "C001",
-      "constraintRef": "C_AUDIT_TRAIL_IMMUTABLE",
       "description": "约束描述",
       "related_functions": ["相关功能"],
       "source_text": "文档原文片段"
@@ -104,7 +103,6 @@
   "exceptions": [
     {
       "id": "X001",
-      "exceptionRef": "X_UNAUTHORIZED_ACCESS",
       "description": "异常流程描述",
       "trigger": "触发条件",
       "handling": "处理方式"
@@ -128,12 +126,6 @@
   ],
   "proposeNewFunctions": [
     {"name": "NewFunction", "description": "..."}
-  ],
-  "proposeNewConstraints": [
-    {"name": "NewConstraint", "description": "..."}
-  ],
-  "proposeNewExceptions": [
-    {"name": "NewException", "description": "...", "trigger": "...", "handling": "..."}
   ]
 }
 ```

@@ -13,10 +13,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("Entity Registry types", () => {
   it("RegistryEntity has required fields", async () => {
-    const { RegistryEntity, RegistryFunction, EntityRegistry } =
+    const { EntityRegistry } =
       await import("../src/shared/types.js");
 
-    // We just need to verify the types exist and are usable
     const entity: import("../src/shared/types.js").RegistryEntity = {
       id: "E_CASE",
       canonicalName: "Case",
@@ -29,18 +28,7 @@ describe("Entity Registry types", () => {
     expect(entity.aliases).toHaveLength(3);
   });
 
-  it("RegistryFunction has required fields", async () => {
-    const fn: import("../src/shared/types.js").RegistryFunction = {
-      id: "F_REGISTER_COMPLAINT",
-      canonicalName: "RegisterComplaint",
-      aliases: ["RegisterComplaint", "注册投诉"],
-    };
-    expect(fn.id).toBe("F_REGISTER_COMPLAINT");
-    expect(fn.canonicalName).toBe("RegisterComplaint");
-    expect(fn.aliases).toHaveLength(2);
-  });
-
-  it("EntityRegistry holds entities and functions", async () => {
+  it("EntityRegistry holds entities", async () => {
     const registry: import("../src/shared/types.js").EntityRegistry = {
       entities: [
         {
@@ -50,16 +38,8 @@ describe("Entity Registry types", () => {
           aliases: ["Case", "案件"],
         },
       ],
-      functions: [
-        {
-          id: "F_REGISTER",
-          canonicalName: "Register",
-          aliases: ["Register", "注册"],
-        },
-      ],
     };
     expect(registry.entities).toHaveLength(1);
-    expect(registry.functions).toHaveLength(1);
   });
 
   it("ExecutionPlan has optional registry field", async () => {
@@ -75,7 +55,6 @@ describe("Entity Registry types", () => {
             aliases: ["Case"],
           },
         ],
-        functions: [],
       },
     });
     expect(plan.registry).toBeDefined();
@@ -99,7 +78,7 @@ describe("Registry extraction prompt", () => {
     const content = fs.readFileSync(promptPath, "utf-8");
     expect(content).toContain("{requirement_text}");
     expect(content).toContain("实体");
-    expect(content).toContain("功能");
+    expect(content).toContain("角色");
   });
 });
 
@@ -113,12 +92,10 @@ describe("RegistryExtractor", () => {
     const mockLlm = {
       generateJson: vi.fn(),
     } as any;
-    // Simulate empty prompt by mocking loadPrompt - constructor reads prompt
     const extractor = new RegistryExtractor(mockLlm);
-    // Override promptTemplate to empty
     (extractor as any).promptTemplate = "";
     const result = await extractor.extract("some requirement text");
-    expect(result).toEqual({ entities: [], functions: [], actors: [], constraints: [], exceptions: [] });
+    expect(result).toEqual({ entities: [], actors: [] });
   });
 
   it("extract calls LLM and returns parsed registry", async () => {
@@ -127,8 +104,8 @@ describe("RegistryExtractor", () => {
       entities: [
         { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case"] },
       ],
-      functions: [
-        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register"] },
+      actors: [
+        { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin"] },
       ],
     };
     const mockLlm = {
@@ -138,20 +115,21 @@ describe("RegistryExtractor", () => {
     (extractor as any).promptTemplate = "template {requirement_text}";
     const result = await extractor.extract("requirement text");
     expect(result.entities).toHaveLength(1);
-    expect(result.functions).toHaveLength(1);
     expect(result.entities[0].id).toBe("E_CASE");
+    expect(result.actors).toHaveLength(1);
+    expect(result.actors![0].id).toBe("A_ADMIN");
   });
 
   it("extract handles LLM returning non-array entities gracefully", async () => {
     const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
     const mockLlm = {
-      generateJson: vi.fn().mockResolvedValue({ content: { entities: "not-array", functions: null } }),
+      generateJson: vi.fn().mockResolvedValue({ content: { entities: "not-array", actors: null } }),
     };
     const extractor = new RegistryExtractor(mockLlm);
     (extractor as any).promptTemplate = "template {requirement_text}";
     const result = await extractor.extract("requirement text");
     expect(result.entities).toEqual([]);
-    expect(result.functions).toEqual([]);
+    expect(result.actors).toEqual([]);
   });
 });
 
@@ -167,16 +145,16 @@ describe("PlanningTool registry integration", () => {
         { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case", "案件"] },
         { id: "E_USER", canonicalName: "User", displayName: "用户", aliases: ["User", "用户"] },
       ],
-      functions: [
-        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register", "注册"] },
+      actors: [
+        { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin"] },
       ],
     };
     const prompt = PlanningTool._buildUserPrompt("some requirement", "design", undefined, registry);
     expect(prompt).toContain("E_CASE");
     expect(prompt).toContain("Case");
     expect(prompt).toContain("E_USER");
-    expect(prompt).toContain("F_REGISTER");
-    expect(prompt).toContain("Register");
+    expect(prompt).toContain("A_ADMIN");
+    expect(prompt).toContain("Admin");
   });
 
   it("_buildUserPrompt works without registry (backward compatible)", async () => {
@@ -343,15 +321,15 @@ describe("AnalyzeMerger entityRef-based grouping", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildRegistrySummary", () => {
-  it("formats registry entities and functions", async () => {
+  it("formats registry entities and actors", async () => {
     const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
     const registry: import("../src/shared/types.js").EntityRegistry = {
       entities: [
         { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case", "案件"] },
         { id: "E_USER", canonicalName: "User", displayName: "用户", aliases: ["User"] },
       ],
-      functions: [
-        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register", "注册"] },
+      actors: [
+        { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin"] },
       ],
     };
     const summary = buildRegistrySummary(registry);
@@ -359,13 +337,13 @@ describe("buildRegistrySummary", () => {
     expect(summary).toContain("Case");
     expect(summary).toContain("案件");
     expect(summary).toContain("E_USER");
-    expect(summary).toContain("F_REGISTER");
-    expect(summary).toContain("Register");
+    expect(summary).toContain("A_ADMIN");
+    expect(summary).toContain("Admin");
   });
 
   it("returns empty string for empty registry", async () => {
     const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
-    const summary = buildRegistrySummary({ entities: [], functions: [] });
+    const summary = buildRegistrySummary({ entities: [] });
     expect(summary).toBe("");
   });
 });
@@ -377,7 +355,6 @@ describe("buildRegistrySummary", () => {
 describe("AnalyzeMerger._getWords camelCase splitting", () => {
   it("splits camelCase words into separate tokens", async () => {
     const { AnalyzeMerger } = await import("../src/generators/merge.js");
-    // Access private static method
     const getWords = (AnalyzeMerger as any)._getWords as (s: string) => Set<string>;
     const words = getWords("AdminUser");
     expect(words.has("admin")).toBe(true);
@@ -424,7 +401,6 @@ describe("AnalyzeMerger._getWords camelCase splitting", () => {
     ];
     const result = merger.preMerge(artifacts);
     const actors = result.actors as Array<Record<string, unknown>>;
-    // adminuser and ADMINUSER are same name case-insensitively — should merge
     const adminActors = actors.filter(
       (a) => String(a.name).toLowerCase().includes("admin"),
     );
@@ -453,7 +429,6 @@ describe("RegistryActor type", () => {
   it("EntityRegistry holds actors", async () => {
     const registry: import("../src/shared/types.js").EntityRegistry = {
       entities: [],
-      functions: [],
       actors: [
         {
           id: "A_ADMIN",
@@ -473,7 +448,6 @@ describe("buildRegistrySummary with actors", () => {
     const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
     const registry: import("../src/shared/types.js").EntityRegistry = {
       entities: [],
-      functions: [],
       actors: [
         { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin", "Administrator"] },
       ],
@@ -569,9 +543,6 @@ describe("RegistryExtractor with actors", () => {
       entities: [
         { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case"] },
       ],
-      functions: [
-        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register"] },
-      ],
       actors: [
         { id: "A_ADMIN", canonicalName: "Admin", displayName: "管理员", aliases: ["Admin"] },
       ],
@@ -583,224 +554,7 @@ describe("RegistryExtractor with actors", () => {
     (extractor as any).promptTemplate = "template {requirement_text}";
     const result = await extractor.extract("requirement text");
     expect(result.entities).toHaveLength(1);
-    expect(result.functions).toHaveLength(1);
     expect(result.actors).toHaveLength(1);
     expect(result.actors![0].id).toBe("A_ADMIN");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Step 1: RegistryConstraint and RegistryException types
-// ---------------------------------------------------------------------------
-
-describe("RegistryConstraint type", () => {
-  it("RegistryConstraint has required fields", () => {
-    const constraint: import("../src/shared/types.js").RegistryConstraint = {
-      id: "C_AUDIT_TRAIL_IMMUTABLE",
-      canonicalName: "AuditTrailImmutability",
-      displayName: "审计跟踪不可更改",
-      aliases: ["Audit trail immutability", "审计跟踪数据不可修改"],
-    };
-    expect(constraint.id).toBe("C_AUDIT_TRAIL_IMMUTABLE");
-    expect(constraint.canonicalName).toBe("AuditTrailImmutability");
-    expect(constraint.displayName).toBe("审计跟踪不可更改");
-    expect(constraint.aliases).toHaveLength(2);
-  });
-});
-
-describe("RegistryException type", () => {
-  it("RegistryException has required fields", () => {
-    const exception: import("../src/shared/types.js").RegistryException = {
-      id: "X_UNAUTHORIZED_ACCESS",
-      canonicalName: "UnauthorizedAccess",
-      displayName: "未授权访问",
-      aliases: ["unauthorized access", "未授权访问异常"],
-    };
-    expect(exception.id).toBe("X_UNAUTHORIZED_ACCESS");
-    expect(exception.canonicalName).toBe("UnauthorizedAccess");
-    expect(exception.displayName).toBe("未授权访问");
-    expect(exception.aliases).toHaveLength(2);
-  });
-});
-
-describe("EntityRegistry with constraints and exceptions", () => {
-  it("EntityRegistry holds constraints and exceptions", () => {
-    const registry: import("../src/shared/types.js").EntityRegistry = {
-      entities: [],
-      functions: [],
-      constraints: [
-        {
-          id: "C_AUDIT_TRAIL_IMMUTABLE",
-          canonicalName: "AuditTrailImmutability",
-          displayName: "审计跟踪不可更改",
-          aliases: ["Audit trail immutability"],
-        },
-      ],
-      exceptions: [
-        {
-          id: "X_UNAUTHORIZED_ACCESS",
-          canonicalName: "UnauthorizedAccess",
-          displayName: "未授权访问",
-          aliases: ["unauthorized access"],
-        },
-      ],
-    };
-    expect(registry.constraints).toHaveLength(1);
-    expect(registry.constraints![0].id).toBe("C_AUDIT_TRAIL_IMMUTABLE");
-    expect(registry.exceptions).toHaveLength(1);
-    expect(registry.exceptions![0].id).toBe("X_UNAUTHORIZED_ACCESS");
-  });
-});
-
-describe("buildRegistrySummary with constraints and exceptions", () => {
-  it("includes constraints section when constraints present", async () => {
-    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
-    const registry: import("../src/shared/types.js").EntityRegistry = {
-      entities: [],
-      functions: [],
-      constraints: [
-        {
-          id: "C_AUDIT_TRAIL_IMMUTABLE",
-          canonicalName: "AuditTrailImmutability",
-          displayName: "审计跟踪不可更改",
-          aliases: ["Audit trail immutability", "审计跟踪数据不可修改"],
-        },
-      ],
-    };
-    const summary = buildRegistrySummary(registry);
-    expect(summary).toContain("### 约束");
-    expect(summary).toContain("C_AUDIT_TRAIL_IMMUTABLE");
-    expect(summary).toContain("AuditTrailImmutability");
-    expect(summary).toContain("审计跟踪不可更改");
-    expect(summary).toContain("别名: Audit trail immutability, 审计跟踪数据不可修改");
-  });
-
-  it("includes exceptions section when exceptions present", async () => {
-    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
-    const registry: import("../src/shared/types.js").EntityRegistry = {
-      entities: [],
-      functions: [],
-      exceptions: [
-        {
-          id: "X_UNAUTHORIZED_ACCESS",
-          canonicalName: "UnauthorizedAccess",
-          displayName: "未授权访问",
-          aliases: ["unauthorized access", "未授权访问异常"],
-        },
-      ],
-    };
-    const summary = buildRegistrySummary(registry);
-    expect(summary).toContain("### 异常");
-    expect(summary).toContain("X_UNAUTHORIZED_ACCESS");
-    expect(summary).toContain("UnauthorizedAccess");
-    expect(summary).toContain("未授权访问");
-    expect(summary).toContain("别名: unauthorized access, 未授权访问异常");
-  });
-
-  it("handles empty constraints and exceptions gracefully", async () => {
-    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
-    const registry: import("../src/shared/types.js").EntityRegistry = {
-      entities: [],
-      functions: [],
-      constraints: [],
-      exceptions: [],
-    };
-    const summary = buildRegistrySummary(registry);
-    expect(summary).toBe("");
-  });
-
-  it("renders constraints without aliases correctly", async () => {
-    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
-    const registry: import("../src/shared/types.js").EntityRegistry = {
-      entities: [],
-      functions: [],
-      constraints: [
-        {
-          id: "C_SIMPLE",
-          canonicalName: "SimpleRule",
-          displayName: "简单规则",
-          aliases: [],
-        },
-      ],
-    };
-    const summary = buildRegistrySummary(registry);
-    expect(summary).toContain("### 约束");
-    expect(summary).toContain("C_SIMPLE");
-    expect(summary).not.toContain("别名");
-  });
-});
-
-describe("RegistryExtractor with constraints and exceptions", () => {
-  it("extract returns constraints and exceptions from LLM response", async () => {
-    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
-    const mockRegistry = {
-      entities: [
-        { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case"] },
-      ],
-      functions: [
-        { id: "F_REGISTER", canonicalName: "Register", aliases: ["Register"] },
-      ],
-      constraints: [
-        { id: "C_AUDIT_TRAIL_IMMUTABLE", canonicalName: "AuditTrailImmutability", displayName: "审计跟踪不可更改", aliases: ["Audit trail immutability"] },
-      ],
-      exceptions: [
-        { id: "X_UNAUTHORIZED_ACCESS", canonicalName: "UnauthorizedAccess", displayName: "未授权访问", aliases: ["unauthorized access"] },
-      ],
-    };
-    const mockLlm = {
-      generateJson: vi.fn().mockResolvedValue({ content: mockRegistry }),
-    };
-    const extractor = new RegistryExtractor(mockLlm);
-    (extractor as any).promptTemplate = "template {requirement_text}";
-    const result = await extractor.extract("requirement text");
-    expect(result.entities).toHaveLength(1);
-    expect(result.functions).toHaveLength(1);
-    expect(result.constraints).toHaveLength(1);
-    expect(result.constraints![0].id).toBe("C_AUDIT_TRAIL_IMMUTABLE");
-    expect(result.exceptions).toHaveLength(1);
-    expect(result.exceptions![0].id).toBe("X_UNAUTHORIZED_ACCESS");
-  });
-
-  it("extract handles missing constraints and exceptions gracefully", async () => {
-    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
-    const mockRegistry = {
-      entities: [],
-      functions: [],
-    };
-    const mockLlm = {
-      generateJson: vi.fn().mockResolvedValue({ content: mockRegistry }),
-    };
-    const extractor = new RegistryExtractor(mockLlm);
-    (extractor as any).promptTemplate = "template {requirement_text}";
-    const result = await extractor.extract("requirement text");
-    expect(result.constraints).toEqual([]);
-    expect(result.exceptions).toEqual([]);
-  });
-
-  it("extract returns empty constraints and exceptions when prompt template is empty", async () => {
-    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
-    const mockLlm = {
-      generateJson: vi.fn(),
-    } as any;
-    const extractor = new RegistryExtractor(mockLlm);
-    (extractor as any).promptTemplate = "";
-    const result = await extractor.extract("some requirement text");
-    expect(result).toEqual({ entities: [], functions: [], actors: [], constraints: [], exceptions: [] });
-  });
-});
-
-describe("Registry extraction prompt includes constraints and exceptions", () => {
-  it("prompt file contains constraint and exception extraction rules", async () => {
-    const fs = await import("node:fs");
-    const path = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const promptPath = path.resolve(__dirname, "..", "prompts", "registry_extraction.md");
-    const content = fs.readFileSync(promptPath, "utf-8");
-    expect(content).toContain("约束");
-    expect(content).toContain("异常");
-    expect(content).toContain("constraints");
-    expect(content).toContain("exceptions");
   });
 });

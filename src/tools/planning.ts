@@ -68,7 +68,7 @@ export class PlanningTool extends BaseTool {
     try {
       const extractor = new RegistryExtractor(this.llm);
       registry = await extractor.extract(requirementText);
-      this.logger.info(`plan: registry 提取完成，entities=${registry.entities.length}，functions=${registry.functions.length}`);
+      this.logger.info(`plan: registry 提取完成，entities=${registry.entities.length}`);
     } catch (e) {
       this.logger.warn(`plan: registry 提取失败，继续无 registry 规划: ${e instanceof Error ? e.message : String(e)}`);
     }

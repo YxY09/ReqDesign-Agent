@@ -135,8 +135,7 @@ export class GenerationTool extends BaseTool {
 
     // Inject registry summary if available in context hints
     const registry = ctx.registry as EntityRegistry | undefined;
-    if (registry && (registry.entities.length > 0 || registry.functions.length > 0
-        || (registry.constraints?.length ?? 0) > 0 || (registry.exceptions?.length ?? 0) > 0)) {
+    if (registry && registry.entities.length > 0) {
       const summary = buildRegistrySummary(registry);
       if (summary) {
         text = text.replace(/\{registry_summary\}/g, summary);

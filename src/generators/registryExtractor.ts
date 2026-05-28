@@ -28,7 +28,7 @@ export class RegistryExtractor extends BaseGenerator<EntityRegistry> {
 
   async extract(requirementText: string, systemPrompt?: string): Promise<EntityRegistry> {
     if (!this.promptTemplate) {
-      return { entities: [], functions: [], actors: [], constraints: [], exceptions: [] };
+      return { entities: [], actors: [] };
     }
     const prompt = this.buildPrompt(this.promptTemplate, {
       requirement_text: requirementText,
@@ -38,11 +38,8 @@ export class RegistryExtractor extends BaseGenerator<EntityRegistry> {
 
     // Validate basic structure
     const entities = Array.isArray(result?.entities) ? result.entities : [];
-    const functions = Array.isArray(result?.functions) ? result.functions : [];
     const actors = Array.isArray(result?.actors) ? result.actors : [];
-    const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
-    const exceptions = Array.isArray(result?.exceptions) ? result.exceptions : [];
 
-    return { entities, functions, actors, constraints, exceptions };
+    return { entities, actors };
   }
 }
