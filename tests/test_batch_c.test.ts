@@ -1077,3 +1077,30 @@ describe("preMerge NFR dedup: Chinese/English category normalization", () => {
     expect(nfrs).toHaveLength(8);
   });
 });
+
+// ---------------------------------------------------------------------------
+// single-artifact path: canonicalizeAndLink must be called
+// ---------------------------------------------------------------------------
+
+describe("single-artifact merge path", () => {
+  it("calls canonicalizeAndLink on single artifact (IDs are canonicalized)", async () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const single = artifact({
+      functions: [{ id: "old_func_id", name: "Login", description: "User login" }],
+      constraints: [{ id: "old_con_id", description: "Must be secure" }],
+      exceptions: [{ id: "old_exc_id", description: "Network failure" }],
+    });
+    const result = await merger.merge([single], "requirement text");
+    const functions = result.functions as Array<Record<string, unknown>>;
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    const exceptions = result.exceptions as Array<Record<string, unknown>>;
+
+    // canonicalizeAndLink rewrites IDs to FUN_/CON_/EXC_ format
+    expect(functions[0].id).toMatch(/^FUN_/);
+    expect(functions[0].displayId).toBe("F001");
+    expect(constraints[0].id).toMatch(/^CON_/);
+    expect(constraints[0].displayId).toBe("C001");
+    expect(exceptions[0].id).toMatch(/^EXC_/);
+    expect(exceptions[0].displayId).toBe("X001");
+  });
+});

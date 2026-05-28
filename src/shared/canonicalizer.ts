@@ -1,0 +1,258 @@
+/**
+ * Canonicalize & Link 模块
+ *
+ * Analyze 阶段的 ID 只是局部临时句柄。
+ * 全局 canonicalId 在 Merge 之后由本模块统一分配。
+ * displayId (F001/C001/X001) 给人看，canonicalId 给程序用。
+ */
+
+export interface CanonicalMaps {
+  functionMap: Map<string, string>;    // oldId/name → canonicalId
+  constraintMap: Map<string, string>;  // oldId → canonicalId
+  exceptionMap: Map<string, string>;   // oldId → canonicalId
+}
+
+/**
+ * 对 Function/Constraint/Exception 分配全局 ID
+ * Entity 和 Actor 保持 Registry ID 不动
+ */
+export function canonicalizeAndLink(merged: Record<string, unknown>): CanonicalMaps {
+  const maps: CanonicalMaps = {
+    functionMap: new Map(),
+    constraintMap: new Map(),
+    exceptionMap: new Map(),
+  };
+
+  // 1. Functions: 按 name 排序，分配 FUN_UPPER_SNAKE 格式
+  canonicalizeFunctions(merged, maps);
+
+  // 2. Constraints: 分配 CON_UPPER_SNAKE 格式
+  canonicalizeConstraints(merged, maps);
+
+  // 3. Exceptions: 分配 EXC_UPPER_SNAKE 格式
+  canonicalizeExceptions(merged, maps);
+
+  // 4. 解析引用：constraint.related_functions 等
+  resolveReferences(merged, maps);
+
+  return maps;
+}
+
+function canonicalizeFunctions(
+  merged: Record<string, unknown>,
+  maps: CanonicalMaps,
+): void {
+  const functions = asArray(merged["functions"]);
+  if (!functions.length) return;
+
+  // 按 name 排序确保确定性
+  functions.sort((a, b) =>
+    String(a.name ?? "").localeCompare(String(b.name ?? "")),
+  );
+
+  let counter = 1;
+  for (const fn of functions) {
+    const name = String(fn.name ?? "").trim();
+    if (!name) continue;
+
+    const canonicalId = nameToCanonicalId("FUN", name);
+    const displayId = `F${String(counter++).padStart(3, "0")}`;
+
+    // 映射：旧 ID、name → canonicalId
+    const oldId = String(fn.id ?? "").trim();
+    if (oldId) maps.functionMap.set(oldId, canonicalId);
+    maps.functionMap.set(name, canonicalId);
+
+    fn.id = canonicalId;
+    fn.displayId = displayId;
+  }
+}
+
+function canonicalizeConstraints(
+  merged: Record<string, unknown>,
+  maps: CanonicalMaps,
+): void {
+  const constraints = asArray(merged["constraints"]);
+  if (!constraints.length) return;
+
+  // 按 description 排序确保确定性
+  constraints.sort((a, b) =>
+    String(a.description ?? a.text ?? "").localeCompare(
+      String(b.description ?? b.text ?? ""),
+    ),
+  );
+
+  let counter = 1;
+  for (const c of constraints) {
+    const text = String(c.description ?? c.text ?? "").trim();
+    if (!text) continue;
+
+    const canonicalId = textToCanonicalId("CON", text);
+    const displayId = `C${String(counter++).padStart(3, "0")}`;
+
+    const oldId = String(c.id ?? "").trim();
+    if (oldId) maps.constraintMap.set(oldId, canonicalId);
+
+    c.id = canonicalId;
+    c.displayId = displayId;
+  }
+}
+
+function canonicalizeExceptions(
+  merged: Record<string, unknown>,
+  maps: CanonicalMaps,
+): void {
+  const exceptions = asArray(merged["exceptions"]);
+  if (!exceptions.length) return;
+
+  exceptions.sort((a, b) =>
+    String(a.description ?? a.text ?? "").localeCompare(
+      String(b.description ?? b.text ?? ""),
+    ),
+  );
+
+  let counter = 1;
+  for (const x of exceptions) {
+    const text = String(x.description ?? x.text ?? "").trim();
+    if (!text) continue;
+
+    const canonicalId = textToCanonicalId("EXC", text);
+    const displayId = `X${String(counter++).padStart(3, "0")}`;
+
+    const oldId = String(x.id ?? "").trim();
+    if (oldId) maps.exceptionMap.set(oldId, canonicalId);
+
+    x.id = canonicalId;
+    x.displayId = displayId;
+  }
+}
+
+/**
+ * 解析所有引用：把旧 ID 替换为 canonicalId
+ */
+function resolveReferences(
+  merged: Record<string, unknown>,
+  maps: CanonicalMaps,
+): void {
+  // 1. Constraint 的 related_functions
+  const constraints = asArray(merged["constraints"]);
+  for (const c of constraints) {
+    const related = c.related_functions;
+    if (Array.isArray(related)) {
+      c.related_functions = related.map((ref: unknown) => {
+        const str = String(ref);
+        return maps.functionMap.get(str) ?? str;
+      });
+    }
+  }
+
+  // 2. Exception 的 related_functions / related_constraints
+  const exceptions = asArray(merged["exceptions"]);
+  for (const x of exceptions) {
+    const relatedFn = x.related_functions;
+    if (Array.isArray(relatedFn)) {
+      x.related_functions = relatedFn.map((ref: unknown) => {
+        const str = String(ref);
+        return maps.functionMap.get(str) ?? str;
+      });
+    }
+    const relatedCon = x.related_constraints;
+    if (Array.isArray(relatedCon)) {
+      x.related_constraints = relatedCon.map((ref: unknown) => {
+        const str = String(ref);
+        return maps.constraintMap.get(str) ?? str;
+      });
+    }
+  }
+
+  // 3. NFR 的 related_constraints
+  const nfrs = asArray(merged["non_functional_requirements"]);
+  for (const nfr of nfrs) {
+    const relatedCon = nfr.related_constraints;
+    if (Array.isArray(relatedCon)) {
+      nfr.related_constraints = relatedCon.map((ref: unknown) => {
+        const str = String(ref);
+        return maps.constraintMap.get(str) ?? str;
+      });
+    }
+  }
+}
+
+// --- 工具函数 ---
+
+function asArray(val: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(val)) return [];
+  return val as Record<string, unknown>[];
+}
+
+/**
+ * 用 name 生成 canonicalId
+ * "SearchCase" → "FUN_SEARCH_CASE"
+ * "RegisterComplaint" → "FUN_REGISTER_COMPLAINT"
+ */
+function nameToCanonicalId(prefix: string, name: string): string {
+  // PascalCase → UPPER_SNAKE_CASE
+  const snake = name
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .toUpperCase();
+  return `${prefix}_${snake}`;
+}
+
+/**
+ * 用描述文本生成 canonicalId
+ * 取前几个关键词，避免过长
+ * "审计跟踪数据不可修改或删除" → "CON_<hash>"
+ * "Search response time should be under 8 seconds" → "CON_SEARCH_RESPONSE_TIME"
+ */
+function textToCanonicalId(prefix: string, text: string): string {
+  // 如果是英文：提取关键名词，生成 UPPER_SNAKE
+  if (/^[A-Za-z]/.test(text)) {
+    const keyWords = extractEnglishKeyWords(text);
+    if (keyWords.length > 0) {
+      return `${prefix}_${keyWords.join("_")}`;
+    }
+  }
+  // 如果是中文或无关键词：用文本的 hash 前 8 位
+  const hash = simpleHash(text);
+  return `${prefix}_${hash}`;
+}
+
+function extractEnglishKeyWords(text: string): string[] {
+  // 取英文描述中的关键名词，去掉常见停用词
+  const stopWords = new Set([
+    "the", "a", "an", "is", "are", "was", "were", "be", "been",
+    "being", "have", "has", "had", "do", "does", "did", "will",
+    "would", "could", "should", "may", "might", "must", "shall",
+    "can", "need", "to", "of", "in", "for", "on", "with", "at",
+    "by", "from", "as", "into", "through", "during", "before",
+    "after", "above", "below", "between", "out", "off", "over",
+    "under", "again", "further", "then", "once", "not", "no",
+    "nor", "only", "own", "same", "so", "than", "too", "very",
+    "and", "but", "or", "if", "any", "all", "each", "every",
+    "both", "few", "more", "most", "other", "some", "such",
+    "that", "this", "these", "those", "it", "its", "their",
+    "they", "them", "we", "us", "our", "you", "your", "he",
+    "him", "his", "she", "her", "which", "what", "when",
+    "where", "who", "whom", "how", "why",
+  ]);
+
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !stopWords.has(w));
+
+  // 取前 4 个关键词，转为大写
+  return words.slice(0, 4).map((w) => w.toUpperCase());
+}
+
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36).toUpperCase().slice(0, 8).padEnd(8, "0");
+}

@@ -11,6 +11,7 @@ import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { checkAnalysisQuality } from "../shared/analysisQualityGate.js";
+import { canonicalizeAndLink } from "../shared/canonicalizer.js";
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
@@ -51,9 +52,11 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       throw createToolError("MERGE_NO_RESULTS", "没有可合并的分析结果", { recoverable: false });
     }
 
-    // 只有一个分析结果：无需合并，直接返回
+    // 只有一个分析结果：无需合并，但仍需 canonicalize
     if (artifacts.length === 1) {
-      return artifacts[0].content;
+      const single = artifacts[0].content as Record<string, unknown>;
+      canonicalizeAndLink(single);
+      return single;
     }
 
     // 程序化预合并：将所有分析结果按名称去重取并集
@@ -70,6 +73,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
     AnalyzeMerger._verifySourceRefs(merged, requirementText);
+
+    // Canonicalize IDs & resolve cross-references
+    canonicalizeAndLink(merged);
 
     // Quality gate: attach result without blocking
     const qualityResult = checkAnalysisQuality(merged, requirementText);
