@@ -631,6 +631,31 @@ describe("checkAnalysisQuality", () => {
     expect(check!.passed).toBe(false);
   });
 
+  it("passes cross-reference integrity when relationship targets are canonical IDs", () => {
+    // After fixCrossReferences, targets become canonical IDs (E001, E002) instead of names.
+    // This should NOT be flagged as broken.
+    const analysis = {
+      ...validAnalysis,
+      entities: [
+        {
+          id: "E001",
+          name: "Order",
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [{ target: "E002", type: "many-to-one", description: "ref to Customer" }],
+        },
+        {
+          id: "E002",
+          name: "Customer",
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [],
+        },
+      ],
+    };
+    const result = checkAnalysisQuality(analysis);
+    const check = result.checks.find((c) => c.name === "cross_reference_integrity");
+    expect(check!.passed).toBe(true);
+  });
+
   it("fails source_ref coverage when < 30% constraints have source_text", () => {
     const analysis = {
       ...validAnalysis,

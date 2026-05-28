@@ -136,12 +136,13 @@ export function checkAnalysisQuality(
   {
     const entities = arrVal(analysis, "entities");
     const entityNames = new Set(entities.map((e) => String(e.name ?? "").trim()));
+    const entityIds = new Set(entities.map((e) => String(e.id ?? "").trim()));
     let brokenCount = 0;
     for (const entity of entities) {
       const rels = Array.isArray(entity.relationships) ? entity.relationships as Rec[] : [];
       for (const rel of rels) {
         const target = String(rel.target ?? "").trim();
-        if (target && !entityNames.has(target)) {
+        if (target && !entityNames.has(target) && !entityIds.has(target)) {
           brokenCount++;
         }
       }

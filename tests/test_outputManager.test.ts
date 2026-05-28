@@ -70,4 +70,42 @@ describe("OutputManager – summary report", () => {
     expect(summary).toContain("- 问题总数: 2");
     expect(summary).toContain("- 问题分布: blocker=0, major=1, minor=1");
   });
+
+  it("saveAll writes review/report.md with formatted content (not empty)", () => {
+    tempDir = makeTempDir();
+    const manager = new OutputManager(tempDir);
+
+    manager.saveAll(
+      {
+        actors: [],
+        functions: [],
+        entities: [],
+        constraints: [],
+        exceptions: [],
+      },
+      "requirement",
+      "design",
+      {},
+      "tests",
+      {
+        passed: false,
+        issues: [
+          { severity: "blocker", description: "critical flaw", suggestion: "Fix it" },
+          { severity: "minor", description: "typo" },
+        ],
+      },
+    );
+
+    const report = readFileSync(join(tempDir, "review", "report.md"), {
+      encoding: "utf-8",
+    });
+
+    expect(report).toContain("# Review Report");
+    expect(report).toContain("Total issues: 2");
+    expect(report).toContain("Blockers: 1");
+    expect(report).toContain("Minor: 1");
+    expect(report).toContain("[BLOCKER] critical flaw");
+    expect(report).toContain("[MINOR] typo");
+    expect(report).toContain("Fix it");
+  });
 });

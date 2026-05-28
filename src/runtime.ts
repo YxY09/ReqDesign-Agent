@@ -28,6 +28,7 @@ import { BudgetManager } from "./orchestration/budget.js";
 import { RunManager } from "./orchestration/runManager.js";
 import { RunSummaryBuilder } from "./orchestration/runManager.js";
 import { OutputManager } from "./outputManager.js";
+import { formatReviewReport } from "./formatReviewReport.js";
 import { SessionContext, SessionRegistry } from "./session.js";
 import { WorkflowState } from "./state.js";
 import { AgentOrchestrator } from "./orchestration/orchestrator.js";
@@ -1287,7 +1288,7 @@ export class MultiAgentRuntime {
     if (Object.keys(state.reviewResult).length > 0) {
       try {
         const manager = new (this.outputManagerClass)(state.outputDir);
-        manager.saveReviewReport("", state.reviewResult);
+        manager.saveReviewReport(formatReviewReport(state.reviewResult), state.reviewResult);
       } catch (err) {
         this.logger.warn(
           `Failed to save review before pause/finish: ${err instanceof Error ? err.message : String(err)}`,
@@ -1303,7 +1304,7 @@ export class MultiAgentRuntime {
     // 无论质量门通过与否，先保存 review result
     if (Object.keys(state.reviewResult).length > 0) {
       const manager = new (this.outputManagerClass)(state.outputDir);
-      manager.saveReviewReport("", state.reviewResult);
+      manager.saveReviewReport(formatReviewReport(state.reviewResult), state.reviewResult);
     }
 
     const consistencyIssues = this.findOutputConsistencyIssues(state);

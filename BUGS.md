@@ -6,19 +6,19 @@
 - 文件: src/shared/analysisQualityGate.ts
 - 根因: check #6 用 entity name 匹配 relationship target，但 fixCrossReferences 已把 target 转成 canonical ID。E001 != "Case" -> 误报
 - 修复: 同时用 entity ID 和 entity name 匹配
-- 状态: TODO
+- 状态: DONE
 
 ### BUG-2: review/report.md 空文件
 - 文件: src/runtime.ts
 - 根因: saveReviewReport("", result) 硬编码空字符串
 - 修复: 从 result.json issues 生成 Markdown 报告
-- 状态: TODO
+- 状态: DONE
 
 ### BUG-3: repair patch 没持久化到 test_cases.json
 - 文件: src/runtime.ts
 - 根因: repair 后的 artifact 没保存，保存的是 repair 前版本
 - 修复: 调查 repair→save 流程
-- 状态: TODO
+- 状态: DONE
 
 ## Round 2
 

@@ -525,8 +525,30 @@ export class RepairTool extends BaseTool {
       return ArtifactPatcher.reconstruct(patchedSections, task.type);
     }
 
-    this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
     const patchedText = ArtifactPatcher.applyPatches(sections, patches);
+
+    // Fallback for JSON-format content where section-based patching doesn't work.
+    // JSON content (e.g., {"test_cases": [...]}) has no markdown headings,
+    // so parseSections returns [{key: "full"}]. Patches target specific IDs
+    // (e.g., "TC-B-001") that don't match "full" → silently dropped.
+    // When patches had no effect and content is JSON, use LLM's full content.
+    const originalText = ArtifactPatcher.applyPatches(sections, []);
+    if (patchedText === originalText && patches.length > 0) {
+      const contentStr = typeof currentContent === "string" ? currentContent.trim() : "";
+      if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
+        if (typeof parsed.content === "string") {
+          this.logger.info(
+            `repair: task=${task.id} JSON patch fallback: ${patches.length} patches had no effect, using full content`,
+          );
+          return parsed.content;
+        }
+        this.logger.warn(
+          `repair: task=${task.id} JSON patch fallback: ${patches.length} patches had no effect and no full content available`,
+        );
+      }
+    }
+
+    this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
     return patchedText;
   }
 

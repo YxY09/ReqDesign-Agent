@@ -114,6 +114,60 @@ describe("RepairTool prompt building", () => {
     expect(resultStr).toContain("fixed content");
   });
 
+  it("falls back to full content for JSON-format test cases when patches don't apply", async () => {
+    // BUG-3: JSON-format test cases like {"test_cases": [...]} have no markdown headings,
+    // so parseSections returns [{key: "full", content: ...}]. LLM patches target test case
+    // IDs (e.g., "TC-B-001") which don't match "full" → patches silently dropped.
+    // Fix: when patches don't apply and content is JSON, fall back to full content.
+    const originalJson = JSON.stringify({
+      test_cases: [
+        { id: "TC-B-001", name: "Boundary test 1", steps: "step 1", expected: "result 1" },
+        { id: "TC-B-002", name: "Boundary test 2", steps: "step 2", expected: "result 2" },
+      ],
+    }, null, 2);
+
+    const fixedJson = JSON.stringify({
+      test_cases: [
+        { id: "TC-B-001", name: "Fixed boundary test 1", steps: "fixed step 1", expected: "fixed result 1" },
+        { id: "TC-B-002", name: "Boundary test 2", steps: "step 2", expected: "result 2" },
+      ],
+    }, null, 2);
+
+    // LLM returns patches targeting TC-B-001 (won't match "full" section) AND full content
+    const llm = designRepairLlm(JSON.stringify({
+      patches: [
+        { op: "replace_section", section: "TC-B-001", content: "## TC-B-001\n\nfixed" },
+      ],
+      content: fixedJson,
+    }));
+
+    const agent = new RepairTool(llm);
+    const task = createTask({
+      id: "tests-json-1",
+      type: "tests",
+      description: "repair JSON test cases",
+    });
+
+    const result = await agent.repair(
+      task,
+      originalJson,
+      [
+        {
+          severity: "major",
+          target_field: "test_cases",
+          description: "TC-B-001 步骤不完整",
+          suggestion: "修复 TC-B-001",
+        },
+      ],
+      {},
+    );
+
+    // The fix should cause the full content fallback to be used
+    expect(result).not.toBeNull();
+    expect(result).not.toBe(originalJson); // Should NOT be the unchanged original
+    expect(String(result)).toContain("Fixed boundary test 1"); // Should contain the fix
+  });
+
   it("falls back to full content on non-JSON LLM response", async () => {
     const llm = designRepairLlm("This is not JSON, just plain text output");
     const agent = new RepairTool(llm);

@@ -23,6 +23,7 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { Logger, setupLogger } from "./logger.js";
+import { formatReviewReport } from "./formatReviewReport.js";
 import { TestCaseGenerator } from "./generators/tests.js";
 
 // ---------------------------------------------------------------------------
@@ -268,6 +269,7 @@ export class OutputManager {
       this.saveTestCases(testCases);
     }
     if (reviewResult) {
+      this._writeFile("report.md", formatReviewReport(reviewResult), SUBDIR_REVIEW);
       this._writeJson("result.json", reviewResult, SUBDIR_REVIEW);
     }
     this._generateSummary(requirementJson, reviewResult);
