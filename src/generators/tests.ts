@@ -371,8 +371,53 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       if (!isCovered(text, eid, exceptionIdMap)) warnings.push(`异常 ${eid} 未被测试用例覆盖`);
     }
 
-    const unknownRefs = [...new Set(text.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [])]
-      .filter((id) => !allAllowedIds.has(id));
+    // Extract IDs referenced in test cases, parsing target triplets correctly.
+    // Target format: "displayId | canonicalId | description" — only extract IDs from fields 1 & 2.
+    // Multi-target: comma-separated triplets, but commas inside description text must be handled.
+    // We split on pipe (|) and only take the first two segments of each triplet.
+    const extractTargetIds = (target: string): string[] => {
+      const ids: string[] = [];
+      // Use regex to match each triplet: displayId | canonicalId | description
+      // The description group stops before the next triplet's displayId (lookahead).
+      const tripletRe = /\b([FCEX]\d+)\s*\|\s*((?:FUN|CON|EXC)_\w+)\s*\|\s*((?:(?!\b[FCEX]\d+\s*\|).)*)/g;
+      let m;
+      while ((m = tripletRe.exec(target)) !== null) {
+        ids.push(m[1]); // displayId
+        ids.push(m[2]); // canonicalId
+        // m[3] = description, skipped
+      }
+      return ids;
+    };
+
+    // Collect all referenced IDs from structured test cases
+    const referencedIds = new Set<string>();
+    for (const tc of cases) {
+      // Extract from target field with triplet-aware parsing
+      const target = String(tc.target ?? "");
+      if (target.includes("|")) {
+        for (const id of extractTargetIds(target)) {
+          referencedIds.add(id);
+        }
+      } else {
+        // Simple target without pipe separators — extract IDs with regex
+        const matches = target.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [];
+        for (const m of matches) referencedIds.add(m);
+      }
+      // Extract from other text fields with standard regex
+      for (const field of ["preconditions", "expected_result"]) {
+        const val = String(tc[field] ?? "");
+        const matches = val.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [];
+        for (const m of matches) referencedIds.add(m);
+      }
+      if (Array.isArray(tc.steps)) {
+        for (const step of tc.steps) {
+          const matches = String(step).match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [];
+          for (const m of matches) referencedIds.add(m);
+        }
+      }
+    }
+
+    const unknownRefs = [...referencedIds].filter((id) => !allAllowedIds.has(id));
     for (const id of unknownRefs) {
       const kind = id.startsWith("F") ? "功能" : "需求";
       warnings.push(`测试用例引用了未定义的${kind} ID: ${id}`);

@@ -50,12 +50,19 @@ function canonicalizeFunctions(
     String(a.name ?? "").localeCompare(String(b.name ?? "")),
   );
 
+  const usedIds = new Set<string>();
   let counter = 1;
   for (const fn of functions) {
     const name = String(fn.name ?? "").trim();
     if (!name) continue;
 
-    const canonicalId = nameToCanonicalId("FUN", name);
+    let canonicalId = nameToCanonicalId("FUN", name);
+    if (usedIds.has(canonicalId)) {
+      let suffix = 2;
+      while (usedIds.has(`${canonicalId}_${suffix}`)) suffix++;
+      canonicalId = `${canonicalId}_${suffix}`;
+    }
+    usedIds.add(canonicalId);
     const displayId = `F${String(counter++).padStart(3, "0")}`;
 
     // 映射：旧 ID、name → canonicalId
@@ -82,12 +89,19 @@ function canonicalizeConstraints(
     ),
   );
 
+  const usedIds = new Set<string>();
   let counter = 1;
   for (const c of constraints) {
     const text = String(c.description ?? c.text ?? "").trim();
     if (!text) continue;
 
-    const canonicalId = textToCanonicalId("CON", text);
+    let canonicalId = textToCanonicalId("CON", text);
+    if (usedIds.has(canonicalId)) {
+      let suffix = 2;
+      while (usedIds.has(`${canonicalId}_${suffix}`)) suffix++;
+      canonicalId = `${canonicalId}_${suffix}`;
+    }
+    usedIds.add(canonicalId);
     const displayId = `C${String(counter++).padStart(3, "0")}`;
 
     const oldId = String(c.id ?? "").trim();
@@ -111,12 +125,19 @@ function canonicalizeExceptions(
     ),
   );
 
+  const usedIds = new Set<string>();
   let counter = 1;
   for (const x of exceptions) {
     const text = String(x.description ?? x.text ?? "").trim();
     if (!text) continue;
 
-    const canonicalId = textToCanonicalId("EXC", text);
+    let canonicalId = textToCanonicalId("EXC", text);
+    if (usedIds.has(canonicalId)) {
+      let suffix = 2;
+      while (usedIds.has(`${canonicalId}_${suffix}`)) suffix++;
+      canonicalId = `${canonicalId}_${suffix}`;
+    }
+    usedIds.add(canonicalId);
     const displayId = `X${String(counter++).padStart(3, "0")}`;
 
     const oldId = String(x.id ?? "").trim();

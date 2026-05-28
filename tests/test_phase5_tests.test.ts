@@ -223,3 +223,125 @@ describe("TestCaseGenerator.generate", () => {
     expect(prompt).toContain("禁止改写为 E001");
   });
 });
+
+describe("TestCaseGenerator.validateStructuredTestCases — Bug A: target triplet parsing", () => {
+  it("does not flag function name (3rd field) as undefined ID in target triplet", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-N-001",
+          title: "Configure system",
+          type: "正常",
+          target: "F002 | FUN_CONFIGURE_SYSTEM | ConfigureSystem",
+          preconditions: "Admin logged in",
+          steps: ["Open settings"],
+          expected_result: "System configured",
+          priority: "P0",
+        },
+        {
+          id: "TC-E-001",
+          title: "Exception test",
+          type: "异常",
+          target: "F002 | FUN_CONFIGURE_SYSTEM | ConfigureSystem",
+          preconditions: "None",
+          steps: ["Trigger error"],
+          expected_result: "Error handled",
+          priority: "P1",
+        },
+        {
+          id: "TC-B-001",
+          title: "Boundary test",
+          type: "边界",
+          target: "F002 | FUN_CONFIGURE_SYSTEM | ConfigureSystem",
+          preconditions: "None",
+          steps: ["Test boundary"],
+          expected_result: "Boundary handled",
+          priority: "P2",
+        },
+      ],
+    });
+    const req = {
+      functions: [{ displayId: "F002", id: "FUN_CONFIGURE_SYSTEM", name: "ConfigureSystem" }],
+      exceptions: [],
+      constraints: [],
+    };
+    const warnings = TestCaseGenerator.validateTestCases(testCases, req);
+    // ConfigureSystem should NOT be flagged as undefined
+    expect(warnings.some((w) => w.includes("ConfigureSystem"))).toBe(false);
+  });
+
+  it("correctly parses multi-target with commas in description text", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-E-001",
+          title: "Security exception",
+          type: "异常",
+          target: "C008 | CON_CHANGES_SECURITY_ATTRIBUTES | Changes to security attributes, X012 | EXC_UNAUTHORIZED_ACCESS | Unauthorized access attempt",
+          preconditions: "User logged in",
+          steps: ["Attempt unauthorized change"],
+          expected_result: "Access denied",
+          priority: "P0",
+        },
+        {
+          id: "TC-N-001",
+          title: "Normal operation",
+          type: "正常",
+          target: "C008 | CON_CHANGES_SECURITY_ATTRIBUTES | Changes to security attributes",
+          preconditions: "Super-user",
+          steps: ["Make change"],
+          expected_result: "Change applied",
+          priority: "P1",
+        },
+        {
+          id: "TC-B-001",
+          title: "Boundary test",
+          type: "边界",
+          target: "C008 | CON_CHANGES_SECURITY_ATTRIBUTES | Changes to security attributes",
+          preconditions: "None",
+          steps: ["Test boundary"],
+          expected_result: "Boundary checked",
+          priority: "P2",
+        },
+      ],
+    });
+    const req = {
+      functions: [],
+      exceptions: [{ displayId: "X012", id: "EXC_UNAUTHORIZED_ACCESS", description: "Unauthorized" }],
+      constraints: [{ displayId: "C008", id: "CON_CHANGES_SECURITY_ATTRIBUTES", description: "Security attrs" }],
+    };
+    const warnings = TestCaseGenerator.validateTestCases(testCases, req);
+    // Words from description text should not be flagged
+    expect(warnings.some((w) => w.includes("Changes") || w.includes("Unauthorized"))).toBe(false);
+    // X012 and EXC_UNAUTHORIZED_ACCESS must be recognized as referenced IDs
+    // (not flagged as undefined because they were extracted from the target)
+    expect(warnings.some((w) => w.includes("X012"))).toBe(false);
+    expect(warnings.some((w) => w.includes("EXC_UNAUTHORIZED_ACCESS"))).toBe(false);
+  });
+
+  it("detects unknown ID in second triplet of multi-target", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-E-001",
+          title: "Security exception",
+          type: "异常",
+          target: "C008 | CON_CHANGES_SECURITY_ATTRIBUTES | Changes to security attributes, X999 | EXC_NONEXISTENT | Unknown exception",
+          preconditions: "User logged in",
+          steps: ["Attempt unauthorized change"],
+          expected_result: "Access denied",
+          priority: "P0",
+        },
+      ],
+    });
+    const req = {
+      functions: [],
+      exceptions: [{ displayId: "X012", id: "EXC_UNAUTHORIZED_ACCESS", description: "Unauthorized" }],
+      constraints: [{ displayId: "C008", id: "CON_CHANGES_SECURITY_ATTRIBUTES", description: "Security attrs" }],
+    };
+    const warnings = TestCaseGenerator.validateTestCases(testCases, req);
+    // X999 and EXC_NONEXISTENT are not defined in req — they must be flagged as unknown
+    expect(warnings.some((w) => w.includes("X999"))).toBe(true);
+    expect(warnings.some((w) => w.includes("EXC_NONEXISTENT"))).toBe(true);
+  });
+});

@@ -206,6 +206,63 @@ describe("canonicalizeAndLink", () => {
   });
 
   // ----------------------------------------------------------------
+  // 10. Duplicate canonicalId deduplication
+  // ----------------------------------------------------------------
+  it("deduplicates identical canonicalIds by appending suffixes", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [
+        { id: "c1", description: "Search response time must be under 8 seconds" },
+        { id: "c2", description: "Search response time must be under 10 seconds" },
+      ],
+    };
+
+    canonicalizeAndLink(merged);
+
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+    const ids = constraints.map((c) => c.id as string);
+    const uniqueIds = new Set(ids);
+    // All IDs must be unique
+    expect(uniqueIds.size).toBe(ids.length);
+    // The first should have no suffix, the second should have _2
+    expect(ids[0]).toMatch(/^CON_SEARCH_RESPONSE_TIME_SECONDS$/);
+    expect(ids[1]).toMatch(/^CON_SEARCH_RESPONSE_TIME_SECONDS_2$/);
+  });
+
+  it("deduplicates identical function canonicalIds", () => {
+    const merged: Record<string, unknown> = {
+      functions: [
+        { id: "f1", name: "ConfigureSystem" },
+        { id: "f2", name: "ConfigureSystem" },
+      ],
+    };
+
+    canonicalizeAndLink(merged);
+
+    const fns = merged.functions as Array<Record<string, unknown>>;
+    const ids = fns.map((f) => f.id as string);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+    expect(ids[0]).toBe("FUN_CONFIGURE_SYSTEM");
+    expect(ids[1]).toBe("FUN_CONFIGURE_SYSTEM_2");
+  });
+
+  it("deduplicates identical exception canonicalIds", () => {
+    const merged: Record<string, unknown> = {
+      exceptions: [
+        { id: "x1", description: "Database connection failed" },
+        { id: "x2", description: "Database connection failure" },
+      ],
+    };
+
+    canonicalizeAndLink(merged);
+
+    const excs = merged.exceptions as Array<Record<string, unknown>>;
+    const ids = excs.map((x) => x.id as string);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  // ----------------------------------------------------------------
   // 10. Deterministic: same input produces same output
   // ----------------------------------------------------------------
   it("produces deterministic canonicalIds for same input", () => {
