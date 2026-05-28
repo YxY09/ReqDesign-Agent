@@ -651,13 +651,18 @@ export class PlanningTool extends BaseTool {
 
     if (unassigned.length === 0) return plan;
 
-    // Find the analyze task with the fewest assigned sections (lightest)
-    let lightest = analyzeTasks[0];
+    // Prefer domain analyze tasks over constraints tasks for appending unassigned sections.
+    // Constraints tasks only extract rules, not full functional requirements.
+    const domainTasks = analyzeTasks.filter((t) => t.analysisMode !== "constraints");
+    const candidates = domainTasks.length > 0 ? domainTasks : analyzeTasks;
+
+    // Find the candidate task with the fewest assigned sections (lightest)
+    let lightest = candidates[0];
     let lightestCount = getAssignedCount(lightest);
-    for (let i = 1; i < analyzeTasks.length; i++) {
-      const count = getAssignedCount(analyzeTasks[i]);
+    for (let i = 1; i < candidates.length; i++) {
+      const count = getAssignedCount(candidates[i]);
       if (count < lightestCount) {
-        lightest = analyzeTasks[i];
+        lightest = candidates[i];
         lightestCount = count;
       }
     }

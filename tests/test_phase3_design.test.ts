@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SystemDesigner } from "../src/generators/design.js";
 import { GenerationTool } from "../src/tools/generation.js";
 import { createTask } from "../src/shared/types.js";
-
+import * as promptLoader from "../src/promptLoader.js";
 describe("SystemDesigner.validateDesign", () => {
   it("should warn on missing required sections", () => {
     const design = "这是一个设计方案，但缺少关键章节。";
@@ -190,6 +190,21 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     expect(prompt.includes("订单创建后需要触发支付")).toBe(true);
   });
 
+  it("should require per-ID constraint enumeration in the prompt template", async () => {
+    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const designer = new SystemDesigner(mockLLM as any);
+    const req = {
+      functions: [],
+      entities: [],
+      constraints: [{ id: "C001", description: "约束1" }],
+    };
+    await designer.generateDesign(req);
+    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    // The prompt must instruct the LLM to enumerate ALL constraint IDs individually
+    expect(prompt).toMatch(/逐条/);
+    expect(prompt).toMatch(/约束.*ID.*一一对应|每条约束/);
+  });
+
   it("should inject a hard design contract into the prompt", async () => {
     const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
     const designer = new SystemDesigner(mockLLM as any);
@@ -206,6 +221,33 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     expect(prompt).toContain("Order");
     expect(prompt).toContain("X001 | 支付失败");
     expect(prompt).toContain("不能改成 E001");
+  });
+
+  it("should include design contract in prompt when fallback template is used", async () => {
+    // Regression: fallback template must contain {requirement_text} placeholder
+    // so the design contract is not silently dropped when design_planner.md fails to load.
+    const loadPromptSpy = vi.spyOn(promptLoader, "loadPrompt");
+    loadPromptSpy.mockReturnValue(
+      "请根据以下需求分析结果生成系统设计方案：\n\n结构化需求：\n{requirement_json}\n\n{requirement_text}",
+    );
+    promptLoader.clearCache();
+
+    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const designer = new SystemDesigner(mockLLM as any);
+    const req = {
+      functions: [{ id: "F001", name: "Login" }],
+      entities: [{ name: "User" }],
+    };
+    await designer.generateDesign(req, "system prompt here");
+    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+
+    // The design contract and system prompt should be injected via {requirement_text}
+    expect(prompt).toContain("设计合同");
+    expect(prompt).toContain("F001 | Login");
+    expect(prompt).toContain("system prompt here");
+    expect(prompt).not.toContain("{requirement_text}");
+
+    loadPromptSpy.mockRestore();
   });
 });
 

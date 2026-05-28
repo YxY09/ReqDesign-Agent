@@ -8,7 +8,7 @@
 {requirement_json}
 ```
 
-
+{requirement_text}
 
 ## 输出要求
 
@@ -77,6 +77,7 @@
 
 硬性约束：
 - 约束 ID 必须使用 `requirement_json.constraints[].id` 的原始编号。
+- **逐条引用约束**：必须逐条列举 `requirement_json.constraints` 中的每个约束 ID（如 C001, C002, C003, …），每条约束都要有对应的架构决策或校验实现方案。禁止只概括性地说"所有约束已覆盖"而不逐条展开。
 - 异常 ID 必须使用 `requirement_json.exceptions[].id` 的原始编号，禁止把 X001-X006 改写成 E001-E006。
 
 ### 8. 非功能需求设计

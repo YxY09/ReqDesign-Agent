@@ -181,7 +181,7 @@ export class SystemDesigner extends BaseGenerator<string> {
     super(llm);
     this.promptTemplate = loadPrompt(
       "design_planner.md",
-      "请根据以下需求分析结果生成系统设计方案：\n\n结构化需求：\n{requirement_json}",
+      "请根据以下需求分析结果生成系统设计方案：\n\n结构化需求：\n{requirement_json}\n\n{requirement_text}",
     );
   }
 
@@ -204,9 +204,12 @@ export class SystemDesigner extends BaseGenerator<string> {
     reqStr = this.sanitizePlaceholder(reqStr, "requirement_json");
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
+    const contractParts: string[] = [];
+    if (systemPrompt) contractParts.push(systemPrompt);
+    contractParts.push(SystemDesigner.buildDesignContract(requirementJson));
     prompt = prompt.replace(
       /\{requirement_text\}/g,
-      `${SystemDesigner.buildDesignContract(requirementJson)}`,
+      contractParts.join("\n\n"),
     );
 
     const result = await this.llm.generateText(prompt, systemPrompt ?? "");
