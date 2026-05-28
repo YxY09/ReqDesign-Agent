@@ -546,42 +546,73 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     return result;
   }
 
-  // --- Constraints / Exceptions: merge by description similarity ---
+  // --- Constraints / Exceptions: merge by description similarity (union-find) ---
   private static _mergeByDescriptionSimilarity(
     items: Record<string, unknown>[],
   ): Record<string, unknown>[] {
     if (items.length <= 1) return [...items];
 
-    const result: Record<string, unknown>[] = [];
-    const used = new Set<number>();
+    // Pre-compute words and source_text for all items
+    const wordsList = items.map((item) =>
+      AnalyzeMerger._getWords(String(item.description ?? "")),
+    );
+    const sourceList = items.map((item) =>
+      AnalyzeMerger._normalizeForMatch(String(item.source_text ?? "")),
+    );
 
+    // Union-Find for transitive closure of similarity
+    const parent = new Map<number, number>();
+    for (let i = 0; i < items.length; i++) parent.set(i, i);
+    const find = (k: number): number => {
+      let cur = k;
+      while (parent.get(cur) !== cur) {
+        cur = parent.get(cur)!;
+      }
+      return cur;
+    };
+    const union = (a: number, b: number) => {
+      parent.set(find(a), find(b));
+    };
+
+    // Compare ALL pairs and union if similar
     for (let i = 0; i < items.length; i++) {
-      if (used.has(i)) continue;
-      let best = items[i];
-      const bestWords = AnalyzeMerger._getWords(String(best.description ?? ""));
-
       for (let j = i + 1; j < items.length; j++) {
-        if (used.has(j)) continue;
-
         // Check source_text match (handles cross-language duplicates)
-        const srcI = AnalyzeMerger._normalizeForMatch(String(best.source_text ?? ""));
-        const srcJ = AnalyzeMerger._normalizeForMatch(String(items[j].source_text ?? ""));
-        const sameSource = srcI.length > 0 && srcI === srcJ;
+        const sameSource = sourceList[i].length > 0 && sourceList[i] === sourceList[j];
 
-        // Also check Jaccard similarity on description
-        const jWords = AnalyzeMerger._getWords(String(items[j].description ?? ""));
-        const sim = AnalyzeMerger._jaccard(bestWords, jWords);
+        // Check Jaccard similarity on description
+        const sim = AnalyzeMerger._jaccard(wordsList[i], wordsList[j]);
 
         if (sameSource || sim >= 0.7) {
-          // Keep the version with longer description
-          if (String(items[j].description ?? "").length > String(best.description ?? "").length) {
-            best = items[j];
-          }
-          used.add(j);
+          union(i, j);
         }
       }
+    }
 
-      result.push(best);
+    // Collect groups by root
+    const groups = new Map<number, Record<string, unknown>[]>();
+    for (let i = 0; i < items.length; i++) {
+      const root = find(i);
+      let arr = groups.get(root);
+      if (!arr) {
+        arr = [];
+        groups.set(root, arr);
+      }
+      arr.push(items[i]);
+    }
+
+    // For each group, pick the item with the longest description
+    const result: Record<string, unknown>[] = [];
+    for (const groupItems of groups.values()) {
+      if (groupItems.length === 1) {
+        result.push(groupItems[0]);
+      } else {
+        groupItems.sort(
+          (a, b) =>
+            String(b.description ?? "").length - String(a.description ?? "").length,
+        );
+        result.push(groupItems[0]);
+      }
     }
 
     return result;
@@ -979,6 +1010,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       .toLowerCase()
       .replace(/\.\.\./g, "")
       .replace(/…/g, "")
+      // Normalize Unicode quotes/apostrophes to ASCII equivalents
+      .replace(/[\u2018\u2019\u201B]/g, "'")
+      .replace(/[\u201C\u201D\u201F\u00AB\u00BB]/g, '"')
       .replace(/\s+/g, "")
       .trim();
   }

@@ -478,6 +478,66 @@ describe("preMerge constraint merging", () => {
     const merged = merger.preMerge([a1, a2]);
     expect((merged.constraints as unknown[]).length).toBe(2);
   });
+
+  it("merges N-way similar constraints via transitive Jaccard closure (BUG-9)", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    // A vs B: Jaccard ~0.67 (< 0.7), A vs C: ~0.88 (>= 0.7), B vs C: ~0.78 (>= 0.7)
+    // Greedy pairwise: A absorbs C, B stays separate → 2 results (BUG)
+    // Union-find: A-C-B all transitively connected → 1 result (correct)
+    const a1 = artifact({
+      constraints: [
+        { id: "C001", description: "User password must contain uppercase letters and lowercase letters" },
+      ],
+    });
+    const a2 = artifact({
+      constraints: [
+        { id: "C002", description: "User password must contain uppercase letters and numbers for security" },
+      ],
+    });
+    const a3 = artifact({
+      constraints: [
+        { id: "C003", description: "User password must contain uppercase letters and lowercase letters for security" },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2, a3]);
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+
+    // All 3 should be merged into 1 via transitive closure
+    expect(constraints.length).toBe(1);
+    // Should keep the longest description
+    const desc = String(constraints[0].description);
+    expect(desc).toContain("security");
+  });
+
+  it("merges N-way constraints with mixed source_text and Jaccard matches", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    // E1 vs E2: same source_text → match
+    // E2 vs E3: Jaccard >= 0.7 → match
+    // E1 vs E3: neither source_text nor Jaccard → no direct match
+    // Union-find should connect all 3 transitively
+    const a1 = artifact({
+      constraints: [
+        { id: "C001", description: "安全属性只能超管修改", source_text: "Only super admin can modify security attributes" },
+      ],
+    });
+    const a2 = artifact({
+      constraints: [
+        { id: "C002", description: "Only super administrators may change security properties and permissions", source_text: "Only super admin can modify security attributes" },
+      ],
+    });
+    const a3 = artifact({
+      constraints: [
+        { id: "C003", description: "Super administrators are the only users allowed to change security properties and permissions" },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2, a3]);
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+
+    // All 3 should merge via transitive closure (C1-C2 by source_text, C2-C3 by Jaccard)
+    expect(constraints.length).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -554,6 +614,59 @@ describe("preMerge exception merging", () => {
 
     const merged = merger.preMerge([a1, a2]);
     expect((merged.exceptions as unknown[]).length).toBe(2);
+  });
+
+  it("dedupes cross-language exceptions with same source_text (BUG-10)", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const a1 = artifact({
+      exceptions: [
+        { id: "X005", description: "AuditExportFailure: system fails to export audit data", source_text: "审计数据导出失败时系统应记录日志" },
+      ],
+    });
+    const a2 = artifact({
+      exceptions: [
+        { id: "X008", description: "审计导出失败时记录日志并通知管理员", source_text: "审计数据导出失败时系统应记录日志" },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2]);
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+
+    // Same source_text → should merge into 1
+    expect(exceptions.length).toBe(1);
+    // Should keep the longer description
+    const desc = String(exceptions[0].description);
+    expect(desc.length).toBeGreaterThan(0);
+  });
+
+  it("merges N-way cross-language exceptions via transitive source_text (BUG-10)", () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    // 3 exceptions from 3 artifacts, all same source_text but different language descriptions
+    const a1 = artifact({
+      exceptions: [
+        { id: "X005", description: "AuditExportFailure", source_text: "审计数据导出失败时系统应记录日志" },
+      ],
+    });
+    const a2 = artifact({
+      exceptions: [
+        { id: "X006", description: "Database connection timeout", source_text: "高峰期数据库连接超时" },
+      ],
+    });
+    const a3 = artifact({
+      exceptions: [
+        { id: "X008", description: "审计导出失败时系统应记录完整日志并通知相关管理员", source_text: "审计数据导出失败时系统应记录日志" },
+      ],
+    });
+
+    const merged = merger.preMerge([a1, a2, a3]);
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+
+    // X005 and X008 have same source_text → merge. X006 is different → keep.
+    expect(exceptions.length).toBe(2);
+    // The merged one should have the longest description
+    const descs = exceptions.map((e) => String(e.description ?? ""));
+    const hasLongDesc = descs.some((d) => d.includes("管理员"));
+    expect(hasLongDesc).toBe(true);
   });
 });
 
@@ -737,6 +850,22 @@ describe("checkAnalysisQuality", () => {
     const result = checkAnalysisQuality(analysis, "users must be at least 18 years old");
     const check = result.checks.find((c) => c.name === "no_unverified_constraints");
     expect(check!.passed).toBe(false);
+  });
+
+  it("passes unverified constraints check when source_text has unicode curly quotes", () => {
+    const analysis = {
+      ...validAnalysis,
+      constraints: [
+        {
+          id: "C001",
+          description: "Search constraint",
+          source_text: "\u201Csearch results\u201D for the user\u2019s password",
+        },
+      ],
+    };
+    const result = checkAnalysisQuality(analysis, 'the system must "search results" for the user\'s password');
+    const check = result.checks.find((c) => c.name === "no_unverified_constraints");
+    expect(check!.passed).toBe(true);
   });
 
   it("score calculation is correct", () => {

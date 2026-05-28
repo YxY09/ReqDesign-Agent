@@ -95,6 +95,8 @@
 
 `source_text` 必须是需求文档中的**原文逐字摘录**。不要改写、不要概括、不要使用省略号（`...`或`…`）。
 
+**如果无法找到对应的原文引用，将 `source_text` 设为空字符串，不要编造或概括。**
+
 **正确示例：**
 ```
 "source_text": "The System must allow changes to security attributes for groups or users to be made only by super-user"
@@ -105,3 +107,8 @@
 "source_text": "...Such configurations must be saved in the user profile."
 ```
 上例错误地使用了省略号，且可能不是逐字摘录。
+
+```
+"source_text": "Implicit requirement throughout document"
+```
+上例是编造的描述，不是原文摘录。**禁止编造此类描述。** 找不到原文时，`source_text` 必须设为空字符串 `""`。

@@ -715,6 +715,40 @@ describe("AnalyzeMerger._verifySourceRefs", () => {
     const unverifiedCount = AnalyzeMerger._verifySourceRefs(merged, req);
     expect(unverifiedCount).toBe(0);
   });
+
+  it("normalizes unicode curly quotes in source_text when matching", () => {
+    // source_text uses curly quotes, requirement uses ASCII quotes
+    const req = 'the system must "search results" for the user\'s password';
+    const merged = {
+      constraints: [
+        {
+          id: "C001",
+          description: "search constraint",
+          source_text: "\u201Csearch results\u201D for the user\u2019s password",
+        },
+      ],
+      exceptions: [],
+    };
+    const unverifiedCount = AnalyzeMerger._verifySourceRefs(merged, req);
+    expect(unverifiedCount).toBe(0);
+  });
+
+  it("normalizes unicode angle quotes and reverse quotes in source_text", () => {
+    // \u00AB \u00BB = angle quotes → ", \u201B = single high-reversed-9 → '
+    const req = 'he said "hello" and \'hi\'';
+    const merged = {
+      constraints: [
+        {
+          id: "C001",
+          description: "quote constraint",
+          source_text: "\u00ABhello\u00BB and \u201Bhi'",
+        },
+      ],
+      exceptions: [],
+    };
+    const unverifiedCount = AnalyzeMerger._verifySourceRefs(merged, req);
+    expect(unverifiedCount).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -745,5 +779,22 @@ describe("Prompt files contain analysisMode and source_text", () => {
   it("requirement_analysis_constraints.md includes {requirement_text} placeholder", () => {
     const content = readPrompt("requirement_analysis_constraints.md");
     expect(content).toContain("{requirement_text}");
+  });
+
+  // BUG-11: source_text anti-fabrication rules
+  it("requirement_analysis_constraints.md prohibits fabricated source_text (BUG-11)", () => {
+    const content = readPrompt("requirement_analysis_constraints.md");
+    // Must instruct LLM to use empty string when no original text found
+    expect(content).toContain("空字符串");
+    // Must explicitly prohibit fabrication with error example
+    expect(content).toContain("Implicit requirement throughout document");
+  });
+
+  it("test_case.md requires test case per exception (BUG-12)", () => {
+    const content = readPrompt("test_case.md");
+    // Must explicitly require each exception gets its own test case
+    expect(content).toContain("每个异常");
+    // Must prioritize security and performance exceptions
+    expect(content).toContain("优先覆盖安全相关和性能相关的异常");
   });
 });

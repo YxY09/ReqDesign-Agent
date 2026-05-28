@@ -16,9 +16,15 @@ export interface QualityCheckResult {
 
 type Rec = Record<string, unknown>;
 
-/** Normalize text for matching: lowercase + strip whitespace. */
+/** Normalize text for matching: lowercase + normalize quotes + strip whitespace. */
 function normalizeForMatch(text: string): string {
-  return text.toLowerCase().replace(/\s+/g, "").trim();
+  return text
+    .toLowerCase()
+    // Normalize Unicode quotes/apostrophes to ASCII equivalents
+    .replace(/[\u2018\u2019\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201F\u00AB\u00BB]/g, '"')
+    .replace(/\s+/g, "")
+    .trim();
 }
 
 function arrVal(analysis: Rec, key: string): Rec[] {
