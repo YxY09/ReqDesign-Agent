@@ -47,9 +47,9 @@ export class TestCaseGenerator extends BaseGenerator<string> {
   }
 
   static buildTestContract(requirementJson: Record<string, unknown>): string {
-    const functions = BaseGenerator.formatContractList(requirementJson.functions, ["id", "name", "description"]);
-    const exceptions = BaseGenerator.formatContractList(requirementJson.exceptions, ["id", "description", "trigger"]);
-    const constraints = BaseGenerator.formatContractList(requirementJson.constraints, ["id", "description"]);
+    const functions = BaseGenerator.formatContractList(requirementJson.functions, ["displayId", "id", "name", "description"]);
+    const exceptions = BaseGenerator.formatContractList(requirementJson.exceptions, ["displayId", "id", "description", "trigger"]);
+    const constraints = BaseGenerator.formatContractList(requirementJson.constraints, ["displayId", "id", "description"]);
 
     return [
       "## 测试生成合同（硬性约束）",
@@ -147,21 +147,39 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       return [...new Set(text.match(re) ?? [])].filter((id) => !allowedIds.has(id));
     };
 
-    const functionItems = collectIds(requirementJson["functions"]);
+    // Build sets containing BOTH displayId and canonicalId for validation
+    const collectAllIdForms = (items: unknown): Set<string> => {
+      const ids = new Set<string>();
+      if (!Array.isArray(items)) return ids;
+      for (const item of items) {
+        if (typeof item === "object" && item !== null) {
+          const rec = item as Record<string, unknown>;
+          const displayId = String(rec.displayId ?? "").trim();
+          const id = String(rec.id ?? "").trim();
+          if (displayId) ids.add(displayId);
+          if (id) ids.add(id);
+        }
+      }
+      return ids;
+    };
+
     const exceptionItems = collectIds(requirementJson["exceptions"]);
-    const functionIds = new Set(functionItems.map((item) => item.id).filter(Boolean));
-    const exceptionIds = new Set(exceptionItems.map((item) => item.id).filter(Boolean));
+    const functionAllIds = collectAllIdForms(requirementJson["functions"]);
+    const exceptionAllIds = collectAllIdForms(requirementJson["exceptions"]);
     const referencedFunctionIds = extractRefs(testCases, "F");
-    const referencedExceptionIds = extractExactRefs(testCases, exceptionIds);
+    const referencedExceptionIds = extractExactRefs(testCases, exceptionAllIds);
 
     const functions = requirementJson["functions"];
     if (Array.isArray(functions)) {
       for (const func of functions) {
         if (typeof func === "object" && func !== null) {
           const rec = func as Record<string, unknown>;
-          const fid = String(rec.id || "").trim();
+          const fid = String(rec.displayId ?? rec.id ?? "").trim();
+          const canonicalId = String(rec.id ?? "").trim();
           const name = String(rec.name || "").trim();
-          if (fid && !testCases.includes(fid)) {
+          const idFound = fid && testCases.includes(fid);
+          const canonicalFound = canonicalId && canonicalId !== fid && testCases.includes(canonicalId);
+          if (fid && !idFound && !canonicalFound) {
             const label = `${fid} ${name}`.trim();
             warnings.push(`功能 ${label} 未被测试用例覆盖`);
           } else if (!fid && name && !testCases.includes(name)) {
@@ -177,12 +195,12 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     }
 
     for (const fid of referencedFunctionIds) {
-      if (!functionIds.has(fid)) {
+      if (!functionAllIds.has(fid)) {
         warnings.push(`测试用例引用了未定义的功能 ID: ${fid}`);
       }
     }
 
-    for (const eid of extractUnknownRequirementRefs(testCases, exceptionIds, ["E", "X"])) {
+    for (const eid of extractUnknownRequirementRefs(testCases, exceptionAllIds, ["E", "X"])) {
       warnings.push(`测试用例引用了未定义的异常 ID: ${eid}`);
     }
 
@@ -294,23 +312,67 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     const collectIds = (items: unknown): string[] => {
       if (!Array.isArray(items)) return [];
       return items
-        .map((item) => typeof item === "object" && item !== null ? String((item as Record<string, unknown>).id ?? "").trim() : "")
+        .map((item) => typeof item === "object" && item !== null ? String((item as Record<string, unknown>).displayId ?? (item as Record<string, unknown>).id ?? "").trim() : "")
         .filter(Boolean);
+    };
+    // Also collect ALL ID forms (both displayId and canonicalId) for unknown-ref checking
+    const collectAllIdForms = (items: unknown): string[] => {
+      if (!Array.isArray(items)) return [];
+      const ids: string[] = [];
+      for (const item of items) {
+        if (typeof item === "object" && item !== null) {
+          const rec = item as Record<string, unknown>;
+          const displayId = String(rec.displayId ?? "").trim();
+          const id = String(rec.id ?? "").trim();
+          if (displayId) ids.push(displayId);
+          if (id && id !== displayId) ids.push(id);
+        }
+      }
+      return ids;
     };
     const functionIds = new Set(collectIds(requirementJson.functions));
     const exceptionIds = new Set(collectIds(requirementJson.exceptions));
-    const constraintIds = new Set(collectIds(requirementJson.constraints));
-    const allowedRequirementIds = new Set([...functionIds, ...exceptionIds, ...constraintIds]);
+    const allAllowedIds = new Set([
+      ...collectAllIdForms(requirementJson.functions),
+      ...collectAllIdForms(requirementJson.exceptions),
+      ...collectAllIdForms(requirementJson.constraints),
+    ]);
+
+    // Build map from displayId to canonicalId for dual-ID coverage checking
+    const buildIdMap = (items: unknown): Map<string, string> => {
+      const map = new Map<string, string>();
+      if (!Array.isArray(items)) return map;
+      for (const item of items) {
+        if (typeof item === "object" && item !== null) {
+          const rec = item as Record<string, unknown>;
+          const displayId = String(rec.displayId ?? "").trim();
+          const canonicalId = String(rec.id ?? "").trim();
+          if (displayId && canonicalId && displayId !== canonicalId) {
+            map.set(displayId, canonicalId);
+          }
+        }
+      }
+      return map;
+    };
+    const functionIdMap = buildIdMap(requirementJson.functions);
+    const exceptionIdMap = buildIdMap(requirementJson.exceptions);
+
+    const isCovered = (text: string, displayId: string, idMap: Map<string, string>): boolean => {
+      if (text.includes(displayId)) return true;
+      const canonicalId = idMap.get(displayId);
+      if (canonicalId && text.includes(canonicalId)) return true;
+      return false;
+    };
 
     for (const fid of functionIds) {
-      if (!text.includes(fid)) warnings.push(`功能 ${fid} 未被测试用例覆盖`);
+      if (!isCovered(text, fid, functionIdMap)) warnings.push(`功能 ${fid} 未被测试用例覆盖`);
     }
     for (const eid of exceptionIds) {
-      if (!text.includes(eid)) warnings.push(`异常 ${eid} 未被测试用例覆盖`);
+      if (!isCovered(text, eid, exceptionIdMap)) warnings.push(`异常 ${eid} 未被测试用例覆盖`);
     }
 
     const unknownRefs = [...new Set(text.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [])]
-      .filter((id) => !allowedRequirementIds.has(id));
+      .filter((id) => !allAllowedIds.has(id));
     for (const id of unknownRefs) {
       const kind = id.startsWith("F") ? "功能" : "需求";
       warnings.push(`测试用例引用了未定义的${kind} ID: ${id}`);

@@ -154,7 +154,8 @@ function containsToken(text: string, token: string): boolean {
 
 function itemId(item: unknown): string {
   if (typeof item === "object" && item !== null) {
-    return String((item as Record<string, unknown>).id ?? "").trim();
+    const rec = item as Record<string, unknown>;
+    return String(rec.displayId ?? rec.id ?? "").trim();
   }
   return "";
 }
@@ -214,7 +215,7 @@ export class SystemDesigner extends BaseGenerator<string> {
   static buildDesignContract(requirementJson: Record<string, unknown>): string {
     const functions = BaseGenerator.formatContractList(
       requirementJson.functions,
-      ["id", "name", "description"],
+      ["displayId", "id", "name", "description"],
     );
 
     // Build sub-capabilities section for each function that has them
@@ -228,7 +229,7 @@ export class SystemDesigner extends BaseGenerator<string> {
       ? [
           "### 功能子能力与验收点（设计必须覆盖）",
           ...functionsWithSubs.map((fn) => {
-            const id = String(fn.id ?? "");
+            const id = String(fn.displayId ?? fn.id ?? "");
             const subs = Array.isArray(fn.sub_capabilities) ? fn.sub_capabilities as string[] : [];
             const acs = Array.isArray(fn.acceptance_criteria) ? fn.acceptance_criteria as string[] : [];
             const parts: string[] = [];
@@ -245,11 +246,11 @@ export class SystemDesigner extends BaseGenerator<string> {
     );
     const constraints = BaseGenerator.formatContractList(
       requirementJson.constraints,
-      ["id", "description"],
+      ["displayId", "id", "description"],
     );
     const exceptions = BaseGenerator.formatContractList(
       requirementJson.exceptions,
-      ["id", "description", "trigger", "handling"],
+      ["displayId", "id", "description", "trigger", "handling"],
     );
 
     return [
@@ -307,16 +308,15 @@ export class SystemDesigner extends BaseGenerator<string> {
     const functions = requirementJson["functions"];
     if (Array.isArray(functions)) {
       for (const func of functions) {
-        const name = typeof func === "object" && func !== null
-          ? (func as Record<string, unknown>).name ?? (func as Record<string, unknown>).id
-          : String(func);
-        const fid = typeof func === "object" && func !== null
-          ? (func as Record<string, unknown>).id
-          : "";
+        const rec = typeof func === "object" && func !== null ? (func as Record<string, unknown>) : null;
+        const name = rec ? (rec.name ?? rec.id) : String(func);
+        const fid = rec ? String(rec.id ?? "") : "";
+        const fdisplayId = rec ? String(rec.displayId ?? "") : "";
         const hasName = name ? containsToken(designText, String(name)) : false;
-        const hasId = fid ? containsToken(designText, String(fid)) : false;
-        if (name && !hasName && !hasId) {
-          const label = fid || name;
+        const hasId = fid ? containsToken(designText, fid) : false;
+        const hasDisplayId = fdisplayId ? containsToken(designText, fdisplayId) : false;
+        if (name && !hasName && !hasId && !hasDisplayId) {
+          const label = fdisplayId || fid || name;
           warnings.push(`功能 ${label} 未在设计中体现`);
         }
       }
@@ -331,18 +331,28 @@ export class SystemDesigner extends BaseGenerator<string> {
 
     const constraintIds = collectIds(requirementJson["constraints"]);
     if (constraintIds.length > 0) {
-      for (const id of constraintIds) {
-        if (!containsToken(designText, id)) {
-          warnings.push(`约束 ${id} 未在设计中体现`);
+      for (let i = 0; i < constraintIds.length; i++) {
+        const displayId = constraintIds[i];
+        const constraints = requirementJson["constraints"];
+        const item = Array.isArray(constraints) ? constraints[i] : null;
+        const canonicalId = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
+        const found = containsToken(designText, displayId) || (canonicalId && canonicalId !== displayId && containsToken(designText, canonicalId));
+        if (!found) {
+          warnings.push(`约束 ${displayId} 未在设计中体现`);
         }
       }
     }
 
     const exceptionIds = collectIds(requirementJson["exceptions"]);
     if (exceptionIds.length > 0) {
-      for (const id of exceptionIds) {
-        if (!containsToken(designText, id)) {
-          warnings.push(`异常 ${id} 未在设计中体现`);
+      for (let i = 0; i < exceptionIds.length; i++) {
+        const displayId = exceptionIds[i];
+        const exceptions = requirementJson["exceptions"];
+        const item = Array.isArray(exceptions) ? exceptions[i] : null;
+        const canonicalId = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
+        const found = containsToken(designText, displayId) || (canonicalId && canonicalId !== displayId && containsToken(designText, canonicalId));
+        if (!found) {
+          warnings.push(`异常 ${displayId} 未在设计中体现`);
         }
       }
     }

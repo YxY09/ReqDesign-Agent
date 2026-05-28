@@ -139,7 +139,8 @@ export class DiagramGenerator extends BaseGenerator<string> {
 
       if (functions.length > 0) {
         const fLines = functions.map((f: Record<string, unknown>) => {
-          let line = `## 功能：${f["id"] ?? ""} ${f["name"] ?? ""}`;
+          const fId = String(f["displayId"] ?? f["id"] ?? "");
+          let line = `## 功能：${fId} ${f["name"] ?? ""}`;
           if (f["description"]) line += `\n${f["description"]}`;
           const subs = Array.isArray(f["sub_capabilities"]) ? (f["sub_capabilities"] as string[]).filter(Boolean) : [];
           if (subs.length > 0) line += `\n子能力：${subs.join(", ")}`;
@@ -149,12 +150,13 @@ export class DiagramGenerator extends BaseGenerator<string> {
       }
 
       if (constraints.length > 0) {
-        parts.push(`## 约束条件\n${constraints.map((c: Record<string, unknown>) => `- ${c["id"]}: ${c["description"]}`).join("\n")}`);
+        parts.push(`## 约束条件\n${constraints.map((c: Record<string, unknown>) => `- ${c["displayId"] ?? c["id"]}: ${c["description"]}`).join("\n")}`);
       }
 
       if (exceptions.length > 0) {
         parts.push(`## 异常流程\n${exceptions.map((e: Record<string, unknown>) => {
-          let line = `- ${e["id"]}: ${e["description"] ?? ""}`;
+          const eId = String(e["displayId"] ?? e["id"] ?? "");
+          let line = `- ${eId}: ${e["description"] ?? ""}`;
           if (e["trigger"]) line += ` (触发: ${e["trigger"]})`;
           if (e["handling"]) line += ` → ${e["handling"]}`;
           return line;
@@ -179,12 +181,13 @@ export class DiagramGenerator extends BaseGenerator<string> {
       }
 
       if (constraints.length > 0) {
-        parts.push(`## 约束条件\n${constraints.map((c: Record<string, unknown>) => `- ${c["id"]}: ${c["description"]}`).join("\n")}`);
+        parts.push(`## 约束条件\n${constraints.map((c: Record<string, unknown>) => `- ${c["displayId"] ?? c["id"]}: ${c["description"]}`).join("\n")}`);
       }
 
       if (exceptions.length > 0) {
         parts.push(`## 异常流程\n${exceptions.map((e: Record<string, unknown>) => {
-          let line = `- ${e["id"]}: ${e["description"] ?? ""}`;
+          const eId = String(e["displayId"] ?? e["id"] ?? "");
+          let line = `- ${eId}: ${e["description"] ?? ""}`;
           if (e["trigger"]) line += ` (触发: ${e["trigger"]})`;
           if (e["handling"]) line += ` → ${e["handling"]}`;
           return line;
