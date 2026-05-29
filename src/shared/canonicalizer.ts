@@ -82,16 +82,34 @@ function canonicalizeConstraints(
   const constraints = asArray(merged["constraints"]);
   if (!constraints.length) return;
 
-  // 按 description 排序确保确定性
+  // Sort all constraints by description for deterministic ordering
   constraints.sort((a, b) =>
     String(a.description ?? a.text ?? "").localeCompare(
       String(b.description ?? b.text ?? ""),
     ),
   );
 
+  // Determine starting counter from already-canonicalized constraints
+  const existingDisplayIds = constraints
+    .filter((c) => typeof c.displayId === "string")
+    .map((c) => String(c.displayId))
+    .filter((d) => /^C\d{3}$/.test(d));
+  let counter = existingDisplayIds.length > 0
+    ? Math.max(...existingDisplayIds.map((d) => parseInt(d.slice(1), 10))) + 1
+    : 1;
+
   const usedIds = new Set<string>();
-  let counter = 1;
+
   for (const c of constraints) {
+    // Already processed by new ConstraintCanonicalizer — populate map and skip
+    if (c.canonicalId && typeof c.canonicalId === "string") {
+      const cid = String(c.canonicalId);
+      const existingId = String(c.id ?? "").trim();
+      if (existingId) maps.constraintMap.set(existingId, cid);
+      usedIds.add(cid);
+      continue;
+    }
+
     const text = String(c.description ?? c.text ?? "").trim();
     if (!text) continue;
 

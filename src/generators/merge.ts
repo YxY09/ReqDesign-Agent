@@ -12,6 +12,56 @@ import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { checkAnalysisQuality } from "../shared/analysisQualityGate.js";
 import { canonicalizeAndLink } from "../shared/canonicalizer.js";
+import {
+  canonicalizeConstraints as canonicalizeConstraintsNew,
+  type ConstraintCandidate,
+} from "../shared/constraintCanonicalizer.js";
+
+/**
+ * Convert merged constraints to ConstraintCandidate[], run the new
+ * ConstraintCanonicalizer, and replace merged["constraints"] with the results.
+ *
+ * Also adds compatibility fields (id, source_text) for downstream consumers
+ * that expect the old format.
+ */
+function canonicalizeConstraintsPipeline(merged: Record<string, unknown>): void {
+  const rawConstraints = asArray(merged["constraints"]);
+  if (!rawConstraints.length) return;
+
+  // Convert to ConstraintCandidate[]
+  const candidates: ConstraintCandidate[] = rawConstraints.map((c) => ({
+    description: String(c.description ?? "").trim(),
+    sourceText: String(c.source_text ?? "").trim(),
+    sectionId: c.sectionId as string | undefined,
+    relatedFunctionCandidates: Array.isArray(c.related_functions)
+      ? (c.related_functions as unknown[]).map((r) => String(r))
+      : undefined,
+  }));
+
+  // Get functions for linking (already canonical IDs after canonicalizeAndLink)
+  const rawFunctions = asArray(merged["functions"]);
+  const funcInputs = rawFunctions.map((f) => ({
+    id: String(f.id ?? ""),
+    displayId: String(f.displayId ?? ""),
+    name: String(f.name ?? ""),
+  }));
+
+  const canonical = canonicalizeConstraintsNew(candidates, funcInputs);
+
+  // Add compatibility fields for downstream consumers (quality gate, resolveReferences, etc.)
+  for (const c of canonical) {
+    ((c as unknown) as Record<string, unknown>).id = c.canonicalId;
+    ((c as unknown) as Record<string, unknown>).source_text = c.sourceText;
+  }
+
+  merged["constraints"] = canonical;
+}
+
+/** Coerce unknown to Record array. */
+function asArray(val: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(val)) return [];
+  return val as Record<string, unknown>[];
+}
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
@@ -59,7 +109,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       for (const e of (single.entities as Array<Record<string, unknown>> | undefined) ?? []) {
         if (e.entityRef) e.id = e.entityRef;
       }
+      // Canonicalize IDs & resolve cross-references first, then constraints
       canonicalizeAndLink(single);
+      canonicalizeConstraintsPipeline(single);
       return single;
     }
 
@@ -83,8 +135,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       if (e.entityRef) e.id = e.entityRef;
     }
 
-    // Canonicalize IDs & resolve cross-references
+    // Canonicalize IDs & resolve cross-references first, then constraints
     canonicalizeAndLink(merged);
+    canonicalizeConstraintsPipeline(merged);
 
     // Quality gate: attach result without blocking
     const qualityResult = checkAnalysisQuality(merged, requirementText);
