@@ -82,7 +82,7 @@ export class PlanningTool extends BaseTool {
         constraintCandidates = await extractor.extractCandidates(
           requirementText,
           registry.entities.map((e) => ({ id: e.id, canonicalName: e.canonicalName, aliases: e.aliases })),
-          [], // function registry not available at planning time
+          (registry.functions ?? []).map((f) => ({ id: f.id, displayId: f.id, name: f.name })),
         );
         this.logger.info(`plan: constraint candidates 提取完成，count=${constraintCandidates.length}`);
       } catch (e) {

@@ -12,6 +12,7 @@ import {
 } from "../shared/types.js";
 import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
+import { validateReview, type ReviewValidationResult } from "../shared/reviewValidator.js";
 
 
 export class EvaluationTool extends BaseTool {
@@ -68,6 +69,14 @@ export class EvaluationTool extends BaseTool {
     issues.push(...ruleIssues);
     this.logger.info(`evaluate: 规则检查发现 ${ruleIssues.length} 个问题`);
 
+    // 1.5 Review 前置门禁（确定性验证）
+    const snapDesignText = EvaluationTool._extractDesignText(snapshots);
+    const snapTestCasesText = EvaluationTool._extractTestCasesText(snapshots);
+    const reviewValidation = validateReview(requirementJson, snapDesignText, snapTestCasesText);
+    if (!reviewValidation.passed) {
+      this.logger.info(`evaluate: review 前置门禁未通过 — ${reviewValidation.checks.filter((c) => !c.passed).map((c) => c.name).join(", ")}`);
+    }
+
     // 2. LLM 评审
     let llmIssues: Issue[];
     const reviewMode = EvaluationTool._selectReviewMode(snapshots, isDirectMode, goal);
@@ -75,7 +84,7 @@ export class EvaluationTool extends BaseTool {
       this.logger.info("evaluate: 跳过 analyze 分片的 LLM 语义评审，仅保留规则检查");
       llmIssues = [];
     } else if (Object.keys(snapshots).length > 0) {
-      const [li] = await this._llmReviewSnapshots(requirementText, snapshots, isDirectMode, reviewMode, undefined);
+      const [li] = await this._llmReviewSnapshots(requirementText, snapshots, isDirectMode, reviewMode, reviewValidation);
       llmIssues = li;
     } else if (goal.toLowerCase().includes("analyze")) {
       llmIssues = await this._llmReviewAnalyze(requirementText, requirementJson);
@@ -176,6 +185,30 @@ export class EvaluationTool extends BaseTool {
       snaps["tests-1"] = { task_id: "tests-1", type: "tests", revision: 0, content: testCases };
     }
     return snaps;
+  }
+
+  /** Extract design text from snapshots for validation. */
+  static _extractDesignText(snapshots: Record<string, Record<string, unknown>>): string {
+    for (const snapshot of Object.values(snapshots)) {
+      if (String(snapshot.type ?? "") === "design") {
+        const content = snapshot.content;
+        if (typeof content === "string") return content;
+        if (typeof content === "object" && content !== null) return JSON.stringify(content);
+      }
+    }
+    return "";
+  }
+
+  /** Extract test cases text from snapshots for validation. */
+  static _extractTestCasesText(snapshots: Record<string, Record<string, unknown>>): string {
+    for (const snapshot of Object.values(snapshots)) {
+      if (String(snapshot.type ?? "") === "tests") {
+        const content = snapshot.content;
+        if (typeof content === "string") return content;
+        if (typeof content === "object" && content !== null) return JSON.stringify(content);
+      }
+    }
+    return "";
   }
 
   static _selectReviewMode(
@@ -839,7 +872,7 @@ export class EvaluationTool extends BaseTool {
     snapshots: Record<string, Record<string, unknown>>,
     isDirectMode: boolean,
     reviewMode: string,
-    _previousIssues?: Array<{ severity: string; description: string; location?: string }>,
+    validationResult?: ReviewValidationResult,
   ): Promise<[Issue[], number | null]> {
     const presentTypes = [...new Set(
       Object.values(snapshots)
@@ -861,6 +894,18 @@ export class EvaluationTool extends BaseTool {
     // NOTE: previousIssues injection removed — LLM evaluators tend to parrot
     // previous issues instead of independently reviewing current artifacts.
     // Each evaluation round now performs a blind review.
+
+    // Inject review validation results as supplementary context
+    if (validationResult && !validationResult.passed) {
+      const failedChecks = validationResult.checks.filter((c) => !c.passed);
+      const validationSection = [
+        "## 前置门禁结果（确定性检查，仅供参考）",
+        "以下检查未通过，请在评审时特别关注：",
+        ...failedChecks.map((c) => `- [✗] ${c.name}: ${c.detail}`),
+        "",
+      ].join("\n");
+      sections.push(validationSection);
+    }
 
     for (const [taskId, snapshot] of Object.entries(snapshots)) {
       const taskType = String(snapshot.type ?? "");

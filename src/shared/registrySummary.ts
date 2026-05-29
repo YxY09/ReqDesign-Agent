@@ -7,7 +7,8 @@ import type { EntityRegistry } from "./types.js";
 
 export function buildRegistrySummary(registry: EntityRegistry): string {
   const hasActors = registry.actors && registry.actors.length > 0;
-  if (!registry || (registry.entities.length === 0 && !hasActors)) {
+  const hasFunctions = registry.functions && registry.functions.length > 0;
+  if (!registry || (registry.entities.length === 0 && !hasActors && !hasFunctions)) {
     return "";
   }
 
@@ -18,6 +19,14 @@ export function buildRegistrySummary(registry: EntityRegistry): string {
     for (const a of registry.actors!) {
       const aliasStr = a.aliases.length > 0 ? ` (别名: ${a.aliases.join(", ")})` : "";
       lines.push(`- ${a.id} | ${a.canonicalName} | ${a.displayName}${aliasStr}`);
+    }
+  }
+
+  if (hasFunctions) {
+    lines.push("### 功能");
+    for (const f of registry.functions!) {
+      const aliasStr = f.aliases.length > 0 ? ` (别名: ${f.aliases.join(", ")})` : "";
+      lines.push(`- ${f.id} | ${f.name}${aliasStr}`);
     }
   }
 

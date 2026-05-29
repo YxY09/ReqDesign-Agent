@@ -53,10 +53,18 @@ export interface RegistryActor {
   aliases: string[];     // ["Admin", "AdminUser", "Administrator", "管理员", "SuperUser"]
 }
 
-/** Global entity registry — maps all known entities and actors. */
+/** A function in the global entity registry. */
+export interface RegistryFunction {
+  id: string;         // "FUN_REGISTER_CASE"
+  name: string;       // "RegisterCase"
+  aliases: string[];  // ["注册案件", "initiate case"]
+}
+
+/** Global entity registry — maps all known entities, actors, and functions. */
 export interface EntityRegistry {
   entities: RegistryEntity[];
   actors?: RegistryActor[];
+  functions?: RegistryFunction[];
 }
 
 // ---------------------------------------------------------------------------

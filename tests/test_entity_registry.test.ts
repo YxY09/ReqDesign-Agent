@@ -560,6 +560,102 @@ describe("RegistryExtractor with actors", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 3.2: RegistryFunction type and functions in registry
+// ---------------------------------------------------------------------------
+
+describe("RegistryFunction type", () => {
+  it("RegistryFunction has required fields", async () => {
+    const fn: import("../src/shared/types.js").RegistryFunction = {
+      id: "FUN_REGISTER_CASE",
+      name: "RegisterCase",
+      aliases: ["注册案件", "initiate case"],
+    };
+    expect(fn.id).toBe("FUN_REGISTER_CASE");
+    expect(fn.name).toBe("RegisterCase");
+    expect(fn.aliases).toHaveLength(2);
+  });
+
+  it("EntityRegistry holds functions", async () => {
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [
+        { id: "FUN_REGISTER_CASE", name: "RegisterCase", aliases: ["注册案件"] },
+        { id: "FUN_SEARCH_CASE", name: "SearchCase", aliases: ["搜索案件"] },
+      ],
+    };
+    expect(registry.functions).toHaveLength(2);
+    expect(registry.functions![0].id).toBe("FUN_REGISTER_CASE");
+  });
+});
+
+describe("buildRegistrySummary with functions", () => {
+  it("includes functions section when functions present", async () => {
+    const { buildRegistrySummary } = await import("../src/shared/registrySummary.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [
+        { id: "FUN_REGISTER_CASE", name: "RegisterCase", aliases: ["注册案件", "initiate case"] },
+        { id: "FUN_SEARCH_CASE", name: "SearchCase", aliases: ["搜索案件"] },
+      ],
+    };
+    const summary = buildRegistrySummary(registry);
+    expect(summary).toContain("FUN_REGISTER_CASE");
+    expect(summary).toContain("RegisterCase");
+    expect(summary).toContain("FUN_SEARCH_CASE");
+    expect(summary).toContain("SearchCase");
+  });
+});
+
+describe("RegistryExtractor with functions", () => {
+  it("extract returns functions from LLM response", async () => {
+    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
+    const mockRegistry = {
+      entities: [
+        { id: "E_CASE", canonicalName: "Case", displayName: "案件", aliases: ["Case"] },
+      ],
+      functions: [
+        { id: "FUN_REGISTER_CASE", name: "RegisterCase", aliases: ["注册案件"] },
+      ],
+    };
+    const mockLlm = {
+      generateJson: vi.fn().mockResolvedValue({ content: mockRegistry }),
+    };
+    const extractor = new RegistryExtractor(mockLlm);
+    (extractor as any).promptTemplate = "template {requirement_text}";
+    const result = await extractor.extract("requirement text");
+    expect(result.functions).toHaveLength(1);
+    expect(result.functions![0].id).toBe("FUN_REGISTER_CASE");
+    expect(result.functions![0].name).toBe("RegisterCase");
+  });
+
+  it("extract handles missing functions gracefully", async () => {
+    const { RegistryExtractor } = await import("../src/generators/registryExtractor.js");
+    const mockLlm = {
+      generateJson: vi.fn().mockResolvedValue({ content: { entities: [], functions: null } }),
+    };
+    const extractor = new RegistryExtractor(mockLlm);
+    (extractor as any).promptTemplate = "template {requirement_text}";
+    const result = await extractor.extract("requirement text");
+    expect(result.functions).toEqual([]);
+  });
+});
+
+describe("PlanningTool functionRegistry injection", () => {
+  it("_buildUserPrompt includes functions in registry summary", async () => {
+    const { PlanningTool } = await import("../src/tools/planning.js");
+    const registry: import("../src/shared/types.js").EntityRegistry = {
+      entities: [],
+      functions: [
+        { id: "FUN_REGISTER_CASE", name: "RegisterCase", aliases: ["注册案件"] },
+      ],
+    };
+    const prompt = PlanningTool._buildUserPrompt("some requirement", "design", undefined, registry);
+    expect(prompt).toContain("FUN_REGISTER_CASE");
+    expect(prompt).toContain("RegisterCase");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Regression: merge() must clean entity id to entityRef before canonicalize
 // ---------------------------------------------------------------------------
 

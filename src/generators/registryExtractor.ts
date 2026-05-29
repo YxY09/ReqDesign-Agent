@@ -39,7 +39,8 @@ export class RegistryExtractor extends BaseGenerator<EntityRegistry> {
     // Validate basic structure
     const entities = Array.isArray(result?.entities) ? result.entities : [];
     const actors = Array.isArray(result?.actors) ? result.actors : [];
+    const functions = Array.isArray(result?.functions) ? result.functions : [];
 
-    return { entities, actors };
+    return { entities, actors, functions };
   }
 }
