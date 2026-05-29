@@ -6,6 +6,8 @@
  * and identifies what is covered (or not) by design and test artifacts.
  */
 
+import type { SpanEvidence } from "./documentNormalizer.js";
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -31,6 +33,55 @@ export interface TraceabilityMatrix {
 function asArray(val: unknown): Record<string, unknown>[] {
   if (!Array.isArray(val)) return [];
   return val as Record<string, unknown>[];
+}
+
+type SpanMapInput = Record<string, SpanEvidence> | Map<string, SpanEvidence>;
+
+function spanEntries(spanMap?: SpanMapInput): Array<[string, SpanEvidence]> {
+  if (!spanMap) return [];
+  if (spanMap instanceof Map) return [...spanMap.entries()];
+  return Object.entries(spanMap);
+}
+
+function normalizeEvidenceText(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/[.!?。！？，,、；;：:\s]+$/g, "")
+    .trim();
+}
+
+function pushUnique(target: string[], values: string[]): void {
+  for (const value of values) {
+    if (value && !target.includes(value)) target.push(value);
+  }
+}
+
+function resolveSentenceIds(
+  evidence: Record<string, unknown>,
+  spans: Array<[string, SpanEvidence]>,
+): string[] {
+  const explicit = String(evidence["sentenceId"] ?? "").trim();
+  if (explicit) return [explicit];
+  if (spans.length === 0) return [];
+
+  const sourceText = normalizeEvidenceText(String(evidence["sourceText"] ?? "").trim());
+  if (!sourceText) return [];
+  const sectionId = String(evidence["sectionId"] ?? "").trim();
+
+  const matches: string[] = [];
+  for (const [sentenceId, span] of spans) {
+    if (sectionId && span.sectionId !== sectionId) continue;
+    const spanText = normalizeEvidenceText(span.sourceText);
+    if (!spanText) continue;
+    if (
+      spanText === sourceText ||
+      spanText.includes(sourceText) ||
+      sourceText.includes(spanText)
+    ) {
+      matches.push(span.sentenceId || sentenceId);
+    }
+  }
+  return matches;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,10 +149,12 @@ export function buildMatrix(
   requirementJson: Record<string, unknown>,
   designText?: string,
   testCasesText?: string,
+  spanMap?: SpanMapInput,
 ): TraceabilityMatrix {
   const functions = asArray(requirementJson["functions"]);
   const constraints = asArray(requirementJson["constraints"]);
   const exceptions = asArray(requirementJson["exceptions"]);
+  const spans = spanEntries(spanMap);
 
   const funcIds = buildIdSet(functions);
 
@@ -156,8 +209,14 @@ export function buildMatrix(
 
     const sentenceIds: string[] = [];
     for (const ev of evidence) {
-      const sid = String(ev["sentenceId"] ?? "");
-      if (sid) sentenceIds.push(sid);
+      pushUnique(sentenceIds, resolveSentenceIds(ev, spans));
+    }
+
+    if (sentenceIds.length === 0 && c["sourceText"]) {
+      pushUnique(sentenceIds, resolveSentenceIds({
+        sourceText: c["sourceText"],
+        sectionId: c["sectionId"],
+      }, spans));
     }
 
     if (sentenceIds.length > 0) {

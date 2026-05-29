@@ -8,6 +8,7 @@ import type { TaskMessage, TaskNotification } from "../messaging.js";
 import { SessionContext, WorkerSession } from "../session.js";
 import { isRecord } from "../utils/isRecord.js";
 import { setupLogger, type Logger } from "../logger.js";
+import { cloneTask } from "../shared/taskUtils.js";
 
 function normalizeFixInstructions(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return [];
@@ -31,6 +32,107 @@ function isStrictSelfCheckFailure(artifact: Artifact): boolean {
   return artifact.selfCheckIssues.some((issue) =>
     strictPatterns.some((pattern) => issue.includes(pattern)),
   );
+}
+
+function cloneTaskForRun(context: SessionContext, contextHints: Record<string, unknown>): Task {
+  const base = context.task
+    ? cloneTask(context.task)
+    : createTask({
+        id: context.taskId,
+        type: context.taskType as Task["type"],
+        description: context.taskDescription,
+      });
+
+  return cloneTask(base, {
+    ...base,
+    id: context.taskId || base.id,
+    type: (context.taskType || base.type) as Task["type"],
+    description: context.taskDescription || base.description,
+    contextHints,
+  });
+}
+
+function pickObjectFields(
+  source: Record<string, unknown>,
+  fields: string[],
+): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (source[field] !== undefined) picked[field] = source[field];
+  }
+  return picked;
+}
+
+function diagramKindForTask(task: Task): string {
+  const hints = (task.contextHints ?? {}) as Record<string, unknown>;
+  const explicit = String(hints.diagram_kind ?? hints.diagramKind ?? "").trim();
+  if (explicit) return explicit;
+  const text = `${task.id} ${task.description}`.toLowerCase();
+  if (text.includes("activity") || text.includes("活动")) return "activity_diagram";
+  if (text.includes("state") || text.includes("状态")) return "state_diagram";
+  if (text.includes("class") || text.includes("类图")) return "class_diagram";
+  return "";
+}
+
+function requirementForTask(
+  task: Task,
+  requirementJson: Record<string, unknown>,
+): Record<string, unknown> {
+  if (Object.keys(requirementJson).length === 0) return {};
+  if (task.type === "analyze") return {};
+  if (task.type === "design") return requirementJson;
+  if (task.type === "tests") {
+    return pickObjectFields(requirementJson, [
+      "actors",
+      "functions",
+      "exceptions",
+      "constraints",
+      "non_functional_requirements",
+      "business_processes",
+    ]);
+  }
+  if (task.type === "diagrams") {
+    const kind = diagramKindForTask(task);
+    if (kind === "class_diagram") {
+      return pickObjectFields(requirementJson, [
+        "entities",
+        "actors",
+      ]);
+    }
+    if (kind === "activity_diagram") {
+      return pickObjectFields(requirementJson, [
+        "actors",
+        "functions",
+        "business_processes",
+        "constraints",
+        "exceptions",
+      ]);
+    }
+    if (kind === "state_diagram") {
+      return pickObjectFields(requirementJson, [
+        "entities",
+        "constraints",
+        "exceptions",
+      ]);
+    }
+    return pickObjectFields(requirementJson, [
+      "entities",
+      "actors",
+      "functions",
+      "business_processes",
+      "constraints",
+      "exceptions",
+    ]);
+  }
+  return requirementJson;
+}
+
+function designTextForTask(task: Task, designText: string): string {
+  if (!designText) return "";
+  if (task.type === "design" || task.type === "analyze") return "";
+  // Keep design text lossless once it is selected. Token reduction happens by
+  // omitting whole irrelevant channels, not by slicing continuous design prose.
+  return designText;
 }
 
 export class GenerationSession extends WorkerSession {
@@ -66,14 +168,9 @@ export class GenerationSession extends WorkerSession {
       });
     }
 
-    const ctx = this.buildAgentContext();
-
-    const task = createTask({
-      id: this.context.taskId,
-      type: this.context.taskType as Task["type"],
-      description: this.context.taskDescription,
-      contextHints: isRecord(ctx._hints) ? ctx._hints : this.context.hints,
-    });
+    const baseTask = cloneTaskForRun(this.context, this.context.hints);
+    const ctx = this.buildAgentContext(baseTask);
+    const task = cloneTaskForRun(this.context, isRecord(ctx._hints) ? ctx._hints : this.context.hints);
 
     const artifact = await this.agent.execute(task, ctx);
 
@@ -111,11 +208,15 @@ export class GenerationSession extends WorkerSession {
     });
   }
 
-  private buildAgentContext(): Record<string, unknown> {
+  private buildAgentContext(task: Task): Record<string, unknown> {
     const ctx: Record<string, unknown> = {};
-    if (this.context.requirementText) ctx.requirement_text = this.context.requirementText;
-    if (Object.keys(this.context.requirementJson).length > 0) ctx.requirement_json = this.context.requirementJson;
-    if (this.context.designText) ctx.design_text = this.context.designText;
+    if (task.type === "analyze" && this.context.requirementText) {
+      ctx.requirement_text = this.context.requirementText;
+    }
+    const requirementJson = requirementForTask(task, this.context.requirementJson);
+    if (Object.keys(requirementJson).length > 0) ctx.requirement_json = requirementJson;
+    const designText = designTextForTask(task, this.context.designText);
+    if (designText) ctx.design_text = designText;
     if (!ctx.requirement_json && !ctx.design_text) {
       ctx.requirement_text = this.context.requirementText;
     }
@@ -125,6 +226,7 @@ export class GenerationSession extends WorkerSession {
     if (this.context.registry) {
       ctx.registry = this.context.registry;
     }
+    ctx._provenance = this.context.provenance;
     return ctx;
   }
 }
@@ -350,7 +452,8 @@ export class RepairSession extends WorkerSession {
     this.logger.info(`run: task=${this.context.taskId}，message=repair，msgCount=${this.state.messageCount}`);
 
     const started = performance.now();
-    const ctx = this._buildRepairContext(message);
+    const baseTask = cloneTaskForRun(this.context, this.context.hints);
+    const ctx = this._buildRepairContext(message, baseTask);
 
     if (this.agent.llm === null) {
       return this._makeNotification("failed", {
@@ -367,12 +470,7 @@ export class RepairSession extends WorkerSession {
       });
     }
 
-    const task = createTask({
-      id: this.context.taskId,
-      type: this.context.taskType as Task["type"],
-      description: this.context.taskDescription,
-      contextHints: isRecord(ctx._hints) ? ctx._hints : this.context.hints,
-    });
+    const task = cloneTaskForRun(this.context, isRecord(ctx._hints) ? ctx._hints : this.context.hints);
 
     const fixInstructions = normalizeFixInstructions(message.payload.fix_instructions);
     const repaired = await this.agent.repair(task, previousContent, fixInstructions, ctx);
@@ -421,7 +519,7 @@ export class RepairSession extends WorkerSession {
     });
   }
 
-  private _buildRepairContext(message: TaskMessage): Record<string, unknown> {
+  private _buildRepairContext(message: TaskMessage, task: Task): Record<string, unknown> {
     const ctx: Record<string, unknown> = {};
 
     // 从 context.hints 中获取之前的 artifact（由 runtime 从之前的会话中获取）
@@ -431,6 +529,9 @@ export class RepairSession extends WorkerSession {
     if (this.context.hints.previous_artifact_type !== undefined) {
       ctx.previous_artifact_type = this.context.hints.previous_artifact_type;
     }
+    if (this.context.hints.previous_artifact_revision !== undefined) {
+      ctx.previous_artifact_revision = this.context.hints.previous_artifact_revision;
+    }
 
     // 修订历史记录
     const fixHistory = this.state.intermediateState.fix_history;
@@ -439,14 +540,17 @@ export class RepairSession extends WorkerSession {
     }
 
     // 需求上下文
-    if (this.context.requirementText) ctx.requirement_text = this.context.requirementText;
-    if (Object.keys(this.context.requirementJson).length > 0) ctx.requirement_json = this.context.requirementJson;
-    if (this.context.designText) ctx.design_text = this.context.designText;
+    const requirementJson = requirementForTask(task, this.context.requirementJson);
+    if (Object.keys(requirementJson).length > 0) ctx.requirement_json = requirementJson;
+    const designText = designTextForTask(task, this.context.designText);
+    if (designText) ctx.design_text = designText;
+    ctx._provenance = this.context.provenance;
 
     // 修复指令作为 hints
     const fixInstructions = normalizeFixInstructions(message.payload.fix_instructions);
     if (fixInstructions.length > 0) {
       ctx._hints = {
+        ...this.context.hints,
         fix_instructions: fixInstructions,
         revision: this.state.resumeCount,
       };

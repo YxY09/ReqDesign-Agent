@@ -5,7 +5,9 @@ import {
   createTask,
   createVerdict,
   type Artifact,
+  type EntityRegistry,
   type ExecutionPlan,
+  type Issue,
   type PlanMutation,
   type Task,
   type Verdict,
@@ -42,6 +44,31 @@ function restoreTask(value: unknown): Task | null {
   if (!isRecord(value)) return null;
   const type = String(value.type ?? "").trim();
   if (!type) return null;
+  const analysisMode = restoreAnalysisMode(value.analysisMode ?? value.analysis_mode);
+  const targetIssues = (Array.isArray(value.targetIssues)
+    ? value.targetIssues
+    : Array.isArray(value.target_issues)
+      ? value.target_issues
+      : [])
+    .map((item) => restoreIssue(item))
+    .filter((item): item is Issue => item !== null);
+  const patchSource = isRecord(value.patchContext)
+    ? value.patchContext
+    : isRecord(value.patch_context)
+      ? value.patch_context
+      : null;
+  const patchContext = patchSource
+    ? {
+        targetArtifactId: String(
+          patchSource.targetArtifactId ?? patchSource.target_artifact_id ?? "",
+        ),
+        targetSections: Array.isArray(patchSource.targetSections)
+          ? patchSource.targetSections.map((item) => String(item))
+          : Array.isArray(patchSource.target_sections)
+            ? patchSource.target_sections.map((item) => String(item))
+            : undefined,
+      }
+    : undefined;
   return createTask({
     id: String(value.id ?? ""),
     type: type as Task["type"],
@@ -56,7 +83,29 @@ function restoreTask(value: unknown): Task | null {
       : isRecord(value.context_hints)
         ? value.context_hints
         : {},
+    targeted: Boolean(value.targeted ?? false),
+    ...(targetIssues.length > 0 ? { targetIssues } : {}),
+    ...(patchContext ? { patchContext } : {}),
+    ...(analysisMode ? { analysisMode } : {}),
   });
+}
+
+function restoreAnalysisMode(value: unknown): Task["analysisMode"] | undefined {
+  const mode = String(value ?? "").trim();
+  return mode === "domain" || mode === "constraints" ? mode : undefined;
+}
+
+function restoreIssue(value: unknown): Issue | null {
+  if (!isRecord(value)) return null;
+  return {
+    severity: String(value.severity ?? "major") as Issue["severity"],
+    targetTaskId: String(value.targetTaskId ?? value.target_task_id ?? ""),
+    targetTaskType: String(value.targetTaskType ?? value.target_task_type ?? ""),
+    targetField: String(value.targetField ?? value.target_field ?? ""),
+    description: String(value.description ?? ""),
+    suggestion: String(value.suggestion ?? ""),
+    scope: String(value.scope ?? "") as Issue["scope"],
+  };
 }
 
 function restoreArtifact(value: unknown): Artifact | null {
@@ -77,6 +126,63 @@ function restoreArtifact(value: unknown): Artifact | null {
     selfCorrectRounds: Number(value.selfCorrectRounds ?? value.self_correct_rounds ?? 0),
     generationDuration: Number(value.generationDuration ?? value.generation_duration ?? 0),
   });
+}
+
+export interface SessionProvenance {
+  scope: "planner" | "task" | "evaluate" | "repair" | "unknown";
+  contentKind: "source" | "raw" | "draft" | "canonical" | "effective" | "mixed";
+  sourceTaskIds: string[];
+  sourceRevisions: Record<string, number>;
+}
+
+function restoreProvenance(value: unknown): SessionProvenance {
+  if (!isRecord(value)) {
+    return {
+      scope: "unknown",
+      contentKind: "mixed",
+      sourceTaskIds: [],
+      sourceRevisions: {},
+    };
+  }
+  const sourceRevisions = isRecord(value.sourceRevisions)
+    ? value.sourceRevisions
+    : isRecord(value.source_revisions)
+      ? value.source_revisions
+      : {};
+  return {
+    scope: normalizeProvenanceScope(value.scope),
+    contentKind: normalizeContentKind(value.contentKind ?? value.content_kind),
+    sourceTaskIds: Array.isArray(value.sourceTaskIds)
+      ? value.sourceTaskIds.map((item) => String(item))
+      : Array.isArray(value.source_task_ids)
+        ? value.source_task_ids.map((item) => String(item))
+        : [],
+    sourceRevisions: Object.fromEntries(
+      Object.entries(sourceRevisions).map(([key, item]) => [key, Number(item)]),
+    ),
+  };
+}
+
+function normalizeProvenanceScope(value: unknown): SessionProvenance["scope"] {
+  const scope = String(value ?? "unknown");
+  return scope === "planner" ||
+    scope === "task" ||
+    scope === "evaluate" ||
+    scope === "repair"
+    ? scope
+    : "unknown";
+}
+
+function normalizeContentKind(value: unknown): SessionProvenance["contentKind"] {
+  const kind = String(value ?? "mixed");
+  return kind === "source" ||
+    kind === "raw" ||
+    kind === "draft" ||
+    kind === "canonical" ||
+    kind === "effective" ||
+    kind === "mixed"
+    ? kind
+    : "mixed";
 }
 
 function restoreExecutionPlan(value: unknown): ExecutionPlan | null {
@@ -166,6 +272,7 @@ function restoreVerdict(value: unknown): Verdict | null {
 }
 
 export class SessionContext {
+  task?: Task = undefined;
   taskId = "";
   taskType = "";
   taskDescription = "";
@@ -182,7 +289,13 @@ export class SessionContext {
   evaluateScope: string[] = [];
   hints: Record<string, unknown> = {};
   previousIssues: Array<{ severity: string; description: string; location?: string }> = [];
-  registry?: import("./shared/types.js").EntityRegistry = undefined;
+  registry?: EntityRegistry = undefined;
+  provenance: SessionProvenance = {
+    scope: "unknown",
+    contentKind: "mixed",
+    sourceTaskIds: [],
+    sourceRevisions: {},
+  };
 
   constructor(init?: Partial<SessionContext>) {
     Object.assign(this, init);
@@ -190,6 +303,7 @@ export class SessionContext {
 
   toDict(): Record<string, unknown> {
     return deepToPlainObject({
+      task: this.task,
       taskId: this.taskId,
       taskType: this.taskType,
       taskDescription: this.taskDescription,
@@ -205,15 +319,21 @@ export class SessionContext {
       isDirectMode: this.isDirectMode,
       evaluateScope: this.evaluateScope,
       hints: this.hints,
+      previousIssues: this.previousIssues,
       registry: this.registry,
+      provenance: this.provenance,
     }) as Record<string, unknown>;
   }
 
   static fromDict(data: Record<string, unknown>): SessionContext {
+    const task = restoreTask(data.task ?? data.task_descriptor ?? data.taskDescriptor);
     return new SessionContext({
-      taskId: String(data.taskId ?? data.task_id ?? ""),
-      taskType: String(data.taskType ?? data.task_type ?? ""),
-      taskDescription: String(data.taskDescription ?? data.task_description ?? ""),
+      task: task ?? undefined,
+      taskId: String(data.taskId ?? data.task_id ?? task?.id ?? ""),
+      taskType: String(data.taskType ?? data.task_type ?? task?.type ?? ""),
+      taskDescription: String(
+        data.taskDescription ?? data.task_description ?? task?.description ?? "",
+      ),
       goal: String(data.goal ?? "design"),
       requirementText: String(data.requirementText ?? data.requirement_text ?? ""),
       requirementJson: isRecord(data.requirementJson)
@@ -242,6 +362,19 @@ export class SessionContext {
           ? data.evaluate_scope.map((item) => String(item))
           : [],
       hints: isRecord(data.hints) ? data.hints : {},
+      previousIssues: (Array.isArray(data.previousIssues)
+        ? data.previousIssues
+        : Array.isArray(data.previous_issues)
+          ? data.previous_issues
+          : [])
+        .filter((item): item is Record<string, unknown> => isRecord(item))
+        .map((item) => ({
+          severity: String(item.severity ?? "major"),
+          description: String(item.description ?? ""),
+          location: item.location === undefined ? undefined : String(item.location),
+        })),
+      registry: isRecord(data.registry) ? data.registry as unknown as EntityRegistry : undefined,
+      provenance: restoreProvenance(data.provenance),
     });
   }
 }

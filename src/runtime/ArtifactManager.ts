@@ -65,7 +65,17 @@ export class ArtifactManager {
 
     if (key === "requirement_json" && typeof content === "object" && !Array.isArray(content)) {
       const raw = this._rebuildRequirementAggregate();
-      this._state.requirementJson = RequirementNormalizer.normalize(raw);
+      const normalized = RequirementNormalizer.normalize(raw);
+      this._state.requirementDraftJson = normalized;
+      if (this._shouldPublishAnalyzeAggregate()) {
+        this._state.requirementJson = normalized;
+        this._state.requirementJsonContentKind =
+          Object.keys(normalized).length > 0 ? "canonical" : "empty";
+      } else if (Object.keys(this._state.requirementJson).length === 0) {
+        this._state.requirementJsonContentKind = "empty";
+      } else {
+        this._state.requirementJsonContentKind = "stale";
+      }
     } else if (key === "design_text" && typeof content === "string") {
       if (content) {
         this._state.designText = content;
@@ -82,6 +92,12 @@ export class ArtifactManager {
         this._state.testCases = content;
       }
     }
+  }
+
+  private _shouldPublishAnalyzeAggregate(): boolean {
+    const analyzeTasks = this._state.plan?.tasks.filter((task) => task.type === "analyze") ?? [];
+    if (analyzeTasks.length <= 1) return true;
+    return analyzeTasks.every((task) => this._state.taskStatuses[task.id] === "completed");
   }
 
   private _rebuildRequirementAggregate(): Record<string, unknown> {
@@ -196,6 +212,9 @@ export class ArtifactManager {
         content: artifact.content,
         selfCheckPassed: artifact.selfCheckPassed,
         selfCheckIssues: [...artifact.selfCheckIssues],
+        contentKind: "raw",
+        sourceTaskIds: [artifact.taskId],
+        sourceRevisions: { [artifact.taskId]: artifact.revision },
       };
     }
     return snapshots;
@@ -213,6 +232,8 @@ export class ArtifactManager {
         content: this._state.requirementJson,
         selfCheckPassed: true,
         selfCheckIssues: [],
+        contentKind: "canonical",
+        sourceTaskIds: Object.keys(this._sourceRevisionsForType("analyze")).sort(),
         sourceRevisions: this._sourceRevisionsForType("analyze"),
       };
     }
@@ -226,6 +247,9 @@ export class ArtifactManager {
         content: latestDesign.content,
         selfCheckPassed: latestDesign.selfCheckPassed,
         selfCheckIssues: [...latestDesign.selfCheckIssues],
+        contentKind: "effective",
+        sourceTaskIds: [latestDesign.taskId],
+        sourceRevisions: { [latestDesign.taskId]: latestDesign.revision },
       };
     }
 
@@ -237,6 +261,7 @@ export class ArtifactManager {
         content: this._state.diagrams,
         selfCheckPassed: true,
         selfCheckIssues: [],
+        contentKind: "canonical",
         sourceTaskIds: [...new Set(Object.values(this._state.diagramSourcesByKey))].sort(),
         sourceRevisions: this._sourceRevisionsForTaskIds(
           [...new Set(Object.values(this._state.diagramSourcesByKey))],
@@ -253,6 +278,9 @@ export class ArtifactManager {
         content: latestTests.content,
         selfCheckPassed: latestTests.selfCheckPassed,
         selfCheckIssues: [...latestTests.selfCheckIssues],
+        contentKind: "effective",
+        sourceTaskIds: [latestTests.taskId],
+        sourceRevisions: { [latestTests.taskId]: latestTests.revision },
       };
     }
 

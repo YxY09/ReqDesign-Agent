@@ -663,8 +663,15 @@ export class RepairTool extends BaseTool {
 
   static _formatAuxContext(context: Record<string, unknown>): string {
     const parts: string[] = [];
+    const skipKeys = new Set([
+      "previous_artifact",
+      "previous_artifact_type",
+      "artifact_summary",
+      "artifact_snapshots",
+    ]);
     for (const [key, val] of Object.entries(context)) {
       if (key.startsWith("_") || key === "requirement_text") continue;
+      if (skipKeys.has(key)) continue;
       if (typeof val === "string") {
         parts.push(`### ${key}\n${val.slice(0, 3000)}`);
       } else if (typeof val === "object" && val !== null) {

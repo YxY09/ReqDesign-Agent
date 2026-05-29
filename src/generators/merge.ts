@@ -24,11 +24,12 @@ import {
  * Also adds compatibility fields (id, source_text) for downstream consumers
  * that expect the old format.
  */
-function canonicalizeConstraintsPipeline(merged: Record<string, unknown>): void {
+export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>): void {
   const rawConstraints = asArray(merged["constraints"]);
-  if (!rawConstraints.length) return;
+  const rawMissing = asArray(merged["missingConstraintCandidates"]);
+  if (!rawConstraints.length && !rawMissing.length) return;
 
-  // Convert to ConstraintCandidate[]
+  // Convert regular constraints to ConstraintCandidate[]
   const candidates: ConstraintCandidate[] = rawConstraints.map((c) => ({
     description: String(c.description ?? "").trim(),
     sourceText: String(c.source_text ?? "").trim(),
@@ -37,6 +38,17 @@ function canonicalizeConstraintsPipeline(merged: Record<string, unknown>): void 
       ? (c.related_functions as unknown[]).map((r) => String(r))
       : undefined,
   }));
+
+  // Convert missingConstraintCandidates to ConstraintCandidate[] and append
+  const missingCandidates: ConstraintCandidate[] = rawMissing.map((c) => ({
+    description: String(c.description ?? "").trim(),
+    sourceText: String(c.source_text ?? c.sourceText ?? "").trim(),
+    sectionId: c.sectionId as string | undefined,
+    relatedFunctionCandidates: Array.isArray(c.related_functions)
+      ? (c.related_functions as unknown[]).map((r) => String(r))
+      : undefined,
+  }));
+  candidates.push(...missingCandidates);
 
   // Get functions for linking (already canonical IDs after canonicalizeAndLink)
   const rawFunctions = asArray(merged["functions"]);

@@ -11,6 +11,7 @@ import {
 import {
   WorkflowState,
 } from "../src/state.js";
+import { ResultHandler } from "../src/runtime/resultHandler.js";
 
 import {
   createArtifact,
@@ -309,6 +310,53 @@ describe("WorkflowState — artifacts", () => {
     expect(state.requirementJson).toEqual({ actors: [], functions: [], entities: [] });
   });
 
+  it("keeps multi-analyze draft aggregate out of canonical requirementJson until merge", () => {
+    const state = new WorkflowState();
+    state.setPlan(createExecutionPlan({
+      tasks: [
+        createTask({ id: "analyze-domain", type: "analyze", description: "domain" }),
+        createTask({ id: "analyze-constraints", type: "analyze", description: "constraints" }),
+      ],
+    }));
+
+    state.addArtifact(
+      createArtifact({
+        taskId: "analyze-domain",
+        type: "analyze",
+        content: { actors: ["User"] },
+      }),
+    );
+
+    expect(state.requirementDraftJson).toEqual({ actors: ["User"] });
+    expect(state.requirementJson).toEqual({});
+    expect(state.requirementJsonContentKind).toBe("empty");
+
+    state.markTaskStatus("analyze-domain", "completed");
+    state.markTaskStatus("analyze-constraints", "running");
+    state.addArtifact(
+      createArtifact({
+        taskId: "analyze-constraints",
+        type: "analyze",
+        content: { constraints: [{ id: "C001" }] },
+      }),
+    );
+
+    expect(state.requirementDraftJson).toEqual({
+      actors: ["User"],
+      constraints: [{ id: "C001" }],
+    });
+    expect(state.requirementJson).toEqual({});
+
+    state.setRequirementJson(state.requirementDraftJson);
+
+    expect(state.requirementJson).toEqual({
+      actors: ["User"],
+      constraints: [{ id: "C001" }],
+    });
+    expect(state.requirementDraftJson).toEqual({});
+    expect(state.requirementJsonContentKind).toBe("canonical");
+  });
+
   it("artifactSummary returns metadata per artifact", () => {
     const state = new WorkflowState();
     state.addArtifact(
@@ -329,6 +377,47 @@ describe("WorkflowState — artifacts", () => {
 
     expect(state.artifactRevisionsByTask["t1"]).toBe(2);
     expect(state.artifacts["t1"].content).toBe("v2");
+  });
+
+  it("post-generation cleanup stores a single artifact revision", async () => {
+    const state = new WorkflowState();
+    state.requirementJson = {
+      functions: [{ id: "F001", name: "DoSomething" }],
+    };
+    const handler = new ResultHandler({
+      backend: {} as never,
+      mailbox: {} as never,
+      logger: {} as never,
+      analyzeMerger: {} as never,
+      outputManagerCtor: class {} as never,
+      getInflight: () => new Map(),
+      getActiveStreamContext: () => null,
+      setActiveStreamContext: () => {},
+      onEmitRuntimeEvent: () => {},
+      onSnapshotState: () => ({}),
+      onSaveArtifactIncrementally: () => {},
+      onPersistValidatedCoordinatorDecision: () => {},
+    });
+    const artifact = createArtifact({
+      taskId: "design-1",
+      type: "design",
+      content: "| A | F001 |\n| Ghost | F999 |\n",
+    });
+
+    await handler.applyGeneratorCompletion(
+      state,
+      "design-1",
+      createTaskNotification({
+        taskId: "design-1",
+        sessionId: "s1",
+        status: "completed",
+        result: artifact,
+      }),
+      "spawn",
+    );
+
+    expect(state.currentArtifactRevision("design-1")).toBe(1);
+    expect(String(state.artifactsState.artifacts["design-1"].content)).not.toContain("F999");
   });
 
   it("addVerdict does NOT auto-set finished", () => {

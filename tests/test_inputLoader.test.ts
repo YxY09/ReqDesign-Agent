@@ -162,6 +162,55 @@ describe("InputLoader", () => {
     });
   });
 
+  // ---- loadWithSections() with spanMap (documentNormalizer integration) ----
+
+  describe("loadWithSections() — XML spanMap", () => {
+    it("returns spanMap for XML files with normalized sentence evidence", () => {
+      const xml = `<req_document>
+  <p>
+    <title>Help Module</title>
+    <text_body>The system must provide contextual help. Users can search the help database.</text_body>
+  </p>
+</req_document>`;
+      const f = createTmpFile("test_spanmap.xml", xml);
+      const result = InputLoader.loadWithSections(f);
+
+      expect(result.text).toContain("Help Module");
+      expect(result.sectionIndex).toBeDefined();
+      expect(result.spanMap).toBeDefined();
+      // spanMap should contain sentence-level entries
+      expect(Object.keys(result.spanMap!).length).toBeGreaterThan(0);
+
+      // Each entry should have sentenceId, sectionId, sourceText
+      for (const evidence of Object.values(result.spanMap!)) {
+        expect(evidence).toHaveProperty("sentenceId");
+        expect(evidence).toHaveProperty("sectionId");
+        expect(evidence).toHaveProperty("sourceText");
+        expect(typeof (evidence as any).sentenceId).toBe("string");
+        expect(typeof (evidence as any).sectionId).toBe("string");
+        expect(typeof (evidence as any).sourceText).toBe("string");
+      }
+    });
+
+    it("returns undefined spanMap for non-XML files", () => {
+      const f = createTmpFile("test.txt", "Some plain text");
+      const result = InputLoader.loadWithSections(f);
+      expect(result.spanMap).toBeUndefined();
+    });
+
+    it("returns empty spanMap when XML has no structured content", () => {
+      const f = createTmpFile("malformed.xml", "not valid xml content");
+      const result = InputLoader.loadWithSections(f);
+      // parseXmlRequirement still processes it as text; spanMap may be empty but not undefined
+      // (normalizeDocument handles malformed XML gracefully with empty results)
+      if (result.spanMap) {
+        expect(Object.keys(result.spanMap).length).toBe(0);
+      }
+      // No crash is the main assertion
+      expect(result.text).toBeDefined();
+    });
+  });
+
   // ---- Static constants -----------------------------------------------------
 
   describe("static constants", () => {

@@ -260,10 +260,8 @@ export class ResultHandler {
     if (messageType === "repair") {
       state.recordRepairAttempt(taskId);
     }
-    state.addArtifact(artifact);
 
     // 生成后验证：清理多余的类、幽灵 ID、重命名。
-    // 必须在 addArtifact 之后运行，以便 requirementJson 可用。
     const cleaned = PostGenerationValidator.validate(
       state.requirementJson,
       artifact.type,
@@ -271,8 +269,8 @@ export class ResultHandler {
     );
     if (cleaned !== null) {
       artifact.content = cleaned;
-      state.addArtifact(artifact);
     }
+    state.addArtifact(artifact);
 
     state.markTaskStatus(taskId, "completed", notif.sessionId);
 

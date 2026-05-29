@@ -155,6 +155,32 @@ describe("buildMatrix", () => {
     expect(matrix.constraintToEvidence["C002"]).toContain("SEC_PERF_001");
   });
 
+  it("resolves constraint evidence sentenceIds from spanMap when canonical evidence only has sourceText", () => {
+    const json = makeRequirementJson({
+      constraints: [
+        {
+          id: "CON_SEC_AUDIT_ABC1",
+          displayId: "C001",
+          description: "Audit trail data cannot be modified or deleted",
+          sourceText: "审计跟踪数据不可修改",
+          related_functions: ["FUN_USER_REGISTER"],
+          evidence: [{ sourceText: "审计跟踪数据不可修改", sectionId: "SEC_AUDIT" }],
+        },
+      ],
+    });
+
+    const matrix = buildMatrix(json, undefined, undefined, {
+      SEC_AUDIT_001: {
+        sentenceId: "SEC_AUDIT_001",
+        sectionId: "SEC_AUDIT",
+        sourceText: "审计跟踪数据不可修改",
+      },
+    });
+
+    expect(matrix.constraintToEvidence["C001"]).toEqual(["SEC_AUDIT_001"]);
+    expect(matrix.constraintToEvidence["CON_SEC_AUDIT_ABC1"]).toEqual(["SEC_AUDIT_001"]);
+  });
+
   // ---------------------------------------------------------------------------
   // Test 5: Empty inputs — all arrays empty, all maps empty
   // ---------------------------------------------------------------------------

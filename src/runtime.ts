@@ -259,8 +259,10 @@ export class MultiAgentRuntime {
       try {
         const loadResult = this.inputLoader.loadWithSections(inputPath);
         state.sectionIndex = loadResult.sectionIndex ?? [];
+        state.spanMap = loadResult.spanMap ?? {};
       } catch {
         state.sectionIndex = [];
+        state.spanMap = {};
       }
       this.trace.log("system", "input_loaded", { inputPath, goal });
       this.emitRuntimeEvent("input_loaded", `loaded input ${inputPath}`, {

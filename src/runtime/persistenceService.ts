@@ -9,7 +9,8 @@ import type { WorkflowEvent } from "../workflowEvents.js";
 import { OutputScorer } from "../../evaluate/scorer.js";
 import { formatReviewReport } from "../formatReviewReport.js";
 import { isRecord } from "../utils/isRecord.js";
-import { validateCoverage } from "../shared/coverageValidator.js";
+import { validateCoverage, type CoverageReport } from "../shared/coverageValidator.js";
+import { validateReview } from "../shared/reviewValidator.js";
 import { buildMatrix } from "../shared/traceabilityMatrix.js";
 
 /**
@@ -146,6 +147,21 @@ export class PersistenceService {
       state.finalReviewPassed = false;
       return false;
     }
+
+    const deterministicIssues = this.findDeterministicQualityGateIssues(state);
+    if (deterministicIssues.length > 0) {
+      for (const issue of deterministicIssues) {
+        state.errors.push(`deterministic quality gate failed: ${issue}`);
+      }
+      this.deps.logger.warn(
+        `skip final persist after ${reason}: deterministic quality gate failed: ${deterministicIssues.join("; ")}`,
+      );
+      state.setQualityStatus("rejected");
+      state.finalReviewPassed = false;
+      state.persistStatus = "partial_saved";
+      return false;
+    }
+
     const latestVerdict = state.latestVerdict;
     if (latestVerdict && !latestVerdict.passed) {
       this.deps.logger.warn(
@@ -155,6 +171,69 @@ export class PersistenceService {
       return false;
     }
     return this.actionSave(state);
+  }
+
+  findDeterministicQualityGateIssues(state: WorkflowState): string[] {
+    if (!this.shouldRunDeterministicFinalGate(state)) return [];
+
+    const coverageReport = validateCoverage(
+      state.requirementJson as Record<string, unknown>,
+      state.designText ?? "",
+      state.testCases ?? "",
+    );
+    const reviewValidation = validateReview(
+      state.requirementJson as Record<string, unknown>,
+      state.designText ?? "",
+      state.testCases ?? "",
+    );
+
+    return [
+      ...this.coverageGateIssues(coverageReport),
+      ...reviewValidation.checks
+        .filter((check) => !check.passed)
+        .map((check) => `review.${check.name}: ${check.detail}`),
+    ];
+  }
+
+  private shouldRunDeterministicFinalGate(state: WorkflowState): boolean {
+    if (state.goal === "analyze") return false;
+    if (Object.keys(state.requirementJson).length === 0) return false;
+    return true;
+  }
+
+  private coverageGateIssues(report: CoverageReport): string[] {
+    const issues: string[] = [];
+    if (report.invalidReferences.length > 0) {
+      issues.push(`coverage.invalidReferences: ${report.invalidReferences.join(", ")}`);
+    }
+    if (report.functionCoverage.uncovered.length > 0) {
+      issues.push(
+        `coverage.functions: ${this.formatCoverageIds(report.functionCoverage.uncovered)}`,
+      );
+    }
+    if (report.constraintDesignCoverage.uncovered.length > 0) {
+      issues.push(
+        `coverage.constraints.design: ${this.formatCoverageIds(report.constraintDesignCoverage.uncovered)}`,
+      );
+    }
+    if (report.constraintTestCoverage.uncovered.length > 0) {
+      issues.push(
+        `coverage.constraints.tests: ${this.formatCoverageIds(report.constraintTestCoverage.uncovered)}`,
+      );
+    }
+    if (report.exceptionCoverage.uncovered.length > 0) {
+      issues.push(
+        `coverage.exceptions: ${this.formatCoverageIds(report.exceptionCoverage.uncovered)}`,
+      );
+    }
+    if (report.overall < 100) {
+      issues.push(`coverage.overall: ${report.overall}%`);
+    }
+    return issues;
+  }
+
+  private formatCoverageIds(items: Array<{ id: string; displayId: string }>): string {
+    return items.map((item) => item.displayId || item.id).join(", ");
   }
 
   findOutputConsistencyIssues(state: WorkflowState): string[] {
@@ -270,6 +349,7 @@ export class PersistenceService {
           state.requirementJson as Record<string, unknown>,
           state.designText ?? "",
           state.testCases ?? "",
+          state.spanMap,
         );
         manager.saveTraceJson("traceability_matrix.json", matrix as unknown as Record<string, unknown>);
         this.deps.logger.info(

@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import { PersistenceService } from "../src/runtime/persistenceService.js";
 import type { PersistenceServiceDeps } from "../src/runtime/persistenceService.js";
 import type { WorkflowState } from "../src/state.js";
+import { WorkflowState as RealWorkflowState } from "../src/state.js";
+import { mkdtempSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 /**
  * Minimal stub deps — findOutputConsistencyIssues doesn't call any deps,
@@ -17,6 +21,8 @@ function makeDeps(): PersistenceServiceDeps {
       saveTraceJson() {}
       saveReviewReport() {}
       saveQualityScore() {}
+      saveRequirementAnalysis() {}
+      saveAll() {}
     } as unknown as PersistenceServiceDeps["outputManagerCtor"],
     trace: { log: () => {}, child: () => ({ log: () => {} }) } as unknown as PersistenceServiceDeps["trace"],
     mailbox: { send: () => {}, receive: () => [] } as unknown as PersistenceServiceDeps["mailbox"],
@@ -68,5 +74,52 @@ describe("findOutputConsistencyIssues", () => {
     });
     const issues = service.findOutputConsistencyIssues(state);
     expect(issues).toEqual([]);
+  });
+});
+
+describe("actionSaveIfQualityGatePassed", () => {
+  function makeWorkflowState(): RealWorkflowState {
+    const state = new RealWorkflowState();
+    state.goal = "design";
+    state.outputDir = mkdtempSync(join(tmpdir(), "reqdesign-persist-"));
+    state.requirementJson = {
+      functions: [
+        { id: "FUN_ADVANCED_SEARCH", displayId: "F001", name: "Advanced Search" },
+      ],
+      constraints: [
+        { id: "CON_SEC_AUDIT", displayId: "C001", description: "Audit trail required" },
+      ],
+      exceptions: [
+        { id: "EXC_DENIED", displayId: "X001", description: "Access denied" },
+      ],
+    };
+    state.designText = "Design covers C001.";
+    state.testCases = "Test F001. Test C001. Test X001.";
+    return state;
+  }
+
+  it("blocks final save when deterministic coverage/review validation fails", () => {
+    const service = new PersistenceService(makeDeps());
+    const state = makeWorkflowState();
+    state.testCases = "Test F001 only.";
+
+    const saved = service.actionSaveIfQualityGatePassed(state, "unit test");
+
+    expect(saved).toBe(false);
+    expect(state.persistStatus).toBe("partial_saved");
+    expect(state.qualityStatus).toBe("rejected");
+    expect(state.finalReviewPassed).toBe(false);
+    expect(state.errors.some((item) => item.includes("deterministic quality gate failed"))).toBe(true);
+  });
+
+  it("allows final save when deterministic validation passes", () => {
+    const service = new PersistenceService(makeDeps());
+    const state = makeWorkflowState();
+
+    const saved = service.actionSaveIfQualityGatePassed(state, "unit test");
+
+    expect(saved).toBe(true);
+    expect(state.persistStatus).toBe("final_saved");
+    expect(state.persisted).toBe(true);
   });
 });

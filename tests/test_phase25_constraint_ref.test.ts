@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { PlanningTool } from "../src/tools/planning.js";
-import { AnalyzeMerger } from "../src/generators/merge.js";
+import { AnalyzeMerger, canonicalizeConstraintsPipeline } from "../src/generators/merge.js";
 import { RequirementAnalyzer } from "../src/generators/analyze.js";
 import { createTask } from "../src/shared/types.js";
 import type { Task } from "../src/shared/types.js";
@@ -59,6 +59,29 @@ describe("Phase 2.5: prompt constraint-ref instructions", () => {
 // ---------------------------------------------------------------------------
 
 describe("Phase 2.5: PlanningTool availableConstraints injection", () => {
+  it("_buildUserPrompt includes extracted constraint candidates for planning", () => {
+    const prompt = PlanningTool._buildUserPrompt(
+      "some requirement",
+      "design",
+      undefined,
+      undefined,
+      [
+        {
+          description: "Users must be authenticated",
+          sourceText: "用户必须登录后操作",
+          sectionId: "SEC_AUTH",
+          relatedFunctionCandidates: ["FUN_LOGIN"],
+        },
+      ],
+    );
+
+    expect(prompt).toContain("约束候选注册表");
+    expect(prompt).toContain("C_RULE_001");
+    expect(prompt).toContain("Users must be authenticated");
+    expect(prompt).toContain("SEC_AUTH");
+    expect(prompt).toContain("missingConstraintCandidates");
+  });
+
   it("_parseResponse propagates availableConstraints from contextHints", () => {
     const planner = new PlanningTool(fakeLlm);
 

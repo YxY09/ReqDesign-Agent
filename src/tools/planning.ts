@@ -19,6 +19,7 @@ import {
   createExecutionPlan,
 } from "../shared/types.js";
 import { buildRegistrySummary } from "../shared/registrySummary.js";
+import type { ConstraintCandidate } from "../shared/constraintCanonicalizer.js";
 
 /** 合并依赖列表，保持顺序的同时确保必需的 upstream 任务存在。 */
 function mergeDeps(existing: string[], required: string[]): string[] {
@@ -37,6 +38,23 @@ function mergeDeps(existing: string[], required: string[]): string[] {
 function getAssignedCount(task: Task): number {
   const sections = task.contextHints?.assignedSections;
   return Array.isArray(sections) ? sections.length : 0;
+}
+
+function buildConstraintCandidateSummary(candidates?: ConstraintCandidate[]): string {
+  if (!candidates || candidates.length === 0) return "";
+  const rows = candidates.map((candidate, index) => {
+    const row: Record<string, unknown> = {
+      constraintRef: `C_RULE_${String(index + 1).padStart(3, "0")}`,
+      description: candidate.description ?? "",
+      sourceText: candidate.sourceText ?? "",
+    };
+    if (candidate.sectionId) row.sectionId = candidate.sectionId;
+    if (candidate.relatedFunctionCandidates?.length) {
+      row.relatedFunctionCandidates = candidate.relatedFunctionCandidates;
+    }
+    return row;
+  });
+  return `\n## 约束候选注册表\n以下是程序预提取的约束候选。规划 analyze 任务时，请保留约束分析职责，并让相关任务通过 context_hints.availableConstraints 复用这些 constraintRef；新发现且不在候选中的约束放入 missingConstraintCandidates。\n\n\`\`\`json\n${JSON.stringify(rows, null, 2)}\n\`\`\`\n`;
 }
 
 export class PlanningTool extends BaseTool {
@@ -75,7 +93,7 @@ export class PlanningTool extends BaseTool {
     }
 
     // Extract constraint candidates if registry is available
-    let constraintCandidates: import("../shared/constraintCanonicalizer.js").ConstraintCandidate[] | undefined;
+    let constraintCandidates: ConstraintCandidate[] | undefined;
     if (registry && registry.entities.length > 0) {
       try {
         const extractor = new ConstraintExtractor(this.llm);
@@ -91,7 +109,7 @@ export class PlanningTool extends BaseTool {
     }
 
     const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
-    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex, registry);
+    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex, registry, constraintCandidates);
 
     let plan: ExecutionPlan;
     try {
@@ -176,6 +194,7 @@ export class PlanningTool extends BaseTool {
     goal: string,
     sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
     registry?: EntityRegistry,
+    constraintCandidates?: ConstraintCandidate[],
   ): string {
     const taskSection = goal.toLowerCase().includes("analyze")
       ? "\n## 特殊要求\n因为目标是 analyze（仅需求分析），请只规划 analyze 任务，不需要 design/diagrams/tests。"
@@ -189,6 +208,7 @@ export class PlanningTool extends BaseTool {
         registrySection = `\n## 全局实体注册表\n以下是已识别的核心实体和功能，规划时请参考这些术语。\n\n${summary}\n`;
       }
     }
+    const constraintsSection = buildConstraintCandidateSummary(constraintCandidates);
 
     if (sectionIndex && sectionIndex.length > 0) {
       // TOC mode: build chapter directory + per-chapter summary
@@ -196,21 +216,14 @@ export class PlanningTool extends BaseTool {
       for (const s of sectionIndex) {
         const indent = "  ".repeat(Math.max(0, s.depth - 1));
         const charCount = s.body.length;
-        const summary = s.body.length > 150 ? s.body.slice(0, 150) + "..." : s.body;
-        tocLines.push(`${indent}- [${s.id}] ${s.title} (${charCount}字)${summary ? " — " + summary : ""}`);
+        tocLines.push(`${indent}- [${s.id}] ${s.title} (${charCount}字)`);
       }
       const toc = tocLines.join("\n");
 
-      return `${registrySection}## 需求文档章节目录（共${sectionIndex.length}个章节）\n\n${toc}\n\n---\n\n请根据上述章节目录，为每个 analyze 任务分配 assignedSections（章节 ID 列表），使各 analyze 任务分工明确。\n约束/异常提取任务不需要 assignedSections（拿全文）。\n${taskSection}\n\n请输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}, "assignedSections": ["s1-1", "s2-1"]}]}\n\`\`\``;
+      return `${registrySection}${constraintsSection}## 需求文档章节目录（共${sectionIndex.length}个章节）\n\n${toc}\n\n---\n\n请根据上述章节目录，为每个 analyze 任务分配 assignedSections（章节 ID 列表），使各 analyze 任务分工明确。\n约束/异常提取任务不需要 assignedSections（拿全文）。\n${taskSection}\n\n请输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}, "assignedSections": ["s1-1", "s2-1"]}]}\n\`\`\``;
     }
 
-    // Fallback: truncate
-    let text = requirementText.slice(0, 8000);
-    if (requirementText.length > 8000) {
-      text += "\n\n...(后续内容已截断，核心功能点已覆盖)";
-    }
-
-    return `${registrySection}## 需求文档\n\n${text}\n${taskSection}\n\n请根据上述需求文档，输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}}]}\n\`\`\``;
+    return `${registrySection}${constraintsSection}## 需求文档\n\n${requirementText}\n${taskSection}\n\n请根据上述需求文档，输出执行计划 JSON。\n\n返回格式：\n\`\`\`json\n{"reasoning": "...", "tasks": [{"id": "...", "type": "analyze|design|diagrams|tests", "description": "...", "depends_on": [...], "context_hints": {}}]}\n\`\`\``;
   }
 
   static _buildReplanUserPrompt(

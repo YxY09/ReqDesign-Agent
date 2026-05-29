@@ -2,7 +2,7 @@ import type { Logger } from "../logger.js";
 import { isRecord } from "../utils/isRecord.js";
 import { WorkerFactory } from "../execution/factory.js";
 import { SessionBackend } from "../execution/backend.js";
-import { SessionContext, SessionRegistry } from "../session.js";
+import { SessionContext, SessionRegistry, type SessionProvenance } from "../session.js";
 import { createTaskMessage, TaskMailbox, type TaskMessage } from "../messaging.js";
 import type { WorkflowState } from "../state.js";
 import {
@@ -12,6 +12,7 @@ import {
   type Task,
   type WorkerKind,
 } from "../shared/types.js";
+import { cloneTask } from "../shared/taskUtils.js";
 import { sliceBySections, type SectionIndex } from "../xmlParser.js";
 
 /** Build a section TOC string from sectionIndex for global context prepending. */
@@ -23,6 +24,43 @@ export function buildSectionToc(sectionIndex: SectionIndex[]): string {
     lines.push(`${indent}- ${section.title}`);
   }
   return lines.join("\n");
+}
+
+function provenanceFromSnapshots(
+  snapshots: Record<string, Record<string, unknown>>,
+  scope: SessionProvenance["scope"],
+  contentKind: SessionProvenance["contentKind"],
+): SessionProvenance {
+  const sourceTaskIds = new Set<string>();
+  const sourceRevisions: Record<string, number> = {};
+
+  for (const [taskId, snapshot] of Object.entries(snapshots)) {
+    sourceTaskIds.add(String(snapshot.taskId ?? taskId));
+    const revision = Number(snapshot.revision ?? 0);
+    if (revision > 0) {
+      sourceRevisions[String(snapshot.taskId ?? taskId)] = revision;
+    }
+
+    const nestedIds = snapshot.sourceTaskIds;
+    if (Array.isArray(nestedIds)) {
+      for (const nestedId of nestedIds) sourceTaskIds.add(String(nestedId));
+    }
+
+    const nestedRevisions = snapshot.sourceRevisions;
+    if (isRecord(nestedRevisions)) {
+      for (const [sourceTaskId, sourceRevision] of Object.entries(nestedRevisions)) {
+        sourceTaskIds.add(sourceTaskId);
+        sourceRevisions[sourceTaskId] = Number(sourceRevision ?? 0);
+      }
+    }
+  }
+
+  return {
+    scope,
+    contentKind,
+    sourceTaskIds: [...sourceTaskIds].sort(),
+    sourceRevisions,
+  };
 }
 
 /** Mutable state dependencies injected from MultiAgentRuntime. */
@@ -93,6 +131,11 @@ export class WorkerDispatcher {
       testCases: state.testCases,
       artifactSummary: state.artifactSummary(),
       artifactSnapshots: state.artifactSnapshots(),
+      provenance: provenanceFromSnapshots(
+        state.artifactSnapshots(),
+        "planner",
+        "mixed",
+      ),
       isDirectMode: state.isDirectMode,
       hints: {
         ...(decision.replanContext ?? {}),
@@ -136,6 +179,11 @@ export class WorkerDispatcher {
     const artifactSnapshots = evaluateScope.length > 0
       ? state.artifactSnapshots(evaluateScope)
       : state.finalArtifactSnapshots();
+    const provenance = provenanceFromSnapshots(
+      artifactSnapshots,
+      "evaluate",
+      evaluateScope.length > 0 ? "raw" : "canonical",
+    );
     const context = new SessionContext({
       taskId: "evaluator",
       taskType: "evaluator",
@@ -148,6 +196,7 @@ export class WorkerDispatcher {
       testCases: state.testCases,
       artifactSummary: state.artifactSummary(),
       artifactSnapshots,
+      provenance,
       isDirectMode: state.isDirectMode,
       evaluateScope: [...evaluateScope],
       previousIssues,
@@ -250,19 +299,39 @@ export class WorkerDispatcher {
       repairScope: "local",
     });
 
-    // Extract previous artifact content from recent session for repair context
     const context = this.buildTaskContext(state, task);
-    const prevSession = this.deps.sessions.latestSessionForTask(taskId);
-    if (prevSession) {
-      const descriptor = prevSession.exportDescriptor();
-      const lastArtifact = descriptor.intermediateState?.last_artifact;
-      if (
-        isRecord(lastArtifact) &&
-        lastArtifact.content !== undefined &&
-        lastArtifact.content !== null
-      ) {
-        context.hints.previous_artifact_content = lastArtifact.content;
-        context.hints.previous_artifact_type = lastArtifact.type;
+    const currentArtifact = state.artifactsState.artifacts[taskId];
+    if (currentArtifact?.content !== undefined && currentArtifact.content !== null) {
+      context.hints.previous_artifact_content = currentArtifact.content;
+      context.hints.previous_artifact_type = currentArtifact.type;
+      context.hints.previous_artifact_revision =
+        currentArtifact.revision || state.currentArtifactRevision(taskId);
+      context.artifactSnapshots = {
+        ...state.finalArtifactSnapshots(),
+        ...state.artifactSnapshots([taskId]),
+      };
+      context.provenance = provenanceFromSnapshots(
+        state.artifactSnapshots([taskId]),
+        "repair",
+        "raw",
+      );
+    } else {
+      // Fallback for restored sessions without a current state artifact.
+      const prevSession = this.deps.sessions.latestSessionForTask(taskId);
+      if (prevSession) {
+        const descriptor = prevSession.exportDescriptor();
+        const lastArtifact = descriptor.intermediateState?.last_artifact;
+        if (
+          isRecord(lastArtifact) &&
+          lastArtifact.content !== undefined &&
+          lastArtifact.content !== null
+        ) {
+          context.hints.previous_artifact_content = lastArtifact.content;
+          context.hints.previous_artifact_type = lastArtifact.type;
+          if (lastArtifact.revision !== undefined) {
+            context.hints.previous_artifact_revision = Number(lastArtifact.revision);
+          }
+        }
       }
     }
 
@@ -337,6 +406,7 @@ export class WorkerDispatcher {
     }
 
     return new SessionContext({
+      task: cloneTask(task),
       taskId: task.id,
       taskType: task.type,
       taskDescription: task.description,
@@ -347,7 +417,8 @@ export class WorkerDispatcher {
       diagrams: state.diagrams,
       testCases: state.testCases,
       artifactSummary: state.artifactSummary(),
-      artifactSnapshots: state.artifactSnapshots(),
+      artifactSnapshots: {},
+      provenance: provenanceFromSnapshots(state.finalArtifactSnapshots(), "task", "effective"),
       hints: task.contextHints,
       isDirectMode: state.isDirectMode,
       registry: state.registry ?? undefined,

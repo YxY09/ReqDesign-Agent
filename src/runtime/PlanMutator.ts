@@ -35,6 +35,9 @@ export class PlanMutator {
   /** Set the merged requirement JSON. */
   setRequirementJson(json: Record<string, unknown>): void {
     this._state.requirementJson = json;
+    this._state.requirementDraftJson = {};
+    this._state.requirementJsonContentKind =
+      Object.keys(json).length > 0 ? "canonical" : "empty";
   }
 
   /** Set the final quality status. */

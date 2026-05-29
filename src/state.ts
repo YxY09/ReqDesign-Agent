@@ -30,6 +30,7 @@ import {
   type Verdict,
 } from "./shared/types.js";
 import type { SectionIndex } from "./xmlParser.js";
+import type { SpanEvidence } from "./shared/documentNormalizer.js";
 import { ProgressSnapshot } from "./progress.js";
 import { ConvergenceTracker } from "./orchestration/snapshot.js";
 import { TaskLifecycleManager } from "./runtime/TaskLifecycleManager.js";
@@ -40,6 +41,8 @@ import { ReviewManager } from "./runtime/ReviewManager.js";
 export interface ArtifactsState {
   artifacts: Record<string, Artifact>;
   requirementJson: Record<string, unknown>;
+  requirementDraftJson: Record<string, unknown>;
+  requirementJsonContentKind: "empty" | "draft" | "canonical" | "stale";
   designText: string;
   diagrams: Record<string, unknown>;
   testCases: string;
@@ -90,6 +93,8 @@ export class WorkflowState {
   // --- Input --------------------------------------------------------------
   requirementText: string = "";
   sectionIndex: SectionIndex[] = [];
+  /** sentenceId → SpanEvidence, populated for XML inputs via normalizeDocument. */
+  spanMap: Record<string, SpanEvidence> = {};
 
   // --- Registry ------------------------------------------------------------
   registry: import("./shared/types.js").EntityRegistry | null = null;
@@ -148,6 +153,8 @@ export class WorkflowState {
 
   // --- Aggregate fields (for legacy consumers) ---------------------------
   requirementJson: Record<string, unknown> = {};
+  requirementDraftJson: Record<string, unknown> = {};
+  requirementJsonContentKind: "empty" | "draft" | "canonical" | "stale" = "empty";
   designText: string = "";
   diagrams: Record<string, unknown> = {};
   testCases: string = "";
@@ -206,6 +213,8 @@ export class WorkflowState {
     const view: ArtifactsState = {
       artifacts: this.artifacts,
       requirementJson: this.requirementJson,
+      requirementDraftJson: this.requirementDraftJson,
+      requirementJsonContentKind: this.requirementJsonContentKind,
       designText: this.designText,
       diagrams: this.diagrams,
       testCases: this.testCases,
@@ -217,6 +226,22 @@ export class WorkflowState {
       () => this.artifacts,
       (value) => {
         this.artifacts = value as Record<string, Artifact>;
+      },
+    );
+    this._linkStateViewProperty(
+      view,
+      "requirementDraftJson",
+      () => this.requirementDraftJson,
+      (value) => {
+        this.requirementDraftJson = value as Record<string, unknown>;
+      },
+    );
+    this._linkStateViewProperty(
+      view,
+      "requirementJsonContentKind",
+      () => this.requirementJsonContentKind,
+      (value) => {
+        this.requirementJsonContentKind = value as "empty" | "draft" | "canonical" | "stale";
       },
     );
     this._linkStateViewProperty(

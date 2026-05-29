@@ -245,12 +245,13 @@ describe("Step 6c: PlanningTool._buildUserPrompt with sectionIndex", () => {
     expect(prompt).toContain("assignedSections");
   });
 
-  it("falls back to truncation when no sectionIndex", () => {
+  it("keeps the full requirement text when no sectionIndex is available", () => {
     const longText = "a".repeat(10000);
     const prompt = PlanningTool._buildUserPrompt(longText, "design");
     expect(prompt).toContain("需求文档");
     expect(prompt).not.toContain("章节目录");
-    expect(prompt.length).toBeLessThan(10000);
+    expect(prompt).toContain(longText);
+    expect(prompt).not.toContain("后续内容已截断");
   });
 });
 
