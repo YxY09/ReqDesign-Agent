@@ -144,14 +144,14 @@ const TYPE_INFERENCE_RULES: Array<{
     subtype: "response_time",
   },
   {
-    regex: /data|integrity|validation|accuracy|数据完整性|数据准确|数据校验|数据一致性|完整性|准确/i,
-    type: "data",
-    subtype: "integrity",
-  },
-  {
     regex: /availability|uptime|sla|可用率|停机/i,
     type: "availability",
     subtype: "uptime",
+  },
+  {
+    regex: /data integrity|data validation|data accuracy|数据完整性|数据准确|数据校验|数据一致性/i,
+    type: "data",
+    subtype: "integrity",
   },
 ];
 
@@ -435,3 +435,4 @@ function linkFunctions(
 
   return links;
 }
+

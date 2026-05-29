@@ -52,6 +52,7 @@ function canonicalizeConstraintsPipeline(merged: Record<string, unknown>): void 
   for (const c of canonical) {
     ((c as unknown) as Record<string, unknown>).id = c.canonicalId;
     ((c as unknown) as Record<string, unknown>).source_text = c.sourceText;
+    ((c as unknown) as Record<string, unknown>).description = c.descriptionZh;
   }
 
   merged["constraints"] = canonical;
