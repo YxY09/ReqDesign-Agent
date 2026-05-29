@@ -193,6 +193,7 @@ const VERIFICATION_TYPE_MAP: Record<string, string> = {
 interface MergedGroup {
   description: string;
   sourceTexts: Array<{ sourceText: string; sectionId?: string }>;
+  descriptions: string[];
   // All fields from the "best" candidate (first one seen)
   canonicalRuleEn?: string;
   candidateType?: string;
@@ -239,6 +240,10 @@ export function canonicalizeConstraints(
     if (groupIdx !== undefined) {
       // Merge into existing group
       const group = groups[groupIdx];
+      // Collect LLM-generated description
+      if (rawDesc && !group.descriptions.includes(rawDesc)) {
+        group.descriptions.push(rawDesc);
+      }
       // Add evidence (avoid duplicate sourceText)
       const evidenceText = rawSource || rawDesc;
       if (evidenceText && !group.sourceTexts.some((s) => s.sourceText === evidenceText)) {
@@ -262,6 +267,7 @@ export function canonicalizeConstraints(
       groups.push({
         description: rawDesc || rawSource,
         sourceTexts,
+        descriptions: rawDesc ? [rawDesc] : [],
         canonicalRuleEn: candidate.canonicalRuleEn,
         candidateType: candidate.type,
         candidateSubtype: candidate.subtype,
@@ -321,7 +327,7 @@ export function canonicalizeConstraints(
       canonicalId,
       type,
       subtype,
-      descriptionZh: group.sourceTexts[0]?.sourceText || text,
+      descriptionZh: group.descriptions[0] || group.sourceTexts[0]?.sourceText || text,
       canonicalRuleEn,
       sourceText: group.sourceTexts[0]?.sourceText || text,
       normalizedRule,

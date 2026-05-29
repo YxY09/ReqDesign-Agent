@@ -292,14 +292,33 @@ describe("canonicalizeConstraints", () => {
   });
 
   // ----------------------------------------------------------------
-  // 10. descriptionZh uses description from candidate
+  // 10. descriptionZh prefers LLM-generated description over sourceText
   // ----------------------------------------------------------------
-  it("uses sourceText as descriptionZh", () => {
+  it("prefers LLM-generated description over sourceText for descriptionZh", () => {
     const candidates: ConstraintCandidate[] = [
       { description: "Test constraint", sourceText: "测试约束" },
     ];
     const [r] = canonicalizeConstraints(candidates, []);
+    expect(r.descriptionZh).toBe("Test constraint");
+  });
+
+  it("falls back to sourceText when no LLM description is available", () => {
+    const candidates: ConstraintCandidate[] = [
+      { sourceText: "测试约束" },
+    ];
+    const [r] = canonicalizeConstraints(candidates, []);
     expect(r.descriptionZh).toBe("测试约束");
+  });
+
+  it("collects descriptions from merged candidates", () => {
+    const candidates: ConstraintCandidate[] = [
+      { description: "Audit trail must be immutable", sourceText: "审计数据不可修改" },
+      { description: "Audit data cannot be changed", sourceText: "审计数据不可修改" },
+    ];
+    const results = canonicalizeConstraints(candidates, []);
+    expect(results).toHaveLength(1);
+    // descriptionZh should use the first LLM description
+    expect(results[0].descriptionZh).toBe("Audit trail must be immutable");
   });
 
   // ----------------------------------------------------------------

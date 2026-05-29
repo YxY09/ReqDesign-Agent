@@ -55,7 +55,7 @@ describe("ConstraintCanonicalizer integration in merge pipeline", () => {
     expect(c.constraintUid).toMatch(/^ct_[A-Z0-9]{8}$/);
     expect(c.type).toBe("security");
     expect(c.subtype).toBe("audit");
-    expect(c.descriptionZh).toBe("审计跟踪数据不可修改或删除");
+    expect(c.descriptionZh).toBe("Audit trail data cannot be modified or deleted");
     expect(c.sourceText).toBe("审计跟踪数据不可修改或删除");
 
     // Compatibility fields (id, displayId, source_text)

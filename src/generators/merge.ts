@@ -988,9 +988,21 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       const existingDescs = new Set(
         mergedConstraints.map((c) => String(c.description ?? "").trim()),
       );
+      // Bug fix: also check against exception descriptions to prevent
+      // postProcess LLM from converting exceptions into duplicate constraints
+      const exceptionDescs = new Set(
+        asArray(merged["exceptions"]).map((e) =>
+          String(e.description ?? e.text ?? "").trim().toLowerCase(),
+        ),
+      );
       for (const c of patches.constraints) {
         const desc = String(c.description ?? "").trim();
         if (desc && !existingDescs.has(desc)) {
+          // Skip if source_text matches an existing exception description
+          const srcText = String(c.source_text ?? "").trim().toLowerCase();
+          if (srcText && exceptionDescs.has(srcText)) continue;
+          // Skip if description matches an existing exception description (case-insensitive)
+          if (exceptionDescs.has(desc.toLowerCase())) continue;
           existingDescs.add(desc);
           mergedConstraints.push(c);
         }

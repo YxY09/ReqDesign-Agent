@@ -1104,3 +1104,61 @@ describe("single-artifact merge path", () => {
     expect(exceptions[0].displayId).toBe("X001");
   });
 });
+
+// ---------------------------------------------------------------------------
+// _applyConstraintPatches: exception description should not become constraint
+// ---------------------------------------------------------------------------
+
+describe("_applyConstraintPatches prevents exception descriptions from becoming constraints", () => {
+  it("filters out constraint patch whose description matches an existing exception description", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [{ description: "Must be secure" }],
+      exceptions: [{ description: "Network failure" }],
+    };
+    const patches = {
+      constraints: [
+        // This should be filtered: description matches exception description
+        { description: "Network failure", source_text: "some other text" },
+      ],
+      exceptions: [],
+    };
+    (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+    // Only the original constraint should remain; "Network failure" should not be added
+    expect(constraints.length).toBe(1);
+    expect(constraints[0].description).toBe("Must be secure");
+  });
+
+  it("still adds constraint when description does NOT match any exception", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [{ description: "Must be secure" }],
+      exceptions: [{ description: "Network failure" }],
+    };
+    const patches = {
+      constraints: [
+        { description: "Must respond within 200ms" },
+      ],
+      exceptions: [],
+    };
+    (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+    expect(constraints.length).toBe(2);
+    expect(constraints[1].description).toBe("Must respond within 200ms");
+  });
+
+  it("filters constraint case-insensitively against exception descriptions", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [],
+      exceptions: [{ description: "Network Failure" }],
+    };
+    const patches = {
+      constraints: [
+        { description: "network failure" },
+      ],
+      exceptions: [],
+    };
+    (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+    expect(constraints.length).toBe(0);
+  });
+});
