@@ -49,17 +49,18 @@ export class TestCaseGenerator extends BaseGenerator<string> {
   static buildTestContract(requirementJson: Record<string, unknown>): string {
     const functions = BaseGenerator.formatContractList(requirementJson.functions, ["displayId", "id", "name", "description"]);
     const exceptions = BaseGenerator.formatContractList(requirementJson.exceptions, ["displayId", "id", "description", "trigger"]);
-    const constraints = BaseGenerator.formatContractList(requirementJson.constraints, ["displayId", "id", "description"]);
+    const constraints = BaseGenerator.formatContractList(requirementJson.constraints, ["displayId", "id", "description", "source_text", "related_functions"]);
 
     return [
       "## 测试生成合同（硬性约束）",
       "以下 ID 是唯一可信来源。测试对象和测试步骤只能引用这些真实 ID，禁止重新编号或改前缀。",
       functions.length > 0 ? `### 必须覆盖的功能 ID\n${functions.map((item) => `- ${item}`).join("\n")}` : "",
       exceptions.length > 0 ? `### 必须覆盖的异常 ID\n${exceptions.map((item) => `- ${item}`).join("\n")}` : "",
-      constraints.length > 0 ? `### 可用于边界测试的约束 ID\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
+      constraints.length > 0 ? `### 必须覆盖的约束 ID\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
       "- 每个功能 ID 至少出现在一个测试对象中。",
       "- 每个异常 ID 至少出现在一个异常测试的测试对象或测试步骤中。",
       "- 如果异常 ID 是 X001，就必须写 X001；禁止改写为 E001。",
+      constraints.length > 0 ? "- 每个约束 ID 至少出现在一个边界测试或约束验证测试的测试对象或测试步骤中。约束的 source_text 描述了具体规则，related_functions 描述了涉及的功能，测试用例应基于这些信息编写。" : "",
       "- 输出必须是合法 JSON 根对象，且包含 `test_cases` 数组；禁止输出 Markdown、表格、代码围栏或解释文本。",
       "- 每个测试用例对象必须包含 id/title/type/target/preconditions/steps/expected_result/priority。",
       "- 优先级必须使用 P0/P1/P2。",

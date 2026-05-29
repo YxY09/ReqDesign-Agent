@@ -246,7 +246,7 @@ export class SystemDesigner extends BaseGenerator<string> {
     );
     const constraints = BaseGenerator.formatContractList(
       requirementJson.constraints,
-      ["displayId", "id", "description"],
+      ["displayId", "id", "description", "source_text"],
     );
     const exceptions = BaseGenerator.formatContractList(
       requirementJson.exceptions,

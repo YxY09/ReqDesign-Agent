@@ -9,6 +9,7 @@ import type { WorkflowEvent } from "../workflowEvents.js";
 import { OutputScorer } from "../../evaluate/scorer.js";
 import { formatReviewReport } from "../formatReviewReport.js";
 import { isRecord } from "../utils/isRecord.js";
+import { validateCoverage } from "../shared/coverageValidator.js";
 
 /**
  * Callback signatures used by PersistenceService to emit runtime events
@@ -235,6 +236,30 @@ export class PersistenceService {
       } catch (scoringError: unknown) {
         this.deps.logger.warn(
           "quality scoring failed: " + (scoringError instanceof Error ? scoringError.message : String(scoringError)),
+        );
+      }
+
+      // Coverage validation
+      try {
+        const coverageReport = validateCoverage(
+          state.requirementJson as Record<string, unknown>,
+          state.designText ?? "",
+          state.testCases ?? "",
+        );
+        this.deps.logger.info(
+          `Coverage: ${coverageReport.overall}% ` +
+          `(functions ${coverageReport.functionCoverage.covered}/${coverageReport.functionCoverage.total}, ` +
+          `constraints-test ${coverageReport.constraintTestCoverage.covered}/${coverageReport.constraintTestCoverage.total}, ` +
+          `constraints-design ${coverageReport.constraintDesignCoverage.covered}/${coverageReport.constraintDesignCoverage.total}, ` +
+          `exceptions ${coverageReport.exceptionCoverage.covered}/${coverageReport.exceptionCoverage.total})`,
+        );
+        if (coverageReport.invalidReferences.length > 0) {
+          this.deps.logger.warn(`Invalid references: ${coverageReport.invalidReferences.join(", ")}`);
+        }
+        manager.saveTraceJson("coverage_report.json", coverageReport as unknown as Record<string, unknown>);
+      } catch (coverageError: unknown) {
+        this.deps.logger.warn(
+          "coverage validation failed: " + (coverageError instanceof Error ? coverageError.message : String(coverageError)),
         );
       }
     } catch (error: unknown) {
