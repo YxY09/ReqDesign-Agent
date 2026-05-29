@@ -165,7 +165,11 @@ export class PersistenceService {
           (item): item is Record<string, unknown> =>
             isRecord(item) && Boolean(item.id),
         )
-        .map((item) => String(item.id)),
+        .flatMap((item) => {
+          const ids = [String(item.id)];
+          if (item.displayId) ids.push(String(item.displayId));
+          return ids;
+        }),
     );
     if (defined.size === 0) return [];
 
