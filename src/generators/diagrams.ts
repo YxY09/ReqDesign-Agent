@@ -5,6 +5,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
 import { BaseGenerator } from "./base.js";
 
 export class DiagramGenerator extends BaseGenerator<string> {
@@ -197,7 +198,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
       reqStr = parts.length > 0 ? parts.join("\n\n") : "{}";
     } else {
       // Default (no diagramType): full JSON for backward compatibility
-      reqStr = JSON.stringify(requirementJson, null, 2);
+      reqStr = JSON.stringify(minimizeForPrompt(requirementJson), null, 2);
     }
 
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");

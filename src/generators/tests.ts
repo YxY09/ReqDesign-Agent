@@ -4,6 +4,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
@@ -32,7 +33,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     }
     designText = designText || "";
 
-    let reqStr = JSON.stringify(requirementJson, null, 2);
+    let reqStr = JSON.stringify(minimizeForPrompt(requirementJson), null, 2);
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");
     let safeDesign = this.sanitizePlaceholder(designText, "requirement_json");
     safeDesign = this.sanitizePlaceholder(safeDesign, "design_text");

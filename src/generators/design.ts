@@ -4,6 +4,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
+import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
@@ -196,7 +197,7 @@ export class SystemDesigner extends BaseGenerator<string> {
       throw createToolError("DESIGN_EMPTY_INPUT", "需求JSON不能为空且必须是字典类型", { recoverable: false });
     }
 
-    let reqStr = JSON.stringify(requirementJson, null, 2);
+    let reqStr = JSON.stringify(minimizeForPrompt(requirementJson), null, 2);
     reqStr = this.sanitizePlaceholder(reqStr, "requirement_json");
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
