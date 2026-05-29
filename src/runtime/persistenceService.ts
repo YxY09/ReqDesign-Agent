@@ -10,6 +10,7 @@ import { OutputScorer } from "../../evaluate/scorer.js";
 import { formatReviewReport } from "../formatReviewReport.js";
 import { isRecord } from "../utils/isRecord.js";
 import { validateCoverage } from "../shared/coverageValidator.js";
+import { buildMatrix } from "../shared/traceabilityMatrix.js";
 
 /**
  * Callback signatures used by PersistenceService to emit runtime events
@@ -260,6 +261,23 @@ export class PersistenceService {
       } catch (coverageError: unknown) {
         this.deps.logger.warn(
           "coverage validation failed: " + (coverageError instanceof Error ? coverageError.message : String(coverageError)),
+        );
+      }
+
+      // Traceability matrix
+      try {
+        const matrix = buildMatrix(
+          state.requirementJson as Record<string, unknown>,
+          state.designText ?? "",
+          state.testCases ?? "",
+        );
+        manager.saveTraceJson("traceability_matrix.json", matrix as unknown as Record<string, unknown>);
+        this.deps.logger.info(
+          `Traceability: ${matrix.uncoveredConstraints.length} uncovered constraints, ${matrix.uncoveredFunctions.length} uncovered functions, ${matrix.uncoveredExceptions.length} uncovered exceptions`,
+        );
+      } catch (matrixError: unknown) {
+        this.deps.logger.warn(
+          "traceability matrix build failed: " + (matrixError instanceof Error ? matrixError.message : String(matrixError)),
         );
       }
     } catch (error: unknown) {
