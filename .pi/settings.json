@@ -1,4 +1,4 @@
 {
-  "defaultProvider": "zhipu",
-  "defaultModel": "glm-5.1"
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro"
 }

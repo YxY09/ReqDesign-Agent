@@ -5,6 +5,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { RegistryExtractor } from "../generators/registryExtractor.js";
+import { ConstraintExtractor } from "../generators/constraintExtractor.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import {
@@ -73,6 +74,22 @@ export class PlanningTool extends BaseTool {
       this.logger.warn(`plan: registry 提取失败，继续无 registry 规划: ${e instanceof Error ? e.message : String(e)}`);
     }
 
+    // Extract constraint candidates if registry is available
+    let constraintCandidates: import("../shared/constraintCanonicalizer.js").ConstraintCandidate[] | undefined;
+    if (registry && registry.entities.length > 0) {
+      try {
+        const extractor = new ConstraintExtractor(this.llm);
+        constraintCandidates = await extractor.extractCandidates(
+          requirementText,
+          registry.entities.map((e) => ({ id: e.id, canonicalName: e.canonicalName, aliases: e.aliases })),
+          [], // function registry not available at planning time
+        );
+        this.logger.info(`plan: constraint candidates 提取完成，count=${constraintCandidates.length}`);
+      } catch (e) {
+        this.logger.warn(`plan: constraint candidate 提取失败，继续无约束候选: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
     const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex, registry);
 
@@ -88,6 +105,20 @@ export class PlanningTool extends BaseTool {
     }
 
     plan = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+
+    // Inject availableConstraints into analyze tasks
+    if (constraintCandidates && constraintCandidates.length > 0) {
+      for (const task of plan.tasks) {
+        if (task.type === "analyze") {
+          task.contextHints.availableConstraints = constraintCandidates.map((c, i) => ({
+            constraintRef: `C_RULE_${String(i + 1).padStart(3, "0")}`,
+            description: c.description ?? "",
+            sourceText: c.sourceText ?? "",
+          }));
+        }
+      }
+    }
+
     // Attach registry to plan for downstream consumers
     if (registry) {
       plan.registry = registry;

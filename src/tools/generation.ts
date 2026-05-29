@@ -146,6 +146,18 @@ export class GenerationTool extends BaseTool {
       }
     }
 
+    // Inject available constraints into prompt template
+    let availableConstraintsText: string | undefined;
+    const availConstraints = hints.availableConstraints as
+      Array<{ constraintRef?: string; description?: string; sourceText?: string }> | undefined;
+    if (Array.isArray(availConstraints) && availConstraints.length > 0) {
+      availableConstraintsText = availConstraints
+        .map((c) => `- ${c.constraintRef ?? "C_RULE_???"}: ${c.description ?? ""} (${c.sourceText ?? ""})`)
+        .join("\n");
+    } else {
+      availableConstraintsText = "（系统尚未预提取约束，请自行提取并编号）";
+    }
+
     if (Array.isArray(hints.focus_areas) && hints.focus_areas.length > 0) {
       const focus = hints.focus_areas.map(String).join(", ");
       text = `[重点关注: ${focus}]\\n\\n${text}`;
@@ -170,7 +182,7 @@ ${text}`;
       ? new RequirementAnalyzer(this.llm, "requirement_analysis_constraints.md")
       : this._getAnalyzer();
     if (this.llm) this.llm.streamTag = "[Generator:analyze]";
-    const raw = await analyzer.analyze(text, 3, systemPrompt, existingJson);
+    const raw = await analyzer.analyze(text, 3, systemPrompt, existingJson, availableConstraintsText);
     return GenerationTool._unwrapAnalyzeDict(raw);
   }
 

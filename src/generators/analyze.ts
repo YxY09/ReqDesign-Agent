@@ -37,6 +37,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     maxRetries = 3,
     systemPrompt?: string,
     existingJson?: Record<string, unknown>,
+    availableConstraintsText?: string,
   ): Promise<Record<string, unknown>> {
     if (!requirementText && !existingJson) {
       throw createToolError("ANALYZE_EMPTY_INPUT", "需求文本和已有分析结果不能同时为空", { recoverable: false });
@@ -49,7 +50,11 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     }
 
     const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
-    const prompt = prefix + this.promptTemplate.replace(/\{requirement_text\}/g, safeText);
+    let tpl = this.promptTemplate.replace(/\{requirement_text\}/g, safeText);
+    if (availableConstraintsText !== undefined) {
+      tpl = tpl.replace(/\{available_constraints\}/g, availableConstraintsText);
+    }
+    const prompt = prefix + tpl;
 
     let result = await this.generateJsonWithRetry(prompt, systemPrompt ?? "", maxRetries);
     result = BaseGenerator.unwrapContent(result);

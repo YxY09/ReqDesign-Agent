@@ -285,6 +285,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const allBP: Record<string, unknown>[] = [];
     const allProposedEntities: Record<string, unknown>[] = [];
     const allProposedFunctions: Record<string, unknown>[] = [];
+    const allMissingConstraintCandidates: Record<string, unknown>[] = [];
     let projectName = "";
     let projectOverview = "";
 
@@ -307,6 +308,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       for (const item of (c.business_processes as Array<Record<string, unknown>>) ?? []) allBP.push(item);
       for (const item of (c.proposeNewEntities as Array<Record<string, unknown>>) ?? []) allProposedEntities.push(item);
       for (const item of (c.proposeNewFunctions as Array<Record<string, unknown>>) ?? []) allProposedFunctions.push(item);
+      for (const item of (c.missingConstraintCandidates as Array<Record<string, unknown>>) ?? []) allMissingConstraintCandidates.push(item);
     }
 
     // --- Phase 2: Smart merge each type ---
@@ -323,6 +325,9 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const proposedEntities = AnalyzeMerger._dedupByName(allProposedEntities);
     const proposedFunctions = AnalyzeMerger._dedupByName(allProposedFunctions);
 
+    // Collect missing constraint candidates, dedup by description
+    const missingConstraintCandidates = AnalyzeMerger._dedupByDescription(allMissingConstraintCandidates);
+
     return {
       project_name: projectName,
       project_overview: projectOverview,
@@ -335,6 +340,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       business_processes: mergedBP,
       proposeNewEntities: proposedEntities,
       proposeNewFunctions: proposedFunctions,
+      missingConstraintCandidates,
     };
   }
 
@@ -728,6 +734,18 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       const name = String(item.name ?? item.canonicalName ?? "").trim();
       if (!name) continue;
       const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, item);
+    }
+    return [...seen.values()];
+  }
+
+  // --- Dedup by description for missing constraint candidates ---
+  private static _dedupByDescription(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const item of items) {
+      const desc = String(item.description ?? "").trim();
+      if (!desc) continue;
+      const key = desc.toLowerCase();
       if (!seen.has(key)) seen.set(key, item);
     }
     return [...seen.values()];
