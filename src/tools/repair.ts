@@ -490,7 +490,7 @@ export class RepairTool extends BaseTool {
     // --- New: ops-based JSON patch routing ---
     const opsRaw = parsed.ops;
     if (Array.isArray(opsRaw) && opsRaw.length > 0) {
-      const contentStr = typeof currentContent === "string" ? currentContent.trim() : "";
+      const contentStr = typeof currentContent === "string" ? currentContent.trim() : JSON.stringify(currentContent);
       if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
         const ops: JsonPatchOp[] = opsRaw
           .filter((o: unknown): o is Record<string, unknown> => typeof o === "object" && o !== null)
@@ -575,7 +575,7 @@ export class RepairTool extends BaseTool {
     // When patches had no effect and content is JSON, use LLM's full content.
     const originalText = ArtifactPatcher.applyPatches(sections, []);
     if (patchedText === originalText && patches.length > 0) {
-      const contentStr = typeof currentContent === "string" ? currentContent.trim() : "";
+      const contentStr = typeof currentContent === "string" ? currentContent.trim() : JSON.stringify(currentContent);
       if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
         if (typeof parsed.content === "string") {
           this.logger.info(

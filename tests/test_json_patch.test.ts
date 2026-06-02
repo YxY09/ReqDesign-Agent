@@ -124,6 +124,45 @@ function makeLlm(text: string) {
 }
 
 describe("RepairTool._applyPatchResponse routing", () => {
+  it("routes ops to applyJsonOps for object currentContent (tests task)", async () => {
+    // For tests tasks, currentContent can be a parsed JSON object,
+    // not a string. The ops branch must still be routed in that case.
+    const originalObj = {
+      test_cases: [
+        { id: "TC-001", name: "Login", steps: "step1", expected: "ok" },
+      ],
+    };
+
+    // LLM returns ops format
+    const llm = makeLlm(
+      JSON.stringify({
+        ops: [
+          {
+            action: "replace",
+            path: "test_cases",
+            match: { field: "id", value: "TC-001" },
+            value: { id: "TC-001", name: "Login Fixed", steps: "step1f", expected: "ok" },
+          },
+        ],
+      }),
+    );
+
+    const agent = new RepairTool(llm);
+    const task = createTask({
+      id: "tests-1",
+      type: "tests",
+      description: "repair tests",
+    });
+
+    const result = await agent.repair(task, originalObj as unknown as string, [
+      { severity: "major", description: "TC-001 broken", suggestion: "fix" },
+    ], {});
+
+    expect(result).not.toBeNull();
+    const parsed = JSON.parse(result as string);
+    expect(parsed.test_cases[0].name).toBe("Login Fixed");
+  });
+
   it("routes ops to applyJsonOps for JSON content", async () => {
     const originalJson = JSON.stringify(
       {

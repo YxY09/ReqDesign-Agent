@@ -1,159 +1,298 @@
-## TC-N-001: 管理员成功配置系统参数
-- **类型**: 正常
-- **测试对象**: F002 | FUN_CONFIGURE_APPLICATION
-- **前置条件**: 管理员已登录系统
-- **测试步骤**: 1. 管理员导航至系统配置页面 2. 修改州特定数据配置 3. 更新法案和章节信息 4. 保存配置
-- **预期结果**: 配置变更成功保存并立即生效
-- **优先级**: P0
-
-## TC-N-002: 警务人员成功注册新案件
-- **类型**: 正常
-- **测试对象**: F010 | FUN_REGISTER_CASE
-- **前置条件**: 警务人员已登录系统，公民提供有效身份信息
-- **测试步骤**: 1. 选择'注册新案件'功能 2. 填写案件详情（标题、描述、发生时间） 3. 添加嫌疑人信息 4. 提交案件
-- **预期结果**: 系统生成案件ID并显示成功消息，案件状态为'已注册'
-- **优先级**: P0
-
-## TC-N-003: 公民成功搜索案件
-- **类型**: 正常
-- **测试对象**: F011 | FUN_SEARCH_CASE
-- **前置条件**: 公民已登录系统，有案件访问权限
-- **测试步骤**: 1. 在搜索栏输入案件编号 2. 点击搜索按钮
-- **预期结果**: 5秒内返回匹配的案例列表
-- **优先级**: P1
-
-## TC-E-001: 非管理员尝试修改用户安全属性
-- **类型**: 异常
-- **测试对象**: F007 | FUN_MANAGE_USER_PROFILE, X012 | EXC_UNAUTHORIZED_PROFILE_MODIFICATION_ATTEMPT
-- **前置条件**: 普通用户已登录系统
-- **测试步骤**: 1. 尝试访问用户管理界面 2. 修改其他用户的权限设置 3. 尝试保存更改
-- **预期结果**: 系统拒绝更改并显示错误消息'仅超级用户可修改安全属性'，记录审计日志
-- **优先级**: P1
-
-## TC-E-002: 案件检索超时
-- **类型**: 异常
-- **测试对象**: F011 | FUN_SEARCH_CASE, X001 | EXC_YPGXB500
-- **前置条件**: 系统负载高，数据库响应慢
-- **测试步骤**: 1. 执行复杂的高级搜索查询 2. 等待15秒
-- **预期结果**: 系统返回超时错误消息，建议优化搜索条件或稍后重试
-- **优先级**: P1
-
-## TC-B-001: 搜索性能边界测试
-- **类型**: 边界
-- **测试对象**: C014 | CON_FUNC_VKFDIF00
-- **前置条件**: 系统中有100万条案件记录
-- **测试步骤**: 1. 执行简单搜索（单条件） 2. 记录响应时间 3. 执行高级搜索（5个条件组合） 4. 记录响应时间
-- **预期结果**: 简单搜索在8秒内返回结果，高级搜索在15秒内返回结果
-- **优先级**: P0
-
-## TC-B-002: 案件访问权限边界测试
-- **类型**: 边界
-- **测试对象**: C021 | CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_5GU5
-- **前置条件**: 案件A限制为仅特定用户组访问
-- **测试步骤**: 1. 非授权用户尝试访问案件A 2. 授权用户尝试访问案件A
-- **预期结果**: 非授权用户收到'无访问权限'消息，授权用户可正常查看案件详情
-- **优先级**: P1
-
-## TC-N-004: 成功导出审计日志
-- **类型**: 正常
-- **测试对象**: F004 | FUN_EXPORT_AUDIT_TRAIL
-- **前置条件**: 审计员已登录系统
-- **测试步骤**: 1. 导航至审计日志页面 2. 设置日期范围过滤器 3. 点击'导出'按钮 4. 选择CSV格式
-- **预期结果**: 系统生成包含指定日期范围内所有审计活动的CSV文件
-- **优先级**: P1
-
-## TC-N-005: 成功自定义用户界面
-- **类型**: 正常
-- **测试对象**: F003 | FUN_CUSTOMIZE_UI
-- **前置条件**: 用户已登录系统
-- **测试步骤**: 1. 访问UI设置页面 2. 修改菜单布局 3. 调整字体大小为14pt 4. 保存设置
-- **预期结果**: 界面立即应用新设置，配置保存到用户档案
-- **优先级**: P2
-
-## TC-E-003: 尝试修改审计记录
-- **类型**: 异常
-- **测试对象**: X005 | EXC_ATTEMPT_MODIFY_AUDIT_TRAIL
-- **前置条件**: 管理员已登录系统
-- **测试步骤**: 1. 查看审计日志 2. 尝试编辑某条审计记录的内容 3. 尝试保存更改
-- **预期结果**: 系统拒绝修改并显示错误消息'审计记录不可修改'，记录违规尝试
-- **优先级**: P0
-
-## TC-E-004: 离线操作数据同步冲突
-- **类型**: 异常
-- **测试对象**: X009 | EXC_OFFLINE_DATA_SYNCHRONIZATION_CONFLICT
-- **前置条件**: 用户在离线模式下修改案件信息
-- **测试步骤**: 1. 用户A离线修改案件X的状态 2. 用户B同时在线修改同一案件X的状态 3. 用户A重新连接并尝试同步更改
-- **预期结果**: 系统检测到冲突，标记案件X需要人工解决，显示两个冲突版本
-- **优先级**: P1
-
-## TC-B-003: 错误消息完整性测试
-- **类型**: 边界
-- **测试对象**: C001 | CON_FUNC_1BAKC800
-- **前置条件**: 触发各种错误条件
-- **测试步骤**: 1. 尝试使用无效凭证登录 2. 尝试访问不存在的案件ID 3. 提交不完整的案件注册表单
-- **预期结果**: 每种错误情况都返回包含解释文本和操作建议的有意义错误消息
-- **优先级**: P1
-
-## TC-B-004: 系统可用时间窗口测试
-- **类型**: 边界
-- **测试对象**: C004 | CON_FUNC_SYSTEM_AVAILABLE_SPECIFIED_HOURS_HCK3
-- **前置条件**: 系统配置为每天8:00-20:00可用
-- **测试步骤**: 1. 在07:59尝试登录 2. 在08:00尝试登录 3. 在20:00尝试登录 4. 在20:01尝试登录
-- **预期结果**: 仅08:00-20:00期间允许访问，其他时间显示系统不可用消息
-- **优先级**: P2
-
-## TC-N-006: 成功跟踪案件状态
-- **类型**: 正常
-- **测试对象**: F013 | FUN_TRACK_CASE
-- **前置条件**: 案件已注册，用户有访问权限
-- **测试步骤**: 1. 导航至案件跟踪页面 2. 输入案件编号 3. 查看案件状态和历史记录
-- **预期结果**: 显示案件当前状态和完整的历史状态变更记录
-- **优先级**: P1
-
-## TC-N-007: 成功记录系统缺陷
-- **类型**: 正常
-- **测试对象**: F006 | FUN_LOG_DEFECT
-- **前置条件**: 用户已登录系统
-- **测试步骤**: 1. 访问缺陷报告页面 2. 填写缺陷描述和重现步骤 3. 选择严重程度 4. 提交缺陷报告
-- **预期结果**: 系统生成缺陷ID并显示确认消息，缺陷状态为'新建'
-- **优先级**: P2
-
-## TC-E-005: 搜索无结果情况处理
-- **类型**: 异常
-- **测试对象**: X010 | EXC_SEARCH_RETURNS_RESULTS
-- **前置条件**: 执行不匹配任何案件的搜索条件
-- **测试步骤**: 1. 输入不存在的案件编号 2. 点击搜索按钮
-- **预期结果**: 系统显示'未找到匹配案件'消息，并建议替代搜索条件
-- **优先级**: P2
-
-## TC-B-005: 案件检索性能边界测试
-- **类型**: 边界
-- **测试对象**: C015 | CON_PERF_SYSTEM_MAINTAIN_CASE_RETRIEVAL_5OK1
-- **前置条件**: 案件最近2个月内被访问过
-- **测试步骤**: 1. 检索该案件详情 2. 记录响应时间
-- **预期结果**: 案件详情在8秒内显示
-- **优先级**: P0
-
-## TC-N-008: 成功发送案件状态警报
-- **类型**: 正常
-- **测试对象**: F012 | FUN_SEND_ALERT
-- **前置条件**: 用户已订阅警报，案件状态变更
-- **测试步骤**: 1. 案件状态从'调查中'变更为'已起诉' 2. 系统检测到状态变更
-- **预期结果**: 用户收到包含案件编号和新状态的电子邮件通知
-- **优先级**: P1
-
-## TC-E-006: UI自定义保存失败处理
-- **类型**: 异常
-- **测试对象**: X008 | EXC_CUSTOMIZATION_SAVE_FAILURE
-- **前置条件**: 数据库写入失败
-- **测试步骤**: 1. 尝试保存UI自定义设置 2. 模拟数据库写入错误
-- **预期结果**: 系统恢复默认UI设置并显示'无法保存偏好'错误消息
-- **优先级**: P2
-
-## TC-B-006: 多语言界面支持测试
-- **类型**: 边界
-- **测试对象**: C010 | CON_FUNC_SYSTEM_SUPPORT_MULTILINGUAL_INTERFACE_9JEO
-- **前置条件**: 系统安装多语言包
-- **测试步骤**: 1. 将界面语言切换为次要语言 2. 导航系统各主要功能页面
-- **预期结果**: 所有界面元素正确显示为所选语言，无混合语言或未翻译文本
-- **优先级**: P2
+```json
+{
+  "ops": [
+    {
+      "action": "append",
+      "path": "test_cases",
+      "items": [
+        {
+          "id": "TC-F001-001",
+          "title": "CustomizeUI - 保存界面配置",
+          "type": "正常",
+          "target": "F001",
+          "preconditions": "用户已登录",
+          "steps": [
+            "修改屏幕布局",
+            "调整配色方案",
+            "保存配置到用户配置文件"
+          ],
+          "expected_result": "界面配置保存成功且立即生效",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F001-002",
+          "title": "CustomizeUI - 会话间配置保留",
+          "type": "边界",
+          "target": "F001",
+          "preconditions": "用户已保存UI配置",
+          "steps": [
+            "注销后重新登录"
+          ],
+          "expected_result": "自定义配置保留不变",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F002-001",
+          "title": "ExportAudit - 审计数据导出",
+          "type": "正常",
+          "target": "F002",
+          "preconditions": "审计功能已激活，管理员已登录",
+          "steps": [
+            "选择审计数据范围",
+            "生成审计报告",
+            "下载审计跟踪数据"
+          ],
+          "expected_result": "审计数据完整导出且格式标准化",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F002-002",
+          "title": "ExportAudit - 审计数据完整性验证",
+          "type": "边界",
+          "target": "F002",
+          "preconditions": "存在审计数据",
+          "steps": [
+            "尝试修改导出的审计数据"
+          ],
+          "expected_result": "原始审计数据保持未更改",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-F003-001",
+          "title": "InvestigateCase - 案件调查记录",
+          "type": "正常",
+          "target": "F003",
+          "preconditions": "案件状态为'新案件'，调查人员已登录",
+          "steps": [
+            "添加调查记录",
+            "关联证据到案件",
+            "更新调查状态"
+          ],
+          "expected_result": "案件调查记录完整且状态更新",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-F003-002",
+          "title": "InvestigateCase - 案件调查权限验证",
+          "type": "异常",
+          "target": "F003",
+          "preconditions": "用户无调查权限",
+          "steps": [
+            "尝试访问案件调查功能"
+          ],
+          "expected_result": "阻止访问并记录安全事件",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F004-001",
+          "title": "ManageAccess - 用户权限设置",
+          "type": "正常",
+          "target": "F004",
+          "preconditions": "管理员已登录",
+          "steps": [
+            "设置用户/组权限",
+            "配置访问违规响应"
+          ],
+          "expected_result": "访问权限正确设置且安全属性更新记录",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-F004-002",
+          "title": "ManageAccess - 权限变更审计",
+          "type": "边界",
+          "target": "F004",
+          "preconditions": "存在权限变更记录",
+          "steps": [
+            "查看访问违规日志"
+          ],
+          "expected_result": "权限变更和违规尝试被正确记录",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F007-001",
+          "title": "RegisterCase - 案件注册",
+          "type": "正常",
+          "target": "F007",
+          "preconditions": "警务人员已登录",
+          "steps": [
+            "填写案件信息",
+            "提交案件注册"
+          ],
+          "expected_result": "案件成功注册且状态为'新案件'",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-F007-002",
+          "title": "RegisterCase - 必填字段验证",
+          "type": "异常",
+          "target": "F007",
+          "preconditions": "警务人员已登录",
+          "steps": [
+            "尝试提交缺少必填字段的案件"
+          ],
+          "expected_result": "阻止提交并高亮缺失字段",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-F008-001",
+          "title": "SearchCase - 案件搜索",
+          "type": "正常",
+          "target": "F008",
+          "preconditions": "用户已登录",
+          "steps": [
+            "输入搜索条件",
+            "执行案件搜索"
+          ],
+          "expected_result": "返回符合搜索条件的案件列表",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-F008-002",
+          "title": "SearchCase - 搜索权限验证",
+          "type": "边界",
+          "target": "F008",
+          "preconditions": "存在受限案件",
+          "steps": [
+            "使用不同权限账户搜索案件"
+          ],
+          "expected_result": "搜索结果符合用户权限级别",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F009-001",
+          "title": "TrackDefect - 缺陷提交",
+          "type": "正常",
+          "target": "F009",
+          "preconditions": "用户已登录",
+          "steps": [
+            "填写缺陷报告",
+            "提交缺陷"
+          ],
+          "expected_result": "缺陷成功提交且状态更新",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-F009-002",
+          "title": "TrackDefect - 缺陷状态跟踪",
+          "type": "边界",
+          "target": "F009",
+          "preconditions": "存在已提交缺陷",
+          "steps": [
+            "更新缺陷状态"
+          ],
+          "expected_result": "缺陷状态正确更新且记录变更历史",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-EXC-001",
+          "title": "EXC_AUDIT_EXPORT_FAILURE - 审计导出失败处理",
+          "type": "异常",
+          "target": "EXC_AUDIT_EXPORT_FAILURE",
+          "preconditions": "审计功能已激活",
+          "steps": [
+            "模拟审计导出失败场景"
+          ],
+          "expected_result": "显示有意义的错误信息并记录失败事件",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-EXC-002",
+          "title": "EXC_CASE_REGISTRATION_FAILS_DUE - 案件注册失败处理",
+          "type": "异常",
+          "target": "EXC_CASE_REGISTRATION_FAILS_DUE",
+          "preconditions": "警务人员已登录",
+          "steps": [
+            "模拟案件注册失败场景"
+          ],
+          "expected_result": "显示失败原因并提供恢复指导",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-EXC-003",
+          "title": "EXC_DEFECT_TRACKING_SYSTEM_UNAVAILABLE - 缺陷系统不可用处理",
+          "type": "异常",
+          "target": "EXC_DEFECT_TRACKING_SYSTEM_UNAVAILABLE",
+          "preconditions": "用户已登录",
+          "steps": [
+            "模拟缺陷系统不可用场景"
+          ],
+          "expected_result": "显示系统维护信息并记录故障",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-EXC-004",
+          "title": "EXC_SEARCH_TIMEOUT - 搜索超时处理",
+          "type": "异常",
+          "target": "EXC_SEARCH_TIMEOUT",
+          "preconditions": "系统中有大量案件数据",
+          "steps": [
+            "执行复杂搜索触发超时"
+          ],
+          "expected_result": "显示超时提示并提供简化搜索建议",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-CON-020",
+          "title": "CON_FUNC_ALLOW_GUI_CUSTOMIZATION_D1SJ - GUI自定义验证",
+          "type": "边界",
+          "target": "CON_FUNC_ALLOW_GUI_CUSTOMIZATION_D1SJ",
+          "preconditions": "用户已登录",
+          "steps": [
+            "尝试自定义GUI元素"
+          ],
+          "expected_result": "允许GUI自定义且不影响其他用户",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-CON-021",
+          "title": "CON_FUNC_SANITIZE_USER_INPUTS_U3IO - 输入清理验证",
+          "type": "边界",
+          "target": "CON_FUNC_SANITIZE_USER_INPUTS_U3IO",
+          "preconditions": "系统运行中",
+          "steps": [
+            "输入包含潜在危险字符的内容"
+          ],
+          "expected_result": "输入被正确清理且无害化",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-CON-022",
+          "title": "CON_SEC_LOG_ACCESS_CONTROL_VIOLATIONS_4BA7 - 访问违规日志验证",
+          "type": "边界",
+          "target": "CON_SEC_LOG_ACCESS_CONTROL_VIOLATIONS_4BA7",
+          "preconditions": "存在受限资源",
+          "steps": [
+            "尝试未经授权访问受限资源"
+          ],
+          "expected_result": "访问被阻止且违规尝试被记录",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-CON-023",
+          "title": "CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0 - SSL连接验证",
+          "type": "边界",
+          "target": "CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0",
+          "preconditions": "系统配置为强制SSL",
+          "steps": [
+            "尝试通过非加密连接访问敏感数据"
+          ],
+          "expected_result": "连接被拒绝或重定向到安全连接",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-CON-024",
+          "title": "CON_FUNC_USE_PARAMETERIZED_QUERIES_9HRR - 参数化查询验证",
+          "type": "边界",
+          "target": "CON_FUNC_USE_PARAMETERIZED_QUERIES_9HRR",
+          "preconditions": "系统运行中",
+          "steps": [
+            "尝试通过输入进行SQL注入"
+          ],
+          "expected_result": "注入尝试被阻止且查询安全执行",
+          "priority": "P0"
+        }
+      ]
+    }
+  ]
+}
+```

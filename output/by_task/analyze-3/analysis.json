@@ -1,479 +1,484 @@
 {
   "project_name": "PoliceCaseManagementSystem",
-  "project_overview": "警务案件管理系统，用于案件注册、调查、起诉、搜索和跟踪，支持多语言界面和严格的访问控制。",
+  "project_overview": "A comprehensive system for police case registration, investigation, prosecution, and reporting with robust audit and access control features.",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "管理员"
+      "description": "System administrator with full access rights"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "警务人员"
+      "description": "Law enforcement personnel who investigate cases"
     },
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "公民"
+      "description": "General public users who may report cases"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "帮助台"
-    },
-    {
-      "actorRef": "A_AUDITOR",
-      "name": "Auditor",
-      "description": "审计员"
+      "description": "Support staff handling system issues and enhancement requests"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
-      "description": "记录室工作人员"
+      "description": "Personnel managing case records and documentation"
+    },
+    {
+      "actorRef": "A_EXTERNAL_AUDITOR",
+      "name": "ExternalAuditor",
+      "description": "Authorized external personnel who audit system activities"
     }
   ],
   "functions": [
     {
       "id": "FUN_REGISTER_CASE",
       "name": "RegisterCase",
-      "description": "注册案件",
+      "description": "Register new police cases in the system",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Case details are captured completely",
+        "Case receives unique identifier",
+        "Audit trail entry is created"
+      ],
       "related_actors": [
-        "A_POLICE_OFFICER"
+        "A_POLICE_OFFICER",
+        "A_CITIZEN"
       ],
       "priority": "high",
-      "preconditions": "用户已登录并具有注册案件的权限"
+      "preconditions": "User must be authenticated"
     },
     {
       "id": "FUN_INVESTIGATE_CASE",
       "name": "InvestigateCase",
-      "description": "调查案件",
+      "description": "Conduct investigation on registered cases",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Case status updates reflect investigation progress",
+        "All evidence and notes are properly recorded",
+        "Access is restricted based on authorization"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "案件已注册"
+      "preconditions": "Case must be registered"
     },
     {
       "id": "FUN_PROSECUTE_CASE",
       "name": "ProsecuteCase",
-      "description": "起诉案件",
+      "description": "Prepare and manage case prosecution",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Court documents are properly generated",
+        "Case status reflects prosecution stage",
+        "All actions are audited"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "案件调查完成"
+      "preconditions": "Case investigation must be complete"
     },
     {
       "id": "FUN_SEARCH_CASE",
       "name": "SearchCase",
-      "description": "搜索案件",
+      "description": "Search for cases based on various criteria",
       "sub_capabilities": [
-        "SimpleSearch",
-        "AdvancedSearch"
+        "Basic search",
+        "Advanced search"
       ],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Search results are returned within performance requirements",
+        "Only authorized cases are displayed",
+        "Search criteria are properly applied"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER",
-        "A_CITIZEN"
+        "A_ADMIN"
       ],
       "priority": "high",
-      "preconditions": "用户已登录"
-    },
-    {
-      "id": "FUN_TRACK_CASE",
-      "name": "TrackCase",
-      "description": "跟踪案件",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_POLICE_OFFICER",
-        "A_CITIZEN"
-      ],
-      "priority": "medium",
-      "preconditions": "案件已注册"
-    },
-    {
-      "id": "FUN_EXPORT_AUDIT_TRAIL",
-      "name": "ExportAuditTrail",
-      "description": "导出审计跟踪",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_AUDITOR"
-      ],
-      "priority": "medium",
-      "preconditions": "审计员已登录"
-    },
-    {
-      "id": "FUN_MANAGE_USER_PROFILE",
-      "name": "ManageUserProfile",
-      "description": "管理用户配置文件",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "medium",
-      "preconditions": "管理员已登录"
-    },
-    {
-      "id": "FUN_CONFIGURE_APPLICATION",
-      "name": "ConfigureApplication",
-      "description": "配置应用",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "medium",
-      "preconditions": "管理员已登录"
-    },
-    {
-      "id": "FUN_LOG_DEFECT",
-      "name": "LogDefect",
-      "description": "记录缺陷",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "low",
-      "preconditions": "用户已登录"
+      "preconditions": "User must be authenticated"
     },
     {
       "id": "FUN_TRACK_DEFECT",
       "name": "TrackDefect",
-      "description": "跟踪缺陷",
+      "description": "Log and track system defects or enhancement requests",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_HELP_DESK"
+      "acceptance_criteria": [
+        "Defects are properly categorized",
+        "Status updates are recorded",
+        "Users receive notifications"
       ],
-      "priority": "low",
-      "preconditions": "缺陷已记录"
-    },
-    {
-      "id": "FUN_SEND_ALERT",
-      "name": "SendAlert",
-      "description": "发送警报",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
       "related_actors": [
-        "System"
+        "A_HELP_DESK",
+        "A_ADMIN"
       ],
       "priority": "medium",
-      "preconditions": "用户已选择接收警报"
+      "preconditions": "User must be authenticated"
     },
     {
-      "id": "FUN_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "访问控制",
+      "id": "FUN_EXPORT_AUDIT",
+      "name": "ExportAudit",
+      "description": "Export audit trail data for external review",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Exported data is complete and accurate",
+        "Original audit trail remains unaltered",
+        "Format is usable by external auditors"
+      ],
+      "related_actors": [
+        "A_EXTERNAL_AUDITOR",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "User must have export permissions"
+    },
+    {
+      "id": "FUN_MANAGE_ACCESS",
+      "name": "ManageAccess",
+      "description": "Configure user access rights to cases",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "Access restrictions are properly applied",
+        "Unauthorized access attempts are logged",
+        "Group memberships are correctly managed"
+      ],
       "related_actors": [
         "A_ADMIN"
       ],
       "priority": "high",
-      "preconditions": "管理员已登录"
-    },
-    {
-      "id": "FUN_NAVIGATE",
-      "name": "Navigate",
-      "description": "导航",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "All"
-      ],
-      "priority": "low",
-      "preconditions": "用户已登录"
+      "preconditions": "User must be administrator"
     },
     {
       "id": "FUN_CUSTOMIZE_UI",
       "name": "CustomizeUI",
-      "description": "自定义界面",
+      "description": "Customize user interface elements and layouts",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "All"
+      "acceptance_criteria": [
+        "Customizations are saved per user",
+        "Interface remains usable after changes",
+        "Special accessibility needs are accommodated"
       ],
-      "priority": "low",
-      "preconditions": "用户已登录"
+      "related_actors": [
+        "A_POLICE_OFFICER",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "User must be authenticated"
+    },
+    {
+      "id": "FUN_VIEW_REPORTS",
+      "name": "ViewReports",
+      "description": "Generate and view system reports",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "Reports contain accurate data",
+        "Access is restricted based on authorization",
+        "Multiple report formats are available"
+      ],
+      "related_actors": [
+        "A_ADMIN",
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "medium",
+      "preconditions": "User must be authenticated"
+    },
+    {
+      "id": "FUN_MANAGE_CONFIG",
+      "name": "ManageConfig",
+      "description": "Manage system configuration settings",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "Changes are properly applied",
+        "Configuration history is maintained",
+        "Critical changes require confirmation"
+      ],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "User must be administrator"
     }
   ],
   "entities": [
     {
       "entityRef": "E_CASE",
       "name": "Case",
-      "description": "案件",
+      "description": "Police case record containing investigation details",
       "attributes": [
         {
           "name": "caseId",
           "type": "String",
-          "description": "案件ID"
+          "description": "Unique identifier for the case"
         },
         {
           "name": "title",
           "type": "String",
-          "description": "案件标题"
-        },
-        {
-          "name": "description",
-          "type": "String",
-          "description": "案件描述"
+          "description": "Brief description of the case"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "案件状态"
+          "description": "Current status of the case"
         },
         {
-          "name": "createdAt",
+          "name": "createdDate",
           "type": "DateTime",
-          "description": "创建时间"
+          "description": "Date and time when case was registered"
         },
         {
-          "name": "updatedAt",
+          "name": "lastAccessed",
           "type": "DateTime",
-          "description": "更新时间"
+          "description": "Date and time when case was last accessed"
         }
       ],
       "relationships": [
         {
-          "target": "Suspect",
+          "target": "E_SUSPECT",
           "type": "one-to-many",
-          "description": "案件关联的嫌疑人"
+          "description": "Case may involve multiple suspects"
         },
         {
-          "target": "Property",
+          "target": "E_PROPERTY",
           "type": "one-to-many",
-          "description": "案件关联的财产"
+          "description": "Case may involve multiple properties"
         },
         {
-          "target": "Document",
+          "target": "E_AUDIT_TRAIL",
           "type": "one-to-many",
-          "description": "案件关联的文档"
+          "description": "Case has multiple audit trail entries"
         }
       ]
     },
     {
       "entityRef": "E_SUSPECT",
       "name": "Suspect",
-      "description": "嫌疑人",
+      "description": "Individual suspected of involvement in a case",
       "attributes": [
         {
           "name": "suspectId",
           "type": "String",
-          "description": "嫌疑人ID"
+          "description": "Unique identifier for the suspect"
         },
         {
           "name": "name",
           "type": "String",
-          "description": "嫌疑人姓名"
+          "description": "Full name of the suspect"
         },
         {
-          "name": "age",
-          "type": "Integer",
-          "description": "年龄"
-        },
-        {
-          "name": "gender",
+          "name": "description",
           "type": "String",
-          "description": "性别"
+          "description": "Physical description and other details"
         }
       ],
       "relationships": [
         {
-          "target": "Case",
+          "target": "E_CASE",
           "type": "many-to-one",
-          "description": "关联的案件"
+          "description": "Suspect may be involved in multiple cases"
         }
       ]
     },
     {
       "entityRef": "E_PROPERTY",
       "name": "Property",
-      "description": "财产",
+      "description": "Physical property or evidence related to a case",
       "attributes": [
         {
           "name": "propertyId",
           "type": "String",
-          "description": "财产ID"
+          "description": "Unique identifier for the property"
         },
         {
-          "name": "name",
+          "name": "description",
           "type": "String",
-          "description": "财产名称"
+          "description": "Description of the property"
         },
         {
-          "name": "value",
-          "type": "Decimal",
-          "description": "财产价值"
+          "name": "status",
+          "type": "String",
+          "description": "Current status of the property (evidence, returned, etc.)"
         }
       ],
       "relationships": [
         {
-          "target": "Case",
+          "target": "E_CASE",
           "type": "many-to-one",
-          "description": "关联的案件"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_DOCUMENT",
-      "name": "Document",
-      "description": "文档",
-      "attributes": [
-        {
-          "name": "documentId",
-          "type": "String",
-          "description": "文档ID"
-        },
-        {
-          "name": "title",
-          "type": "String",
-          "description": "文档标题"
-        },
-        {
-          "name": "type",
-          "type": "String",
-          "description": "文档类型"
-        },
-        {
-          "name": "content",
-          "type": "String",
-          "description": "文档内容"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "关联的案件"
+          "description": "Property may be related to multiple cases"
         }
       ]
     },
     {
       "entityRef": "E_AUDIT_TRAIL",
       "name": "AuditTrail",
-      "description": "审计跟踪",
+      "description": "Record of system activities and access for auditing purposes",
       "attributes": [
         {
           "name": "auditId",
           "type": "String",
-          "description": "审计ID"
+          "description": "Unique identifier for the audit entry"
         },
         {
           "name": "action",
           "type": "String",
-          "description": "操作类型"
-        },
-        {
-          "name": "entityType",
-          "type": "String",
-          "description": "实体类型"
-        },
-        {
-          "name": "entityId",
-          "type": "String",
-          "description": "实体ID"
-        },
-        {
-          "name": "userId",
-          "type": "String",
-          "description": "用户ID"
+          "description": "Description of the action performed"
         },
         {
           "name": "timestamp",
           "type": "DateTime",
-          "description": "时间戳"
+          "description": "Date and time when action occurred"
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "User who performed the action"
         }
       ],
-      "relationships": []
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-one",
+          "description": "Audit entry may be related to a specific case"
+        }
+      ]
     },
     {
       "entityRef": "E_USER_PROFILE",
       "name": "UserProfile",
-      "description": "用户配置文件",
+      "description": "User account information and preferences",
       "attributes": [
         {
           "name": "userId",
           "type": "String",
-          "description": "用户ID"
+          "description": "Unique identifier for the user"
         },
         {
-          "name": "username",
+          "name": "name",
           "type": "String",
-          "description": "用户名"
+          "description": "User's full name"
         },
         {
           "name": "role",
           "type": "String",
-          "description": "角色"
+          "description": "User's role in the system"
         },
         {
-          "name": "preferences",
+          "name": "uiPreferences",
           "type": "Object",
-          "description": "用户偏好设置"
+          "description": "User interface customization settings"
         }
       ],
-      "relationships": []
+      "relationships": [
+        {
+          "target": "E_ACCESS_CONTROL",
+          "type": "one-to-many",
+          "description": "User may have multiple access control entries"
+        }
+      ]
     },
     {
-      "entityRef": "E_COMPLAINT",
-      "name": "Complaint",
-      "description": "投诉",
+      "entityRef": "E_ACCESS_CONTROL",
+      "name": "AccessControl",
+      "description": "Permissions and security attributes for users and groups",
       "attributes": [
         {
-          "name": "complaintId",
+          "name": "controlId",
           "type": "String",
-          "description": "投诉ID"
+          "description": "Unique identifier for the access control entry"
         },
         {
-          "name": "title",
+          "name": "resourceType",
           "type": "String",
-          "description": "投诉标题"
+          "description": "Type of resource being controlled (case, report, etc.)"
+        },
+        {
+          "name": "permissionLevel",
+          "type": "String",
+          "description": "Level of access granted"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_USER_PROFILE",
+          "type": "many-to-one",
+          "description": "Access control applies to specific users"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_DEFECT",
+      "name": "Defect",
+      "description": "System defect or enhancement request",
+      "attributes": [
+        {
+          "name": "defectId",
+          "type": "String",
+          "description": "Unique identifier for the defect"
         },
         {
           "name": "description",
           "type": "String",
-          "description": "投诉描述"
+          "description": "Detailed description of the issue"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "投诉状态"
+          "description": "Current status of the defect"
+        },
+        {
+          "name": "priority",
+          "type": "String",
+          "description": "Priority level for resolution"
         }
       ],
       "relationships": []
     },
     {
-      "entityRef": "E_SEARCH_RESULT",
-      "name": "SearchResult",
-      "description": "搜索结果",
+      "entityRef": "E_NAVIGATION",
+      "name": "Navigation",
+      "description": "System navigation structure and user paths",
       "attributes": [
         {
-          "name": "resultId",
+          "name": "navId",
           "type": "String",
-          "description": "结果ID"
+          "description": "Unique identifier for the navigation element"
         },
         {
-          "name": "query",
+          "name": "path",
           "type": "String",
-          "description": "查询条件"
+          "description": "Navigation path or route"
         },
         {
-          "name": "items",
-          "type": "List",
-          "description": "结果项列表"
+          "name": "label",
+          "type": "String",
+          "description": "Display label for the navigation element"
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "entityRef": "E_CONFIGURATION",
+      "name": "Configuration",
+      "description": "System configuration settings and parameters",
+      "attributes": [
+        {
+          "name": "configId",
+          "type": "String",
+          "description": "Unique identifier for the configuration"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "Name of the configuration parameter"
+        },
+        {
+          "name": "value",
+          "type": "String",
+          "description": "Current value of the parameter"
         }
       ],
       "relationships": []
@@ -482,171 +487,238 @@
   "constraints": [
     {
       "constraintRef": "C_RULE_001",
-      "description": "系统必须提供详细的上下文相关帮助材料，涵盖应用程序中所有用户界面的所有可能操作和场景。",
+      "description": "System must provide detailed context-sensitive help material",
       "related_functions": [
-        "FUN_NAVIGATE"
+        "FUN_REGISTER_CASE",
+        "FUN_INVESTIGATE_CASE",
+        "FUN_PROSECUTE_CASE"
       ],
       "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
     },
     {
       "constraintRef": "C_RULE_002",
-      "description": "系统必须提供一个界面，供用户记录应用程序上的任何缺陷或增强请求并跟踪。",
+      "description": "System must provide interface for logging defects/enhancements",
       "related_functions": [
-        "FUN_LOG_DEFECT",
         "FUN_TRACK_DEFECT"
       ],
       "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
     },
     {
-      "constraintRef": "C_RULE_003",
-      "description": "系统必须能够发送警报（例如电子邮件、短信）给用户，如果用户选择在任何操作已采取时接收警报。",
-      "related_functions": [
-        "FUN_SEND_ALERT"
-      ],
-      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
-    },
-    {
       "constraintRef": "C_RULE_004",
-      "description": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。",
+      "description": "System must maintain unalterable audit trail",
       "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
+        "FUN_EXPORT_AUDIT"
       ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word “unalterable” is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
     },
     {
-      "constraintRef": "C_RULE_005",
-      "description": "系统必须允许用户将案件访问权限限制为指定的用户或用户组。",
+      "constraintRef": "C_RULE_007",
+      "description": "System must allow limiting case access to specific users/groups",
       "related_functions": [
-        "FUN_ACCESS_CONTROL"
+        "FUN_MANAGE_ACCESS"
       ],
       "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
     },
     {
-      "constraintRef": "C_RULE_006",
-      "description": "系统必须仅允许管理员用户设置用户配置文件并将用户分配到组。",
+      "constraintRef": "C_RULE_008",
+      "description": "Only admin-users can set up profiles and allocate users to groups",
       "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
+        "FUN_MANAGE_ACCESS"
       ],
       "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
     },
     {
-      "constraintRef": "C_RULE_007",
-      "description": "系统必须确保所有错误消息都是有意义的，以便用户能够适当地采取行动。",
+      "constraintRef": "C_RULE_010",
+      "description": "Search results must exclude unauthorized records",
       "related_functions": [
-        "All"
+        "FUN_SEARCH_CASE"
       ],
-      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
+      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
     },
     {
-      "constraintRef": "C_RULE_008",
-      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索（多个搜索条件），无论存储容量或系统中的案件数量如何。",
+      "constraintRef": "C_RULE_012",
+      "description": "Interfaces must be customizable and save configurations in user profile",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
+    },
+    {
+      "constraintRef": "C_RULE_014",
+      "description": "System must perform simple search in 5-8 seconds, advanced in 10-15",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves."
     },
     {
-      "constraintRef": "C_RULE_009",
-      "description": "系统必须支持多语言界面。",
+      "constraintRef": "C_RULE_016",
+      "description": "System must support multilingual interface",
       "related_functions": [
         "FUN_CUSTOMIZE_UI"
       ],
-      "source_text": "The system should support multilingual interface."
+      "source_text": "The system should support multilingual interface"
     },
     {
-      "constraintRef": "C_RULE_010",
-      "description": "系统必须使用HTTPS作为通信协议，即通过加密的安全套接字层（SSL）的HTTP。",
+      "constraintRef": "C_RULE_028",
+      "description": "System must be able to export audit trails for specified cases",
       "related_functions": [
-        "All"
+        "FUN_EXPORT_AUDIT"
       ],
-      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)."
+      "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity."
+    },
+    {
+      "constraintRef": "C_RULE_032",
+      "description": "System must provide role-based control for functionality",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The system should provide for role-based control for the functionality within the system"
+    },
+    {
+      "constraintRef": "C_RULE_039",
+      "description": "System must employ single set of UI rules for consistent look and feel",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application."
+    },
+    {
+      "constraintRef": "C_RULE_045",
+      "description": "User interfaces must comply with ISO 9241 standard",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The user interfaces of the system should comply with Standard ISO 9241."
+    },
+    {
+      "constraintRef": "C_RULE_048",
+      "description": "System should be implemented using SOA and modular design",
+      "related_functions": [],
+      "source_text": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design"
+    },
+    {
+      "constraintRef": "C_RULE_053",
+      "description": "System should have n-tier architecture with separated layers",
+      "related_functions": [],
+      "source_text": "The system should be designed to have a n-tier architecture with the presentation logic separated from the business logic that is again separated from the data-access logic"
+    },
+    {
+      "constraintRef": "C_RULE_079",
+      "description": "System must allow users to track submitted defects/enhancements",
+      "related_functions": [
+        "FUN_TRACK_DEFECT"
+      ],
+      "source_text": "The solution should enable the user to track the submitted defect or enhancement request."
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [
     {
       "id": "X001",
-      "description": "用户尝试访问无权限的案件",
-      "trigger": "用户请求访问或搜索无权限的案件",
-      "handling": "系统根据配置提供不同级别的响应：显示标题和元数据、仅显示案件存在、不显示任何信息"
+      "description": "Unauthorized access attempt to case",
+      "trigger": "User attempts to access case without proper permissions",
+      "handling": "Log attempt in audit trail and display configured response"
     },
     {
       "id": "X002",
-      "description": "用户尝试执行无权限的操作",
-      "trigger": "用户尝试执行超出其权限范围的操作",
-      "handling": "系统记录违规行为到审计跟踪，并向用户显示有意义的错误消息"
+      "description": "Case retrieval timeout",
+      "trigger": "Case retrieval exceeds performance thresholds",
+      "handling": "Notify user and suggest alternative actions"
+    },
+    {
+      "id": "X003",
+      "description": "Audit trail export failure",
+      "trigger": "Error during audit trail export process",
+      "handling": "Log error and notify administrator"
+    },
+    {
+      "id": "X004",
+      "description": "Defect tracking system unavailable",
+      "trigger": "Defect tracking subsystem is offline",
+      "handling": "Queue requests and process when system is available"
     }
   ],
   "non_functional_requirements": [
     {
-      "category": "性能",
-      "description": "系统必须在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
+      "category": "Performance",
+      "description": "System must provide adequate response times under standard and peak conditions"
     },
     {
-      "category": "安全",
-      "description": "系统必须使用HTTPS作为通信协议"
+      "category": "Security",
+      "description": "System must implement robust access control and authentication mechanisms"
     },
     {
-      "category": "可用性",
-      "description": "系统必须提供详细的上下文相关帮助材料"
+      "category": "Usability",
+      "description": "System must provide intuitive interfaces suitable for users with special needs"
     },
     {
-      "category": "可扩展性",
-      "description": "系统必须能够扩展以适应小型和大型警察局的不同需求"
+      "category": "Availability",
+      "description": "System must maintain high availability with minimal planned and unplanned downtime"
     },
     {
-      "category": "可访问性",
-      "description": "系统用户界面必须适合有特殊需求的用户"
+      "category": "Scalability",
+      "description": "System must scale to support varying numbers of cases and users"
+    },
+    {
+      "category": "Auditability",
+      "description": "System must maintain complete and unalterable audit trails"
+    },
+    {
+      "category": "Accessibility",
+      "description": "System must comply with accessibility standards and guidelines"
     }
   ],
   "business_processes": [
     {
-      "name": "案件注册流程",
+      "name": "CaseRegistration",
       "steps": [
-        "填写案件信息",
-        "提交案件",
-        "系统验证",
-        "案件创建"
+        "Enter case details",
+        "Verify information",
+        "Submit case",
+        "Generate case number"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER",
+        "A_CITIZEN"
+      ]
+    },
+    {
+      "name": "CaseInvestigation",
+      "steps": [
+        "Review case details",
+        "Collect evidence",
+        "Interview witnesses",
+        "Update case status"
       ],
       "actors": [
         "A_POLICE_OFFICER"
       ]
     },
     {
-      "name": "案件调查流程",
+      "name": "DefectReporting",
       "steps": [
-        "分配调查员",
-        "收集证据",
-        "记录调查结果",
-        "更新案件状态"
+        "Describe issue",
+        "Categorize defect",
+        "Submit report",
+        "Track resolution"
       ],
       "actors": [
-        "A_POLICE_OFFICER"
+        "A_HELP_DESK",
+        "A_ADMIN"
       ]
     },
     {
-      "name": "案件起诉流程",
+      "name": "AuditReview",
       "steps": [
-        "准备起诉材料",
-        "提交起诉",
-        "系统记录",
-        "更新案件状态"
+        "Select audit criteria",
+        "Generate report",
+        "Review activities",
+        "Export findings"
       ],
       "actors": [
-        "A_POLICE_OFFICER"
-      ]
-    },
-    {
-      "name": "缺陷报告流程",
-      "steps": [
-        "填写缺陷报告",
-        "提交报告",
-        "系统记录",
-        "分配帮助台人员"
-      ],
-      "actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
+        "A_EXTERNAL_AUDITOR",
+        "A_ADMIN"
       ]
     }
   ],

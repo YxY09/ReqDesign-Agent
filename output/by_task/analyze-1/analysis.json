@@ -1,36 +1,36 @@
 {
   "project_name": "PoliceCaseManagementSystem",
-  "project_overview": "A system for police to manage case registration, investigation, and prosecution processes with citizen interaction capabilities.",
+  "project_overview": "警务案件管理系统，用于案件注册、调查、起诉和搜索，提高警务工作效率和信息安全性",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "系统管理员"
+      "description": "系统管理员，负责用户管理和系统配置"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "警务人员"
+      "description": "警务人员，负责案件调查和处理"
     },
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "公民"
+      "description": "公民，可以注册投诉和查看案件状态"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "帮助台"
-    },
-    {
-      "actorRef": "A_AUDITOR",
-      "name": "Auditor",
-      "description": "审计员"
+      "description": "帮助台人员，处理系统缺陷和增强请求"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
-      "description": "记录室工作人员"
+      "description": "记录室工作人员，负责案件记录管理"
+    },
+    {
+      "actorRef": "A_EXTERNAL_AUDITOR",
+      "name": "ExternalAuditor",
+      "description": "外部审计员，审查系统审计跟踪"
     }
   ],
   "functions": [
@@ -39,175 +39,169 @@
       "name": "RegisterCase",
       "description": "注册案件",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "案件信息完整记录",
+        "案件编号自动生成",
+        "案件状态初始化为'新案件'"
+      ],
       "related_actors": [
         "A_CITIZEN",
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "公民需要提供有效的身份信息和案件详情"
+      "preconditions": "用户已登录并具有相应权限"
     },
     {
       "id": "FUN_INVESTIGATE_CASE",
       "name": "InvestigateCase",
       "description": "调查案件",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "案件调查记录完整",
+        "调查状态更新",
+        "相关证据关联到案件"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "案件必须已注册"
+      "preconditions": "案件已注册且状态为'新案件'"
     },
     {
       "id": "FUN_PROSECUTE_CASE",
       "name": "ProsecuteCase",
       "description": "起诉案件",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "案件起诉记录完整",
+        "起诉状态更新",
+        "法院接口信息记录"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "案件调查已完成"
+      "preconditions": "案件调查已完成且证据充分"
     },
     {
       "id": "FUN_SEARCH_CASE",
       "name": "SearchCase",
       "description": "搜索案件",
       "sub_capabilities": [
-        "SimpleSearch",
+        "BasicSearch",
         "AdvancedSearch"
       ],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "搜索结果在5-8秒内返回（简单搜索）",
+        "搜索结果在10-15秒内返回（高级搜索）",
+        "仅显示用户有权访问的案件"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER",
-        "A_CITIZEN"
-      ],
-      "priority": "medium",
-      "preconditions": "用户需要有案件访问权限"
-    },
-    {
-      "id": "FUN_TRACK_CASE",
-      "name": "TrackCase",
-      "description": "跟踪案件",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "medium",
-      "preconditions": "案件必须已注册"
-    },
-    {
-      "id": "FUN_EXPORT_AUDIT_TRAIL",
-      "name": "ExportAuditTrail",
-      "description": "导出审计跟踪",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_AUDITOR"
-      ],
-      "priority": "low",
-      "preconditions": "需要管理员权限"
-    },
-    {
-      "id": "FUN_MANAGE_USER_PROFILE",
-      "name": "ManageUserProfile",
-      "description": "管理用户配置文件",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
         "A_ADMIN"
       ],
-      "priority": "medium",
-      "preconditions": "需要管理员权限"
-    },
-    {
-      "id": "FUN_CONFIGURE_APPLICATION",
-      "name": "ConfigureApplication",
-      "description": "配置应用",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "low",
-      "preconditions": "需要管理员权限"
-    },
-    {
-      "id": "FUN_LOG_DEFECT",
-      "name": "LogDefect",
-      "description": "记录缺陷",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "low",
-      "preconditions": "用户需要登录系统"
+      "priority": "high",
+      "preconditions": "用户已登录并具有相应权限"
     },
     {
       "id": "FUN_TRACK_DEFECT",
       "name": "TrackDefect",
       "description": "跟踪缺陷",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_HELP_DESK"
+      "acceptance_criteria": [
+        "缺陷状态可追踪",
+        "缺陷报告可生成",
+        "用户可收到状态更新通知"
       ],
-      "priority": "low",
-      "preconditions": "缺陷必须已记录"
-    },
-    {
-      "id": "FUN_SEND_ALERT",
-      "name": "SendAlert",
-      "description": "发送警报",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
       "related_actors": [
-        "System"
+        "A_HELP_DESK",
+        "A_CITIZEN"
       ],
       "priority": "medium",
-      "preconditions": "用户选择接收警报"
+      "preconditions": "缺陷已提交"
     },
     {
-      "id": "FUN_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "访问控制",
+      "id": "FUN_EXPORT_AUDIT",
+      "name": "ExportAudit",
+      "description": "导出审计",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "审计数据完整导出",
+        "导出格式标准化",
+        "导出不影响系统审计跟踪"
+      ],
+      "related_actors": [
+        "A_EXTERNAL_AUDITOR",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "审计功能已激活"
+    },
+    {
+      "id": "FUN_MANAGE_ACCESS",
+      "name": "ManageAccess",
+      "description": "管理访问",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "访问权限正确设置",
+        "用户组配置正确",
+        "安全属性更新记录"
+      ],
       "related_actors": [
         "A_ADMIN"
       ],
       "priority": "high",
-      "preconditions": "需要管理员权限"
-    },
-    {
-      "id": "FUN_NAVIGATE",
-      "name": "Navigate",
-      "description": "导航",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "All"
-      ],
-      "priority": "low",
-      "preconditions": "用户需要登录系统"
+      "preconditions": "用户具有管理员权限"
     },
     {
       "id": "FUN_CUSTOMIZE_UI",
       "name": "CustomizeUI",
       "description": "自定义界面",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "界面配置保存成功",
+        "配置随用户配置文件保存",
+        "配置立即生效"
+      ],
       "related_actors": [
-        "All"
+        "A_POLICE_OFFICER",
+        "A_ADMIN"
       ],
       "priority": "low",
-      "preconditions": "用户需要登录系统"
+      "preconditions": "用户已登录"
+    },
+    {
+      "id": "FUN_VIEW_REPORTS",
+      "name": "ViewReports",
+      "description": "查看报告",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "报告按案件、用户和时间顺序生成",
+        "报告可按工作站和网络地址组织",
+        "报告数据准确"
+      ],
+      "related_actors": [
+        "A_POLICE_OFFICER",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "用户具有相应权限"
+    },
+    {
+      "id": "FUN_MANAGE_CONFIG",
+      "name": "ManageConfig",
+      "description": "管理配置",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "配置更新成功",
+        "配置变更记录在审计跟踪中",
+        "配置立即生效"
+      ],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "用户具有管理员权限"
     }
   ],
   "entities": [
@@ -222,19 +216,34 @@
           "description": "案件唯一标识"
         },
         {
-          "name": "status",
+          "name": "title",
           "type": "String",
-          "description": "案件状态"
-        },
-        {
-          "name": "registrationDate",
-          "type": "DateTime",
-          "description": "注册日期"
+          "description": "案件标题"
         },
         {
           "name": "description",
           "type": "String",
           "description": "案件描述"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "案件状态"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "description": "更新时间"
+        },
+        {
+          "name": "accessControl",
+          "type": "Object",
+          "description": "访问控制设置"
         }
       ],
       "relationships": [
@@ -249,9 +258,9 @@
           "description": "案件关联的财产"
         },
         {
-          "target": "Document",
+          "target": "AuditTrail",
           "type": "one-to-many",
-          "description": "案件关联的文档"
+          "description": "案件的审计跟踪"
         }
       ]
     },
@@ -271,16 +280,21 @@
           "description": "嫌疑人姓名"
         },
         {
-          "name": "identificationNumber",
+          "name": "description",
           "type": "String",
-          "description": "身份证号"
+          "description": "嫌疑人描述"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "嫌疑人状态"
         }
       ],
       "relationships": [
         {
           "target": "Case",
           "type": "many-to-one",
-          "description": "关联的案件"
+          "description": "嫌疑人关联的案件"
         }
       ]
     },
@@ -295,50 +309,26 @@
           "description": "财产唯一标识"
         },
         {
+          "name": "name",
+          "type": "String",
+          "description": "财产名称"
+        },
+        {
           "name": "description",
           "type": "String",
           "description": "财产描述"
         },
         {
-          "name": "value",
-          "type": "Decimal",
-          "description": "财产价值"
+          "name": "status",
+          "type": "String",
+          "description": "财产状态"
         }
       ],
       "relationships": [
         {
           "target": "Case",
           "type": "many-to-one",
-          "description": "关联的案件"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_DOCUMENT",
-      "name": "Document",
-      "description": "文档",
-      "attributes": [
-        {
-          "name": "documentId",
-          "type": "String",
-          "description": "文档唯一标识"
-        },
-        {
-          "name": "title",
-          "type": "String",
-          "description": "文档标题"
-        },
-        {
-          "name": "content",
-          "type": "String",
-          "description": "文档内容"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "关联的案件"
+          "description": "财产关联的案件"
         }
       ]
     },
@@ -358,21 +348,26 @@
           "description": "执行的操作"
         },
         {
+          "name": "userId",
+          "type": "String",
+          "description": "执行操作的用户"
+        },
+        {
           "name": "timestamp",
           "type": "DateTime",
           "description": "操作时间"
         },
         {
-          "name": "userId",
+          "name": "details",
           "type": "String",
-          "description": "执行操作的用户"
+          "description": "操作详情"
         }
       ],
       "relationships": [
         {
           "target": "Case",
           "type": "many-to-one",
-          "description": "关联的案件"
+          "description": "审计记录关联的案件"
         }
       ]
     },
@@ -382,204 +377,915 @@
       "description": "用户配置文件",
       "attributes": [
         {
+          "name": "profileId",
+          "type": "String",
+          "description": "配置文件唯一标识"
+        },
+        {
           "name": "userId",
           "type": "String",
-          "description": "用户唯一标识"
+          "description": "关联的用户"
         },
         {
-          "name": "role",
-          "type": "String",
-          "description": "用户角色"
-        },
-        {
-          "name": "preferences",
+          "name": "uiConfig",
           "type": "Object",
-          "description": "用户偏好设置"
+          "description": "用户界面配置"
+        },
+        {
+          "name": "defaults",
+          "type": "Object",
+          "description": "数据输入默认值"
         }
       ],
       "relationships": []
     },
     {
-      "entityRef": "E_COMPLAINT",
-      "name": "Complaint",
-      "description": "投诉",
+      "entityRef": "E_ACCESS_CONTROL",
+      "name": "AccessControl",
+      "description": "访问控制",
       "attributes": [
         {
-          "name": "complaintId",
+          "name": "controlId",
           "type": "String",
-          "description": "投诉唯一标识"
+          "description": "控制记录唯一标识"
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "关联的用户"
+        },
+        {
+          "name": "groupId",
+          "type": "String",
+          "description": "关联的用户组"
+        },
+        {
+          "name": "securityAttributes",
+          "type": "Object",
+          "description": "安全属性"
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "entityRef": "E_DEFECT",
+      "name": "Defect",
+      "description": "缺陷",
+      "attributes": [
+        {
+          "name": "defectId",
+          "type": "String",
+          "description": "缺陷唯一标识"
         },
         {
           "name": "description",
           "type": "String",
-          "description": "投诉描述"
+          "description": "缺陷描述"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "投诉状态"
+          "description": "缺陷状态"
+        },
+        {
+          "name": "category",
+          "type": "String",
+          "description": "缺陷类别"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
         }
       ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "one-to-one",
-          "description": "关联的案件"
-        }
-      ]
+      "relationships": []
     },
     {
-      "entityRef": "E_SEARCH_RESULT",
-      "name": "SearchResult",
-      "description": "搜索结果",
+      "entityRef": "E_NAVIGATION",
+      "name": "Navigation",
+      "description": "导航",
       "attributes": [
         {
-          "name": "searchId",
+          "name": "navId",
           "type": "String",
-          "description": "搜索唯一标识"
+          "description": "导航记录唯一标识"
         },
         {
-          "name": "query",
-          "type": "String",
-          "description": "搜索查询"
+          "name": "structure",
+          "type": "Object",
+          "description": "导航结构"
         },
         {
-          "name": "resultCount",
-          "type": "Integer",
-          "description": "结果数量"
+          "name": "customization",
+          "type": "Object",
+          "description": "用户自定义设置"
         }
       ],
-      "relationships": [
+      "relationships": []
+    },
+    {
+      "entityRef": "E_CONFIGURATION",
+      "name": "Configuration",
+      "description": "配置",
+      "attributes": [
         {
-          "target": "Case",
-          "type": "many-to-many",
-          "description": "关联的案件"
+          "name": "configId",
+          "type": "String",
+          "description": "配置唯一标识"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "配置名称"
+        },
+        {
+          "name": "value",
+          "type": "Object",
+          "description": "配置值"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "配置描述"
         }
-      ]
+      ],
+      "relationships": []
     }
   ],
   "constraints": [
     {
       "constraintRef": "C_RULE_001",
-      "description": "系统必须提供详细的上下文相关帮助材料",
+      "description": "系统必须提供所有用户界面上所有可能操作和场景的详细上下文敏感帮助材料",
       "related_functions": [
-        "FUN_NAVIGATE"
+        "FUN_CUSTOMIZE_UI"
       ],
       "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
     },
     {
       "constraintRef": "C_RULE_002",
-      "description": "系统必须提供一个界面供用户记录缺陷或增强请求",
+      "description": "系统必须提供用户界面用于记录应用程序的缺陷或增强请求并跟踪",
       "related_functions": [
-        "FUN_LOG_DEFECT"
+        "FUN_TRACK_DEFECT"
       ],
       "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
     },
     {
       "constraintRef": "C_RULE_003",
-      "description": "系统必须能够发送警报给用户",
+      "description": "系统必须在用户选择时发送警报（如电子邮件、短信）当对警报采取任何行动时",
       "related_functions": [
-        "FUN_SEND_ALERT"
+        "FUN_TRACK_DEFECT"
       ],
-      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
+      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
+      "id": "CON_RXO1PV00",
+      "displayId": "C013"
     },
     {
       "constraintRef": "C_RULE_004",
-      "description": "系统必须能够维护不可更改的审计跟踪",
+      "description": "系统必须保持不可更改的审计跟踪，自动捕获和存储关键实体的操作信息",
       "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
+        "FUN_EXPORT_AUDIT"
       ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word “unalterable” is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
     },
     {
       "constraintRef": "C_RULE_005",
-      "description": "系统必须允许用户将案件访问权限限制为指定的用户或用户组",
+      "description": "审计跟踪功能激活后，系统必须自动跟踪事件并存储相关信息",
       "related_functions": [
-        "FUN_ACCESS_CONTROL"
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them.",
+      "id": "CON_P6D2OX00",
+      "displayId": "C001"
+    },
+    {
+      "constraintRef": "C_RULE_006",
+      "description": "系统必须维护审计跟踪至少与相关案件的寿命一样长",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers.",
+      "id": "CON_A358Y200",
+      "displayId": "C010"
+    },
+    {
+      "constraintRef": "C_RULE_007",
+      "description": "系统必须允许将访问限制于特定用户或用户组",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
       ],
       "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
     },
     {
-      "constraintRef": "C_RULE_006",
+      "constraintRef": "C_RULE_008",
       "description": "系统必须仅允许管理员用户设置用户配置文件并将用户分配到组",
       "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
+        "FUN_MANAGE_ACCESS"
       ],
       "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
     },
     {
-      "constraintRef": "C_RULE_007",
-      "description": "系统必须确保所有错误消息都是有意义的",
+      "constraintRef": "C_RULE_009",
+      "description": "系统必须仅允许超级用户更改组或用户的安全属性",
       "related_functions": [
-        "All"
+        "FUN_MANAGE_ACCESS"
       ],
-      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
+      "source_text": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user.",
+      "id": "CON_BKK6BX00",
+      "displayId": "C005"
     },
     {
-      "constraintRef": "C_RULE_008",
-      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索",
+      "constraintRef": "C_RULE_010",
+      "description": "系统在搜索结果列表中不得包含用户无权访问的任何记录",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
+    },
+    {
+      "constraintRef": "C_RULE_011",
+      "description": "系统必须能够同时显示多个实体（案件、嫌疑人）",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to display several entities (cases, suspects) simultaneously.",
+      "id": "CON_AID8YI00",
+      "displayId": "C008"
+    },
+    {
+      "constraintRef": "C_RULE_012",
+      "description": "界面必须尽可能可定制或用户可配置，配置必须保存在用户配置文件中",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
+    },
+    {
+      "constraintRef": "C_RULE_013",
+      "description": "系统用户界面必须适合有特殊需求的用户",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines"
+    },
+    {
+      "constraintRef": "C_RULE_014",
+      "description": "系统必须在5-8秒内执行简单搜索，在10-15秒内执行高级搜索",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves."
     },
     {
-      "constraintRef": "C_RULE_009",
+      "constraintRef": "C_RULE_015",
+      "description": "系统必须在5-8秒内检索并显示最近2个月内访问过的案件",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system. This requirement is intended to allow for rapid retrieval of frequently-used cases, on the understanding that frequency of use is typically correlated with recent use.",
+      "id": "CON_4GJ7AT00",
+      "displayId": "C012"
+    },
+    {
+      "constraintRef": "C_RULE_016",
       "description": "系统必须支持多语言界面",
       "related_functions": [
         "FUN_CUSTOMIZE_UI"
       ],
-      "source_text": "The system should support multilingual interface."
+      "source_text": "The system should support multilingual interface"
     },
     {
-      "constraintRef": "C_RULE_010",
-      "description": "系统必须使用HTTPS作为通信协议",
+      "constraintRef": "C_RULE_017",
+      "description": "系统设计应确保在设备或通信网络故障时不会丢失操作数据",
       "related_functions": [
-        "All"
+        "FUN_MANAGE_CONFIG"
       ],
-      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)."
+      "source_text": "The system should be designed in manner that operational data is not lost in case of any failure of equipment or communication network.",
+      "id": "CON_X63TPX00",
+      "displayId": "C014"
+    },
+    {
+      "constraintRef": "C_RULE_018",
+      "description": "系统应支持HTTPS作为通信协议",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)"
+    },
+    {
+      "constraintRef": "C_RULE_019",
+      "description": "系统应支持选择性加密存储数据",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should support selective encryption of the stored data",
+      "id": "CON_EECF6V00",
+      "displayId": "C018"
+    },
+    {
+      "constraintRef": "C_RULE_020",
+      "description": "系统应确保通过网络安全传输数据，使用SSL和双向数字签名",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should ensure secure transmission of data over the network and utilize SSL and 2-way digital signatures",
+      "id": "CON_CUOPMX00",
+      "displayId": "C017"
+    },
+    {
+      "constraintRef": "C_RULE_021",
+      "description": "系统应防止跨站脚本攻击",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Prevent cross-site scripting"
+    },
+    {
+      "constraintRef": "C_RULE_022",
+      "description": "系统应防止SQL注入",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Prevent SQL Injection"
+    },
+    {
+      "constraintRef": "C_RULE_023",
+      "description": "系统不应允许硬删除，只应执行软标记删除行",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Do not allow hard delete and perform only soft tagging the row for deletion"
+    },
+    {
+      "constraintRef": "C_RULE_024",
+      "description": "系统应使用缓存存储频繁访问的数据",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "Use of cache for storing frequent data"
+    },
+    {
+      "constraintRef": "C_RULE_025",
+      "description": "搜索结果应从数据库中以最多10或20条为一批获取",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The search results should be fetched from the database in batches of 10 or 20 maximum as configured within the application"
+    },
+    {
+      "constraintRef": "C_RULE_026",
+      "description": "搜索应仅获取需要显示给用户的字段",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The search should fetch only the fields that need to be displayed to the user. Only when the user clicks on a particular record to view its further details should a query be fired to fetch the additional details for this particular record only"
+    },
+    {
+      "constraintRef": "C_RULE_027",
+      "description": "应在用于搜索的关键列上应用数据库索引",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "Database Indexes should be applied on the key columns used for searching"
+    },
+    {
+      "constraintRef": "C_RULE_028",
+      "description": "系统必须能够导出指定案件的审计跟踪",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity."
+    },
+    {
+      "constraintRef": "C_RULE_029",
+      "description": "系统必须能够捕获和存储访问控制机制的违规行为",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "The System must be able to capture and store violations (i.e. A user’s attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms."
+    },
+    {
+      "constraintRef": "C_RULE_030",
+      "description": "系统必须能够按案件、用户和时间顺序提供案件操作报告",
+      "related_functions": [
+        "FUN_VIEW_REPORTS"
+      ],
+      "source_text": "By case; By user; In chronological sequence. The System must at a minimum be able to provide reports for actions on cases organised:",
+      "id": "CON_4VZGDL00",
+      "displayId": "C007"
+    },
+    {
+      "constraintRef": "C_RULE_031",
+      "description": "系统应能够按工作站和网络地址提供案件操作报告",
+      "related_functions": [
+        "FUN_VIEW_REPORTS"
+      ],
+      "source_text": "The System should be able to provide reports for actions on cases organised by workstation and (where technically appropriate) by network address.",
+      "id": "CON_MJEFUX00",
+      "displayId": "C016"
+    },
+    {
+      "constraintRef": "C_RULE_032",
+      "description": "系统必须提供角色基于功能的控制",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The system should provide for role-based control for the functionality within the system"
+    },
+    {
+      "constraintRef": "C_RULE_033",
+      "description": "系统必须允许用户属于多个组",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The System must allow a user to be a member of more than one group."
+    },
+    {
+      "constraintRef": "C_RULE_034",
+      "description": "系统应允许用户指定哪些其他用户或组可以访问案件",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The System should allow a user to stipulate which other users or groups can access cases."
+    },
+    {
+      "constraintRef": "C_RULE_035",
+      "description": "系统必须对无权访问的案件请求提供可配置的响应",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "display title and metadata; display the existence of a case but not its title or other metadata; do not display any case information or indicate its existence in any way. If a user requests access to, or searches for, a case which he does not have the right to access, the System must provide one of the following responses (selectable at configuration time):These options are presented in order of increasing security. Note that the requirement in the third option (i.e. the most stringent) implies that the System must not include such cases in any count of search results; this level of security is normally appropriate for cases dealing with matters such as national security.",
+      "id": "CON_FCB0U000",
+      "displayId": "C002"
+    },
+    {
+      "constraintRef": "C_RULE_036",
+      "description": "系统必须将未经授权的案件访问尝试记录到审计跟踪中",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "If the System allows users to make unauthorised attempts to access cases, it must log these in the audit trail.",
+      "id": "CON_VNQW1O00",
+      "displayId": "C004"
+    },
+    {
+      "constraintRef": "C_RULE_037",
+      "description": "系统必须将所有案件访问和相关活动存储在审计跟踪中",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "Any access to cases, and all other activities involving the cases and related documents or data should also need to be stored in the audit trail to ensure legal admissibility and to assist in data recovery.",
+      "id": "CON_8W5HU400",
+      "displayId": "C003"
+    },
+    {
+      "constraintRef": "C_RULE_038",
+      "description": "系统产生的所有错误消息必须是有意义的",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
+    },
+    {
+      "constraintRef": "C_RULE_039",
+      "description": "系统必须采用单一的用户界面规则集",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application."
+    },
+    {
+      "constraintRef": "C_RULE_040",
+      "description": "系统必须提供易于使用和直观的终端用户和管理员功能",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The System must provide End User and Administrator functions which are easy to use and intuitive throughout."
+    },
+    {
+      "constraintRef": "C_RULE_041",
+      "description": "系统必须允许数据输入的可持久默认值",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "user-definable values; values same as previous item; values derived from context, e.g. date, file reference, user identifier; The System must allow persistent defaults for data entry where desirable. These defaults should include:"
+    },
+    {
+      "constraintRef": "C_RULE_042",
+      "description": "频繁执行的系统事务必须设计为可以用少量交互完成",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "Frequently-executed System transactions must be designed so that they can be completed with a small number of interactions (e.g. mouse clicks)."
+    },
+    {
+      "constraintRef": "C_RULE_043",
+      "description": "图形用户界面必须允许用户自定义",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "menu contents; layout of screens; use of function keys; on-screen colours, fonts and font sizes; Where the System employs a graphical user interface, it must allow users to customise it. Customisation should include, but need not be limited to the following changes:"
+    },
+    {
+      "constraintRef": "C_RULE_044",
+      "description": "用户界面应设计为用户直观的",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The user interfaces should be designed to make them user-intuitive."
+    },
+    {
+      "constraintRef": "C_RULE_045",
+      "description": "系统用户界面应符合ISO 9241标准",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "The user interfaces of the system should comply with Standard ISO 9241."
+    },
+    {
+      "constraintRef": "C_RULE_046",
+      "description": "系统应支持离线模式下的关键功能",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should work even in an offline mode with the critical functionality"
+    },
+    {
+      "constraintRef": "C_RULE_047",
+      "description": "系统应设计为在低带宽连接的警察局也能有满意的性能",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be designed to have satisfactory performance even in Police Stations connected on low-bandwidth"
+    },
+    {
+      "constraintRef": "C_RULE_048",
+      "description": "系统应使用服务导向架构(SOA)和模块化设计实现",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design"
+    },
+    {
+      "constraintRef": "C_RULE_049",
+      "description": "系统应建立在开放标准上开发",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be developed on Open Standards"
+    },
+    {
+      "constraintRef": "C_RULE_050",
+      "description": "系统应建立在通用用户访问和认证服务上，确保终端用户单点登录",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The system should be built on a common User Access and Authentication Service to ensure Single-Sign on for the end-user",
+      "id": "CON_KR70SV00",
+      "displayId": "C015"
+    },
+    {
+      "constraintRef": "C_RULE_051",
+      "description": "系统应设计为集中部署和维护",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be developed for a centralized deployment and maintenance"
+    },
+    {
+      "constraintRef": "C_RULE_052",
+      "description": "系统应开发为部署在三层数据中心架构中",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be developed to be deployed in a 3-tier datacenter architecture"
+    },
+    {
+      "constraintRef": "C_RULE_053",
+      "description": "系统应设计为n层架构，表示逻辑与业务逻辑分离，业务逻辑与数据访问逻辑分离",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be designed to have a n-tier architecture with the presentation logic separated from the business logic that is again separated from the data-access logic"
+    },
+    {
+      "constraintRef": "C_RULE_054",
+      "description": "系统应可扩展以通过PDA和移动数据终端提供接口访问",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be extensible to provide access to the interfaces through PDA’s and mobile data terminals"
+    },
+    {
+      "constraintRef": "C_RULE_055",
+      "description": "系统应采用标准化格式和通用元数据元素",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should adopt standardized formats and common metadata elements"
+    },
+    {
+      "constraintRef": "C_RULE_056",
+      "description": "系统应设计为通过基于浏览器的系统访问，并对客户端设备要求最低",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should be designed for access through browser-based systems and must impose minimal requirements on the client device"
+    },
+    {
+      "constraintRef": "C_RULE_057",
+      "description": "系统必须支持多种类型的远程访问通信服务",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system must support multiple types of communication services for remote access"
+    },
+    {
+      "constraintRef": "C_RULE_058",
+      "description": "系统应具备支持公共访问部分数据和功能的能力",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The system should have capability to support public access to a subset of data and functionality"
+    },
+    {
+      "constraintRef": "C_RULE_059",
+      "description": "系统应支持多级认证",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The system should support multi-tier authentication where required"
+    },
+    {
+      "constraintRef": "C_RULE_060",
+      "description": "系统应支持SSL加密连接",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should support SSL encrypted connections"
+    },
+    {
+      "constraintRef": "C_RULE_061",
+      "description": "系统应支持安全虚拟专用网络连接",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should support secure virtual private network connections"
+    },
+    {
+      "constraintRef": "C_RULE_062",
+      "description": "系统应在多个浏览器上运行",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The system should run on multiple browsers"
+    },
+    {
+      "constraintRef": "C_RULE_063",
+      "description": "系统必须确保审计跟踪数据可供检查",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "The System must ensure that audit trail data is available for inspection on request, so that a specific event can be identified and all related data made accessible, and that this can be achieved by authorised external personnel who have little or no familiarity with the system."
+    },
+    {
+      "constraintRef": "C_RULE_064",
+      "description": "系统必须可扩展，不得有任何阻止在小或大型警察局使用的特性",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled.",
+      "id": "CON_I0I0V400",
+      "displayId": "C006"
+    },
+    {
+      "constraintRef": "C_RULE_065",
+      "description": "系统必须提供在标准和峰值条件下常用功能的适当响应时间",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "The System must provide adequate response times for commonly performed functions under both standard and peak conditions"
+    },
+    {
+      "constraintRef": "C_RULE_066",
+      "description": "系统必须在20秒内检索并显示最近2个月内未访问过的案件",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to retrieve and display within 20 seconds the case which has not been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system. This requirement is intended to allow for cases where cases used infrequently are stored on slower media than more active records.",
+      "id": "CON_VRBLCJ00",
+      "displayId": "C011"
+    },
+    {
+      "constraintRef": "C_RULE_067",
+      "description": "系统必须验证传入数据/用户请求",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Validate the incoming data / user request"
+    },
+    {
+      "constraintRef": "C_RULE_068",
+      "description": "系统必须编码传入数据/用户请求",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Encode the incoming data / user request"
+    },
+    {
+      "constraintRef": "C_RULE_069",
+      "description": "系统应使用参数化查询",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Utilize parameterized queries"
+    },
+    {
+      "constraintRef": "C_RULE_070",
+      "description": "系统应清理用户输入",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Sanitize the user-inputs"
+    },
+    {
+      "constraintRef": "C_RULE_071",
+      "description": "系统应在客户端和服务器端验证数据",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Validate the data both at the client and server"
+    },
+    {
+      "constraintRef": "C_RULE_072",
+      "description": "系统应使用AJAX技术改善用户体验",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "Use of AJAX based technology to improve user experience."
+    },
+    {
+      "constraintRef": "C_RULE_073",
+      "description": "系统应考虑基于屏幕和估计使用模式的积极页面加载",
+      "related_functions": [
+        "FUN_CUSTOMIZE_UI"
+      ],
+      "source_text": "Aggressive page loading to be considered based on the screen and estimate usage pattern"
+    },
+    {
+      "constraintRef": "C_RULE_074",
+      "description": "系统应利用Web服务器的异步HTTP套接字功能实现可扩展性和性能",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Leverage Asynchronous HTTP socket capabilities of web server for scalability and performance"
+    },
+    {
+      "constraintRef": "C_RULE_075",
+      "description": "系统应在Web服务器上托管所有静态内容",
+      "related_functions": [
+        "FUN_MANAGE_CONFIG"
+      ],
+      "source_text": "Host all the static content (documents, images) on the web server"
+    },
+    {
+      "constraintRef": "C_RULE_076",
+      "description": "系统应以分页/分批方式在屏幕上显示记录",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "Display of records on the screen in batches/paged manner"
+    },
+    {
+      "constraintRef": "C_RULE_077",
+      "description": "系统应配置和使用分层缓存来缓存最频繁使用的搜索结果",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "A hierarchical cache should be configured and used for caching of results of most frequently used searches"
+    },
+    {
+      "constraintRef": "C_RULE_078",
+      "description": "系统必须确保审计跟踪数据可供不熟悉系统的授权外部人员访问",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
+      ],
+      "source_text": "The System must ensure that audit trail data is available for inspection on request, so that a specific event can be identified and all related data made accessible, and that this can be achieved by authorised external personnel who have little or no familiarity with the system."
+    },
+    {
+      "constraintRef": "C_RULE_079",
+      "description": "系统必须允许用户跟踪提交的缺陷或增强请求",
+      "related_functions": [
+        "FUN_TRACK_DEFECT"
+      ],
+      "source_text": "The solution should enable the user to track the submitted defect or enhancement request."
+    },
+    {
+      "constraintRef": "C_RULE_080",
+      "description": "系统必须使帮助台用户能够查看按类别、状态和年龄分类的缺陷或增强请求报告",
+      "related_functions": [
+        "FUN_TRACK_DEFECT"
+      ],
+      "source_text": "The solution should enable the help-desk user to view the reports on the submitted defects or enhancement requests category-wise, status-wise, and age- wise.",
+      "id": "CON_JLBT2000",
+      "displayId": "C009"
+    },
+    {
+      "constraintRef": "C_RULE_081",
+      "description": "支持解决方案必须可从应用程序内部和外部通过浏览器界面访问",
+      "related_functions": [
+        "FUN_TRACK_DEFECT"
+      ],
+      "source_text": "The support solution should be accessible to the users both from within the application and also outside the application through a browser interface."
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [
     {
-      "id": "X001",
-      "description": "用户尝试访问无权限的案件",
-      "trigger": "用户请求访问或搜索无权限的案件",
-      "handling": "系统记录在审计跟踪中，并根据配置显示不同级别的响应"
+      "id": "EXC_UDDJFZ00",
+      "description": "用户无权访问案件",
+      "trigger": "用户尝试访问没有权限的案件",
+      "handling": "根据配置显示不同级别的响应（显示标题和元数据/仅显示存在/完全不显示）",
+      "displayId": "X005"
     },
     {
-      "id": "X002",
-      "description": "案件检索超时",
-      "trigger": "案件检索时间超过规定阈值",
-      "handling": "系统返回超时错误，建议用户优化搜索条件或稍后重试"
+      "id": "EXC_UIHVWC00",
+      "description": "审计跟踪功能未激活",
+      "trigger": "尝试导出审计跟踪但功能未激活",
+      "handling": "显示错误消息并提示激活审计功能",
+      "displayId": "X002"
+    },
+    {
+      "id": "EXC_D5KK5Z00",
+      "description": "搜索超时",
+      "trigger": "搜索操作超过规定时间",
+      "handling": "终止搜索并显示超时错误",
+      "displayId": "X003"
+    },
+    {
+      "id": "EXC_85Q1U900",
+      "description": "案件不存在",
+      "trigger": "尝试访问不存在的案件",
+      "handling": "显示错误消息并记录到审计跟踪",
+      "displayId": "X001"
+    },
+    {
+      "id": "EXC_QBBURV00",
+      "description": "用户未登录",
+      "trigger": "尝试执行需要登录的操作",
+      "handling": "重定向到登录页面",
+      "displayId": "X004"
     }
   ],
   "non_functional_requirements": [
     {
       "category": "性能",
-      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
+      "description": "系统必须在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
+    },
+    {
+      "category": "性能",
+      "description": "系统必须在5-8秒内检索并显示最近2个月内访问过的案件"
+    },
+    {
+      "category": "性能",
+      "description": "系统必须在20秒内检索并显示最近2个月内未访问过的案件"
     },
     {
       "category": "安全",
-      "description": "系统必须使用HTTPS作为通信协议"
+      "description": "系统必须保持不可更改的审计跟踪"
+    },
+    {
+      "category": "安全",
+      "description": "系统必须防止跨站脚本攻击和SQL注入"
+    },
+    {
+      "category": "安全",
+      "description": "系统应支持HTTPS作为通信协议"
     },
     {
       "category": "可用性",
-      "description": "系统必须提供详细的上下文相关帮助材料"
+      "description": "系统用户界面必须适合有特殊需求的用户"
+    },
+    {
+      "category": "可用性",
+      "description": "系统必须提供易于使用和直观的终端用户和管理员功能"
     },
     {
       "category": "可扩展性",
-      "description": "系统应设计为可扩展，以适应小型和大型警察局的不同需求"
+      "description": "系统必须可扩展，不得有任何阻止在小或大型警察局使用的特性"
+    },
+    {
+      "category": "可扩展性",
+      "description": "系统应使用服务导向架构(SOA)和模块化设计实现"
     }
   ],
   "business_processes": [
     {
-      "name": "CaseRegistration",
+      "name": "案件注册流程",
       "steps": [
-        "Citizen submits complaint",
-        "Police officer registers case",
-        "System generates case ID"
+        "公民提交投诉",
+        "警务人员审核",
+        "生成案件记录",
+        "通知相关人员"
       ],
       "actors": [
         "A_CITIZEN",
@@ -587,25 +1293,54 @@
       ]
     },
     {
-      "name": "CaseInvestigation",
+      "name": "案件调查流程",
       "steps": [
-        "Police officer initiates investigation",
-        "System records investigation details",
-        "Police officer updates case status"
+        "分配调查人员",
+        "收集证据",
+        "记录调查结果",
+        "更新案件状态"
       ],
       "actors": [
         "A_POLICE_OFFICER"
       ]
     },
     {
-      "name": "CaseProsecution",
+      "name": "案件起诉流程",
       "steps": [
-        "Police officer interfaces with court",
-        "System records court interactions",
-        "Police officer updates case status"
+        "准备起诉材料",
+        "提交法院",
+        "记录法院反馈",
+        "更新案件状态"
       ],
       "actors": [
         "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "案件搜索流程",
+      "steps": [
+        "输入搜索条件",
+        "执行搜索",
+        "过滤结果",
+        "显示匹配案件"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER",
+        "A_ADMIN"
+      ]
+    },
+    {
+      "name": "缺陷跟踪流程",
+      "steps": [
+        "用户提交缺陷",
+        "帮助台分类",
+        "分配处理人员",
+        "更新状态",
+        "通知用户"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_HELP_DESK"
       ]
     }
   ],

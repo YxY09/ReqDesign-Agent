@@ -1,92 +1,97 @@
 classDiagram
     class Case {
         -String caseId
-        -String status
-        -DateTime registrationDate
-        -String description
         -String title
+        -String description
+        -String status
         -DateTime createdAt
         -DateTime updatedAt
+        -Object accessControl
         -DateTime createdDate
         -DateTime lastAccessed
         +register()
-        +updateStatus()
-        +assignOfficer()
+        +investigate()
+        +prosecute()
     }
     class Suspect {
         -String suspectId
         -String name
-        -String identificationNumber
-        -Integer age
-        -String gender
         -String description
+        -String status
         +addToCase()
-        +updateDetails()
+        +updateStatus()
     }
     class Property {
         -String propertyId
-        -String description
-        -Decimal value
         -String name
-        +associateWithCase()
-        +updateValue()
-    }
-    class Document {
-        -String documentId
-        -String title
-        -Binary content
-        -String type
-        +upload()
-        +download()
-        +associateWithCase()
+        -String description
+        -String status
+        +markAsEvidence()
+        +release()
     }
     class AuditTrail {
         -String auditId
         -String action
-        -DateTime timestamp
         -String userId
-        -String entityType
-        -String entityId
-        +logAction()
-        +exportRecords()
+        -DateTime timestamp
+        -String details
+        +logEvent()
+        +exportData()
     }
     class UserProfile {
+        -String profileId
         -String userId
+        -Object uiConfig
+        -Object defaults
+        -Object uiSettings
+        -Object defaultValues
+        -String languagePreference
+        -String name
         -String role
-        -Object preferences
         -Object uiPreferences
-        -String language
-        -String username
-        +updateProfile()
-        +setPreferences()
+        +savePreferences()
+        +resetDefaults()
     }
-    class Complaint {
-        -String complaintId
+    class AccessControl {
+        -String controlId
+        -String userId
+        -String groupId
+        -Object securityAttributes
+        -String securityLevel
+        -List assignedGroups
+        -Object casePermissions
+        -String resourceType
+        -String permissionLevel
+        -List permissions
+        +checkPermission()
+        +updateSecurityAttributes()
+    }
+    class Defect {
+        -String defectId
         -String description
         -String status
-        -String title
+        -String category
+        -DateTime createdAt
+        -DateTime reportedDate
+        -String priority
         +submit()
         +updateStatus()
     }
-    class SearchResult {
-        -String searchId
-        -String query
-        -Integer resultCount
-        -String resultId
-        -List items
-        -String queryId
-        -List results
-        +executeSearch()
-        +filterResults()
+    class Configuration {
+        -String configId
+        -String name
+        -String value
+        -String description
+        -Object settings
+        +updateSetting()
+        +rollbackChange()
     }
-    Case "1" --> "*" Suspect : contains
+    Case "1" --> "*" Suspect : involves
     Case "1" --> "*" Property : contains
-    Case "1" --> "*" Document : contains
-    Case "1" --> "*" AuditTrail : generates
-    Case "1" --> "*" UserProfile : assigned_to
-    UserProfile "1" --> "*" Case : assigned_to
-    Complaint "1" --> "1" Case : refers_to
-    Complaint "1" --> "1" UserProfile : submitted_by
-    SearchResult "*" --> "*" Case : references
-    SearchResult "1" --> "1" UserProfile : generated_for
-    UserProfile "1" --> "*" AuditTrail : generates
+    Case "1" --> "*" AuditTrail : has
+    UserProfile "1" --> "1" AccessControl : has
+    UserProfile "1" --> "1" Navigation : has
+    UserProfile "1" --> "*" Case : assigned
+    Defect "1" --> "1" UserProfile : reportedBy
+
+
