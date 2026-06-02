@@ -473,14 +473,7 @@ export class RepairTool extends BaseTool {
     let parsed: Record<string, unknown>;
     try {
       // Strip markdown code fences if present
-      let cleanText = llmText.trim();
-      if (cleanText.startsWith("```")) {
-        const firstNl = cleanText.indexOf("\n");
-        const lastFence = cleanText.lastIndexOf("```");
-        if (firstNl >= 0 && lastFence > firstNl) {
-          cleanText = cleanText.slice(firstNl + 1, lastFence).trim();
-        }
-      }
+      const cleanText = RepairTool._stripCodeFences(llmText);
       parsed = JSON.parse(cleanText);
     } catch {
       this.logger.warn(`repair: task=${task.id} LLM输出不是有效JSON，fallback到完整替换`);
@@ -490,7 +483,9 @@ export class RepairTool extends BaseTool {
     // --- New: ops-based JSON patch routing ---
     const opsRaw = parsed.ops;
     if (Array.isArray(opsRaw) && opsRaw.length > 0) {
-      const contentStr = typeof currentContent === "string" ? currentContent.trim() : JSON.stringify(currentContent);
+      const contentStr = RepairTool._stripCodeFences(
+        typeof currentContent === "string" ? currentContent : JSON.stringify(currentContent),
+      );
       if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
         const ops: JsonPatchOp[] = opsRaw
           .filter((o: unknown): o is Record<string, unknown> => typeof o === "object" && o !== null)
@@ -517,6 +512,8 @@ export class RepairTool extends BaseTool {
             this.logger.warn(`repair: task=${task.id} applyJsonOps失败，fallback`);
           }
         }
+      } else {
+        this.logger.warn(`repair: task=${task.id} ops存在但currentContent不以{或[开头，无法应用JSON patch`);
       }
     }
 
@@ -575,7 +572,9 @@ export class RepairTool extends BaseTool {
     // When patches had no effect and content is JSON, use LLM's full content.
     const originalText = ArtifactPatcher.applyPatches(sections, []);
     if (patchedText === originalText && patches.length > 0) {
-      const contentStr = typeof currentContent === "string" ? currentContent.trim() : JSON.stringify(currentContent);
+      const contentStr = RepairTool._stripCodeFences(
+        typeof currentContent === "string" ? currentContent : JSON.stringify(currentContent),
+      );
       if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
         if (typeof parsed.content === "string") {
           this.logger.info(
@@ -867,6 +866,18 @@ export class RepairTool extends BaseTool {
       if (typeof val === "object" || typeof val === "string") return val;
     }
     return null;
+  }
+
+  static _stripCodeFences(text: string): string {
+    const trimmed = text.trim();
+    if (trimmed.startsWith("```")) {
+      const firstNl = trimmed.indexOf("\n");
+      const lastFence = trimmed.lastIndexOf("```");
+      if (firstNl >= 0 && lastFence > firstNl) {
+        return trimmed.slice(firstNl + 1, lastFence).trim();
+      }
+    }
+    return trimmed;
   }
 
   static _inferDiagramKind(task: Task, text = ""): string {
