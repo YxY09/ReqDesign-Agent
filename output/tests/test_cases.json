@@ -2,211 +2,781 @@
   "test_cases": [
     {
       "id": "TC-N-001",
-      "title": "警务人员成功注册新案件",
+      "title": "管理员成功登录系统",
       "type": "正常",
-      "target": "F007 | FUN_REGISTER_CASE",
-      "preconditions": "警务人员已登录系统",
+      "target": "F001 用户登录",
+      "preconditions": "管理员账户已创建且状态正常",
       "steps": [
-        "进入案件注册页面",
-        "填写案件标题、描述等必填字段",
-        "关联至少一个财产证据",
-        "提交案件信息"
+        "访问系统登录页面",
+        "输入管理员用户名",
+        "输入正确密码",
+        "点击登录按钮"
       ],
-      "expected_result": "系统生成唯一案件ID，状态为'新案件'，创建审计记录",
+      "expected_result": "登录成功，显示管理员控制面板",
       "priority": "P0"
     },
     {
       "id": "TC-N-002",
-      "title": "成功执行简单案件搜索",
+      "title": "警员成功登记新案件",
       "type": "正常",
-      "target": "F008 | FUN_SEARCH_CASE",
-      "preconditions": "用户已登录，系统中有可搜索案件",
+      "target": "F014 案件登记",
+      "preconditions": "警员已登录系统，有案件登记权限",
       "steps": [
-        "在搜索栏输入案件关键词",
-        "点击搜索按钮"
+        "导航至案件登记页面",
+        "填写案件基本信息（标题、描述、发生时间）",
+        "上传至少一个证据文件（满足C011）",
+        "提交案件信息"
       ],
-      "expected_result": "5-8秒内返回搜索结果列表（符合C045约束）",
+      "expected_result": "案件创建成功，生成案件编号，显示案件详情页面",
       "priority": "P0"
     },
     {
       "id": "TC-N-003",
-      "title": "管理员成功导出审计数据",
+      "title": "执行简单案件搜索",
       "type": "正常",
-      "target": "F002 | FUN_EXPORT_AUDIT",
-      "preconditions": "审计功能已激活，管理员已登录",
+      "target": "F015 案件搜索",
+      "preconditions": "系统中有至少10个案件记录",
       "steps": [
-        "选择审计日期范围",
-        "指定导出格式为CSV",
-        "点击导出按钮"
+        "在搜索栏输入案件关键词",
+        "点击搜索按钮"
       ],
-      "expected_result": "生成标准化审计报告文件，原审计数据未被修改（符合C078约束）",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-001",
-      "title": "尝试访问不存在案件",
-      "type": "异常",
-      "target": "F003 | FUN_INVESTIGATE_CASE, X001 | EXC_85Q1U900",
-      "preconditions": "警务人员已登录",
-      "steps": [
-        "输入无效案件ID",
-        "尝试查看案件详情"
-      ],
-      "expected_result": "显示'案件不存在'错误消息，记录到审计日志（符合X001处理要求）",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-002",
-      "title": "无权限用户尝试访问受限案件",
-      "type": "异常",
-      "target": "F004 | FUN_MANAGE_ACCESS, X005 | EXC_UDDJFZ00",
-      "preconditions": "非管理员用户已登录，存在受限案件",
-      "steps": [
-        "尝试直接访问受限案件URL"
-      ],
-      "expected_result": "根据配置显示相应级别的响应（符合C059约束）",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-E-003",
-      "title": "审计功能未激活时尝试导出",
-      "type": "异常",
-      "target": "F002 | FUN_EXPORT_AUDIT, X002 | EXC_UIHVWC00",
-      "preconditions": "审计功能未激活，管理员已登录",
-      "steps": [
-        "尝试访问审计导出功能"
-      ],
-      "expected_result": "显示'审计功能未激活'错误，提示联系管理员（符合X002处理要求）",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-001",
-      "title": "搜索超时边界测试",
-      "type": "边界",
-      "target": "F008 | FUN_SEARCH_CASE, C045 | CON_FUNC_SYSTEM_PERFORM_SIMPLE_SEARCH_KB95",
-      "preconditions": "系统配置搜索超时阈值为15秒",
-      "steps": [
-        "执行复杂查询使处理时间超过15秒"
-      ],
-      "expected_result": "系统在15秒时终止搜索并返回超时错误（符合X003处理要求）",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-002",
-      "title": "案件注册缺少必要证据",
-      "type": "边界",
-      "target": "F007 | FUN_REGISTER_CASE, X009 | EXC_CASE_REGISTRATION_FAILS_DUE",
-      "preconditions": "警务人员已登录",
-      "steps": [
-        "填写案件信息但不关联财产证据",
-        "尝试提交案件"
-      ],
-      "expected_result": "阻止提交并高亮缺失证据字段（符合X009处理要求）",
+      "expected_result": "5秒内返回匹配的搜索结果列表（满足C050）",
       "priority": "P0"
     },
     {
       "id": "TC-N-004",
-      "title": "成功调查案件并关联证据",
+      "title": "管理员配置系统参数",
       "type": "正常",
-      "target": "F003 | FUN_INVESTIGATE_CASE",
-      "preconditions": "案件状态为'新案件'，警务人员有访问权限",
+      "target": "F002 系统配置",
+      "preconditions": "管理员已登录系统",
       "steps": [
-        "打开案件详情页",
-        "添加调查笔记",
-        "关联财产作为证据",
-        "更新案件状态为'调查中'"
-      ],
-      "expected_result": "案件状态更新，证据关联成功，审计记录创建（符合C082约束）",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-005",
-      "title": "管理员配置用户界面自定义",
-      "type": "正常",
-      "target": "F001 | FUN_CUSTOMIZE_UI",
-      "preconditions": "管理员已登录",
-      "steps": [
-        "进入界面配置页面",
-        "修改颜色方案为高对比度",
-        "调整屏幕布局为紧凑模式",
+        "进入系统配置页面",
+        "修改'搜索结果每页显示数量'参数为20",
         "保存配置"
       ],
-      "expected_result": "配置立即生效并保存到用户档案（符合C025约束）",
+      "expected_result": "配置保存成功，后续搜索结果显示20条/页（满足C036）",
       "priority": "P1"
     },
     {
-      "id": "TC-E-004",
-      "title": "移动设备认证失败处理",
-      "type": "异常",
-      "target": "F004 | FUN_MANAGE_ACCESS, X013 | EXC_MOBILE_DEVICE_FAILS_AUTHENTICATION",
-      "preconditions": "用户通过移动设备访问，网络连接不稳定",
+      "id": "TC-N-005",
+      "title": "查看最近访问的案件详情",
+      "type": "正常",
+      "target": "F020 查看案件",
+      "preconditions": "案件在2个月内被访问过",
       "steps": [
-        "在网络中断期间尝试关键操作"
+        "在案件列表中选择最近访问的案件",
+        "点击查看详情"
       ],
-      "expected_result": "本地保存操作数据，连接恢复后要求重新认证（符合X013处理要求）",
+      "expected_result": "5秒内显示案件完整详情（满足C065）",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-E-001",
+      "title": "非管理员尝试修改系统配置",
+      "type": "异常",
+      "target": "F002 系统配置 | X015 未授权配置尝试",
+      "preconditions": "普通警员已登录系统",
+      "steps": [
+        "尝试直接访问系统配置页面URL",
+        "尝试修改任何配置参数"
+      ],
+      "expected_result": "显示'权限不足'错误信息，操作被拒绝（满足C001）",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-002",
+      "title": "搜索超时处理",
+      "type": "异常",
+      "target": "F015 案件搜索 | X001 搜索超时",
+      "preconditions": "系统中有大量案件记录",
+      "steps": [
+        "执行复杂搜索条件组合",
+        "等待超过15秒"
+      ],
+      "expected_result": "显示'搜索超时'提示，建议优化搜索条件（满足X001处理要求）",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-003",
+      "title": "尝试访问无权限案件",
+      "type": "异常",
+      "target": "F020 查看案件 | X003 用户无权访问案件",
+      "preconditions": "案件设置了严格的访问限制",
+      "steps": [
+        "尝试直接访问无权限案件的URL"
+      ],
+      "expected_result": "根据系统配置返回相应错误响应（满足C102）",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-E-004",
+      "title": "案件更新冲突处理",
+      "type": "异常",
+      "target": "F019 更新案件 | X008 案件更新冲突",
+      "preconditions": "多个用户同时编辑同一案件",
+      "steps": [
+        "用户A开始编辑案件",
+        "用户B同时编辑同一案件并先保存",
+        "用户A尝试保存修改"
+      ],
+      "expected_result": "检测到冲突，提示用户解决冲突（满足X008处理要求）",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-001",
+      "title": "案件搜索性能边界测试",
+      "type": "边界",
+      "target": "F015 案件搜索 | C050 搜索性能要求",
+      "preconditions": "系统中有超过10万案件记录",
+      "steps": [
+        "执行简单搜索（单条件）",
+        "记录响应时间",
+        "执行高级搜索（多条件组合）",
+        "记录响应时间"
+      ],
+      "expected_result": "简单搜索在8秒内返回，高级搜索在15秒内返回（严格满足C050）",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-002",
+      "title": "案件登记证据要求边界测试",
+      "type": "边界",
+      "target": "F014 案件登记 | C011 案件关联证据要求",
+      "preconditions": "新案件待登记",
+      "steps": [
+        "尝试提交不含任何证据的案件登记"
+      ],
+      "expected_result": "系统拒绝提交，提示'必须上传至少一个证据文件'（满足C011）",
       "priority": "P1"
     },
     {
       "id": "TC-B-003",
-      "title": "检索长期未访问案件性能",
+      "title": "案件访问时间边界测试",
       "type": "边界",
-      "target": "F008 | FUN_SEARCH_CASE, C001 | CON_FUNC_2Q4KED00",
-      "preconditions": "存在超过2个月未访问的案件",
+      "target": "F020 查看案件 | C064 不常用案件访问时间",
+      "preconditions": "案件超过2个月未被访问",
       "steps": [
-        "搜索并请求查看该案件详情"
+        "访问该案件详情页面",
+        "记录加载时间"
       ],
-      "expected_result": "20秒内显示案件详情（符合C001约束）",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-004",
-      "title": "多语言界面显示边界测试",
-      "type": "边界",
-      "target": "F003 | FUN_INVESTIGATE_CASE, X014 | EXC_MULTILINGUAL_CONTENT_UNAVAILABLE_SPECIFIC",
-      "preconditions": "系统配置为显示未支持语言",
-      "steps": [
-        "查看案件详情页面"
-      ],
-      "expected_result": "回退到主要语言并标记未翻译内容（符合X014处理要求）",
+      "expected_result": "20秒内显示案件详情（满足C064）",
       "priority": "P1"
     },
     {
-      "id": "TC-N-006",
-      "title": "帮助台查看缺陷分类报告",
-      "type": "正常",
-      "target": "F009 | FUN_TRACK_DEFECT",
-      "preconditions": "存在已提交的缺陷报告，帮助台人员已登录",
+      "id": "TC-B-004",
+      "title": "批量导出审计日志边界测试",
+      "type": "边界",
+      "target": "F007 导出审计日志 | C095 审计日志导出功能",
+      "preconditions": "系统中有大量审计日志记录",
       "steps": [
-        "进入缺陷报告页面",
-        "按类别筛选缺陷",
-        "查看状态分布图表"
+        "选择导出过去1年的所有审计日志",
+        "执行导出操作"
       ],
-      "expected_result": "正确显示按类别、状态和年龄分类的缺陷报告（符合C026约束）",
+      "expected_result": "成功生成导出文件，不影响系统审计日志存储（满足C095）",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-N-006",
+      "title": "成功导出案件审计日志",
+      "type": "正常",
+      "target": "F007 导出审计日志",
+      "preconditions": "案件存在且用户有导出权限",
+      "steps": [
+        "选择特定案件",
+        "点击'导出审计日志'按钮",
+        "指定导出时间范围",
+        "确认导出"
+      ],
+      "expected_result": "成功下载包含所选案件审计日志的文件（满足C095）",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-007",
+      "title": "警员成功更新案件状态",
+      "type": "正常",
+      "target": "F019 更新案件",
+      "preconditions": "案件存在且警员有编辑权限",
+      "steps": [
+        "打开案件详情页面",
+        "修改案件状态为'调查中'",
+        "填写状态变更说明",
+        "保存更改"
+      ],
+      "expected_result": "案件状态更新成功，变更记录到审计日志（满足C089）",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-008",
+      "title": "管理员管理用户权限",
+      "type": "正常",
+      "target": "F011 管理用户",
+      "preconditions": "管理员已登录系统",
+      "steps": [
+        "进入用户管理页面",
+        "选择目标用户",
+        "修改用户权限组",
+        "保存更改"
+      ],
+      "expected_result": "用户权限更新成功，新权限立即生效（满足C003）",
       "priority": "P1"
     },
     {
       "id": "TC-E-005",
-      "title": "缺陷提交必填字段缺失",
+      "title": "尝试起诉已结案案件",
       "type": "异常",
-      "target": "F009 | FUN_TRACK_DEFECT, X011 | EXC_DEFECT_SUBMISSION_ERROR",
-      "preconditions": "用户已登录",
+      "target": "F013 案件起诉 | X004 尝试起诉已结案案件",
+      "preconditions": "案件状态为'已结案'",
       "steps": [
-        "尝试提交不带描述的缺陷报告"
+        "尝试添加新的起诉记录"
       ],
-      "expected_result": "阻止提交并提示必填字段缺失（符合X011处理要求）",
+      "expected_result": "阻止起诉更新，提示'不能对已结案案件添加起诉记录'（满足X004处理要求）",
       "priority": "P1"
     },
     {
-      "id": "TC-B-005",
-      "title": "案件访问权限边界测试",
-      "type": "边界",
-      "target": "F004 | FUN_MANAGE_ACCESS, C059 | CON_FUNC_YKC06500",
-      "preconditions": "存在国家安全级别案件，普通用户已登录",
+      "id": "TC-E-006",
+      "title": "审计日志导出失败处理",
+      "type": "异常",
+      "target": "F007 导出审计日志 | X005 审计日志导出失败",
+      "preconditions": "系统存储空间不足",
       "steps": [
-        "尝试搜索该案件"
+        "尝试执行审计日志导出"
       ],
-      "expected_result": "搜索结果中完全不显示该案件存在（符合C059最高安全级别配置）",
+      "expected_result": "记录错误日志并通知用户导出失败（满足X005处理要求）",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-B-005",
+      "title": "用户权限边界测试",
+      "type": "边界",
+      "target": "F010 管理访问权限 | C103 超级用户权限变更",
+      "preconditions": "普通管理员已登录系统",
+      "steps": [
+        "尝试修改超级用户权限"
+      ],
+      "expected_result": "操作被拒绝，提示'只有超级用户可执行此操作'（满足C103）",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-006",
+      "title": "案件软删除功能测试",
+      "type": "边界",
+      "target": "F005 删除案件 | C037 软删除要求",
+      "preconditions": "案件存在且用户有删除权限",
+      "steps": [
+        "执行案件删除操作",
+        "检查数据库记录"
+      ],
+      "expected_result": "案件标记为已删除但仍保留在数据库中（满足C037）",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-009",
+      "title": "用户成功定制界面元素",
+      "type": "正常",
+      "target": "F003 定制UI",
+      "preconditions": "用户已登录系统",
+      "steps": [
+        "进入界面设置页面",
+        "修改显示列配置",
+        "调整元素大小",
+        "保存设置"
+      ],
+      "expected_result": "界面按配置更新，变更持久化保存",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-010",
+      "title": "系统自动加密敏感数据",
+      "type": "正常",
+      "target": "F006 加密数据",
+      "preconditions": "系统识别到敏感数据",
+      "steps": [
+        "系统检测到需要加密的数据",
+        "自动触发加密流程"
+      ],
+      "expected_result": "数据被正确加密存储",
       "priority": "P0"
+    },
+    {
+      "id": "TC-N-011",
+      "title": "系统成功解密数据",
+      "type": "正常",
+      "target": "F004 解密数据",
+      "preconditions": "加密数据存在且用户有访问权限",
+      "steps": [
+        "用户请求访问加密数据",
+        "系统验证权限",
+        "执行解密操作"
+      ],
+      "expected_result": "数据被正确解密并返回给用户",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-012",
+      "title": "管理员成功发送系统警报",
+      "type": "正常",
+      "target": "F016 发送警报",
+      "preconditions": "管理员已登录系统",
+      "steps": [
+        "进入警报管理页面",
+        "创建新警报",
+        "指定接收用户",
+        "发送警报"
+      ],
+      "expected_result": "警报成功发送，目标用户收到通知",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-013",
+      "title": "用户成功提交缺陷报告",
+      "type": "正常",
+      "target": "F017 报告缺陷",
+      "preconditions": "用户已登录系统",
+      "steps": [
+        "进入缺陷报告页面",
+        "填写缺陷详情",
+        "提交报告"
+      ],
+      "expected_result": "缺陷报告成功创建并分配跟踪ID",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-014",
+      "title": "管理员成功跟踪缺陷状态",
+      "type": "正常",
+      "target": "F018 跟踪缺陷",
+      "preconditions": "缺陷报告存在且管理员已登录",
+      "steps": [
+        "进入缺陷管理页面",
+        "查看缺陷列表",
+        "更新缺陷状态"
+      ],
+      "expected_result": "缺陷状态正确更新，变更历史可追溯",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-015",
+      "title": "用户成功使用导航功能",
+      "type": "正常",
+      "target": "F012 系统导航",
+      "preconditions": "用户已登录系统",
+      "steps": [
+        "使用主导航菜单切换模块",
+        "使用面包屑导航返回上级",
+        "使用快捷导航跳转"
+      ],
+      "expected_result": "导航功能正常工作，位置指示准确",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-E-007",
+      "title": "尝试访问加密数据无权限",
+      "type": "异常",
+      "target": "F004 解密数据 | X002 解密权限不足",
+      "preconditions": "加密数据存在但用户无访问权限",
+      "steps": [
+        "用户尝试访问加密数据"
+      ],
+      "expected_result": "系统拒绝访问并记录安全事件",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-E-008",
+      "title": "缺陷报告缺少必要信息",
+      "type": "异常",
+      "target": "F017 报告缺陷 | X006 缺陷报告不完整",
+      "preconditions": "用户尝试提交缺陷报告",
+      "steps": [
+        "不填写必填字段",
+        "尝试提交报告"
+      ],
+      "expected_result": "系统拒绝提交并提示缺失信息",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-009",
+      "title": "导航功能不可用",
+      "type": "异常",
+      "target": "F012 系统导航 | X007 导航失效",
+      "preconditions": "系统部分功能不可用",
+      "steps": [
+        "尝试使用失效的导航链接"
+      ],
+      "expected_result": "提供备用导航方式或错误恢复指引",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-010",
+      "title": "警报发送失败",
+      "type": "异常",
+      "target": "F016 发送警报 | X009 警报发送失败",
+      "preconditions": "通知服务不可用",
+      "steps": [
+        "尝试发送系统警报"
+      ],
+      "expected_result": "系统记录失败并提供重试机制",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-011",
+      "title": "缺陷状态更新冲突",
+      "type": "异常",
+      "target": "F018 跟踪缺陷 | X010 缺陷状态冲突",
+      "preconditions": "多人同时更新同一缺陷",
+      "steps": [
+        "用户A开始编辑缺陷",
+        "用户B同时更新同一缺陷",
+        "用户A尝试保存"
+      ],
+      "expected_result": "检测到冲突并提示解决",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-012",
+      "title": "UI定制保存失败",
+      "type": "异常",
+      "target": "F003 定制UI | X011 UI保存失败",
+      "preconditions": "存储服务异常",
+      "steps": [
+        "尝试保存UI定制设置"
+      ],
+      "expected_result": "提示保存失败并提供恢复选项",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-E-013",
+      "title": "加密过程异常中断",
+      "type": "异常",
+      "target": "F006 加密数据 | X012 加密失败",
+      "preconditions": "加密服务中断",
+      "steps": [
+        "系统尝试加密敏感数据"
+      ],
+      "expected_result": "数据保持未加密状态并标记为待处理",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-E-014",
+      "title": "导航配置无效",
+      "type": "异常",
+      "target": "F012 系统导航 | X013 无效导航配置",
+      "preconditions": "管理员配置了无效导航项",
+      "steps": [
+        "用户尝试使用无效导航"
+      ],
+      "expected_result": "系统提供安全回退导航",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-015",
+      "title": "审计日志防篡改验证",
+      "type": "异常",
+      "target": "F007 导出审计日志 | X014 审计日志篡改尝试",
+      "preconditions": "存在审计日志记录",
+      "steps": [
+        "尝试直接修改数据库中的审计日志"
+      ],
+      "expected_result": "修改操作被阻止，系统发出安全警报",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-007",
+      "title": "UI定制边界测试",
+      "type": "边界",
+      "target": "F003 定制UI | CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_SAVE_PYDA",
+      "preconditions": "用户尝试极端定制设置",
+      "steps": [
+        "设置最小/最大字体大小",
+        "配置极端布局",
+        "保存设置"
+      ],
+      "expected_result": "系统接受有效设置，拒绝无效配置",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-008",
+      "title": "加密性能边界测试",
+      "type": "边界",
+      "target": "F006 加密数据 | CON_SEC_SUPPORT_SELECTIVE_ENCRYPTION_STORED_1PAV",
+      "preconditions": "准备大量待加密数据",
+      "steps": [
+        "系统执行批量加密",
+        "记录处理时间"
+      ],
+      "expected_result": "加密在可接受时间内完成",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-009",
+      "title": "导航深度边界测试",
+      "type": "边界",
+      "target": "F012 系统导航 | CON_FUNC_MINIMIZE_NAVIGATION_STEPS_NEEDED_WRK2",
+      "preconditions": "系统存在深层导航结构",
+      "steps": [
+        "测试最深层次导航",
+        "记录导航响应时间"
+      ],
+      "expected_result": "导航在合理时间内完成",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-010",
+      "title": "审计日志完整性验证",
+      "type": "边界",
+      "target": "F007 导出审计日志 | CON_SEC_MAINTAIN_UNALTERABLE_AUDIT_TRAIL_XDOP",
+      "preconditions": "系统运行一段时间",
+      "steps": [
+        "导出全部审计日志",
+        "验证日志完整性"
+      ],
+      "expected_result": "日志完整无缺失，哈希验证通过",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-011",
+      "title": "帮助请求处理测试",
+      "type": "边界",
+      "target": "Help模块功能",
+      "preconditions": "用户需要帮助",
+      "steps": [
+        "提交帮助请求",
+        "跟踪请求状态",
+        "验证解决方案"
+      ],
+      "expected_result": "请求被正确处理并解决",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-F008-001",
+      "title": "生成案件报告功能测试",
+      "type": "正常",
+      "target": "F008 生成报告",
+      "preconditions": "案件存在且用户有报告生成权限",
+      "steps": [
+        "选择案件",
+        "选择报告类型",
+        "点击生成报告按钮"
+      ],
+      "expected_result": "系统生成指定格式的报告文件",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-F008-002",
+      "title": "报告生成失败处理",
+      "type": "异常",
+      "target": "F008 生成报告",
+      "preconditions": "报告模板损坏",
+      "steps": [
+        "尝试生成案件报告"
+      ],
+      "expected_result": "系统提示报告生成失败并提供错误详情",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-F009-001",
+      "title": "案件起诉功能测试",
+      "type": "正常",
+      "target": "F009 案件起诉",
+      "preconditions": "案件处于可起诉状态",
+      "steps": [
+        "选择案件",
+        "填写起诉信息",
+        "提交起诉申请"
+      ],
+      "expected_result": "起诉记录成功创建，案件状态更新",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-F009-002",
+      "title": "起诉无效案件测试",
+      "type": "异常",
+      "target": "F009 案件起诉",
+      "preconditions": "案件证据不足",
+      "steps": [
+        "尝试起诉证据不足的案件"
+      ],
+      "expected_result": "系统拒绝起诉并提示原因",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-001",
+      "title": "管理员设置用户HWPC测试",
+      "type": "边界",
+      "target": "CON_FUNC_ADMIN_USERS_SET_USER_HWPC",
+      "preconditions": "管理员已登录",
+      "steps": [
+        "尝试设置用户HWPC参数为边界值"
+      ],
+      "expected_result": "系统正确处理边界值设置",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-002",
+      "title": "标准化格式采用测试",
+      "type": "边界",
+      "target": "CON_FUNC_ADOPT_STANDARDIZED_FORMATS_COMMON_7IUX",
+      "preconditions": "系统配置界面打开",
+      "steps": [
+        "验证系统是否强制使用标准化格式"
+      ],
+      "expected_result": "所有数据交换使用标准化格式",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-003",
+      "title": "多成员关联测试",
+      "type": "边界",
+      "target": "CON_FUNC_ALLOW_USERS_MEMBERS_MULTIPLE_JHZG",
+      "preconditions": "用户存在",
+      "steps": [
+        "将用户关联到多个组织单元"
+      ],
+      "expected_result": "系统正确处理多成员关联",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-004",
+      "title": "文本大小调整测试",
+      "type": "边界",
+      "target": "CON_FUNC_ALLOW_USERS_RESIZE_TEXT_XT1Y",
+      "preconditions": "用户已登录",
+      "steps": [
+        "调整文本大小到极限值"
+      ],
+      "expected_result": "文本可调整且在合理范围内",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-005",
+      "title": "查看修改权限测试",
+      "type": "边界",
+      "target": "CON_FUNC_ALLOW_USERS_SEE_MODIFY_6W6R",
+      "preconditions": "不同权限用户已登录",
+      "steps": [
+        "验证不同权限用户的查看修改能力"
+      ],
+      "expected_result": "权限控制符合规范",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-006",
+      "title": "应用Logo显示测试",
+      "type": "边界",
+      "target": "CON_FUNC_APPLICATION_LOGO_AVAILABLE_PAGES_FIRM",
+      "preconditions": "系统页面打开",
+      "steps": [
+        "验证所有页面Logo显示"
+      ],
+      "expected_result": "Logo在所有指定页面正确显示",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-007",
+      "title": "数据库索引应用测试",
+      "type": "边界",
+      "target": "CON_FUNC_APPLY_DATABASE_INDEXES_KEY_T74V",
+      "preconditions": "系统运行中",
+      "steps": [
+        "执行关键查询并验证索引使用"
+      ],
+      "expected_result": "关键查询使用适当索引",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-008",
+      "title": "链接过载测试",
+      "type": "边界",
+      "target": "CON_FUNC_AVOID_LINK_OVERLOAD_IMPEDES_41UB",
+      "preconditions": "系统页面打开",
+      "steps": [
+        "验证页面链接数量"
+      ],
+      "expected_result": "页面链接数量在合理范围内",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-009",
+      "title": "不必要窗口测试",
+      "type": "边界",
+      "target": "CON_FUNC_AVOID_OPENING_UNNECESSARY_WINDOWS_IEBS",
+      "preconditions": "系统操作中",
+      "steps": [
+        "执行可能触发新窗口的操作"
+      ],
+      "expected_result": "无不必要的弹出窗口",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-CON-010",
+      "title": "启动画面测试",
+      "type": "边界",
+      "target": "CON_FUNC_AVOID_SPLASH_SCREENS_UNLESS_LK3Z",
+      "preconditions": "系统启动",
+      "steps": [
+        "验证启动过程"
+      ],
+      "expected_result": "无不必要的启动画面",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-HELP-001",
+      "title": "上下文敏感帮助测试",
+      "type": "正常",
+      "target": "Help模块",
+      "preconditions": "系统页面打开",
+      "steps": [
+        "在关键界面请求上下文帮助"
+      ],
+      "expected_result": "显示相关帮助内容",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-HELP-002",
+      "title": "缺陷跟踪功能测试",
+      "type": "正常",
+      "target": "Help模块",
+      "preconditions": "系统缺陷存在",
+      "steps": [
+        "跟踪缺陷状态变化"
+      ],
+      "expected_result": "缺陷状态变更历史可追溯",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-AUDIT-001",
+      "title": "审计日志防篡改测试",
+      "type": "边界",
+      "target": "审计日志",
+      "preconditions": "审计日志存在",
+      "steps": [
+        "尝试修改审计日志记录"
+      ],
+      "expected_result": "修改操作被阻止并记录",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-LANG-001",
+      "title": "多语言支持测试",
+      "type": "边界",
+      "target": "多语言支持",
+      "preconditions": "系统配置多语言",
+      "steps": [
+        "切换不同语言界面"
+      ],
+      "expected_result": "界面元素正确翻译",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-UI-001",
+      "title": "界面定制详细测试",
+      "type": "边界",
+      "target": "UI定制",
+      "preconditions": "用户已登录",
+      "steps": [
+        "详细定制各界面元素"
+      ],
+      "expected_result": "定制设置被正确应用",
+      "priority": "P1"
     }
   ]
 }

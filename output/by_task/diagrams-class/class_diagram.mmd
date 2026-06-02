@@ -1,17 +1,23 @@
 classDiagram
     class Case {
         -String caseId
+        -String status
+        -DateTime createdDate
         -String title
         -String description
-        -String status
-        -DateTime createdAt
-        -DateTime updatedAt
-        -Object accessControl
-        -DateTime createdDate
-        -DateTime lastAccessed
+        -DateTime lastAccessedAt
         +register()
         +investigate()
         +prosecute()
+    }
+    class Complaint {
+        -String complaintId
+        -String description
+        -String status
+        -DateTime createdAt
+        -String reportedBy
+        +submit()
+        +updateStatus()
     }
     class Suspect {
         -String suspectId
@@ -21,77 +27,71 @@ classDiagram
         +addToCase()
         +updateStatus()
     }
-    class Property {
-        -String propertyId
-        -String name
+    class Evidence {
+        -String evidenceId
+        -String type
         -String description
-        -String status
-        +markAsEvidence()
-        +release()
+        -DateTime collectedAt
+        +validate()
+        +store()
+    }
+    class Document {
+        -String documentId
+        -String type
+        -String title
+        -Object content
+        +upload()
+        +encrypt()
+    }
+    class SearchResult {
+        -String searchId
+        -String query
+        -Integer resultCount
+        -DateTime executedAt
+        +filterByAccess()
+        +paginate()
+    }
+    class UserProfile {
+        -String userId
+        -String username
+        -String displayName
+        -String role
+        -Object uiSettings
+        +checkPermission()
+        +updateProfile()
+    }
+    class AccessControl {
+        -String accessId
+        -String resourceType
+        -String resourceId
+        -String permission
+        +verifyAccess()
+        +grantPermission()
     }
     class AuditTrail {
         -String auditId
         -String action
-        -String userId
+        -String entityType
+        -String entityId
         -DateTime timestamp
-        -String details
-        +logEvent()
-        +exportData()
-    }
-    class UserProfile {
-        -String profileId
-        -String userId
-        -Object uiConfig
-        -Object defaults
-        -Object uiSettings
-        -Object defaultValues
-        -String languagePreference
-        -String name
-        -String role
-        -Object uiPreferences
-        +savePreferences()
-        +resetDefaults()
-    }
-    class AccessControl {
-        -String controlId
-        -String userId
-        -String groupId
-        -Object securityAttributes
-        -String securityLevel
-        -List assignedGroups
-        -Object casePermissions
-        -String resourceType
-        -String permissionLevel
-        -List permissions
-        +checkPermission()
-        +updateSecurityAttributes()
-    }
-    class Defect {
-        -String defectId
-        -String description
-        -String status
-        -String category
-        -DateTime createdAt
-        -DateTime reportedDate
-        -String priority
-        +submit()
-        +updateStatus()
+        +export()
+        +filterByDate()
     }
     class Configuration {
         -String configId
-        -String name
+        -String key
         -String value
-        -String description
-        -Object settings
-        +updateSetting()
-        +rollbackChange()
+        -String scope
+        +update()
+        +getValue()
     }
-    Case "1" --> "*" Suspect : involves
-    Case "1" --> "*" Property : contains
-    Case "1" --> "*" AuditTrail : has
-    UserProfile "1" --> "1" AccessControl : has
-    UserProfile "1" --> "1" Navigation : has
-    UserProfile "1" --> "*" Case : assigned
-    Defect "1" --> "1" UserProfile : reportedBy
-
+    Case "1" --> "*" Suspect : contains
+    Case "1" --> "*" Evidence : has
+    Case "1" --> "*" Document : includes
+    Complaint "1" --> "1" Case : leads to
+    UserProfile "1" --> "*" AccessControl : has
+    AccessControl "*" --> "1" Case : controls
+    Case "1" --> "*" AuditTrail : generates
+    UserProfile "1" --> "*" AuditTrail : performs
+    SearchResult "*" --> "*" Case : references
 

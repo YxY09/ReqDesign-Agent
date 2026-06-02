@@ -279,6 +279,7 @@ export class TracingLLMClient {
       prompt: string,
       system?: string,
       onChunk?: ((chunk: string) => void) | null,
+      temperature?: number,
     ) => Promise<Record<string, unknown>> | Record<string, unknown>;
     generateText: (
       prompt: string,
@@ -357,10 +358,11 @@ export class TracingLLMClient {
     prompt: string,
     system = "",
     _onChunk?: ((chunk: string) => void) | null,
+    temperature?: number,
   ): Promise<Record<string, unknown>> {
     const start = Date.now() / 1000;
     try {
-      const result = await this._client.generateJson(prompt, system);
+      const result = await this._client.generateJson(prompt, system, undefined, temperature);
       const duration = Date.now() / 1000 - start;
 
       let resultStr: string;

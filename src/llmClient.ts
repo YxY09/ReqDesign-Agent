@@ -384,9 +384,10 @@ export class LLMClient {
     prompt: string,
     system = "",
     onChunk?: OnChunk,
+    temperature?: number,
   ): Promise<Record<string, unknown>> {
     const messages = buildMessages(prompt, system);
-    const raw = await this.chat(messages, undefined, onChunk);
+    const raw = await this.chat(messages, temperature, onChunk);
     return parseJsonResponse(raw);
   }
 

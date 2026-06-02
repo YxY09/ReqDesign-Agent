@@ -48,6 +48,11 @@
 
 ## 约束 ID 规则（严格遵守）
 
+**约束相关性原则**：只引用与你当前任务分配的章节相关的约束。
+- 只引用与你 assignedSections（章节范围）相关的 constraintRef 条目
+- 如果某个 constraintRef 与你负责分析的章节无关，直接跳过，不要在输出中列出
+- 不要把所有可用的 constraintRef 都回显到输出中——只保留真正适用于你分析范围的约束
+
 约束 ID 由系统统一分配，不要自己编号 C001/C002。
 
 如果提示中提供了 `{available_constraints}` 列表：

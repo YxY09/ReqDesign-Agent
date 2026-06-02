@@ -40,11 +40,27 @@ function getAssignedCount(task: Task): number {
   return Array.isArray(sections) ? sections.length : 0;
 }
 
-function buildConstraintCandidateSummary(candidates?: ConstraintCandidate[]): string {
+function buildConstraintCandidateSummary(
+  candidates?: ConstraintCandidate[],
+  sectionIds?: string[],
+): string {
   if (!candidates || candidates.length === 0) return "";
-  const rows = candidates.map((candidate, index) => {
+
+  let filtered = candidates;
+  if (sectionIds && sectionIds.length > 0) {
+    const sectionSet = new Set(sectionIds);
+    const sectionMatched = candidates.filter((c) => c.sectionId && sectionSet.has(c.sectionId));
+    const noSection = candidates.filter((c) => !c.sectionId);
+    if (sectionMatched.length > 0) {
+      filtered = [...sectionMatched, ...noSection];
+    }
+    // If no candidates have sectionId, keep all (fall through)
+  }
+
+  const rows = filtered.map((candidate) => {
+    const originalIndex = candidates.indexOf(candidate);
     const row: Record<string, unknown> = {
-      constraintRef: `C_RULE_${String(index + 1).padStart(3, "0")}`,
+      constraintRef: `C_RULE_${String(originalIndex + 1).padStart(3, "0")}`,
       description: candidate.description ?? "",
       sourceText: candidate.sourceText ?? "",
     };
@@ -124,15 +140,49 @@ export class PlanningTool extends BaseTool {
 
     plan = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
 
-    // Inject availableConstraints into analyze tasks
+    // Inject availableConstraints into analyze tasks (section-filtered, capped)
+    const MAX_CONSTRAINTS_PER_TASK = 30;
     if (constraintCandidates && constraintCandidates.length > 0) {
       for (const task of plan.tasks) {
         if (task.type === "analyze") {
-          task.contextHints.availableConstraints = constraintCandidates.map((c, i) => ({
-            constraintRef: `C_RULE_${String(i + 1).padStart(3, "0")}`,
-            description: c.description ?? "",
-            sourceText: c.sourceText ?? "",
-          }));
+          const assignedSections = Array.isArray(task.contextHints?.assignedSections)
+            ? (task.contextHints.assignedSections as string[])
+            : [];
+
+          let filtered: ConstraintCandidate[];
+          if (assignedSections.length > 0) {
+            // Try section-based filtering
+            const sectionSet = new Set(assignedSections);
+            const sectionMatched = constraintCandidates.filter(
+              (c) => c.sectionId && sectionSet.has(c.sectionId),
+            );
+            const noSection = constraintCandidates.filter((c) => !c.sectionId);
+
+            if (sectionMatched.length > 0) {
+              // Use section-matched + those without section info
+              filtered = [...sectionMatched, ...noSection];
+            } else {
+              // No candidates have sectionId — fall back to all
+              filtered = constraintCandidates;
+            }
+          } else {
+            // Task has no assignedSections — include all
+            filtered = constraintCandidates;
+          }
+
+          // Apply cap for safety
+          if (filtered.length > MAX_CONSTRAINTS_PER_TASK) {
+            filtered = filtered.slice(0, MAX_CONSTRAINTS_PER_TASK);
+          }
+
+          task.contextHints.availableConstraints = filtered.map((c) => {
+            const originalIndex = constraintCandidates.indexOf(c);
+            return {
+              constraintRef: `C_RULE_${String(originalIndex + 1).padStart(3, "0")}`,
+              description: c.description ?? "",
+              sourceText: c.sourceText ?? "",
+            };
+          });
         }
       }
     }

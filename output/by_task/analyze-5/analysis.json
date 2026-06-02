@@ -1,282 +1,173 @@
 {
-  "project_name": "PoliceCaseManagementSystem",
-  "project_overview": "A system for managing police cases with features for registration, investigation, prosecution, and auditing, designed to meet high security and usability standards.",
+  "project_name": "CCTNS",
+  "project_overview": "The Citizen Interface module of the CCTNS acts as a conduit for the information exchange between citizens and police units/personnel.",
   "actors": [
     {
-      "actorRef": "A_ADMIN",
-      "name": "Admin",
-      "description": "Administrator with full system access and user management privileges"
+      "actorRef": "A_CITIZEN",
+      "name": "Citizen",
+      "description": "公民用户，可以通过系统与警方进行信息交换"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "Officer responsible for case registration, investigation and prosecution"
-    },
-    {
-      "actorRef": "A_CITIZEN",
-      "name": "Citizen",
-      "description": "Public user who can submit complaints and track cases"
-    },
-    {
-      "actorRef": "A_HELP_DESK",
-      "name": "HelpDesk",
-      "description": "Support staff handling user issues and defect tracking"
-    },
-    {
-      "actorRef": "A_AUDITOR",
-      "name": "Auditor",
-      "description": "External auditor reviewing system activity and audit trails"
-    },
-    {
-      "actorRef": "A_SYSTEM",
-      "name": "System",
-      "description": "Automated system processes and background jobs"
+      "description": "警务人员，处理公民提交的信息和请求"
     }
   ],
   "functions": [
     {
-      "id": "FUN_AUDIT_ACTIONS",
-      "name": "AuditActions",
-      "description": "Track and log all system actions for audit purposes",
-      "sub_capabilities": [
-        "Capture create/read/update/delete actions on critical entities",
-        "Record user initiating the action",
-        "Store date and time of events",
-        "Track access violations"
-      ],
+      "id": "FUN_SEND_ALERT",
+      "name": "SendAlert",
+      "description": "向用户发送警报（如电子邮件、短信）",
+      "sub_capabilities": [],
       "acceptance_criteria": [
-        "All critical actions must be logged",
-        "Audit records must be unalterable",
-        "Violation attempts must be captured"
+        "用户可以选择接收警报的方式",
+        "当对警报采取行动时触发发送"
       ],
       "related_actors": [
-        "A_SYSTEM",
-        "A_ADMIN",
-        "A_AUDITOR"
+        "A_CITIZEN"
       ],
       "priority": "high",
-      "preconditions": "Audit trail functionality must be activated"
+      "preconditions": "用户已选择接收警报"
     },
     {
-      "id": "FUN_MANAGE_ACCESS",
-      "name": "ManageAccess",
-      "description": "Control access to cases and system functionality",
-      "sub_capabilities": [
-        "Limit case access to specified users/groups",
-        "Set role-based access controls",
-        "Configure security attributes",
-        "Handle unauthorized access attempts"
-      ],
+      "id": "FUN_TRACK_DEFECT",
+      "name": "TrackDefect",
+      "description": "跟踪系统缺陷",
+      "sub_capabilities": [],
       "acceptance_criteria": [
-        "Only admin can set up user profiles",
-        "Users can belong to multiple groups",
-        "Access changes must be logged"
+        "用户可以查看缺陷状态",
+        "帮助台用户可以按类别、状态和时间查看缺陷报告"
       ],
       "related_actors": [
-        "A_ADMIN"
+        "A_CITIZEN",
+        "A_HELP_DESK"
       ],
-      "priority": "high",
-      "preconditions": "User must have admin privileges"
+      "priority": "medium",
+      "preconditions": "用户已登录系统"
     }
   ],
   "entities": [
     {
-      "entityRef": "E_AUDIT_TRAIL",
-      "name": "AuditTrail",
-      "description": "Immutable record of system actions and events",
+      "entityRef": "E_ALERT",
+      "name": "Alert",
+      "description": "系统发送给用户的警报通知",
       "attributes": [
         {
-          "name": "actionType",
+          "name": "alertType",
           "type": "String",
-          "description": "Type of action performed (create/read/update/delete)"
+          "description": "警报类型（如email、SMS）"
         },
         {
-          "name": "entityType",
+          "name": "content",
           "type": "String",
-          "description": "Type of entity affected by the action"
+          "description": "警报内容"
         },
         {
-          "name": "entityId",
+          "name": "recipient",
           "type": "String",
-          "description": "Identifier of the affected entity"
+          "description": "接收者"
         },
         {
-          "name": "userId",
-          "type": "String",
-          "description": "User who initiated the action"
-        },
-        {
-          "name": "timestamp",
+          "name": "sentTime",
           "type": "DateTime",
-          "description": "When the action occurred"
-        },
-        {
-          "name": "details",
-          "type": "String",
-          "description": "Additional context about the action"
+          "description": "发送时间"
         }
       ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "Audit entries may reference specific cases"
-        }
-      ]
+      "relationships": []
     },
     {
-      "entityRef": "E_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "Configuration of user permissions and case access",
+      "entityRef": "E_DEFECT",
+      "name": "Defect",
+      "description": "系统缺陷记录",
       "attributes": [
         {
-          "name": "userId",
+          "name": "description",
           "type": "String",
-          "description": "User identifier"
+          "description": "缺陷描述"
         },
         {
-          "name": "groupId",
+          "name": "status",
           "type": "String",
-          "description": "Group identifier"
+          "description": "缺陷状态"
         },
         {
-          "name": "caseAccessLevel",
+          "name": "category",
           "type": "String",
-          "description": "Level of access to cases"
+          "description": "缺陷类别"
         },
         {
-          "name": "functionalAccess",
-          "type": "Object",
-          "description": "Role-based access to system functions"
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
         }
       ],
-      "relationships": [
+      "relationships": []
+    },
+    {
+      "entityRef": "E_COMPLAINT",
+      "name": "Complaint",
+      "description": "公民提交的投诉",
+      "attributes": [
         {
-          "target": "UserProfile",
-          "type": "many-to-one",
-          "description": "Access controls reference user profiles"
+          "name": "content",
+          "type": "String",
+          "description": "投诉内容"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "投诉状态"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
         }
-      ]
+      ],
+      "relationships": []
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_004",
-      "description": "System must maintain unalterable audit trail",
+      "constraintRef": "C_RULE_003",
+      "description": "系统必须能够向用户发送警报（如电子邮件、短信），当用户选择时，每当对警报采取任何行动时",
       "related_functions": [
-        "FUN_AUDIT_ACTIONS"
+        "FUN_SEND_ALERT"
       ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
     },
     {
-      "constraintRef": "C_RULE_005",
-      "description": "System must track events automatically",
+      "constraintRef": "C_RULE_002",
+      "description": "系统必须提供界面让用户记录应用程序中的任何缺陷或增强请求并跟踪",
       "related_functions": [
-        "FUN_AUDIT_ACTIONS"
+        "FUN_TRACK_DEFECT"
       ],
-      "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them."
-    },
-    {
-      "constraintRef": "C_RULE_006",
-      "description": "Audit trail must be maintained for case lifetime",
-      "related_functions": [
-        "FUN_AUDIT_ACTIONS"
-      ],
-      "source_text": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers."
-    },
-    {
-      "constraintRef": "C_RULE_007",
-      "description": "System must allow case access limitation",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
-    },
-    {
-      "constraintRef": "C_RULE_008",
-      "description": "Only admins can manage user profiles",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
     }
   ],
   "missingConstraintCandidates": [],
-  "exceptions": [
-    {
-      "id": "X001",
-      "description": "Unauthorized access attempt",
-      "trigger": "User attempts to access restricted case",
-      "handling": "Log violation in audit trail and show appropriate error message"
-    },
-    {
-      "id": "X002",
-      "description": "Audit trail export failure",
-      "trigger": "System unable to export audit data",
-      "handling": "Notify administrator and retry operation"
-    }
-  ],
+  "exceptions": [],
   "non_functional_requirements": [
     {
-      "category": "performance",
-      "description": "Simple search must complete within 5-8 seconds, advanced search within 10-15 seconds"
+      "category": "可用性",
+      "description": "系统用户界面必须适合有特殊需求的用户"
     },
     {
-      "category": "security",
-      "description": "System must prevent cross-site scripting and SQL injection"
-    },
-    {
-      "category": "security",
-      "description": "System must use HTTPS for all communications"
-    },
-    {
-      "category": "security",
-      "description": "System must support selective data encryption"
-    },
-    {
-      "category": "usability",
-      "description": "Error messages must be meaningful with suggested actions"
-    },
-    {
-      "category": "usability",
-      "description": "System must support multilingual interface"
-    },
-    {
-      "category": "availability",
-      "description": "System must work in offline mode with critical functionality"
-    },
-    {
-      "category": "architecture",
-      "description": "System must implement Service Oriented Architecture (SOA)"
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
     }
   ],
   "business_processes": [
     {
-      "name": "CaseAccessManagement",
+      "name": "CitizenComplaintProcess",
       "steps": [
-        "Admin configures user groups",
-        "Admin assigns case access rights",
-        "User attempts case access",
-        "System enforces access controls",
-        "Violations are logged"
+        "提交投诉",
+        "警方处理",
+        "反馈结果"
       ],
       "actors": [
-        "A_ADMIN",
+        "A_CITIZEN",
         "A_POLICE_OFFICER"
-      ]
-    },
-    {
-      "name": "AuditTrailGeneration",
-      "steps": [
-        "User performs system action",
-        "System captures audit data",
-        "System stores immutable record",
-        "Auditor requests audit data",
-        "System provides audit reports"
-      ],
-      "actors": [
-        "A_SYSTEM",
-        "A_AUDITOR"
       ]
     }
   ],

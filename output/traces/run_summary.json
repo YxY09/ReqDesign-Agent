@@ -5,40 +5,39 @@
   "persist_status": "not_saved",
   "finished": true,
   "persisted": false,
-  "duration": 1058.76,
-  "artifact_count": 9,
+  "duration": 1516.57,
+  "artifact_count": 12,
   "artifact_counts": {
-    "analyze": 4,
+    "analyze": 7,
     "design": 1,
     "diagrams": 3,
     "tests": 1
   },
-  "decision_count": 229,
+  "decision_count": 321,
   "review_rounds": 3,
   "final_review_done": true,
   "final_review_passed": true,
-  "plan_task_count": 9,
+  "plan_task_count": 12,
   "plan_revision_count": 0,
   "issue_counts": {
     "severity": {
-      "major": 382,
-      "minor": 1
+      "major": 479,
+      "minor": 8
     },
     "scope": {
-      "local": 380,
-      "upstream": 3
+      "local": 483,
+      "upstream": 4
     },
     "target_type": {
-      "analyze": 3,
-      "design": 71,
-      "diagrams": 12,
-      "tests": 297
+      "analyze": 4,
+      "design": 113,
+      "diagrams": 11,
+      "tests": 359
     }
   },
   "budget_counters": {
     "repair_count:design-1": 2,
-    "repair_count:diagrams-activity": 1,
-    "repair_count:diagrams-class": 2,
+    "repair_count:diagrams-class": 1,
     "repair_count:diagrams-state": 1,
     "repair_count:tests-1": 2
   },

@@ -1,0 +1,211 @@
+{
+  "project_name": "CCTNS",
+  "project_overview": "Police case management system with configuration, access control and audit capabilities",
+  "actors": [
+    {
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "System administrator with configuration privileges"
+    },
+    {
+      "actorRef": "A_POLICE_OFFICER",
+      "name": "PoliceOfficer",
+      "description": "Primary user of the system for case management"
+    },
+    {
+      "actorRef": "A_EXTERNAL_AUDITOR",
+      "name": "ExternalAuditor",
+      "description": "External personnel who review audit trails"
+    }
+  ],
+  "functions": [
+    {
+      "id": "FUN_CONFIGURE_SYSTEM",
+      "name": "ConfigureSystem",
+      "description": "Configure application settings and data elements",
+      "sub_capabilities": [
+        "Create/update/delete configuration items",
+        "Maintain state-specific data elements"
+      ],
+      "acceptance_criteria": [
+        "Configuration changes persist after system restart",
+        "State-specific data elements are correctly applied"
+      ],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "User must have admin privileges"
+    },
+    {
+      "id": "FUN_MANAGE_ACCESS",
+      "name": "ManageAccess",
+      "description": "Control case access permissions",
+      "sub_capabilities": [
+        "Limit access to specified users/groups",
+        "Configure security attributes",
+        "Handle unauthorized access attempts"
+      ],
+      "acceptance_criteria": [
+        "Access restrictions are enforced",
+        "Unauthorized attempts are logged"
+      ],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "User must have admin privileges"
+    }
+  ],
+  "entities": [
+    {
+      "entityRef": "E_CONFIGURATION",
+      "name": "Configuration",
+      "description": "System configuration settings",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "String",
+          "description": "Configuration parameter name"
+        },
+        {
+          "name": "value",
+          "type": "String",
+          "description": "Configuration value"
+        },
+        {
+          "name": "scope",
+          "type": "String",
+          "description": "Global/state-specific scope"
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "entityRef": "E_USER_PROFILE",
+      "name": "UserProfile",
+      "description": "User configuration and preferences",
+      "attributes": [
+        {
+          "name": "uiSettings",
+          "type": "Object",
+          "description": "User interface customizations"
+        },
+        {
+          "name": "accessRights",
+          "type": "List",
+          "description": "Assigned permissions"
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "entityRef": "E_ACCESS_CONTROL",
+      "name": "AccessControl",
+      "description": "Case access permissions",
+      "attributes": [
+        {
+          "name": "caseId",
+          "type": "String",
+          "description": "Case identifier"
+        },
+        {
+          "name": "allowedUsers",
+          "type": "List",
+          "description": "Authorized users"
+        },
+        {
+          "name": "allowedGroups",
+          "type": "List",
+          "description": "Authorized groups"
+        }
+      ],
+      "relationships": []
+    }
+  ],
+  "constraints": [
+    {
+      "constraintRef": "C_RULE_010",
+      "description": "Allow limiting case access to specified users/groups",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
+    },
+    {
+      "constraintRef": "C_RULE_013",
+      "description": "Only admins can set up user profiles and groups",
+      "related_functions": [
+        "FUN_MANAGE_ACCESS"
+      ],
+      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+    },
+    {
+      "constraintRef": "C_RULE_021",
+      "description": "UI customizations must be saved in user profile",
+      "related_functions": [
+        "FUN_CONFIGURE_SYSTEM"
+      ],
+      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
+    }
+  ],
+  "missingConstraintCandidates": [],
+  "exceptions": [
+    {
+      "id": "X001",
+      "description": "Unauthorized configuration attempt",
+      "trigger": "Non-admin user tries to modify system configuration",
+      "handling": "Log attempt and show error message"
+    },
+    {
+      "id": "X002",
+      "description": "Invalid configuration data",
+      "trigger": "Invalid configuration values provided",
+      "handling": "Reject changes and show validation errors"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "security",
+      "description": "Role-based access control"
+    },
+    {
+      "category": "usability",
+      "description": "Customizable user interface"
+    },
+    {
+      "category": "audit",
+      "description": "Unalterable audit trail"
+    }
+  ],
+  "business_processes": [
+    {
+      "name": "SystemConfiguration",
+      "steps": [
+        "Access configuration module",
+        "Modify settings",
+        "Save changes",
+        "Verify configuration"
+      ],
+      "actors": [
+        "A_ADMIN"
+      ]
+    },
+    {
+      "name": "AccessControlSetup",
+      "steps": [
+        "Select case",
+        "Specify access rules",
+        "Save permissions",
+        "Verify restrictions"
+      ],
+      "actors": [
+        "A_ADMIN"
+      ]
+    }
+  ],
+  "proposeNewEntities": [],
+  "proposeNewFunctions": [],
+  "proposeNewConstraints": [],
+  "proposeNewExceptions": []
+}

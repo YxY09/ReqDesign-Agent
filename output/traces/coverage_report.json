@@ -1,512 +1,471 @@
 {
   "functionCoverage": {
-    "total": 10,
-    "covered": 7,
-    "uncovered": [
-      {
-        "id": "FUN_MANAGE_CONFIG",
-        "displayId": "F005",
-        "name": "ManageConfig"
-      },
-      {
-        "id": "FUN_PROSECUTE_CASE",
-        "displayId": "F006",
-        "name": "ProsecuteCase"
-      },
-      {
-        "id": "FUN_VIEW_REPORTS",
-        "displayId": "F010",
-        "name": "ViewReports"
-      }
-    ]
+    "total": 20,
+    "covered": 20,
+    "uncovered": []
   },
   "constraintTestCoverage": {
-    "total": 83,
-    "covered": 5,
+    "total": 110,
+    "covered": 24,
     "uncovered": [
       {
-        "id": "CON_FUNC_2Q4KED00",
-        "displayId": "C001",
-        "description": "系统必须在20秒内检索并显示最近2个月内未访问过的案件"
-      },
-      {
-        "id": "CON_FUNC_5DRLUE00",
-        "displayId": "C002",
-        "description": "系统必须在5-8秒内检索并显示最近2个月内访问过的案件"
-      },
-      {
-        "id": "CON_FUNC_91KEYV00",
-        "displayId": "C003",
-        "description": "系统必须可扩展，不得有任何阻止在小或大型警察局使用的特性"
-      },
-      {
-        "id": "CON_FUNC_93KA5400",
-        "displayId": "C004",
-        "description": "系统必须能够同时显示多个实体（案件、嫌疑人）"
-      },
-      {
-        "id": "CON_FUNC_ADMIN_USERS_SET_PROFILES_NARL",
-        "displayId": "C005",
-        "description": "Only admin-users can set up profiles and allocate users to groups"
-      },
-      {
-        "id": "CON_FUNC_ALLOW_PERSISTENT_DATA_ENTRY_RKX7",
-        "displayId": "C007",
-        "description": "Allow persistent data entry defaults"
-      },
-      {
-        "id": "CON_FUNC_ALLOW_SOFT_DELETES_7K6L",
-        "displayId": "C008",
-        "description": "Only allow soft deletes"
-      },
-      {
-        "id": "CON_FUNC_ALLOW_USERS_MULTIPLE_GROUPS_C4Y4",
-        "displayId": "C009",
-        "description": "Allow users in multiple groups"
-      },
-      {
-        "id": "CON_FUNC_APPLY_DATABASE_INDEXES_SEARCH_HZ5A",
-        "displayId": "C010",
-        "description": "Apply database indexes on search columns"
-      },
-      {
-        "id": "CON_FUNC_COMPATIBLE_SPECIAL_NEEDS_SOFTWARE_CPE6",
-        "displayId": "C011",
-        "description": "UI compatible with special needs software"
-      },
-      {
-        "id": "CON_FUNC_CONSIDER_AGGRESSIVE_PAGE_LOADING_ELXB",
+        "id": "CON_FUNC_CLEARLY_DISTINGUISH_NAVIGATION_LINKS_20W7",
         "displayId": "C012",
-        "description": "Consider aggressive page loading"
+        "description": "Clearly distinguish navigation links from action controls"
       },
       {
-        "id": "CON_FUNC_DEPLOY_TIER_ARCHITECTURE_FTPL",
+        "id": "CON_FUNC_CLEARLY_DISTINGUISH_WITHIN_PAGE_WJG3",
         "displayId": "C013",
-        "description": "Deploy in 3-tier architecture"
+        "description": "Clearly distinguish within-page links from other links"
       },
       {
-        "id": "CON_FUNC_DESIGN_CENTRALIZED_DEPLOYMENT_PMRB",
+        "id": "CON_FUNC_CLEARLY_MARK_LINKS_OPEN_T5ZT",
         "displayId": "C014",
-        "description": "Design for centralized deployment"
+        "description": "Clearly mark links that open new windows"
       },
       {
-        "id": "CON_FUNC_DESIGN_FREQUENT_TRANSACTIONS_MINIMAL_N936",
+        "id": "CON_FUNC_COMPLAINTS_ASSOCIATED_LEAST_ONE_C92H",
         "displayId": "C015",
-        "description": "Design frequent transactions for minimal interactions"
+        "description": "Complaints must be associated with at least one case"
       },
       {
-        "id": "CON_FUNC_DESIGN_INTUITIVE_USER_INTERFACES_MPXA",
+        "id": "CON_FUNC_CONFIGURE_HIERARCHICAL_CACHE_FREQUENTLY_CL6V",
         "displayId": "C016",
-        "description": "Design intuitive user interfaces"
+        "description": "Configure hierarchical cache for frequently used searches"
       },
       {
-        "id": "CON_FUNC_DEVELOP_OPEN_STANDARDS_5DHB",
+        "id": "CON_FUNC_CONSIDER_AGGRESSIVE_PAGE_LOADING_O4KT",
         "displayId": "C017",
-        "description": "Develop on open standards"
+        "description": "Consider aggressive page loading based on screen and usage pattern"
       },
       {
-        "id": "CON_FUNC_DISPLAY_RECORDS_BATCHES_PAGES_NV2O",
+        "id": "CON_FUNC_CONSIDER_PRINCIPLES_HUMAN_PERCEPTION_H9SX",
         "displayId": "C018",
-        "description": "Display records in batches/pages"
+        "description": "Consider principles of human perception in UI design"
       },
       {
-        "id": "CON_FUNC_ENCODE_INCOMING_DATA_YJLG",
+        "id": "CON_FUNC_DESIGN_CENTRALIZED_DEPLOYMENT_MAINTENANCE_HUR0",
         "displayId": "C019",
-        "description": "Encode incoming data"
+        "description": "Design for centralized deployment and maintenance"
       },
       {
-        "id": "CON_FUNC_FETCH_DISPLAYED_FIELDS_INITIALLY_UTML",
+        "id": "CON_FUNC_DESIGN_INPUT_DEVICE_INDEPENDENCE_78G8",
         "displayId": "C020",
-        "description": "Only fetch displayed fields initially"
+        "description": "Design UI for input device independence"
       },
       {
-        "id": "CON_FUNC_FETCH_SEARCH_RESULTS_BATCHES_EJTB",
+        "id": "CON_FUNC_DESIGN_NAVIGATION_HELP_USERS_I3HK",
         "displayId": "C021",
-        "description": "Fetch search results in batches"
+        "description": "Design navigation to help users understand location and options"
       },
       {
-        "id": "CON_FUNC_G4HK8D00",
+        "id": "CON_FUNC_DESIGN_PREVENT_OPERATIONAL_DATA_PQ27",
         "displayId": "C022",
-        "description": "系统必须在用户选择时发送警报（如电子邮件、短信）当对警报采取任何行动时"
+        "description": "Design to prevent operational data loss during failures"
       },
       {
-        "id": "CON_FUNC_H9BRE900",
+        "id": "CON_FUNC_DESIGN_ROBUST_AGAINST_TECHNOLOGY_M66J",
         "displayId": "C023",
-        "description": "系统必须仅允许超级用户更改组或用户的安全属性"
+        "description": "Design UI to be robust against technology changes"
       },
       {
-        "id": "CON_FUNC_HOST_STATIC_CONTENT_WEB_Z0UE",
+        "id": "CON_FUNC_DESIGN_TIER_ARCHITECTURE_SEPARATING_2PKW",
         "displayId": "C024",
-        "description": "Host static content on web server"
+        "description": "Design with n-tier architecture separating presentation, business, and data logic"
       },
       {
-        "id": "CON_FUNC_INTERFACES_CUSTOMIZABLE_SAVE_CONFIGURATIONS_X5VR",
+        "id": "CON_FUNC_DEVELOP_DEPLOYMENT_TIER_DATACENTER_J09W",
         "displayId": "C025",
-        "description": "Interfaces must be customizable and save configurations in user profile"
+        "description": "Develop for deployment in 3-tier datacenter architecture"
       },
       {
-        "id": "CON_FUNC_JV8JG600",
+        "id": "CON_FUNC_DEVELOP_OPEN_STANDARDS_ASY7",
         "displayId": "C026",
-        "description": "系统必须使帮助台用户能够查看按类别、状态和年龄分类的缺陷或增强请求报告"
+        "description": "Develop on Open Standards"
       },
       {
-        "id": "CON_FUNC_LEVERAGE_ASYNCHRONOUS_HTTP_SOCKETS_P5LD",
+        "id": "CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y",
         "displayId": "C027",
-        "description": "Leverage asynchronous HTTP sockets"
+        "description": "Display multiple entities simultaneously"
       },
       {
-        "id": "CON_FUNC_M14V3300",
+        "id": "CON_FUNC_DISPLAY_RECORDS_BATCHES_PAGED_37JL",
         "displayId": "C028",
-        "description": "系统应能够按工作站和网络地址提供案件操作报告"
+        "description": "Display records in batches/paged manner"
       },
       {
-        "id": "CON_FUNC_MWG37C00",
+        "id": "CON_FUNC_EMPLOY_CONSISTENT_RULES_COMMON_1NPG",
         "displayId": "C029",
-        "description": "系统设计应确保在设备或通信网络故障时不会丢失操作数据"
+        "description": "Employ consistent UI rules for common look and feel"
       },
       {
-        "id": "CON_FUNC_OFFLINE_MODE_MAINTAIN_DATA_9PBA",
+        "id": "CON_FUNC_ENSURE_ACCEPTABLE_PAGE_OPENING_VD99",
         "displayId": "C030",
-        "description": "Offline mode must maintain data consistency with central system when reconnected"
+        "description": "Ensure acceptable page opening/download times"
       },
       {
-        "id": "CON_FUNC_OHMHAZ00",
+        "id": "CON_FUNC_ENSURE_SECURE_DATA_TRANSMISSION_FO5Q",
         "displayId": "C031",
-        "description": "系统必须能够按案件、用户和时间顺序提供案件操作报告"
+        "description": "Ensure secure data transmission using SSL and 2-way digital signatures"
+      },
+      {
+        "id": "CON_FUNC_ENSURE_SUITABLE_USERS_SPECIAL_2K37",
+        "displayId": "C032",
+        "description": "Ensure UI is suitable for users with special needs"
+      },
+      {
+        "id": "CON_FUNC_ENSURE_TEXT_QUALITY_IMPEDE_HF9P",
+        "displayId": "C033",
+        "description": "Ensure text quality does not impede readability"
+      },
+      {
+        "id": "CON_FUNC_ERROR_MESSAGES_MEANINGFUL_ELNV",
+        "displayId": "C034",
+        "description": "All error messages must be meaningful"
+      },
+      {
+        "id": "CON_FUNC_FETCH_FIELDS_NEEDED_DISPLAY_YWH2",
+        "displayId": "C035",
+        "description": "Fetch only fields needed for display in search"
+      },
+      {
+        "id": "CON_FUNC_HOST_STATIC_CONTENT_WEB_BTJV",
+        "displayId": "C038",
+        "description": "Host all static content on web server"
+      },
+      {
+        "id": "CON_FUNC_IMPLEMENT_USING_SERVICE_ORIENTED_O28B",
+        "displayId": "C039",
+        "description": "Implement using Service Oriented Architecture (SOA)"
+      },
+      {
+        "id": "CON_FUNC_INCLUDE_LINK_HOME_LANDMARK_7PK9",
+        "displayId": "C040",
+        "description": "Include link to home/landmark page on each page"
+      },
+      {
+        "id": "CON_FUNC_LEVERAGE_ASYNCHRONOUS_HTTP_SOCKET_MIUY",
+        "displayId": "C041",
+        "description": "Leverage asynchronous HTTP socket capabilities for scalability"
+      },
+      {
+        "id": "CON_FUNC_MAINTAIN_CONSISTENCY_NAVIGATION_COMPONENTS_OS75",
+        "displayId": "C042",
+        "description": "Maintain consistency between navigation components and content"
+      },
+      {
+        "id": "CON_FUNC_MAKE_CURRENT_USER_PROFILE_OZ5G",
+        "displayId": "C043",
+        "description": "Make current user profile evident when used"
+      },
+      {
+        "id": "CON_FUNC_MAKE_INDIVIDUALIZATION_ADAPTATION_EVIDENT_TELE",
+        "displayId": "C044",
+        "description": "Make individualization/adaptation evident to users"
+      },
+      {
+        "id": "CON_FUNC_MINIMIZE_POTENTIAL_USER_ERRORS_OMWR",
+        "displayId": "C047",
+        "description": "Minimize potential user errors and recovery effort"
+      },
+      {
+        "id": "CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_AVOID_B6KD",
+        "displayId": "C048",
+        "description": "Minimize vertical scrolling, avoid horizontal scrolling"
+      },
+      {
+        "id": "CON_FUNC_NUMBER_UNPLANNED_DOWNTIME_INCIDENTS_9S1K",
+        "displayId": "C049",
+        "description": "Number of unplanned downtime incidents must not exceed limit"
+      },
+      {
+        "id": "CON_FUNC_PLACE_NAVIGATION_COMPONENTS_CONSISTENTLY_KF9T",
+        "displayId": "C051",
+        "description": "Place navigation components consistently"
+      },
+      {
+        "id": "CON_FUNC_PLACE_TITLE_INFORMATION_CONSISTENTLY_NMS9",
+        "displayId": "C052",
+        "description": "Place title information consistently across pages"
+      },
+      {
+        "id": "CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_SYZH",
+        "displayId": "C053",
+        "description": "Planned downtime must not exceed specified hours"
       },
       {
         "id": "CON_FUNC_PREVENT_CROSS_SITE_SCRIPTING_9KJT",
-        "displayId": "C032",
+        "displayId": "C054",
         "description": "Prevent cross-site scripting"
       },
       {
         "id": "CON_FUNC_PREVENT_SQL_INJECTION_A5J8",
-        "displayId": "C033",
+        "displayId": "C055",
         "description": "Prevent SQL injection"
       },
       {
-        "id": "CON_FUNC_PROVIDE_INTUITIVE_USER_FUNCTIONS_W0ZV",
-        "displayId": "C034",
-        "description": "Provide intuitive user functions"
+        "id": "CON_FUNC_PROSECUTION_RECORDS_REFERENCE_EXISTING_7XMR",
+        "displayId": "C056",
+        "description": "Prosecution records must reference an existing case"
       },
       {
-        "id": "CON_FUNC_PROVIDE_MEANINGFUL_ERROR_MESSAGES_LSX4",
-        "displayId": "C035",
-        "description": "Provide meaningful error messages"
+        "id": "CON_FUNC_PROVIDE_CLEAR_ERROR_MESSAGES_DX98",
+        "displayId": "C057",
+        "description": "Provide clear error messages with resolution actions"
+      },
+      {
+        "id": "CON_FUNC_PROVIDE_DETAILED_CONTEXT_SENSITIVE_Z1RT",
+        "displayId": "C058",
+        "description": "Provide detailed context-sensitive help material for all UI actions"
+      },
+      {
+        "id": "CON_FUNC_PROVIDE_INTERFACE_LOGGING_TRACKING_LRSN",
+        "displayId": "C059",
+        "description": "Provide interface for logging and tracking defects/enhancements"
+      },
+      {
+        "id": "CON_FUNC_PROVIDE_PRINTABLE_VERSIONS_LONG_1FWA",
+        "displayId": "C060",
+        "description": "Provide printable versions for long documents"
+      },
+      {
+        "id": "CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_G6KT",
+        "displayId": "C061",
+        "description": "Provide role-based control for system functionality"
+      },
+      {
+        "id": "CON_FUNC_PROVIDE_SITE_MAP_SHOWING_NTJ8",
+        "displayId": "C062",
+        "description": "Provide site map showing application structure"
+      },
+      {
+        "id": "CON_FUNC_PROVIDE_TEXT_EQUIVALENTS_NON_R92W",
+        "displayId": "C063",
+        "description": "Provide text equivalents for non-text media objects"
       },
       {
         "id": "CON_FUNC_RUN_MULTIPLE_BROWSERS_DJZO",
-        "displayId": "C036",
+        "displayId": "C066",
         "description": "Run on multiple browsers"
       },
       {
-        "id": "CON_FUNC_SSL_M8DA",
-        "displayId": "C038",
-        "description": "系统应确保通过网络安全传输数据，使用SSL和双向数字签名"
-      },
-      {
-        "id": "CON_FUNC_SUPPORT_SECURE_VPN_CONNECTIONS_TLTS",
-        "displayId": "C039",
-        "description": "Support secure VPN connections"
-      },
-      {
-        "id": "CON_FUNC_SUPPORT_SOLUTION_ACCESSIBLE_INSIDE_MLIV",
-        "displayId": "C040",
-        "description": "Support solution accessible inside/outside application"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_ALLOW_USERS_TRACK_BSA8",
-        "displayId": "C041",
-        "description": "System must allow users to track submitted defects/enhancements"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_EMPLOY_SINGLE_SET_EY26",
-        "displayId": "C042",
-        "description": "System must employ single set of UI rules for consistent look and feel"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_IMPLEMENTED_USING_SOA_LMI1",
-        "displayId": "C043",
-        "description": "System should be implemented using SOA and modular design"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_MAINTAIN_CASE_PROPERTY_8YNW",
-        "displayId": "C044",
-        "description": "System must maintain case-property relationship integrity when properties are used as evidence"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_PERFORM_SIMPLE_SEARCH_KB95",
-        "displayId": "C045",
-        "description": "System must perform simple search in 5-8 seconds, advanced in 10-15"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
-        "displayId": "C046",
-        "description": "System must provide detailed context-sensitive help material"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_PROVIDE_INTERFACE_LOGGING_SK7I",
-        "displayId": "C047",
-        "description": "System must provide interface for logging defects/enhancements"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_PROVIDE_ROLE_BASED_CJDR",
-        "displayId": "C048",
-        "description": "System must provide role-based control for functionality"
-      },
-      {
-        "id": "CON_FUNC_SYSTEM_TIER_ARCHITECTURE_SEPARATED_T83E",
-        "displayId": "C049",
-        "description": "System should have n-tier architecture with separated layers"
-      },
-      {
-        "id": "CON_FUNC_USE_AJAX_IMPROVE_T6WU",
-        "displayId": "C050",
-        "description": "Use AJAX to improve UX"
-      },
-      {
-        "id": "CON_FUNC_USE_CACHE_FREQUENT_DATA_1W52",
-        "displayId": "C051",
-        "description": "Use cache for frequent data"
-      },
-      {
-        "id": "CON_FUNC_USE_HIERARCHICAL_CACHE_FREQUENT_Q89R",
-        "displayId": "C052",
-        "description": "Use hierarchical cache for frequent searches"
-      },
-      {
-        "id": "CON_FUNC_USE_HTTPS_COMMUNICATION_RQDR",
-        "displayId": "C053",
-        "description": "Use HTTPS for communication"
-      },
-      {
-        "id": "CON_FUNC_USE_STANDARDIZED_FORMATS_METADATA_FN4F",
-        "displayId": "C055",
-        "description": "Use standardized formats and metadata"
-      },
-      {
-        "id": "CON_FUNC_USER_INTERFACE_CUSTOMIZATIONS_PRESERVED_D5ZG",
-        "displayId": "C056",
-        "description": "User interface customizations must be preserved during system updates"
-      },
-      {
-        "id": "CON_FUNC_VALIDATE_DATA_CLIENT_SERVER_B6CM",
-        "displayId": "C057",
-        "description": "Validate data at client and server"
-      },
-      {
-        "id": "CON_FUNC_VALIDATE_INCOMING_DATA_FL0Y",
-        "displayId": "C058",
-        "description": "Validate incoming data"
-      },
-      {
-        "id": "CON_FUNC_YKC06500",
-        "displayId": "C059",
-        "description": "系统必须对无权访问的案件请求提供可配置的响应"
-      },
-      {
-        "id": "CON_PERF_PROVIDE_ADEQUATE_RESPONSE_TIMES_XT87",
-        "displayId": "C060",
-        "description": "Provide adequate response times"
-      },
-      {
-        "id": "CON_PERF_SUPPORT_LOW_BANDWIDTH_PERFORMANCE_IMM8",
-        "displayId": "C061",
-        "description": "Support low-bandwidth performance"
-      },
-      {
-        "id": "CON_SEC_5MOQ5000",
-        "displayId": "C062",
-        "description": "系统应支持选择性加密存储数据"
-      },
-      {
-        "id": "CON_SEC_ALLOW_USERS_SPECIFY_ACCESS_7J48",
-        "displayId": "C063",
-        "description": "Allow users to specify access rights"
-      },
-      {
-        "id": "CON_SEC_ENSURE_AUDIT_TRAIL_ACCESSIBLE_JNLJ",
-        "displayId": "C064",
-        "description": "Ensure audit trail accessible to external personnel"
-      },
-      {
-        "id": "CON_SEC_GI7HZG00",
-        "displayId": "C065",
-        "description": "审计跟踪功能激活后，系统必须自动跟踪事件并存储相关信息"
-      },
-      {
-        "id": "CON_SEC_MOBILE_ACCESS_ENFORCE_SECURITY_XCXG",
+        "id": "CON_FUNC_SELECT_APPROPRIATE_PAGE_LENGTHS_7UBV",
         "displayId": "C067",
-        "description": "Mobile access must enforce the same security controls as desktop access"
+        "description": "Select appropriate page lengths based on purpose"
       },
       {
-        "id": "CON_SEC_MULTILINGUAL_SUPPORT_EXTEND_CASE_QWCP",
+        "id": "CON_FUNC_SEND_ALERTS_USERS_ACTIONS_7TC9",
         "displayId": "C068",
-        "description": "Multilingual support must extend to all case metadata and audit trail entries"
+        "description": "Send alerts to users when actions are taken on alerts"
       },
       {
-        "id": "CON_SEC_N13AAU00",
+        "id": "CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_L4SD",
         "displayId": "C069",
-        "description": "系统必须维护审计跟踪至少与相关案件的寿命一样长"
+        "description": "Show users their location in navigation structure"
       },
       {
-        "id": "CON_SEC_NNPEE800",
+        "id": "CON_FUNC_SUPPORT_FAST_TEXT_SKIMMING_4V5I",
         "displayId": "C070",
-        "description": "系统应建立在通用用户访问和认证服务上，确保终端用户单点登录"
+        "description": "Support fast text skimming with clear links and lists"
       },
       {
-        "id": "CON_SEC_SEARCH_RESULTS_EXCLUDE_UNAUTHORIZED_IGF5",
+        "id": "CON_FUNC_SUPPORT_MULTILINGUAL_INTERFACE_HD4F",
         "displayId": "C071",
-        "description": "Search results must exclude unauthorized records"
+        "description": "Support multilingual interface"
       },
       {
-        "id": "CON_SEC_SUPPORT_ACCESS_VIA_MOBILE_OZEA",
+        "id": "CON_FUNC_SUPPORT_SECURE_VIRTUAL_PRIVATE_IK45",
         "displayId": "C072",
-        "description": "Support access via mobile devices"
+        "description": "Support secure virtual private network connections"
       },
       {
-        "id": "CON_SEC_SUPPORT_BROWSER_BASED_ACCESS_8QE7",
+        "id": "CON_FUNC_SYSTEM_AVAILABLE_SPECIFIED_TIMES_NGSR",
         "displayId": "C073",
-        "description": "Support browser-based access with minimal client requirements"
+        "description": "System must be available during specified times"
       },
       {
-        "id": "CON_SEC_SUPPORT_MULTI_TIER_AUTHENTICATION_KV1B",
+        "id": "CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F",
         "displayId": "C074",
-        "description": "Support multi-tier authentication"
+        "description": "System must be restorable within specified time after failure"
       },
       {
-        "id": "CON_SEC_SUPPORT_MULTIPLE_REMOTE_ACCESS_59O6",
+        "id": "CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH",
         "displayId": "C075",
-        "description": "Support multiple remote access types"
+        "description": "System must be scalable for different police station sizes"
       },
       {
-        "id": "CON_SEC_SUPPORT_PUBLIC_ACCESS_SUBSET_3X1V",
+        "id": "CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_YCF1",
         "displayId": "C076",
-        "description": "Support public access to subset of data"
+        "description": "Unplanned downtime must not exceed specified duration"
       },
       {
-        "id": "CON_SEC_SYSTEM_ABLE_EXPORT_AUDIT_FCJ7",
+        "id": "CON_FUNC_USE_AJAX_IMPROVE_USER_2VHI",
+        "displayId": "C077",
+        "description": "Use AJAX to improve user experience"
+      },
+      {
+        "id": "CON_FUNC_USE_CACHE_STORING_FREQUENT_AXET",
         "displayId": "C078",
-        "description": "System must be able to export audit trails for specified cases"
+        "description": "Use cache for storing frequent data"
       },
       {
-        "id": "CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_NHJ8",
+        "id": "CON_FUNC_USE_COLOR_CAREFULLY_SOLE_JFHD",
         "displayId": "C079",
-        "description": "System must allow limiting case access to specific users/groups"
+        "description": "Use color carefully, not as sole information means"
       },
       {
-        "id": "CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_7WR0",
+        "id": "CON_FUNC_USE_CONSISTENT_LAYOUT_SCHEMES_CDOT",
         "displayId": "C080",
-        "description": "System must maintain unalterable audit trail"
+        "description": "Use consistent layout schemes across pages"
       },
       {
-        "id": "CON_SEC_UV9Z5100",
+        "id": "CON_FUNC_USE_DESCRIPTIVE_LINK_LABELS_AUL7",
         "displayId": "C081",
-        "description": "系统必须将未经授权的案件访问尝试记录到审计跟踪中"
+        "description": "Use descriptive link labels indicating target/purpose"
       },
       {
-        "id": "CON_SEC_VU16BY00",
+        "id": "CON_FUNC_USE_FAMILIAR_TERMINOLOGY_NAVIGATION_60MX",
         "displayId": "C082",
-        "description": "系统必须将所有案件访问和相关活动存储在审计跟踪中"
+        "description": "Use familiar terminology for navigation links"
       },
       {
-        "id": "CON_USAB_USER_INTERFACES_COMPLY_ISO_TDR9",
+        "id": "CON_FUNC_USE_FRAMES_CAREFULLY_ALTERNATIVES_RWY2",
         "displayId": "C083",
-        "description": "User interfaces must comply with ISO 9241 standard"
+        "description": "Use frames carefully with alternatives"
+      },
+      {
+        "id": "CON_FUNC_USE_HTTPS_COMMUNICATION_PROTOCOL_X2RJ",
+        "displayId": "C084",
+        "description": "Use HTTPS as communication protocol"
+      },
+      {
+        "id": "CON_FUNC_USE_WHITE_SPACE_CAREFULLY_4N60",
+        "displayId": "C085",
+        "description": "Use white space carefully to not impair visual skimming"
+      },
+      {
+        "id": "CON_PERF_DESIGN_SATISFACTORY_PERFORMANCE_LOW_2WDG",
+        "displayId": "C086",
+        "description": "Design for satisfactory performance in low-bandwidth stations"
+      },
+      {
+        "id": "CON_PERF_PROVIDE_ADEQUATE_RESPONSE_TIMES_AIKP",
+        "displayId": "C087",
+        "description": "Provide adequate response times for common functions"
+      },
+      {
+        "id": "CON_SEC_ALLOW_LIMITING_CASE_ACCESS_O7KY",
+        "displayId": "C088",
+        "description": "Allow limiting case access to specified users/groups"
+      },
+      {
+        "id": "CON_SEC_AUTOMATICALLY_TRACK_EVENTS_STORE_421Z",
+        "displayId": "C090",
+        "description": "Automatically track events and store audit trail information"
+      },
+      {
+        "id": "CON_SEC_BUILD_COMMON_USER_ACCESS_ANXR",
+        "displayId": "C091",
+        "description": "Build on common User Access and Authentication Service"
+      },
+      {
+        "id": "CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ",
+        "displayId": "C092",
+        "description": "Capture and store access control violations"
+      },
+      {
+        "id": "CON_SEC_DESIGN_BROWSER_BASED_ACCESS_SW9Y",
+        "displayId": "C093",
+        "description": "Design for browser-based access with minimal client requirements"
+      },
+      {
+        "id": "CON_SEC_ENSURE_AUDIT_TRAIL_DATA_A7DX",
+        "displayId": "C094",
+        "description": "Ensure audit trail data is available for inspection on request"
+      },
+      {
+        "id": "CON_SEC_EXTENSIBLE_PROVIDE_ACCESS_PDAS_QR0T",
+        "displayId": "C096",
+        "description": "Extensible to provide access through PDAs and mobile data terminals"
+      },
+      {
+        "id": "CON_SEC_LOG_UNAUTHORIZED_CASE_ACCESS_S3OR",
+        "displayId": "C097",
+        "description": "Log unauthorized case access attempts to audit trail"
+      },
+      {
+        "id": "CON_SEC_MAINTAIN_AUDIT_TRAIL_LEAST_9PVS",
+        "displayId": "C098",
+        "description": "Maintain audit trail for at least the life of the related case"
+      },
+      {
+        "id": "CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF",
+        "displayId": "C100",
+        "description": "Never include unauthorized records in search results"
+      },
+      {
+        "id": "CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_CEPN",
+        "displayId": "C101",
+        "description": "Offer alternative access paths for navigation"
+      },
+      {
+        "id": "CON_SEC_SUPPORT_MULTI_TIER_AUTHENTICATION_JXGE",
+        "displayId": "C104",
+        "description": "Support multi-tier authentication where required"
+      },
+      {
+        "id": "CON_SEC_SUPPORT_MULTIPLE_TYPES_REMOTE_1GD3",
+        "displayId": "C105",
+        "description": "Support multiple types of remote access communication services"
+      },
+      {
+        "id": "CON_SEC_SUPPORT_PUBLIC_ACCESS_SUBSET_3IYR",
+        "displayId": "C106",
+        "description": "Support public access to subset of data and functionality"
+      },
+      {
+        "id": "CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0",
+        "displayId": "C108",
+        "description": "Support SSL encrypted connections"
+      },
+      {
+        "id": "CON_USAB_COMPLY_ISO_STANDARD_7NCW",
+        "displayId": "C109",
+        "description": "UI should comply with ISO 9241 standard"
+      },
+      {
+        "id": "CON_USAB_FOLLOW_USABILITY_GOV_GUIDELINES_1BGF",
+        "displayId": "C110",
+        "description": "Follow usability.gov guidelines for UI"
       }
     ]
   },
   "constraintDesignCoverage": {
-    "total": 83,
-    "covered": 83,
-    "uncovered": []
-  },
-  "exceptionCoverage": {
-    "total": 20,
-    "covered": 4,
+    "total": 110,
+    "covered": 107,
     "uncovered": [
       {
-        "id": "EXC_85Q1U900",
-        "displayId": "X001",
-        "description": "案件不存在"
+        "id": "CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_SAVE_PYDA",
+        "displayId": "C045",
+        "description": "Make interfaces customizable and save configurations in user profile"
       },
       {
-        "id": "EXC_UIHVWC00",
-        "displayId": "X002",
-        "description": "审计跟踪功能未激活"
+        "id": "CON_FUNC_SUPPORT_MULTILINGUAL_INTERFACE_HD4F",
+        "displayId": "C071",
+        "description": "Support multilingual interface"
       },
       {
-        "id": "EXC_D5KK5Z00",
-        "displayId": "X003",
-        "description": "搜索超时"
-      },
-      {
-        "id": "EXC_QBBURV00",
-        "displayId": "X004",
-        "description": "用户未登录"
-      },
-      {
-        "id": "EXC_UDDJFZ00",
-        "displayId": "X005",
-        "description": "用户无权访问案件"
-      },
-      {
-        "id": "EXC_AUDIT_TRAIL_EXPORT_FAILURE",
-        "displayId": "X007",
-        "description": "Audit trail export failure"
-      },
-      {
-        "id": "EXC_CASE_FOUND",
-        "displayId": "X008",
-        "description": "Case not found"
-      },
-      {
-        "id": "EXC_CASE_RETRIEVAL_TIMEOUT",
-        "displayId": "X010",
-        "description": "Case retrieval timeout"
-      },
-      {
-        "id": "EXC_DEFECT_SUBMISSION_ERROR",
-        "displayId": "X011",
-        "description": "Defect submission error"
-      },
-      {
-        "id": "EXC_MOBILE_DEVICE_FAILS_AUTHENTICATION",
-        "displayId": "X013",
-        "description": "Mobile device fails authentication during critical operation"
-      },
-      {
-        "id": "EXC_MULTILINGUAL_CONTENT_UNAVAILABLE_SPECIFIC",
-        "displayId": "X014",
-        "description": "Multilingual content unavailable for specific case metadata"
-      },
-      {
-        "id": "EXC_OFFLINE_MODIFICATIONS_CONFLICT_CENTRAL",
-        "displayId": "X015",
-        "description": "Offline modifications conflict with central system updates"
-      },
-      {
-        "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT_CASE",
-        "displayId": "X017",
-        "description": "Unauthorized access attempt to case"
-      },
-      {
-        "id": "EXC_UNAUTHORIZED_CASE_ACCESS_ATTEMPT",
-        "displayId": "X018",
-        "description": "Unauthorized case access attempt"
-      },
-      {
-        "id": "EXC_UNAUTHORIZED_CASE_ACCESS_ATTEMPT_2",
-        "displayId": "X019",
-        "description": "Unauthorized case access attempt"
-      },
-      {
-        "id": "EXC_USER_INTERFACE_CUSTOMIZATION_DATA",
-        "displayId": "X020",
-        "description": "User interface customization data corruption"
+        "id": "CON_SEC_MAINTAIN_UNALTERABLE_AUDIT_TRAIL_XDOP",
+        "displayId": "C099",
+        "description": "Maintain unalterable audit trail for critical entities"
       }
     ]
   },
+  "exceptionCoverage": {
+    "total": 15,
+    "covered": 15,
+    "uncovered": []
+  },
   "invalidReferences": [],
-  "overall": 51
+  "overall": 65
 }

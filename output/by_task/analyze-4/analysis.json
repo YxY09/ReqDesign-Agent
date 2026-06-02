@@ -1,366 +1,189 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "CCTNS V1.0 is a police case management system designed to improve crime investigation and criminal detection processes.",
+  "project_overview": "警察案件跟踪系统，提供案件注册、调查、起诉、搜索等功能",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "System administrator with full access rights"
+      "description": "管理员"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "Investigating officer handling cases"
+      "description": "警务人员"
     },
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "Public user reporting cases or accessing public data"
+      "description": "公民"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "Support staff handling defect reports"
+      "description": "帮助台"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
-      "description": "Staff managing case records"
+      "description": "记录室工作人员"
     },
     {
       "actorRef": "A_EXTERNAL_AUDITOR",
       "name": "ExternalAuditor",
-      "description": "External personnel auditing system activities"
+      "description": "外部审计员"
+    },
+    {
+      "actorRef": "A_SYSTEM",
+      "name": "System",
+      "description": "系统"
     }
   ],
   "functions": [
     {
-      "id": "FUN_REGISTER_CASE",
-      "name": "RegisterCase",
-      "description": "Register new police cases",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "PoliceOfficer"
-      ],
-      "priority": "high",
-      "preconditions": "User must be authenticated"
-    },
-    {
-      "id": "FUN_INVESTIGATE_CASE",
-      "name": "InvestigateCase",
-      "description": "Conduct case investigations",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "PoliceOfficer"
-      ],
-      "priority": "high",
-      "preconditions": "Case must exist"
-    },
-    {
-      "id": "FUN_PROSECUTE_CASE",
-      "name": "ProsecuteCase",
-      "description": "Handle case prosecution",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "PoliceOfficer"
-      ],
-      "priority": "high",
-      "preconditions": "Case investigation must be complete"
-    },
-    {
       "id": "FUN_SEARCH_CASE",
       "name": "SearchCase",
-      "description": "Search for cases",
+      "description": "搜索案件",
       "sub_capabilities": [
-        "BasicSearch",
-        "AdvancedSearch"
+        "执行基本搜索",
+        "执行高级搜索",
+        "按人员搜索",
+        "按犯罪类型搜索",
+        "按作案手法搜索",
+        "按财产搜索",
+        "自定义结果视图",
+        "生成月度报告",
+        "生成RTI相关查询"
       ],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "搜索结果应在5-8秒内返回（简单搜索）",
+        "搜索结果应在10-15秒内返回（高级搜索）",
+        "搜索结果不应包含用户无权访问的记录"
+      ],
       "related_actors": [
-        "PoliceOfficer",
-        "RecordsStaff"
+        "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "User must have search permissions"
+      "preconditions": "用户已登录并具有搜索权限"
     },
     {
-      "id": "FUN_TRACK_DEFECT",
-      "name": "TrackDefect",
-      "description": "Track system defects and enhancement requests",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "HelpDesk",
-        "Admin"
+      "id": "FUN_VIEW_CASE",
+      "name": "ViewCase",
+      "description": "查看案件",
+      "sub_capabilities": [
+        "查看案件详情",
+        "查看嫌疑人信息",
+        "查看财产信息",
+        "查看证据信息"
       ],
-      "priority": "medium",
-      "preconditions": "Defect must be logged"
-    },
-    {
-      "id": "FUN_EXPORT_AUDIT",
-      "name": "ExportAudit",
-      "description": "Export audit trails",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "ExternalAuditor",
-        "Admin"
+      "acceptance_criteria": [
+        "最近2个月内访问过的案件应在5-8秒内显示",
+        "最近2个月内未访问过的案件应在20秒内显示"
       ],
-      "priority": "medium",
-      "preconditions": "Audit trail must exist"
-    },
-    {
-      "id": "FUN_MANAGE_ACCESS",
-      "name": "ManageAccess",
-      "description": "Manage user access controls",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
       "related_actors": [
-        "Admin"
+        "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "User must have admin privileges"
-    },
-    {
-      "id": "FUN_CUSTOMIZE_UI",
-      "name": "CustomizeUI",
-      "description": "Customize user interface",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "PoliceOfficer",
-        "Admin"
-      ],
-      "priority": "low",
-      "preconditions": "User must be authenticated"
-    },
-    {
-      "id": "FUN_VIEW_REPORTS",
-      "name": "ViewReports",
-      "description": "View system reports",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "Admin",
-        "PoliceOfficer"
-      ],
-      "priority": "medium",
-      "preconditions": "User must have report viewing permissions"
-    },
-    {
-      "id": "FUN_MANAGE_CONFIG",
-      "name": "ManageConfig",
-      "description": "Manage system configuration",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "Admin"
-      ],
-      "priority": "high",
-      "preconditions": "User must have admin privileges"
+      "preconditions": "用户已登录并具有查看权限"
     }
   ],
   "entities": [
     {
       "entityRef": "E_CASE",
       "name": "Case",
-      "description": "Police case record",
+      "description": "案件",
       "attributes": [
         {
           "name": "caseId",
           "type": "String",
-          "description": "Unique case identifier"
+          "description": "案件ID"
         },
         {
-          "name": "status",
+          "name": "title",
           "type": "String",
-          "description": "Current case status"
-        },
-        {
-          "name": "createdDate",
-          "type": "DateTime",
-          "description": "Case creation date"
-        },
-        {
-          "name": "lastAccessed",
-          "type": "DateTime",
-          "description": "Last access timestamp"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "Suspect",
-          "type": "one-to-many",
-          "description": "Case may have multiple suspects"
-        },
-        {
-          "target": "Property",
-          "type": "one-to-many",
-          "description": "Case may involve multiple properties"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_SUSPECT",
-      "name": "Suspect",
-      "description": "Person suspected in a case",
-      "attributes": [
-        {
-          "name": "suspectId",
-          "type": "String",
-          "description": "Unique suspect identifier"
-        },
-        {
-          "name": "name",
-          "type": "String",
-          "description": "Suspect name"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "Suspect belongs to a case"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_PROPERTY",
-      "name": "Property",
-      "description": "Property involved in a case",
-      "attributes": [
-        {
-          "name": "propertyId",
-          "type": "String",
-          "description": "Unique property identifier"
+          "description": "案件标题"
         },
         {
           "name": "description",
           "type": "String",
-          "description": "Property description"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "Property belongs to a case"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_AUDIT_TRAIL",
-      "name": "AuditTrail",
-      "description": "System activity audit records",
-      "attributes": [
-        {
-          "name": "auditId",
-          "type": "String",
-          "description": "Unique audit record identifier"
+          "description": "案件描述"
         },
         {
-          "name": "action",
-          "type": "String",
-          "description": "Action performed"
-        },
-        {
-          "name": "timestamp",
+          "name": "createdAt",
           "type": "DateTime",
-          "description": "When action occurred"
+          "description": "创建时间"
+        },
+        {
+          "name": "lastAccessedAt",
+          "type": "DateTime",
+          "description": "最后访问时间"
         }
       ],
       "relationships": [
         {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "Audit may reference a case"
+          "target": "E_SUSPECT",
+          "type": "one-to-many",
+          "description": "案件关联的嫌疑人"
+        },
+        {
+          "target": "E_PROPERTY",
+          "type": "one-to-many",
+          "description": "案件关联的财产"
+        },
+        {
+          "target": "E_EVIDENCE",
+          "type": "one-to-many",
+          "description": "案件关联的证据"
         }
       ]
     },
     {
-      "entityRef": "E_USER_PROFILE",
-      "name": "UserProfile",
-      "description": "User configuration and preferences",
+      "entityRef": "E_SEARCH_RESULT",
+      "name": "SearchResult",
+      "description": "搜索结果",
       "attributes": [
         {
-          "name": "userId",
+          "name": "query",
           "type": "String",
-          "description": "User identifier"
+          "description": "搜索查询"
         },
         {
-          "name": "uiSettings",
+          "name": "resultCount",
+          "type": "Integer",
+          "description": "结果数量"
+        },
+        {
+          "name": "executionTime",
+          "type": "DateTime",
+          "description": "执行时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-many",
+          "description": "搜索结果包含的案件"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_CACHE",
+      "name": "Cache",
+      "description": "缓存",
+      "attributes": [
+        {
+          "name": "key",
+          "type": "String",
+          "description": "缓存键"
+        },
+        {
+          "name": "value",
           "type": "Object",
-          "description": "User interface preferences"
-        }
-      ],
-      "relationships": []
-    },
-    {
-      "entityRef": "E_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "User access permissions",
-      "attributes": [
-        {
-          "name": "groupId",
-          "type": "String",
-          "description": "Group identifier"
+          "description": "缓存值"
         },
         {
-          "name": "permissions",
-          "type": "List",
-          "description": "Access permissions list"
-        }
-      ],
-      "relationships": []
-    },
-    {
-      "entityRef": "E_DEFECT",
-      "name": "Defect",
-      "description": "System defect or enhancement request",
-      "attributes": [
-        {
-          "name": "defectId",
-          "type": "String",
-          "description": "Unique defect identifier"
-        },
-        {
-          "name": "status",
-          "type": "String",
-          "description": "Current status"
-        }
-      ],
-      "relationships": []
-    },
-    {
-      "entityRef": "E_NAVIGATION",
-      "name": "Navigation",
-      "description": "System navigation structure",
-      "attributes": [
-        {
-          "name": "menuItems",
-          "type": "List",
-          "description": "Navigation menu items"
-        }
-      ],
-      "relationships": []
-    },
-    {
-      "entityRef": "E_CONFIGURATION",
-      "name": "Configuration",
-      "description": "System configuration settings",
-      "attributes": [
-        {
-          "name": "configId",
-          "type": "String",
-          "description": "Configuration identifier"
-        },
-        {
-          "name": "settings",
-          "type": "Object",
-          "description": "Configuration values"
+          "name": "expirationTime",
+          "type": "DateTime",
+          "description": "过期时间"
         }
       ],
       "relationships": []
@@ -368,519 +191,119 @@
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_001",
-      "description": "Provide context-sensitive help for all UI actions",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
-    },
-    {
-      "constraintRef": "C_RULE_002",
-      "description": "Provide interface for logging defects",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
-    },
-    {
-      "constraintRef": "C_RULE_004",
-      "description": "Maintain unalterable audit trail",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT"
-      ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
-    },
-    {
-      "constraintRef": "C_RULE_007",
-      "description": "Allow access restriction to specific users/groups",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
-    },
-    {
-      "constraintRef": "C_RULE_008",
-      "description": "Only admins can set up user profiles",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
-    },
-    {
-      "constraintRef": "C_RULE_010",
-      "description": "Search results must respect access rights",
-      "related_functions": [
-        "FUN_SEARCH_CASE"
-      ],
-      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
-    },
-    {
-      "constraintRef": "C_RULE_012",
-      "description": "UI must be customizable",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
-    },
-    {
-      "constraintRef": "C_RULE_014",
-      "description": "Fast search performance requirements",
+      "constraintRef": "C_RULE_023",
+      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves."
     },
     {
-      "constraintRef": "C_RULE_016",
-      "description": "Support multilingual interface",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The system should support multilingual interface"
-    },
-    {
-      "constraintRef": "C_RULE_018",
-      "description": "Use HTTPS for communication",
-      "related_functions": [],
-      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)"
-    },
-    {
-      "constraintRef": "C_RULE_021",
-      "description": "Prevent cross-site scripting",
-      "related_functions": [],
-      "source_text": "Prevent cross-site scripting"
-    },
-    {
-      "constraintRef": "C_RULE_022",
-      "description": "Prevent SQL injection",
-      "related_functions": [],
-      "source_text": "Prevent SQL Injection"
-    },
-    {
-      "constraintRef": "C_RULE_023",
-      "description": "Only allow soft deletes",
-      "related_functions": [],
-      "source_text": "Do not allow hard delete and perform only soft tagging the row for deletion"
-    },
-    {
       "constraintRef": "C_RULE_024",
-      "description": "Use cache for frequent data",
-      "related_functions": [],
-      "source_text": "Use of cache for storing frequent data"
+      "description": "系统必须能够在5-8秒内检索并显示过去2个月内访问过的案件",
+      "related_functions": [
+        "FUN_VIEW_CASE"
+      ],
+      "source_text": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system. This requirement is intended to allow for rapid retrieval of frequently-used cases, on the understanding that frequency of use is typically correlated with recent use."
     },
     {
       "constraintRef": "C_RULE_025",
-      "description": "Fetch search results in batches",
+      "description": "系统必须能够在20秒内检索并显示过去2个月内未访问过的案件",
+      "related_functions": [
+        "FUN_VIEW_CASE"
+      ],
+      "source_text": "The System must be able to retrieve and display within 20 seconds the case which has not been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system. This requirement is intended to allow for cases where cases used infrequently are stored on slower media than more active records."
+    },
+    {
+      "constraintRef": "C_RULE_016",
+      "description": "系统在搜索结果列表中绝不能包含用户无权访问的任何记录",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
+    },
+    {
+      "constraintRef": "C_RULE_035",
+      "description": "系统应使用缓存存储频繁使用的数据",
+      "related_functions": [
+        "FUN_SEARCH_CASE",
+        "FUN_VIEW_CASE"
+      ],
+      "source_text": "Use of cache for storing frequent data"
+    },
+    {
+      "constraintRef": "C_RULE_036",
+      "description": "搜索结果应从数据库中以10或20个为一批获取",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "The search results should be fetched from the database in batches of 10 or 20 maximum as configured within the application"
     },
     {
-      "constraintRef": "C_RULE_026",
-      "description": "Only fetch displayed fields initially",
+      "constraintRef": "C_RULE_037",
+      "description": "搜索应仅获取需要显示给用户的字段",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "The search should fetch only the fields that need to be displayed to the user. Only when the user clicks on a particular record to view its further details should a query be fired to fetch the additional details for this particular record only"
     },
     {
-      "constraintRef": "C_RULE_027",
-      "description": "Apply database indexes on search columns",
+      "constraintRef": "C_RULE_038",
+      "description": "应在用于搜索的关键列上应用数据库索引",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "Database Indexes should be applied on the key columns used for searching"
     },
     {
-      "constraintRef": "C_RULE_028",
-      "description": "Export audit trails for specified cases",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT"
-      ],
-      "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity."
-    },
-    {
-      "constraintRef": "C_RULE_032",
-      "description": "Provide role-based control",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The system should provide for role-based control for the functionality within the system"
-    },
-    {
-      "constraintRef": "C_RULE_033",
-      "description": "Allow users in multiple groups",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow a user to be a member of more than one group."
-    },
-    {
-      "constraintRef": "C_RULE_034",
-      "description": "Allow users to specify access rights",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System should allow a user to stipulate which other users or groups can access cases."
-    },
-    {
-      "constraintRef": "C_RULE_038",
-      "description": "Provide meaningful error messages",
-      "related_functions": [],
-      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
-    },
-    {
-      "constraintRef": "C_RULE_039",
-      "description": "Use consistent UI rules",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application."
-    },
-    {
-      "constraintRef": "C_RULE_040",
-      "description": "Provide intuitive user functions",
-      "related_functions": [],
-      "source_text": "The System must provide End User and Administrator functions which are easy to use and intuitive throughout."
-    },
-    {
-      "constraintRef": "C_RULE_041",
-      "description": "Allow persistent data entry defaults",
-      "related_functions": [],
-      "source_text": "user-definable values; values same as previous item; values derived from context, e.g. date, file reference, user identifier; The System must allow persistent defaults for data entry where desirable. These defaults should include:"
-    },
-    {
-      "constraintRef": "C_RULE_042",
-      "description": "Design frequent transactions for minimal interactions",
-      "related_functions": [],
-      "source_text": "Frequently-executed System transactions must be designed so that they can be completed with a small number of interactions (e.g. mouse clicks)."
-    },
-    {
-      "constraintRef": "C_RULE_043",
-      "description": "Allow GUI customization",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "menu contents; layout of screens; use of function keys; on-screen colours, fonts and font sizes; Where the System employs a graphical user interface, it must allow users to customise it. Customisation should include, but need not be limited to the following changes:"
-    },
-    {
-      "constraintRef": "C_RULE_044",
-      "description": "Design intuitive user interfaces",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The user interfaces should be designed to make them user-intuitive."
-    },
-    {
-      "constraintRef": "C_RULE_045",
-      "description": "Comply with ISO 9241 standards",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The user interfaces of the system should comply with Standard ISO 9241."
-    },
-    {
-      "constraintRef": "C_RULE_046",
-      "description": "Support offline mode for critical functions",
-      "related_functions": [],
-      "source_text": "The system should work even in an offline mode with the critical functionality"
-    },
-    {
-      "constraintRef": "C_RULE_047",
-      "description": "Support low-bandwidth performance",
-      "related_functions": [],
-      "source_text": "The system should be designed to have satisfactory performance even in Police Stations connected on low-bandwidth"
-    },
-    {
-      "constraintRef": "C_RULE_048",
-      "description": "Use SOA and modular design",
-      "related_functions": [],
-      "source_text": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design"
-    },
-    {
-      "constraintRef": "C_RULE_049",
-      "description": "Develop on open standards",
-      "related_functions": [],
-      "source_text": "The system should be developed on Open Standards"
-    },
-    {
-      "constraintRef": "C_RULE_050",
-      "description": "Support single sign-on",
-      "related_functions": [],
-      "source_text": "The system should be built on a common User Access and Authentication Service to ensure Single-Sign on for the end-user"
-    },
-    {
-      "constraintRef": "C_RULE_051",
-      "description": "Design for centralized deployment",
-      "related_functions": [],
-      "source_text": "The system should be developed for a centralized deployment and maintenance"
-    },
-    {
-      "constraintRef": "C_RULE_052",
-      "description": "Deploy in 3-tier architecture",
-      "related_functions": [],
-      "source_text": "The system should be developed to be deployed in a 3-tier datacenter architecture"
-    },
-    {
-      "constraintRef": "C_RULE_053",
-      "description": "Use n-tier architecture with separation of concerns",
-      "related_functions": [],
-      "source_text": "The system should be designed to have a n-tier architecture with the presentation logic separated from the business logic that is again separated from the data-access logic"
-    },
-    {
-      "constraintRef": "C_RULE_054",
-      "description": "Support access via mobile devices",
-      "related_functions": [],
-      "source_text": "The system should be extensible to provide access to the interfaces through PDA's and mobile data terminals"
-    },
-    {
-      "constraintRef": "C_RULE_055",
-      "description": "Use standardized formats and metadata",
-      "related_functions": [],
-      "source_text": "The system should adopt standardized formats and common metadata elements"
-    },
-    {
-      "constraintRef": "C_RULE_056",
-      "description": "Support browser-based access with minimal client requirements",
-      "related_functions": [],
-      "source_text": "The system should be designed for access through browser-based systems and must impose minimal requirements on the client device"
-    },
-    {
-      "constraintRef": "C_RULE_057",
-      "description": "Support multiple remote access types",
-      "related_functions": [],
-      "source_text": "The system must support multiple types of communication services for remote access"
-    },
-    {
-      "constraintRef": "C_RULE_058",
-      "description": "Support public access to subset of data",
-      "related_functions": [],
-      "source_text": "The system should have capability to support public access to a subset of data and functionality"
-    },
-    {
-      "constraintRef": "C_RULE_059",
-      "description": "Support multi-tier authentication",
-      "related_functions": [],
-      "source_text": "The system should support multi-tier authentication where required"
-    },
-    {
-      "constraintRef": "C_RULE_060",
-      "description": "Support SSL encrypted connections",
-      "related_functions": [],
-      "source_text": "The system should support SSL encrypted connections"
-    },
-    {
-      "constraintRef": "C_RULE_061",
-      "description": "Support secure VPN connections",
-      "related_functions": [],
-      "source_text": "The system should support secure virtual private network connections"
-    },
-    {
-      "constraintRef": "C_RULE_062",
-      "description": "Run on multiple browsers",
-      "related_functions": [],
-      "source_text": "The system should run on multiple browsers"
-    },
-    {
-      "constraintRef": "C_RULE_063",
-      "description": "Ensure audit trail data is available for inspection",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT"
-      ],
-      "source_text": "The System must ensure that audit trail data is available for inspection on request, so that a specific event can be identified and all related data made accessible, and that this can be achieved by authorised external personnel who have little or no familiarity with the system."
-    },
-    {
-      "constraintRef": "C_RULE_064",
-      "description": "Ensure system scalability",
-      "related_functions": [],
-      "source_text": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled."
-    },
-    {
-      "constraintRef": "C_RULE_065",
-      "description": "Provide adequate response times",
-      "related_functions": [],
-      "source_text": "The System must provide adequate response times for commonly performed functions under both standard and peak conditions"
-    },
-    {
-      "constraintRef": "C_RULE_067",
-      "description": "Validate incoming data",
-      "related_functions": [],
-      "source_text": "Validate the incoming data / user request"
-    },
-    {
-      "constraintRef": "C_RULE_068",
-      "description": "Encode incoming data",
-      "related_functions": [],
-      "source_text": "Encode the incoming data / user request"
-    },
-    {
-      "constraintRef": "C_RULE_069",
-      "description": "Use parameterized queries",
-      "related_functions": [],
-      "source_text": "Utilize parameterized queries"
-    },
-    {
-      "constraintRef": "C_RULE_070",
-      "description": "Sanitize user inputs",
-      "related_functions": [],
-      "source_text": "Sanitize the user-inputs"
-    },
-    {
-      "constraintRef": "C_RULE_071",
-      "description": "Validate data at client and server",
-      "related_functions": [],
-      "source_text": "Validate the data both at the client and server"
-    },
-    {
-      "constraintRef": "C_RULE_072",
-      "description": "Use AJAX to improve UX",
-      "related_functions": [],
-      "source_text": "Use of AJAX based technology to improve user experience."
-    },
-    {
-      "constraintRef": "C_RULE_073",
-      "description": "Consider aggressive page loading",
-      "related_functions": [],
-      "source_text": "Aggressive page loading to be considered based on the screen and estimate usage pattern"
-    },
-    {
-      "constraintRef": "C_RULE_074",
-      "description": "Leverage asynchronous HTTP sockets",
-      "related_functions": [],
-      "source_text": "Leverage Asynchronous HTTP socket capabilities of web server for scalability and performance"
-    },
-    {
-      "constraintRef": "C_RULE_075",
-      "description": "Host static content on web server",
-      "related_functions": [],
-      "source_text": "Host all the static content (documents, images) on the web server"
-    },
-    {
-      "constraintRef": "C_RULE_076",
-      "description": "Display records in batches/pages",
-      "related_functions": [
-        "FUN_SEARCH_CASE"
-      ],
-      "source_text": "Display of records on the screen in batches/paged manner"
-    },
-    {
-      "constraintRef": "C_RULE_077",
-      "description": "Use hierarchical cache for frequent searches",
+      "constraintRef": "C_RULE_106",
+      "description": "应配置和使用分层缓存来缓存最频繁使用的搜索结果",
       "related_functions": [
         "FUN_SEARCH_CASE"
       ],
       "source_text": "A hierarchical cache should be configured and used for caching of results of most frequently used searches"
-    },
-    {
-      "constraintRef": "C_RULE_078",
-      "description": "Ensure audit trail accessible to external personnel",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT"
-      ],
-      "source_text": "The System must ensure that audit trail data is available for inspection on request, so that a specific event can be identified and all related data made accessible, and that this can be achieved by authorised external personnel who have little or no familiarity with the system."
-    },
-    {
-      "constraintRef": "C_RULE_079",
-      "description": "Allow tracking of defect/enhancement requests",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The solution should enable the user to track the submitted defect or enhancement request."
-    },
-    {
-      "constraintRef": "C_RULE_080",
-      "description": "Provide defect/enhancement reports",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The solution should enable the help-desk user to view the reports on the submitted defects or enhancement requests category-wise, status-wise, and age- wise."
-    },
-    {
-      "constraintRef": "C_RULE_081",
-      "description": "Support solution accessible inside/outside application",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The support solution should be accessible to the users both from within the application and also outside the application through a browser interface."
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [
     {
       "id": "X001",
-      "description": "Unauthorized case access attempt",
-      "trigger": "User attempts to access case without permission",
-      "handling": "Log attempt in audit trail and show configured response"
+      "description": "用户无权访问案件",
+      "trigger": "用户尝试访问或搜索没有权限的案件",
+      "handling": "根据配置返回不同响应：显示标题和元数据/仅显示案件存在/不显示任何信息"
     },
     {
       "id": "X002",
-      "description": "Case not found",
-      "trigger": "Requested case does not exist",
-      "handling": "Show meaningful error message"
-    },
-    {
-      "id": "X003",
-      "description": "Search timeout",
-      "trigger": "Search takes longer than allowed time",
-      "handling": "Show timeout message and suggest refining search"
+      "description": "搜索超时",
+      "trigger": "搜索操作超过规定时间限制",
+      "handling": "返回错误信息并建议用户优化搜索条件"
     }
   ],
   "non_functional_requirements": [
     {
-      "category": "Performance",
-      "description": "System must perform simple searches within 5-8 seconds and advanced searches within 10-15 seconds"
+      "category": "性能",
+      "description": "系统必须可扩展，不能有任何功能会妨碍在不同规模的警察局使用"
     },
     {
-      "category": "Security",
-      "description": "System must maintain unalterable audit trails and prevent unauthorized access"
+      "category": "安全",
+      "description": "系统必须记录用户对案件的无权访问尝试到审计跟踪中"
     },
     {
-      "category": "Usability",
-      "description": "System must provide intuitive interfaces with context-sensitive help"
-    },
-    {
-      "category": "Availability",
-      "description": "System must be available during specified hours with minimal downtime"
-    },
-    {
-      "category": "Scalability",
-      "description": "System must scale to support varying numbers of cases across police stations"
+      "category": "可用性",
+      "description": "系统用户界面必须适合有特殊需求的用户"
     }
   ],
   "business_processes": [
     {
-      "name": "CaseRegistration",
+      "name": "案件搜索流程",
       "steps": [
-        "RegisterCase",
-        "AssignInvestigator",
-        "InitiateInvestigation"
+        "输入搜索条件",
+        "执行搜索",
+        "查看搜索结果",
+        "选择案件查看详情"
       ],
       "actors": [
-        "PoliceOfficer"
-      ]
-    },
-    {
-      "name": "CaseInvestigation",
-      "steps": [
-        "GatherEvidence",
-        "InterviewWitnesses",
-        "IdentifySuspects"
-      ],
-      "actors": [
-        "PoliceOfficer"
-      ]
-    },
-    {
-      "name": "DefectManagement",
-      "steps": [
-        "LogDefect",
-        "AssignPriority",
-        "TrackResolution"
-      ],
-      "actors": [
-        "HelpDesk"
+        "A_POLICE_OFFICER"
       ]
     }
   ],

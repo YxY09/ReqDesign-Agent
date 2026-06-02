@@ -16,6 +16,7 @@
   "descriptionZh": "中文描述",
   "canonicalRuleEn": "English canonical rule statement",
   "sourceText": "原文引用",
+  "sectionId": "约束所在章节的ID（如 s1-1、s2-3），对应文档章节编号。如果文档无章节编号则省略此字段",
   "type": "security|performance|usability|data|availability|functional",
   "subtype": "具体子类型",
   "relatedFunctionCandidates": ["功能名或ID"]
@@ -33,7 +34,8 @@
 
 ## 规则
 1. 每个 sourceText 必须是原文的精确引用
-2. relatedFunctionCandidates 填写该约束涉及的功能名或 ID
+2. sectionId 必须填写该约束所出自的章节编号（如文档有 s1-1、s2-3 等章节划分）。精确定位到最小一级章节。如果文档没有明确的章节编号体系，可省略 sectionId
+3. relatedFunctionCandidates 填写该约束涉及的功能名或 ID
 3. 如果约束涉及已知的实体或功能，用它们的规范名称
 4. 复合约束必须拆成多个原子约束
 5. 不要遗漏隐含约束（如合规性要求、安全隐含规则）

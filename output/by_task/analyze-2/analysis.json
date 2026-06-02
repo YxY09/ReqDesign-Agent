@@ -1,396 +1,203 @@
 {
-  "project_name": "CCTNS",
-  "project_overview": "Police case management system with citizen interface, audit trails and role-based access control",
+  "project_name": "CCTNS Investigation Module",
+  "project_overview": "案件调查模块，用于警务人员自动化处理案件调查流程",
   "actors": [
-    {
-      "actorRef": "A_ADMIN",
-      "name": "Admin",
-      "description": "System administrator with full access rights"
-    },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "Police personnel using the system for case management"
+      "description": "警务人员，负责案件调查"
     },
     {
-      "actorRef": "A_CITIZEN",
-      "name": "Citizen",
-      "description": "Public user accessing citizen interface features"
-    },
-    {
-      "actorRef": "A_HELP_DESK",
-      "name": "HelpDesk",
-      "description": "Support staff handling defect reports"
-    },
-    {
-      "actorRef": "A_RECORDS_STAFF",
-      "name": "RecordsStaff",
-      "description": "Records room personnel managing case files"
-    },
-    {
-      "actorRef": "A_EXTERNAL_AUDITOR",
-      "name": "ExternalAuditor",
-      "description": "External personnel auditing system activities"
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "管理员，负责系统配置和用户管理"
     }
   ],
   "functions": [
     {
-      "id": "FUN_TRACK_DEFECT",
-      "name": "TrackDefect",
-      "description": "Log and track application defects or enhancement requests",
-      "sub_capabilities": [
-        "Submit defect report",
-        "View defect status",
-        "Receive alerts on defect updates"
-      ],
-      "acceptance_criteria": [
-        "User can submit defect with all required fields",
-        "Help desk can view defect reports by category/status/age",
-        "Users receive alerts when defect status changes"
-      ],
+      "id": "FUN_INVESTIGATE_CASE",
+      "name": "InvestigateCase",
+      "description": "调查案件",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
       "related_actors": [
-        "A_CITIZEN",
-        "A_HELP_DESK"
+        "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "User must be authenticated"
+      "preconditions": "案件已注册"
     },
     {
-      "id": "FUN_EXPORT_AUDIT",
-      "name": "ExportAudit",
-      "description": "Export audit trails for specified cases",
-      "sub_capabilities": [
-        "Select cases for audit export",
-        "Generate audit report",
-        "Download audit trail"
-      ],
-      "acceptance_criteria": [
-        "Audit data remains unaltered during export",
-        "Reports can be organized by case/user/chronology"
-      ],
+      "id": "FUN_UPDATE_CASE",
+      "name": "UpdateCase",
+      "description": "更新案件信息",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
       "related_actors": [
-        "A_ADMIN",
-        "A_EXTERNAL_AUDITOR"
-      ],
-      "priority": "medium",
-      "preconditions": "Audit trail must exist for selected cases"
-    },
-    {
-      "id": "FUN_MANAGE_ACCESS",
-      "name": "ManageAccess",
-      "description": "Configure user access rights to cases",
-      "sub_capabilities": [
-        "Set user/group permissions",
-        "Configure access violation responses",
-        "View access violation logs"
-      ],
-      "acceptance_criteria": [
-        "Only super-users can modify security attributes",
-        "Unauthorized access attempts are logged",
-        "Search results respect access rights"
-      ],
-      "related_actors": [
-        "A_ADMIN"
+        "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "User must have admin privileges"
-    },
-    {
-      "id": "FUN_CUSTOMIZE_UI",
-      "name": "CustomizeUI",
-      "description": "Personalize user interface settings",
-      "sub_capabilities": [
-        "Modify screen layout",
-        "Adjust color schemes",
-        "Save configurations to user profile"
-      ],
-      "acceptance_criteria": [
-        "Customizations persist across sessions",
-        "UI remains accessible for special needs users",
-        "Changes don't affect other users"
-      ],
-      "related_actors": [
-        "A_POLICE_OFFICER",
-        "A_ADMIN"
-      ],
-      "priority": "medium",
-      "preconditions": "User must be authenticated"
+      "preconditions": "案件已存在"
     }
   ],
   "entities": [
     {
-      "entityRef": "E_USER_PROFILE",
-      "name": "UserProfile",
-      "description": "User configuration and preferences",
+      "entityRef": "E_CASE",
+      "name": "Case",
+      "description": "案件",
       "attributes": [
         {
-          "name": "uiSettings",
-          "type": "Object",
-          "description": "Saved UI customizations"
-        },
-        {
-          "name": "defaultValues",
-          "type": "Object",
-          "description": "Persistent data entry defaults"
-        },
-        {
-          "name": "languagePreference",
+          "name": "caseId",
           "type": "String",
-          "description": "Selected interface language"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "User",
-          "type": "one-to-one",
-          "description": "Profile belongs to single user"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "Security permissions and group memberships",
-      "attributes": [
-        {
-          "name": "securityLevel",
-          "type": "String",
-          "description": "User access privilege level"
-        },
-        {
-          "name": "assignedGroups",
-          "type": "List",
-          "description": "Groups user belongs to"
-        },
-        {
-          "name": "casePermissions",
-          "type": "Object",
-          "description": "Case-specific access rights"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "User",
-          "type": "one-to-one",
-          "description": "Controls access for user"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_DEFECT",
-      "name": "Defect",
-      "description": "Reported application issue or enhancement request",
-      "attributes": [
-        {
-          "name": "description",
-          "type": "String",
-          "description": "Detailed problem description"
-        },
-        {
-          "name": "category",
-          "type": "String",
-          "description": "Classification of defect"
+          "description": "案件唯一标识"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "Current resolution state"
+          "description": "案件状态"
         },
         {
-          "name": "reportedDate",
+          "name": "createdAt",
           "type": "DateTime",
-          "description": "When issue was logged"
+          "description": "创建时间"
         }
       ],
       "relationships": [
         {
-          "target": "User",
-          "type": "many-to-one",
-          "description": "Defect reported by user"
+          "target": "Suspect",
+          "type": "one-to-many",
+          "description": "案件关联的嫌疑人"
+        },
+        {
+          "target": "Evidence",
+          "type": "one-to-many",
+          "description": "案件关联的证据"
         }
       ]
     },
     {
-      "entityRef": "E_NAVIGATION",
-      "name": "Navigation",
-      "description": "Role-based interface navigation structure",
+      "entityRef": "E_SUSPECT",
+      "name": "Suspect",
+      "description": "嫌疑人",
       "attributes": [
         {
-          "name": "landingPageConfig",
-          "type": "Object",
-          "description": "Role-specific dashboard setup"
+          "name": "suspectId",
+          "type": "String",
+          "description": "嫌疑人唯一标识"
         },
         {
-          "name": "recentCases",
-          "type": "List",
-          "description": "Quick access to frequently used cases"
-        },
-        {
-          "name": "pendingTasks",
-          "type": "List",
-          "description": "Outstanding action items"
+          "name": "name",
+          "type": "String",
+          "description": "嫌疑人姓名"
         }
       ],
-      "relationships": [
+      "relationships": []
+    },
+    {
+      "entityRef": "E_EVIDENCE",
+      "name": "Evidence",
+      "description": "证据",
+      "attributes": [
         {
-          "target": "UserProfile",
-          "type": "one-to-one",
-          "description": "Navigation customized per user"
+          "name": "evidenceId",
+          "type": "String",
+          "description": "证据唯一标识"
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "description": "证据类型"
         }
-      ]
+      ],
+      "relationships": []
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_001",
-      "description": "Provide context-sensitive help for all UI actions",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
-    },
-    {
-      "constraintRef": "C_RULE_002",
-      "description": "Interface for logging/tracking defects",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
-    },
-    {
       "constraintRef": "C_RULE_004",
-      "description": "Maintain unalterable audit trail",
+      "description": "系统必须能够维护不可更改的审计跟踪",
       "related_functions": [
-        "FUN_EXPORT_AUDIT"
+        "FUN_INVESTIGATE_CASE",
+        "FUN_UPDATE_CASE"
       ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
     },
     {
-      "constraintRef": "C_RULE_007",
-      "description": "Restrict case access to specified users/groups",
+      "constraintRef": "C_RULE_010",
+      "description": "系统必须允许用户将案件访问限制为指定用户或用户组",
       "related_functions": [
-        "FUN_MANAGE_ACCESS"
+        "FUN_INVESTIGATE_CASE",
+        "FUN_UPDATE_CASE"
       ],
       "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
     },
     {
-      "constraintRef": "C_RULE_012",
-      "description": "Save UI customizations in user profile",
+      "constraintRef": "C_RULE_016",
+      "description": "系统在搜索结果列表中绝不能包含用户无权访问的任何记录",
       "related_functions": [
-        "FUN_CUSTOMIZE_UI"
+        "FUN_INVESTIGATE_CASE"
+      ],
+      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
+    },
+    {
+      "constraintRef": "C_RULE_017",
+      "description": "系统必须记录用户对案件的无权访问尝试到审计跟踪中",
+      "related_functions": [
+        "FUN_INVESTIGATE_CASE"
+      ],
+      "source_text": "If the System allows users to make unauthorised attempts to access cases, it must log these in the audit trail."
+    },
+    {
+      "constraintRef": "C_RULE_020",
+      "description": "系统必须能够同时显示多个实体（案件、嫌疑人）",
+      "related_functions": [
+        "FUN_INVESTIGATE_CASE"
+      ],
+      "source_text": "The System must be able to display several entities (cases, suspects) simultaneously."
+    },
+    {
+      "constraintRef": "C_RULE_021",
+      "description": "界面必须尽可能可定制或用户可配置，并将配置保存在用户配置文件中",
+      "related_functions": [
+        "FUN_INVESTIGATE_CASE",
+        "FUN_UPDATE_CASE"
       ],
       "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
-    },
-    {
-      "constraintRef": "C_RULE_013",
-      "description": "UI compatible with special needs software",
-      "related_functions": [
-        "FUN_CUSTOMIZE_UI"
-      ],
-      "source_text": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines"
-    },
-    {
-      "constraintRef": "C_RULE_028",
-      "description": "Export case audit trails",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT"
-      ],
-      "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity."
-    },
-    {
-      "constraintRef": "C_RULE_029",
-      "description": "Log access control violations",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must be able to capture and store violations (i.e. A user's attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms."
-    },
-    {
-      "constraintRef": "C_RULE_032",
-      "description": "Implement role-based functionality control",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The system should provide for role-based control for the functionality within the system"
-    },
-    {
-      "constraintRef": "C_RULE_079",
-      "description": "Allow tracking submitted defects",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The solution should enable the user to track the submitted defect or enhancement request."
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [
     {
-      "id": "X001",
-      "description": "Unauthorized case access attempt",
-      "trigger": "User tries to access restricted case",
-      "handling": "Log violation and show configured response"
-    },
-    {
-      "id": "X002",
-      "description": "Audit export failure",
-      "trigger": "Error during audit trail export",
-      "handling": "Notify administrator and preserve original audit data"
-    },
-    {
-      "id": "X003",
-      "description": "Defect submission error",
-      "trigger": "Required fields missing in defect report",
-      "handling": "Show meaningful error message with guidance"
+      "id": "EXC_FD589S00",
+      "description": "无权访问案件",
+      "trigger": "用户尝试访问没有权限的案件",
+      "handling": "记录到审计跟踪并返回错误消息",
+      "displayId": "X002"
     }
   ],
   "non_functional_requirements": [
     {
-      "category": "Performance",
-      "description": "Simple search completes in 5-8 seconds, advanced search in 10-15 seconds"
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
     },
     {
-      "category": "Security",
-      "description": "HTTPS protocol with SSL encryption for all communications"
+      "category": "安全",
+      "description": "系统必须维护不可更改的审计跟踪"
     },
     {
-      "category": "Usability",
-      "description": "UI complies with ISO 9241 accessibility standards"
-    },
-    {
-      "category": "Availability",
-      "description": "Critical functionality available in offline mode"
-    },
-    {
-      "category": "Scalability",
-      "description": "Supports deployment in police stations of varying sizes"
+      "category": "可用性",
+      "description": "界面必须尽可能可定制或用户可配置"
     }
   ],
   "business_processes": [
     {
-      "name": "DefectReporting",
+      "name": "案件调查流程",
       "steps": [
-        "User identifies issue",
-        "Submit defect report",
-        "Help desk categorizes",
-        "Track resolution status",
-        "Notify user of updates"
+        "注册案件",
+        "调查案件",
+        "更新案件信息"
       ],
       "actors": [
-        "A_CITIZEN",
-        "A_HELP_DESK"
-      ]
-    },
-    {
-      "name": "AuditInspection",
-      "steps": [
-        "Select cases for audit",
-        "Generate audit report",
-        "Export trail data",
-        "Analyze system activity"
-      ],
-      "actors": [
-        "A_ADMIN",
-        "A_EXTERNAL_AUDITOR"
+        "A_POLICE_OFFICER"
       ]
     }
   ],

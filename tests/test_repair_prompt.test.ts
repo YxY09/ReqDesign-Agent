@@ -168,6 +168,40 @@ describe("RepairTool prompt building", () => {
     expect(String(result)).toContain("Fixed boundary test 1"); // Should contain the fix
   });
 
+  it("_stripCodeFences strips markdown code fences", () => {
+    expect(RepairTool._stripCodeFences('```json\n{"key": "value"}\n```')).toBe('{"key": "value"}');
+    expect(RepairTool._stripCodeFences('```\nhello\n```')).toBe('hello');
+    expect(RepairTool._stripCodeFences('  ```\nhello\n```  ')).toBe('hello');
+    expect(RepairTool._stripCodeFences('{"no": "fence"}')).toBe('{"no": "fence"}');
+    expect(RepairTool._stripCodeFences('plain text')).toBe('plain text');
+    // Malformed fence: no closing fence
+    expect(RepairTool._stripCodeFences('```\nno closing')).toBe('```\nno closing');
+  });
+
+  it("patches fallback handles fenced JSON content", async () => {
+    // The currentContent is wrapped in code fences — the patches fallback
+    // should still detect it as JSON and apply the full content fallback.
+    const originalJson = JSON.stringify({ test_cases: [{ id: "TC-1", name: "test" }] }, null, 2);
+    const fencedJson = "```json\n" + originalJson + "\n```";
+    const fixedJson = JSON.stringify({ test_cases: [{ id: "TC-1", name: "fixed" }] }, null, 2);
+
+    const llm = designRepairLlm(JSON.stringify({
+      patches: [{ op: "replace_section", section: "TC-1", content: "## TC-1\nfixed" }],
+      content: fixedJson,
+    }));
+
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "tests-fenced", type: "tests", description: "repair fenced JSON" });
+
+    const result = await agent.repair(task, fencedJson, [
+      { severity: "major", target_field: "test_cases", description: "fix", suggestion: "fix" },
+    ], {});
+
+    expect(result).not.toBeNull();
+    expect(String(result)).toContain("fixed");
+    expect(String(result)).not.toBe(fencedJson);
+  });
+
   it("falls back to full content on non-JSON LLM response", async () => {
     const llm = designRepairLlm("This is not JSON, just plain text output");
     const agent = new RepairTool(llm);
