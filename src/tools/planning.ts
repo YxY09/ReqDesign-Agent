@@ -274,8 +274,8 @@ export class PlanningTool extends BaseTool {
         rawMode = String(hints.analysisMode ?? hints.analysis_mode ?? "").trim();
       }
     }
-    return rawMode === "constraints" ? "constraints"
-      : rawMode === "domain" ? "domain"
+    return rawMode.toLowerCase() === "constraints" ? "constraints"
+      : rawMode.toLowerCase() === "domain" ? "domain"
       : rawMode ? "domain"
       : undefined;
   }
@@ -314,6 +314,7 @@ export class PlanningTool extends BaseTool {
     if (goal.toLowerCase().includes("analyze")) {
       tasks = tasks.filter((t) => t.type === "analyze");
     }
+    tasks = tasks.filter((t) => t.analysisMode !== "constraints");
     tasks = PlanningTool._splitDiagramTasks(tasks);
     tasks = PlanningTool._ensureOrder(tasks);
 
@@ -338,7 +339,8 @@ export class PlanningTool extends BaseTool {
           contextHints: (typeof t.context_hints === "object") ? t.context_hints as Record<string, unknown> : {},
           ...(analysisMode ? { analysisMode } : {}),
         });
-      });
+      })
+      .filter((t) => t.analysisMode !== "constraints");
 
     const updateRaw = (response.update_tasks as Array<Record<string, unknown>>) ?? [];
     const updateTasks = updateRaw
@@ -353,7 +355,8 @@ export class PlanningTool extends BaseTool {
           contextHints: (typeof t.context_hints === "object") ? t.context_hints as Record<string, unknown> : {},
           ...(analysisMode ? { analysisMode } : {}),
         });
-      });
+      })
+      .filter((t) => t.analysisMode !== "constraints");
 
     const dropIds = ((response.drop_task_ids as string[]) ?? [])
       .map((d) => String(d).trim())

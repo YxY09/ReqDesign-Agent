@@ -88,7 +88,7 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
     expect(plan.tasks[0].analysisMode).toBe("domain");
   });
 
-  it("parses analysisMode 'constraints'", () => {
+  it("parses analysisMode 'constraints' but filters from plan", () => {
     const response = {
       reasoning: "test",
       tasks: [
@@ -100,10 +100,19 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
           context_hints: {},
           analysis_mode: "constraints",
         },
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
       ],
     };
     const plan = planner._parseResponse(response, "design");
-    expect(plan.tasks[0].analysisMode).toBe("constraints");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0].id).toBe("analyze-d");
   });
 
   it("falls back unknown analysisMode to 'domain'", () => {
@@ -124,41 +133,59 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
     expect(plan.tasks[0].analysisMode).toBe("domain");
   });
 
-  it("parses analysisMode (camelCase) from LLM response", () => {
+  it("parses analysisMode (camelCase) from LLM response and filters constraints", () => {
     const response = {
       reasoning: "test",
       tasks: [
         {
-          id: "analyze-1",
+          id: "analyze-c",
           type: "analyze",
           description: "constraint extraction via camelCase",
           depends_on: [],
           context_hints: {},
           analysisMode: "constraints",
         },
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysisMode: "domain",
+        },
       ],
     };
     const plan = planner._parseResponse(response, "design");
-    expect(plan.tasks[0].analysisMode).toBe("constraints");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0].id).toBe("analyze-d");
   });
 
-  it("prefers snake_case analysis_mode when both present", () => {
+  it("prefers snake_case analysis_mode when both present and filters constraints", () => {
     const response = {
       reasoning: "test",
       tasks: [
         {
           id: "analyze-1",
           type: "analyze",
-          description: "both modes",
+          description: "both modes - snake_case wins",
           depends_on: [],
           context_hints: {},
           analysis_mode: "constraints",
           analysisMode: "domain",
         },
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
       ],
     };
     const plan = planner._parseResponse(response, "design");
-    expect(plan.tasks[0].analysisMode).toBe("constraints");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0].id).toBe("analyze-d");
   });
 
   it("sets analysisMode to undefined when not provided", () => {
@@ -179,7 +206,7 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
   });
 
   // context_hints fallback for analysisMode
-  it("reads analysisMode from context_hints when top-level missing", () => {
+  it("reads analysisMode from context_hints when top-level missing and filters constraints", () => {
     const response = {
       reasoning: "test",
       tasks: [
@@ -190,10 +217,19 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
           depends_on: [],
           context_hints: { analysisMode: "constraints" },
         },
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
       ],
     };
     const plan = planner._parseResponse(response, "design");
-    expect(plan.tasks[0].analysisMode).toBe("constraints");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0].id).toBe("analyze-d");
   });
 
   it("reads analysis_mode from context_hints (snake_case)", () => {
@@ -213,22 +249,104 @@ describe("PlanningTool._parseResponse analysisMode validation", () => {
     expect(plan.tasks[0].analysisMode).toBe("domain");
   });
 
-  it("prefers top-level analysis_mode over context_hints", () => {
+  it("prefers top-level analysis_mode over context_hints and filters constraints", () => {
     const response = {
       reasoning: "test",
       tasks: [
         {
           id: "analyze-1",
           type: "analyze",
-          description: "both",
+          description: "both - top-level constraints wins",
           depends_on: [],
           context_hints: { analysisMode: "domain" },
           analysis_mode: "constraints",
         },
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
       ],
     };
     const plan = planner._parseResponse(response, "design");
-    expect(plan.tasks[0].analysisMode).toBe("constraints");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0].id).toBe("analyze-d");
+  });
+
+  it("treats analysisMode case-insensitively — 'CONSTRAINTS' is filtered", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-c",
+          type: "analyze",
+          description: "uppercase constraints",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "CONSTRAINTS",
+        },
+        {
+          id: "analyze-d",
+          type: "analyze",
+          description: "domain analysis",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    expect(plan.tasks).toHaveLength(1);
+    expect(plan.tasks[0].id).toBe("analyze-d");
+  });
+
+  it("filters out all analysisMode 'constraints' tasks from execution plan", () => {
+    const response = {
+      reasoning: "test",
+      tasks: [
+        {
+          id: "analyze-d1",
+          type: "analyze",
+          description: "domain analysis 1",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "domain",
+        },
+        {
+          id: "analyze-c1",
+          type: "analyze",
+          description: "constraint extraction 1",
+          depends_on: [],
+          context_hints: {},
+          analysis_mode: "constraints",
+        },
+        {
+          id: "analyze-c2",
+          type: "analyze",
+          description: "constraint extraction 2",
+          depends_on: [],
+          context_hints: {},
+          analysisMode: "constraints",
+        },
+        {
+          id: "analyze-d2",
+          type: "analyze",
+          description: "domain analysis 2",
+          depends_on: [],
+          context_hints: {},
+        },
+      ],
+    };
+    const plan = planner._parseResponse(response, "design");
+    const ids = plan.tasks.map((t) => t.id);
+    expect(ids).toContain("analyze-d1");
+    expect(ids).toContain("analyze-d2");
+    expect(ids).not.toContain("analyze-c1");
+    expect(ids).not.toContain("analyze-c2");
+    expect(plan.tasks).toHaveLength(2);
   });
 });
 
@@ -277,7 +395,7 @@ describe("PlanningTool._parseReplanResponse analysisMode validation", () => {
       drop_task_ids: [],
     };
     const mutation = planner._parseReplanResponse(response);
-    expect(mutation.updateTasks[0].analysisMode).toBe("constraints");
+    expect(mutation.updateTasks).toHaveLength(0);
   });
 
   it("falls back unknown analysisMode to 'domain' in replan", () => {
@@ -336,7 +454,7 @@ describe("PlanningTool._parseReplanResponse analysisMode validation", () => {
       drop_task_ids: [],
     };
     const mutation = planner._parseReplanResponse(response);
-    expect(mutation.addTasks[0].analysisMode).toBe("constraints");
+    expect(mutation.addTasks).toHaveLength(0);
   });
 
   it("reads analysis_mode from context_hints in update_tasks (snake_case)", () => {
