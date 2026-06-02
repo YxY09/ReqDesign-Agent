@@ -20,6 +20,14 @@ export interface PatchOp {
   content?: string;
 }
 
+export interface JsonPatchOp {
+  action: "append" | "replace" | "delete";
+  path: string;
+  items?: unknown[];
+  value?: unknown;
+  match?: { field: string; value: string };
+}
+
 // ---------------------------------------------------------------------------
 // ArtifactPatcher
 // ---------------------------------------------------------------------------
@@ -207,6 +215,47 @@ export class ArtifactPatcher {
     }
 
     return sections.map((s) => s.content).join("\n\n");
+  }
+
+  // --------------------------------------------------------------
+  // JSON Patch（ops-based）
+  // --------------------------------------------------------------
+
+  /** Apply fine-grained JSON patch operations (append/replace/delete by ID). */
+  static applyJsonOps(originalJson: string, ops: JsonPatchOp[]): string {
+    const doc = JSON.parse(originalJson);
+    for (const op of ops) {
+      const arr = doc[op.path];
+      if (!Array.isArray(arr)) continue;
+      switch (op.action) {
+        case "append":
+          if (op.items) arr.push(...op.items);
+          break;
+        case "replace":
+          if (op.match) {
+            const idx = arr.findIndex(
+              (item: unknown) =>
+                typeof item === "object" &&
+                item !== null &&
+                (item as Record<string, unknown>)[op.match!.field] === op.match!.value,
+            );
+            if (idx >= 0 && op.value !== undefined) arr[idx] = op.value;
+          }
+          break;
+        case "delete":
+          if (op.match) {
+            const idx = arr.findIndex(
+              (item: unknown) =>
+                typeof item === "object" &&
+                item !== null &&
+                (item as Record<string, unknown>)[op.match!.field] === op.match!.value,
+            );
+            if (idx >= 0) arr.splice(idx, 1);
+          }
+          break;
+      }
+    }
+    return JSON.stringify(doc, null, 2);
   }
 
   // --------------------------------------------------------------

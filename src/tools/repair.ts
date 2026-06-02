@@ -7,7 +7,7 @@ import type { LLMClient } from "../llmClient.js";
 import { SystemDesigner } from "../generators/design.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
-import { ArtifactPatcher, type PatchOp, type Section } from "./artifactPatcher.js";
+import { ArtifactPatcher, type PatchOp, type Section, type JsonPatchOp } from "./artifactPatcher.js";
 import type { Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
 
@@ -487,9 +487,50 @@ export class RepairTool extends BaseTool {
       return RepairTool._wrapDiagramText(task, llmText);
     }
 
+    // --- New: ops-based JSON patch routing ---
+    const opsRaw = parsed.ops;
+    if (Array.isArray(opsRaw) && opsRaw.length > 0) {
+      const contentStr = typeof currentContent === "string" ? currentContent.trim() : "";
+      if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
+        const ops: JsonPatchOp[] = opsRaw
+          .filter((o: unknown): o is Record<string, unknown> => typeof o === "object" && o !== null)
+          .map((o: Record<string, unknown>) => ({
+            action: String(o.action ?? "") as JsonPatchOp["action"],
+            path: String(o.path ?? ""),
+            items: Array.isArray(o.items) ? o.items : undefined,
+            value: o.value,
+            match: typeof o.match === "object" && o.match !== null
+              ? { field: String((o.match as Record<string, unknown>).field ?? ""), value: String((o.match as Record<string, unknown>).value ?? "") }
+              : undefined,
+          }))
+          .filter((o: JsonPatchOp) => o.path && (o.action === "append" || o.action === "replace" || o.action === "delete"));
+        if (ops.length > 0) {
+          try {
+            const patched = ArtifactPatcher.applyJsonOps(contentStr, ops);
+            if (patched !== contentStr) {
+              this.logger.info(`repair: task=${task.id} 成功应用 ${ops.length} 个JSON ops`);
+            } else {
+              this.logger.warn(`repair: task=${task.id} ${ops.length} 个JSON ops无效果`);
+            }
+            return patched;
+          } catch {
+            this.logger.warn(`repair: task=${task.id} applyJsonOps失败，fallback`);
+          }
+        }
+      }
+    }
+
+    // --- New: full_replace routing ---
+    if (parsed.action === "full_replace" && typeof parsed.content === "string") {
+      this.logger.info(`repair: task=${task.id} full_replace`);
+      return task.type === "diagrams"
+        ? RepairTool._wrapDiagramText(task, parsed.content)
+        : parsed.content;
+    }
+
     const patchesRaw = parsed.patches;
     if (!Array.isArray(patchesRaw) || patchesRaw.length === 0) {
-      this.logger.warn(`repair: task=${task.id} LLM未返回有效的patches数组，fallback到完整替换`);
+      this.logger.warn(`repair: task=${task.id} LLM未返回有效的patches/ops数组，fallback到完整替换`);
       // Maybe the LLM returned the full content directly
       if (typeof parsed.content === "string") {
         return task.type === "diagrams"
@@ -548,7 +589,11 @@ export class RepairTool extends BaseTool {
       }
     }
 
-    this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
+    if (patchedText !== originalText) {
+      this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
+    } else {
+      this.logger.warn(`repair: task=${task.id} ${patches.length} 个patches无效果`);
+    }
     return patchedText;
   }
 
@@ -614,6 +659,10 @@ export class RepairTool extends BaseTool {
     let fmtNote: string;
     if (task.type === "analyze") {
       fmtNote = '- 严格输出 JSON 格式：{"content": <修复后的完整产物>}';
+    } else if (task.type === "tests") {
+      fmtNote = '- 如果当前产物是 JSON 格式（{"test_cases": [...]}），使用 ops 格式：{"ops": [{"action": "replace|append|delete", "path": "test_cases", "match": {"field": "id", "value": "..."}, "value": {...}|"items": [...]}]}\n- 如果当前产物是 Markdown 格式，使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整内容"}\n- 不要重写未出问题的内容';
+    } else if (task.type === "design") {
+      fmtNote = '- 使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整 Markdown"}\n- 不要重写未出问题的章节';
     } else {
       fmtNote = '- 输出 JSON 格式的 patches 数组，每个 patch 指定要修改的章节名称和替换内容\n- 不要重写未出问题的章节';
     }

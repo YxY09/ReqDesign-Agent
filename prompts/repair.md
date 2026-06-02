@@ -11,6 +11,53 @@
 
 ## Patch 格式
 
+根据产物内容类型选择合适的 patch 格式：
+
+### 格式 1：JSON ops（用于 JSON 产物：test_cases、analysis）
+
+当产物是 JSON 格式（如 `{"test_cases": [...]}`）时，使用 ops 数组进行精细操作：
+
+```json
+{
+  "ops": [
+    {
+      "action": "replace",
+      "path": "test_cases",
+      "match": { "field": "id", "value": "TC-B-001" },
+      "value": { "id": "TC-B-001", "name": "修复后的测试", "steps": "...", "expected": "..." }
+    },
+    {
+      "action": "append",
+      "path": "test_cases",
+      "items": [{ "id": "TC-B-003", "name": "新增测试", "steps": "...", "expected": "..." }]
+    },
+    {
+      "action": "delete",
+      "path": "test_cases",
+      "match": { "field": "id", "value": "TC-B-002" }
+    }
+  ]
+}
+```
+
+操作类型：
+- `replace`：按 match 匹配数组中的一项并替换为 value。match.field 指定匹配字段名，match.value 指定匹配值。
+- `append`：向 path 指定的数组末尾追加 items。
+- `delete`：按 match 匹配并删除数组中的一项。
+
+### 格式 2：full_replace（用于 Markdown 产物：design）
+
+当产物是 Markdown 格式时，直接替换整个内容：
+
+```json
+{
+  "action": "full_replace",
+  "content": "修复后的完整 Markdown 内容"
+}
+```
+
+### 格式 3：section patches（兼容旧格式，用于 diagrams）
+
 输出一个 JSON 对象：
 
 ```json
@@ -39,17 +86,18 @@
 ```
 
 ### diagrams（图表）
+- 使用 section patches 格式（格式 3）
 - section 值为图表类型键名：`class_diagram`、`activity_diagram`、`state_diagram`
 - content 直接输出 Mermaid 代码（不要 markdown 代码块包裹）
 
 ### design（系统设计）
-- section 值为 `## ` 标题文本
-- content 包含 `## 标题` 行 + 完整正文
-- 如果问题涉及跨章节的结构性缺失（如缺少模块、实体），用 `insert_after` 插入新章节
+- 使用 full_replace 格式（格式 2）
+- content 为修复后的完整 Markdown 内容
+- 保持所有标题、表格、列表格式不变
 
 ### tests（测试用例）
-- section 值为 `## ` 标题文本
-- content 包含 `## 标题` 行 + 完整正文
+- 如果产物是 JSON 格式（`{"test_cases": [...]}`），使用 JSON ops 格式（格式 1）
+- 如果产物是 Markdown 格式，使用 full_replace 格式（格式 2）
 
 ## 通用要求
 - 每个 patch 的 content 必须是完整的、可直接替换的文本

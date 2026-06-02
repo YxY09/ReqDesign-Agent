@@ -1,0 +1,1817 @@
+{
+  "project_name": "PoliceCaseManagementSystem",
+  "project_overview": "A system for police to manage case registration, investigation, and prosecution processes with citizen interaction capabilities.",
+  "actors": [
+    {
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "System administrator with full access rights"
+    },
+    {
+      "actorRef": "A_POLICE_OFFICER",
+      "name": "PoliceOfficer",
+      "description": "Investigating officer handling cases"
+    },
+    {
+      "actorRef": "A_CITIZEN",
+      "name": "Citizen",
+      "description": "General public user who can file complaints"
+    },
+    {
+      "actorRef": "A_HELP_DESK",
+      "name": "HelpDesk",
+      "description": "Support staff handling user issues"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "External auditor reviewing system activities"
+    },
+    {
+      "actorRef": "A_RECORDS_STAFF",
+      "name": "RecordsStaff",
+      "description": "Staff managing case records"
+    }
+  ],
+  "functions": [
+    {
+      "id": "FUN_ACCESS_CONTROL",
+      "name": "AccessControl",
+      "description": "Manage access to cases and functionality",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "需要管理员权限",
+      "displayId": "F001"
+    },
+    {
+      "id": "FUN_CONFIGURE_APPLICATION",
+      "name": "ConfigureApplication",
+      "description": "Configure system settings and parameters",
+      "sub_capabilities": [
+        "创建更新删除州特定数据",
+        "管理法案和章节信息",
+        "配置种姓、部落、财产信息"
+      ],
+      "acceptance_criteria": [
+        "配置变更能够正确保存",
+        "配置变更能够正确应用到系统"
+      ],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "low",
+      "preconditions": "需要管理员权限",
+      "displayId": "F002"
+    },
+    {
+      "id": "FUN_CUSTOMIZE_UI",
+      "name": "CustomizeUI",
+      "description": "Customize user interface elements",
+      "sub_capabilities": [
+        "修改菜单内容",
+        "调整屏幕布局",
+        "自定义功能键",
+        "调整屏幕颜色、字体和字体大小"
+      ],
+      "acceptance_criteria": [
+        "用户能够成功保存自定义配置",
+        "配置能够正确应用到用户界面"
+      ],
+      "related_actors": [
+        "All"
+      ],
+      "priority": "low",
+      "preconditions": "用户需要登录系统",
+      "displayId": "F003"
+    },
+    {
+      "id": "FUN_EXPORT_AUDIT_TRAIL",
+      "name": "ExportAuditTrail",
+      "description": "Export audit trail data for review",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_AUDITOR"
+      ],
+      "priority": "low",
+      "preconditions": "需要管理员权限",
+      "displayId": "F004"
+    },
+    {
+      "id": "FUN_INVESTIGATE_CASE",
+      "name": "InvestigateCase",
+      "description": "Conduct case investigations",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "案件必须已注册",
+      "displayId": "F005"
+    },
+    {
+      "id": "FUN_LOG_DEFECT",
+      "name": "LogDefect",
+      "description": "Log system defects or enhancement requests",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "low",
+      "preconditions": "用户需要登录系统",
+      "displayId": "F006"
+    },
+    {
+      "id": "FUN_MANAGE_USER_PROFILE",
+      "name": "ManageUserProfile",
+      "description": "Manage user profiles and access rights",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "需要管理员权限",
+      "displayId": "F007"
+    },
+    {
+      "id": "FUN_NAVIGATE",
+      "name": "Navigate",
+      "description": "System navigation functionality",
+      "sub_capabilities": [
+        "查看分配的案件",
+        "查看警报",
+        "查看待处理任务"
+      ],
+      "acceptance_criteria": [
+        "能够正确显示角色相关的导航信息",
+        "导航信息准确反映系统状态"
+      ],
+      "related_actors": [
+        "All"
+      ],
+      "priority": "low",
+      "preconditions": "用户需要登录系统",
+      "displayId": "F008"
+    },
+    {
+      "id": "FUN_PROSECUTE_CASE",
+      "name": "ProsecuteCase",
+      "description": "Handle case prosecution",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "案件调查已完成",
+      "displayId": "F009"
+    },
+    {
+      "id": "FUN_REGISTER_CASE",
+      "name": "RegisterCase",
+      "description": "Register new police cases",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "公民需要提供有效的身份信息和案件详情",
+      "displayId": "F010"
+    },
+    {
+      "id": "FUN_SEARCH_CASE",
+      "name": "SearchCase",
+      "description": "Search for cases with basic or advanced criteria",
+      "sub_capabilities": [
+        "SimpleSearch",
+        "AdvancedSearch",
+        "Search by person",
+        "Search by crime type",
+        "Search by modus operandi",
+        "Search by property",
+        "Customize results view"
+      ],
+      "acceptance_criteria": [
+        "Simple search returns results within 5-8 seconds",
+        "Advanced search returns results within 10-15 seconds"
+      ],
+      "related_actors": [
+        "A_POLICE_OFFICER",
+        "A_CITIZEN"
+      ],
+      "priority": "medium",
+      "preconditions": "用户需要有案件访问权限",
+      "displayId": "F011"
+    },
+    {
+      "id": "FUN_SEND_ALERT",
+      "name": "SendAlert",
+      "description": "Send alerts via email or SMS",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "System"
+      ],
+      "priority": "medium",
+      "preconditions": "用户选择接收警报",
+      "displayId": "F012"
+    },
+    {
+      "id": "FUN_TRACK_CASE",
+      "name": "TrackCase",
+      "description": "Track case status and progress",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "medium",
+      "preconditions": "案件必须已注册",
+      "displayId": "F013"
+    },
+    {
+      "id": "FUN_TRACK_DEFECT",
+      "name": "TrackDefect",
+      "description": "Track status of submitted defects or requests",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_HELP_DESK"
+      ],
+      "priority": "low",
+      "preconditions": "缺陷必须已记录",
+      "displayId": "F014"
+    }
+  ],
+  "entities": [
+    {
+      "entityRef": "E_CASE",
+      "name": "Case",
+      "description": "Police case record",
+      "attributes": [
+        {
+          "name": "caseId",
+          "type": "String",
+          "description": "Unique case identifier"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "Current case status"
+        },
+        {
+          "name": "registrationDate",
+          "type": "DateTime",
+          "description": "注册日期"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "Case details"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "Case title"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "description": "更新时间"
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "description": "Date case was created"
+        },
+        {
+          "name": "lastAccessed",
+          "type": "DateTime",
+          "description": "Last access date"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Suspect",
+          "type": "one-to-many",
+          "description": "案件关联的嫌疑人"
+        },
+        {
+          "target": "Property",
+          "type": "one-to-many",
+          "description": "案件关联的财产"
+        },
+        {
+          "target": "Document",
+          "type": "one-to-many",
+          "description": "案件关联的文档"
+        },
+        {
+          "target": "UserProfile",
+          "type": "m2m",
+          "description": "Cases can be assigned to multiple users and users can be assigned to multiple cases"
+        }
+      ],
+      "id": "E_CASE"
+    },
+    {
+      "entityRef": "E_SUSPECT",
+      "name": "Suspect",
+      "description": "Person suspected of crime",
+      "attributes": [
+        {
+          "name": "suspectId",
+          "type": "String",
+          "description": "Unique suspect identifier"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "Suspect name"
+        },
+        {
+          "name": "identificationNumber",
+          "type": "String",
+          "description": "身份证号"
+        },
+        {
+          "name": "age",
+          "type": "Integer",
+          "description": "年龄"
+        },
+        {
+          "name": "gender",
+          "type": "String",
+          "description": "性别"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "Suspect details"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "many-to-one",
+          "description": "关联的案件"
+        }
+      ],
+      "id": "E_SUSPECT"
+    },
+    {
+      "entityRef": "E_PROPERTY",
+      "name": "Property",
+      "description": "Property involved in case",
+      "attributes": [
+        {
+          "name": "propertyId",
+          "type": "String",
+          "description": "Unique property identifier"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "Property details"
+        },
+        {
+          "name": "value",
+          "type": "Decimal",
+          "description": "财产价值"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "财产名称"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "many-to-one",
+          "description": "关联的案件"
+        }
+      ],
+      "id": "E_PROPERTY"
+    },
+    {
+      "entityRef": "E_DOCUMENT",
+      "name": "Document",
+      "description": "Case-related documents",
+      "attributes": [
+        {
+          "name": "documentId",
+          "type": "String",
+          "description": "Unique document identifier"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "文档标题"
+        },
+        {
+          "name": "content",
+          "type": "Binary",
+          "description": "Document content"
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "description": "Document type"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "many-to-one",
+          "description": "关联的案件"
+        }
+      ],
+      "id": "E_DOCUMENT"
+    },
+    {
+      "entityRef": "E_AUDIT_TRAIL",
+      "name": "AuditTrail",
+      "description": "System activity audit records",
+      "attributes": [
+        {
+          "name": "auditId",
+          "type": "String",
+          "description": "Unique audit record identifier"
+        },
+        {
+          "name": "action",
+          "type": "String",
+          "description": "Action performed"
+        },
+        {
+          "name": "timestamp",
+          "type": "DateTime",
+          "description": "When action occurred"
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "User who performed action"
+        },
+        {
+          "name": "entityType",
+          "type": "String",
+          "description": "Type of entity affected"
+        },
+        {
+          "name": "entityId",
+          "type": "String",
+          "description": "Identifier of affected entity"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "many-to-one",
+          "description": "关联的案件"
+        }
+      ],
+      "id": "E_AUDIT_TRAIL"
+    },
+    {
+      "entityRef": "E_USER_PROFILE",
+      "name": "UserProfile",
+      "description": "User account and preferences",
+      "attributes": [
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "Unique user identifier"
+        },
+        {
+          "name": "role",
+          "type": "String",
+          "description": "User role"
+        },
+        {
+          "name": "preferences",
+          "type": "Object",
+          "description": "User interface preferences"
+        },
+        {
+          "name": "uiPreferences",
+          "type": "Object",
+          "description": "用户界面偏好设置"
+        },
+        {
+          "name": "language",
+          "type": "String",
+          "description": "用户首选语言"
+        },
+        {
+          "name": "username",
+          "type": "String",
+          "description": "用户名"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "m2m",
+          "description": "Users can be assigned to multiple cases and cases can have multiple users assigned"
+        },
+        {
+          "target": "AuditTrail",
+          "type": "o2m",
+          "description": "A user can generate multiple audit trail records"
+        }
+      ],
+      "id": "E_USER_PROFILE"
+    },
+    {
+      "entityRef": "E_COMPLAINT",
+      "name": "Complaint",
+      "description": "Citizen complaints",
+      "attributes": [
+        {
+          "name": "complaintId",
+          "type": "String",
+          "description": "Unique complaint identifier"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "Complaint details"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "投诉状态"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "投诉标题"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "one-to-one",
+          "description": "关联的案件"
+        },
+        {
+          "target": "UserProfile",
+          "type": "m2o",
+          "description": "Complaints are submitted by users"
+        }
+      ],
+      "id": "E_COMPLAINT"
+    },
+    {
+      "entityRef": "E_SEARCH_RESULT",
+      "name": "SearchResult",
+      "description": "Search query results",
+      "attributes": [
+        {
+          "name": "searchId",
+          "type": "String",
+          "description": "搜索唯一标识"
+        },
+        {
+          "name": "query",
+          "type": "String",
+          "description": "搜索查询"
+        },
+        {
+          "name": "resultCount",
+          "type": "Integer",
+          "description": "结果数量"
+        },
+        {
+          "name": "resultId",
+          "type": "String",
+          "description": "结果ID"
+        },
+        {
+          "name": "items",
+          "type": "List",
+          "description": "结果项列表"
+        },
+        {
+          "name": "queryId",
+          "type": "String",
+          "description": "Unique query identifier"
+        },
+        {
+          "name": "results",
+          "type": "List",
+          "description": "List of matching items"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "Case",
+          "type": "many-to-many",
+          "description": "关联的案件"
+        },
+        {
+          "target": "UserProfile",
+          "type": "m2o",
+          "description": "Search results are generated for specific users"
+        }
+      ],
+      "id": "E_SEARCH_RESULT"
+    }
+  ],
+  "constraints": [
+    {
+      "constraintUid": "ct_1BAKC800",
+      "displayId": "C001",
+      "canonicalId": "CON_FUNC_1BAKC800",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "系统必须确保所有错误消息都是有意义的，以便用户能够适当地采取行动。",
+      "canonicalRuleEn": "系统必须确保所有错误消息都是有意义的，以便用户能够适当地采取行动。",
+      "sourceText": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error.",
+      "normalizedRule": {
+        "subject": "系统必须确保所有错误消息都是有意义的，以便用户能够适当地采取行动。",
+        "modality": "must",
+        "action": "系统必须确保所有错误消息都是有意义的，以便用户能够适当地采取行动。"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_1BAKC800",
+      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error.",
+      "description": "系统必须确保所有错误消息都是有意义的，以便用户能够适当地采取行动。"
+    },
+    {
+      "constraintUid": "ct_PZCGAY00",
+      "displayId": "C002",
+      "canonicalId": "CON_FUNC_ADMINS_SET_USER_PROFILES_PZCG",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Only admins can set up user profiles",
+      "canonicalRuleEn": "Only admins can set up user profiles",
+      "sourceText": "The System must allow only admin-users to set up user profiles and allocate users to groups.",
+      "normalizedRule": {
+        "subject": "only admins can set up user profiles",
+        "modality": "must",
+        "action": "only admins can set up user profiles"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_ADMINS_SET_USER_PROFILES_PZCG",
+      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups.",
+      "description": "Only admins can set up user profiles"
+    },
+    {
+      "constraintUid": "ct_9TTBZR00",
+      "displayId": "C003",
+      "canonicalId": "CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_9TTB",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Planned downtime must not exceed specified limits",
+      "canonicalRuleEn": "Planned downtime must not exceed specified limits",
+      "sourceText": "The planned downtime for the System must not exceed <xx> hours per <rolling three month period>. The System is considered to be down if any user is unable to perform any normal System function and if this failure is attributed to any component of the System other than the workstation.",
+      "normalizedRule": {
+        "subject": "planned downtime must not exceed specified limits",
+        "modality": "must_not",
+        "action": "planned downtime must not exceed specified limits"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The planned downtime for the System must not exceed <xx> hours per <rolling three month period>. The System is considered to be down if any user is unable to perform any normal System function and if this failure is attributed to any component of the System other than the workstation."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_9TTB",
+      "source_text": "The planned downtime for the System must not exceed <xx> hours per <rolling three month period>. The System is considered to be down if any user is unable to perform any normal System function and if this failure is attributed to any component of the System other than the workstation.",
+      "description": "Planned downtime must not exceed specified limits"
+    },
+    {
+      "constraintUid": "ct_HCK35J00",
+      "displayId": "C004",
+      "canonicalId": "CON_FUNC_SYSTEM_AVAILABLE_SPECIFIED_HOURS_HCK3",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must be available during specified hours",
+      "canonicalRuleEn": "System must be available during specified hours",
+      "sourceText": "from <xx:00> to <xx:00>; on <all weekdays/xxx days per year>. The System must be available to users:",
+      "normalizedRule": {
+        "subject": "system must be available during specified hours",
+        "modality": "must",
+        "action": "system must be available during specified hours"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "from <xx:00> to <xx:00>; on <all weekdays/xxx days per year>. The System must be available to users:"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_AVAILABLE_SPECIFIED_HOURS_HCK3",
+      "source_text": "from <xx:00> to <xx:00>; on <all weekdays/xxx days per year>. The System must be available to users:",
+      "description": "System must be available during specified hours"
+    },
+    {
+      "constraintUid": "ct_PB66O100",
+      "displayId": "C005",
+      "canonicalId": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must provide detailed context-sensitive help material",
+      "canonicalRuleEn": "System must provide detailed context-sensitive help material",
+      "sourceText": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application.",
+      "normalizedRule": {
+        "subject": "system must provide detailed context-sensitive help material",
+        "modality": "must",
+        "action": "system must provide detailed context-sensitive help material"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CONFIGURE_APPLICATION",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
+      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application.",
+      "description": "System must provide detailed context-sensitive help material"
+    },
+    {
+      "constraintUid": "ct_CVQWS100",
+      "displayId": "C006",
+      "canonicalId": "CON_FUNC_SYSTEM_PROVIDE_INTERFACE_LOGGING_CVQW",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must provide interface for logging defects",
+      "canonicalRuleEn": "System must provide interface for logging defects",
+      "sourceText": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
+      "normalizedRule": {
+        "subject": "system must provide interface for logging defects",
+        "modality": "must",
+        "action": "system must provide interface for logging defects"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CONFIGURE_APPLICATION",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_LOG_DEFECT",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_DEFECT",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_PROVIDE_INTERFACE_LOGGING_CVQW",
+      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
+      "description": "System must provide interface for logging defects"
+    },
+    {
+      "constraintUid": "ct_FU5FQ100",
+      "displayId": "C007",
+      "canonicalId": "CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must be restorable within specified time after failure",
+      "canonicalRuleEn": "System must be restorable within specified time after failure",
+      "sourceText": "In the event of any software or hardware failure, it must be possible to restore the System (with inline synchronization) within no more than <xx> hours.",
+      "normalizedRule": {
+        "subject": "system must be restorable within specified time after failure",
+        "modality": "must",
+        "action": "system must be restorable within specified time after failure"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "In the event of any software or hardware failure, it must be possible to restore the System (with inline synchronization) within no more than <xx> hours."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F",
+      "source_text": "In the event of any software or hardware failure, it must be possible to restore the System (with inline synchronization) within no more than <xx> hours.",
+      "description": "System must be restorable within specified time after failure"
+    },
+    {
+      "constraintUid": "ct_QLYHVH00",
+      "displayId": "C008",
+      "canonicalId": "CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must be scalable for different police station sizes",
+      "canonicalRuleEn": "System must be scalable for different police station sizes",
+      "sourceText": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled.",
+      "normalizedRule": {
+        "subject": "system must be scalable for different police station sizes",
+        "modality": "must",
+        "action": "system must be scalable for different police station sizes"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH",
+      "source_text": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled.",
+      "description": "System must be scalable for different police station sizes"
+    },
+    {
+      "constraintUid": "ct_MEQIH500",
+      "displayId": "C009",
+      "canonicalId": "CON_FUNC_SYSTEM_SEND_ALERTS_ACTIONS_MEQI",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must send alerts when actions are taken",
+      "canonicalRuleEn": "System must send alerts when actions are taken",
+      "sourceText": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
+      "normalizedRule": {
+        "subject": "system must send alerts when actions are taken",
+        "modality": "must",
+        "action": "system must send alerts when actions are taken"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEND_ALERT",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_SEND_ALERTS_ACTIONS_MEQI",
+      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
+      "description": "System must send alerts when actions are taken"
+    },
+    {
+      "constraintUid": "ct_9JEODJ00",
+      "displayId": "C010",
+      "canonicalId": "CON_FUNC_SYSTEM_SUPPORT_MULTILINGUAL_INTERFACE_9JEO",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must support multilingual interface",
+      "canonicalRuleEn": "System must support multilingual interface",
+      "sourceText": "The system should support multilingual interface.",
+      "normalizedRule": {
+        "subject": "system must support multilingual interface",
+        "modality": "must",
+        "action": "system must support multilingual interface"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "The system should support multilingual interface."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_SUPPORT_MULTILINGUAL_INTERFACE_9JEO",
+      "source_text": "The system should support multilingual interface.",
+      "description": "System must support multilingual interface"
+    },
+    {
+      "constraintUid": "ct_9MXNXG00",
+      "displayId": "C011",
+      "canonicalId": "CON_FUNC_SYSTEM_SUPPORT_OFFLINE_OPERATION_9MXN",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must support offline operation with critical functionality",
+      "canonicalRuleEn": "System must support offline operation with critical functionality",
+      "sourceText": "The system should work even in an offline mode with the critical functionality",
+      "normalizedRule": {
+        "subject": "system must support offline operation with critical functionality",
+        "modality": "must",
+        "action": "system must support offline operation with critical functionality"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "The system should work even in an offline mode with the critical functionality"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_SUPPORT_OFFLINE_OPERATION_9MXN",
+      "source_text": "The system should work even in an offline mode with the critical functionality",
+      "description": "System must support offline operation with critical functionality"
+    },
+    {
+      "constraintUid": "ct_M82FEB00",
+      "displayId": "C012",
+      "canonicalId": "CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_M82F",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Unplanned downtime must not exceed specified limits",
+      "canonicalRuleEn": "Unplanned downtime must not exceed specified limits",
+      "sourceText": "Unplanned downtime for the System must not exceed <xx hours/minutes> per <rolling three month period>.",
+      "normalizedRule": {
+        "subject": "unplanned downtime must not exceed specified limits",
+        "modality": "must_not",
+        "action": "unplanned downtime must not exceed specified limits"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "Unplanned downtime for the System must not exceed <xx hours/minutes> per <rolling three month period>."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_M82F",
+      "source_text": "Unplanned downtime for the System must not exceed <xx hours/minutes> per <rolling three month period>.",
+      "description": "Unplanned downtime must not exceed specified limits"
+    },
+    {
+      "constraintUid": "ct_V6CODB00",
+      "displayId": "C013",
+      "canonicalId": "CON_FUNC_USER_INTERFACE_CUSTOMIZABLE_SAVED_V6CO",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "User interface must be customizable and saved in user profile",
+      "canonicalRuleEn": "User interface must be customizable and saved in user profile",
+      "sourceText": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile.",
+      "normalizedRule": {
+        "subject": "user interface must be customizable and saved in user profile",
+        "modality": "must",
+        "action": "user interface must be customizable and saved in user profile"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_USER_INTERFACE_CUSTOMIZABLE_SAVED_V6CO",
+      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile.",
+      "description": "User interface must be customizable and saved in user profile"
+    },
+    {
+      "constraintUid": "ct_VKFDIF00",
+      "displayId": "C014",
+      "canonicalId": "CON_FUNC_VKFDIF00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索（多个搜索条件），无论存储容量或系统中的案件数量如何。",
+      "canonicalRuleEn": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索（多个搜索条件），无论存储容量或系统中的案件数量如何。",
+      "sourceText": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves.",
+      "normalizedRule": {
+        "subject": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索（多个搜索条件），无论存储容量或系统中的案件数量如何。",
+        "modality": "must",
+        "action": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索（多个搜索条件），无论存储容量或系统中的案件数量如何。"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_VKFDIF00",
+      "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves.",
+      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索（多个搜索条件），无论存储容量或系统中的案件数量如何。"
+    },
+    {
+      "constraintUid": "ct_5OK1UD00",
+      "displayId": "C015",
+      "canonicalId": "CON_PERF_SYSTEM_MAINTAIN_CASE_RETRIEVAL_5OK1",
+      "type": "performance",
+      "subtype": "response_time",
+      "descriptionZh": "System must maintain case retrieval performance standards",
+      "canonicalRuleEn": "System must maintain case retrieval performance standards",
+      "sourceText": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system.",
+      "normalizedRule": {
+        "subject": "system must maintain case retrieval performance standards",
+        "modality": "must",
+        "action": "system must maintain case retrieval performance standards"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "performance_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_PERF_SYSTEM_MAINTAIN_CASE_RETRIEVAL_5OK1",
+      "source_text": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system.",
+      "description": "System must maintain case retrieval performance standards"
+    },
+    {
+      "constraintUid": "ct_2US4W600",
+      "displayId": "C016",
+      "canonicalId": "CON_PERF_SYSTEM_PROVIDE_ADEQUATE_RESPONSE_2US4",
+      "type": "performance",
+      "subtype": "response_time",
+      "descriptionZh": "System must provide adequate response times under standard and peak conditions",
+      "canonicalRuleEn": "System must provide adequate response times under standard and peak conditions",
+      "sourceText": "The System must provide adequate response times for commonly performed functions under both standard and peak conditions",
+      "normalizedRule": {
+        "subject": "system must provide adequate response times under standard and peak conditions",
+        "modality": "must",
+        "action": "system must provide adequate response times under standard and peak conditions"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "The System must provide adequate response times for commonly performed functions under both standard and peak conditions"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "performance_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_PERF_SYSTEM_PROVIDE_ADEQUATE_RESPONSE_2US4",
+      "source_text": "The System must provide adequate response times for commonly performed functions under both standard and peak conditions",
+      "description": "System must provide adequate response times under standard and peak conditions"
+    },
+    {
+      "constraintUid": "ct_HNV37H00",
+      "displayId": "C017",
+      "canonicalId": "CON_SEC_AUDIT_TRAIL_DATA_MAINTAINED_HNV3",
+      "type": "security",
+      "subtype": "audit",
+      "descriptionZh": "Audit trail data must be maintained for at least the life of the case",
+      "canonicalRuleEn": "Audit trail data must be maintained for at least the life of the case",
+      "sourceText": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers.",
+      "normalizedRule": {
+        "subject": "audit trail data must be maintained for at least the life of the case",
+        "modality": "must",
+        "action": "audit trail data must be maintained for at least the life of the case"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_AUDIT_TRAIL_DATA_MAINTAINED_HNV3",
+      "source_text": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers.",
+      "description": "Audit trail data must be maintained for at least the life of the case"
+    },
+    {
+      "constraintUid": "ct_GFUDBQ00",
+      "displayId": "C018",
+      "canonicalId": "CON_SEC_GFUDBQ00",
+      "type": "security",
+      "subtype": "audit",
+      "descriptionZh": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。",
+      "canonicalRuleEn": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。",
+      "sourceText": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word “unalterable” is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged.",
+      "normalizedRule": {
+        "subject": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。",
+        "modality": "must",
+        "action": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word “unalterable” is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_GFUDBQ00",
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word “unalterable” is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged.",
+      "description": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。"
+    },
+    {
+      "constraintUid": "ct_OZXCXS00",
+      "displayId": "C019",
+      "canonicalId": "CON_SEC_HTTPS_SSL_HTTP_OZXC",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "系统必须使用HTTPS作为通信协议，即通过加密的安全套接字层（SSL）的HTTP。",
+      "canonicalRuleEn": "系统必须使用HTTPS作为通信协议，即通过加密的安全套接字层（SSL）的HTTP。",
+      "sourceText": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL).",
+      "normalizedRule": {
+        "subject": "系统必须使用https作为通信协议，即通过加密的安全套接字层（ssl）的http。",
+        "modality": "must",
+        "action": "系统必须使用https作为通信协议，即通过加密的安全套接字层（ssl）的http。"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_HTTPS_SSL_HTTP_OZXC",
+      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL).",
+      "description": "系统必须使用HTTPS作为通信协议，即通过加密的安全套接字层（SSL）的HTTP。"
+    },
+    {
+      "constraintUid": "ct_FM6A6200",
+      "displayId": "C020",
+      "canonicalId": "CON_SEC_SECURITY_ATTRIBUTE_CHANGES_MADE_FM6A",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "Security attribute changes can only be made by super-users",
+      "canonicalRuleEn": "Security attribute changes can only be made by super-users",
+      "sourceText": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user.",
+      "normalizedRule": {
+        "subject": "security attribute changes can only be made by super-users",
+        "modality": "must",
+        "action": "security attribute changes can only be made by super-users"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_SECURITY_ATTRIBUTE_CHANGES_MADE_FM6A",
+      "source_text": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user.",
+      "description": "Security attribute changes can only be made by super-users"
+    },
+    {
+      "constraintUid": "ct_5GU5NN00",
+      "displayId": "C021",
+      "canonicalId": "CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_5GU5",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "System must allow limiting case access",
+      "canonicalRuleEn": "System must allow limiting case access",
+      "sourceText": "The System must allow the user to limit access to cases to specified users or user groups.",
+      "normalizedRule": {
+        "subject": "system must allow limiting case access",
+        "modality": "must",
+        "action": "system must allow limiting case access"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must allow the user to limit access to cases to specified users or user groups."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_5GU5",
+      "source_text": "The System must allow the user to limit access to cases to specified users or user groups.",
+      "description": "System must allow limiting case access"
+    }
+  ],
+  "exceptions": [
+    {
+      "id": "EXC_YPGXB500",
+      "description": "案件检索超时",
+      "trigger": "案件检索时间超过规定阈值",
+      "handling": "系统返回超时错误，建议用户优化搜索条件或稍后重试",
+      "displayId": "X001"
+    },
+    {
+      "id": "EXC_IUOTOB00",
+      "description": "用户尝试访问无权限的案件",
+      "trigger": "用户请求访问或搜索无权限的案件",
+      "handling": "系统记录在审计跟踪中，并根据配置显示不同级别的响应",
+      "displayId": "X002"
+    },
+    {
+      "id": "EXC_IUOTOB00_2",
+      "description": "用户尝试访问无权限的案件",
+      "trigger": "用户请求访问或搜索无权限的案件",
+      "handling": "系统根据配置提供不同级别的响应：显示标题和元数据、仅显示案件存在、不显示任何信息",
+      "displayId": "X003"
+    },
+    {
+      "id": "EXC_N7KH6A00",
+      "description": "用户尝试执行无权限的操作",
+      "trigger": "用户尝试执行超出其权限范围的操作",
+      "handling": "系统记录违规行为到审计跟踪，并向用户显示有意义的错误消息",
+      "displayId": "X004"
+    },
+    {
+      "id": "EXC_ATTEMPT_MODIFY_AUDIT_TRAIL",
+      "description": "Attempt to modify audit trail data",
+      "trigger": "User or system attempts to modify audit trail records",
+      "handling": "System must reject modification attempts and log the violation",
+      "displayId": "X005"
+    },
+    {
+      "id": "EXC_CASE_FOUND",
+      "description": "Case not found",
+      "trigger": "Requested case does not exist or user has no access",
+      "handling": "Display appropriate message based on security settings",
+      "displayId": "X006"
+    },
+    {
+      "id": "EXC_CASE_RETRIEVAL_TIMEOUT",
+      "description": "Case retrieval timeout",
+      "trigger": "Case retrieval exceeds performance thresholds",
+      "handling": "System must notify user and suggest alternative search criteria",
+      "displayId": "X007"
+    },
+    {
+      "id": "EXC_CUSTOMIZATION_SAVE_FAILURE",
+      "description": "Customization save failure",
+      "trigger": "Failure to save UI customization to user profile",
+      "handling": "System must revert to default settings and notify user",
+      "displayId": "X008"
+    },
+    {
+      "id": "EXC_OFFLINE_DATA_SYNCHRONIZATION_CONFLICT",
+      "description": "Offline data synchronization conflict",
+      "trigger": "Conflicting changes made during offline operation",
+      "handling": "System must flag conflicts for manual resolution by authorized users",
+      "displayId": "X009"
+    },
+    {
+      "id": "EXC_SEARCH_RETURNS_RESULTS",
+      "description": "Search returns no results",
+      "trigger": "No cases match search criteria",
+      "handling": "Display informative message and suggest alternative searches",
+      "displayId": "X010"
+    },
+    {
+      "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT",
+      "description": "Unauthorized access attempt",
+      "trigger": "User attempts to access case without permission",
+      "handling": "Log attempt in audit trail and show appropriate message",
+      "displayId": "X011"
+    },
+    {
+      "id": "EXC_UNAUTHORIZED_PROFILE_MODIFICATION_ATTEMPT",
+      "description": "Unauthorized profile modification attempt",
+      "trigger": "Non-superuser attempts to modify security attributes",
+      "handling": "System must reject changes and log the attempt",
+      "displayId": "X012"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
+    },
+    {
+      "category": "安全",
+      "description": "系统必须使用HTTPS作为通信协议"
+    },
+    {
+      "category": "可用性",
+      "description": "系统必须提供详细的上下文相关帮助材料"
+    },
+    {
+      "category": "可扩展性",
+      "description": "系统应设计为可扩展，以适应小型和大型警察局的不同需求"
+    },
+    {
+      "category": "可访问性",
+      "description": "系统用户界面必须适合有特殊需求的用户"
+    },
+    {
+      "category": "Usability",
+      "description": "User interfaces must comply with ISO 9241 standards"
+    },
+    {
+      "category": "Architecture",
+      "description": "System must be implemented using SOA"
+    },
+    {
+      "category": "Reliability",
+      "description": "System must work in offline mode for critical functionality"
+    }
+  ],
+  "business_processes": [
+    {
+      "name": "CaseRegistration",
+      "steps": [
+        "Citizen submits complaint",
+        "Police officer registers case",
+        "System generates case ID"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "CaseInvestigation",
+      "steps": [
+        "Police officer initiates investigation",
+        "System records investigation details",
+        "Police officer updates case status"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "CaseProsecution",
+      "steps": [
+        "Police officer interfaces with court",
+        "System records court interactions",
+        "Police officer updates case status"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "公民信息交换流程",
+      "steps": [
+        "公民提交信息或请求",
+        "警务人员处理请求",
+        "系统发送响应给公民"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "案件导航流程",
+      "steps": [
+        "警务人员查看分配的案件",
+        "系统显示相关警报和任务",
+        "警务人员执行任务"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "案件注册流程",
+      "steps": [
+        "填写案件信息",
+        "提交案件",
+        "系统验证",
+        "案件创建"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "案件调查流程",
+      "steps": [
+        "分配调查员",
+        "收集证据",
+        "记录调查结果",
+        "更新案件状态"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "案件起诉流程",
+      "steps": [
+        "准备起诉材料",
+        "提交起诉",
+        "系统记录",
+        "更新案件状态"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "缺陷报告流程",
+      "steps": [
+        "填写缺陷报告",
+        "提交报告",
+        "系统记录",
+        "分配帮助台人员"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "DefectReporting",
+      "steps": [
+        "Identify defect or enhancement",
+        "Log details in system",
+        "Submit for tracking",
+        "Receive confirmation",
+        "Monitor status updates"
+      ],
+      "actors": [
+        "Citizen",
+        "PoliceOfficer",
+        "HelpDesk"
+      ]
+    }
+  ],
+  "proposeNewEntities": [],
+  "proposeNewFunctions": [],
+  "missingConstraintCandidates": [
+    {
+      "description": "System must be available during specified hours",
+      "source_text": "from <xx:00> to <xx:00>; on <all weekdays/xxx days per year>. The System must be available to users:"
+    },
+    {
+      "description": "Planned downtime must not exceed specified limits",
+      "source_text": "The planned downtime for the System must not exceed <xx> hours per <rolling three month period>. The System is considered to be down if any user is unable to perform any normal System function and if this failure is attributed to any component of the System other than the workstation."
+    },
+    {
+      "description": "Unplanned downtime must not exceed specified limits",
+      "source_text": "Unplanned downtime for the System must not exceed <xx hours/minutes> per <rolling three month period>."
+    },
+    {
+      "description": "System must be restorable within specified time after failure",
+      "source_text": "In the event of any software or hardware failure, it must be possible to restore the System (with inline synchronization) within no more than <xx> hours."
+    },
+    {
+      "description": "System must provide adequate response times under standard and peak conditions",
+      "source_text": "The System must provide adequate response times for commonly performed functions under both standard and peak conditions"
+    },
+    {
+      "description": "System must be scalable for different police station sizes",
+      "source_text": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled."
+    }
+  ],
+  "__qualityGate": {
+    "passed": true,
+    "score": 0.875,
+    "checks": [
+      {
+        "name": "required_fields_non_empty",
+        "passed": true,
+        "detail": "actors=6, functions=14, entities=8"
+      },
+      {
+        "name": "entity_attribute_coverage",
+        "passed": true,
+        "detail": "8/8 entities have attributes (100%)"
+      },
+      {
+        "name": "function_description_coverage",
+        "passed": true,
+        "detail": "14/14 functions have description (100%)"
+      },
+      {
+        "name": "constraints_non_empty",
+        "passed": true,
+        "detail": "21 constraints, 12 exceptions"
+      },
+      {
+        "name": "id_format",
+        "passed": true,
+        "detail": "All 55 IDs valid"
+      },
+      {
+        "name": "cross_reference_integrity",
+        "passed": true,
+        "detail": "All relationship targets resolve"
+      },
+      {
+        "name": "source_ref_coverage",
+        "passed": true,
+        "detail": "21/21 constraints have source_text (100%)"
+      },
+      {
+        "name": "no_unverified_constraints",
+        "passed": false,
+        "detail": "2 unverified source_text reference(s)"
+      }
+    ]
+  }
+}

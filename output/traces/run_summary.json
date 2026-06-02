@@ -1,35 +1,43 @@
 {
   "goal": "design",
   "run_status": "paused",
-  "quality_status": "unknown",
+  "quality_status": "passed",
   "persist_status": "not_saved",
   "finished": true,
   "persisted": false,
-  "duration": 288.91,
-  "artifact_count": 4,
+  "duration": 803.05,
+  "artifact_count": 9,
   "artifact_counts": {
-    "analyze": 4
+    "analyze": 4,
+    "design": 1,
+    "diagrams": 3,
+    "tests": 1
   },
-  "decision_count": 65,
-  "review_rounds": 0,
-  "final_review_done": false,
-  "final_review_passed": false,
-  "plan_task_count": 10,
+  "decision_count": 174,
+  "review_rounds": 3,
+  "final_review_done": true,
+  "final_review_passed": true,
+  "plan_task_count": 9,
   "plan_revision_count": 0,
   "issue_counts": {
-    "severity": {},
-    "scope": {},
-    "target_type": {}
+    "severity": {
+      "major": 108,
+      "minor": 8
+    },
+    "scope": {
+      "local": 116
+    },
+    "target_type": {
+      "design": 22,
+      "diagrams": 7,
+      "tests": 87
+    }
   },
   "budget_counters": {
-    "regenerate_count:analyze-2": 1
+    "repair_count:design-1": 2,
+    "repair_count:tests-1": 2
   },
   "failure_categories": [],
   "recovered_incidents": [],
-  "errors": [
-    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes",
-    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes",
-    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes",
-    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes"
-  ]
+  "errors": []
 }

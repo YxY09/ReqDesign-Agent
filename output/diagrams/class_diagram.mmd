@@ -1,0 +1,92 @@
+classDiagram
+    class Case {
+        -String caseId
+        -String status
+        -DateTime registrationDate
+        -String description
+        -String title
+        -DateTime createdAt
+        -DateTime updatedAt
+        -DateTime createdDate
+        -DateTime lastAccessed
+        +register()
+        +updateStatus()
+        +assignOfficer()
+    }
+    class Suspect {
+        -String suspectId
+        -String name
+        -String identificationNumber
+        -Integer age
+        -String gender
+        -String description
+        +addToCase()
+        +updateDetails()
+    }
+    class Property {
+        -String propertyId
+        -String description
+        -Decimal value
+        -String name
+        +associateWithCase()
+        +updateValue()
+    }
+    class Document {
+        -String documentId
+        -String title
+        -Binary content
+        -String type
+        +upload()
+        +download()
+        +associateWithCase()
+    }
+    class AuditTrail {
+        -String auditId
+        -String action
+        -DateTime timestamp
+        -String userId
+        -String entityType
+        -String entityId
+        +logAction()
+        +exportRecords()
+    }
+    class UserProfile {
+        -String userId
+        -String role
+        -Object preferences
+        -Object uiPreferences
+        -String language
+        -String username
+        +updateProfile()
+        +setPreferences()
+    }
+    class Complaint {
+        -String complaintId
+        -String description
+        -String status
+        -String title
+        +submit()
+        +updateStatus()
+    }
+    class SearchResult {
+        -String searchId
+        -String query
+        -Integer resultCount
+        -String resultId
+        -List items
+        -String queryId
+        -List results
+        +executeSearch()
+        +filterResults()
+    }
+    Case "1" --> "*" Suspect : contains
+    Case "1" --> "*" Property : contains
+    Case "1" --> "*" Document : contains
+    Case "1" --> "*" AuditTrail : generates
+    Case "1" --> "*" UserProfile : assigned_to
+    UserProfile "1" --> "*" Case : assigned_to
+    Complaint "1" --> "1" Case : refers_to
+    Complaint "1" --> "1" UserProfile : submitted_by
+    SearchResult "*" --> "*" Case : references
+    SearchResult "1" --> "1" UserProfile : generated_for
+    UserProfile "1" --> "*" AuditTrail : generates

@@ -1,10 +1,32 @@
 {
   "entityCoverage": 1,
-  "functionIdCoverage": 1,
-  "constraintIdCoverage": 1,
-  "exceptionIdCoverage": 1,
+  "functionIdCoverage": 0.64,
+  "constraintIdCoverage": 0.29,
+  "exceptionIdCoverage": 0.5,
   "namingConsistency": 1,
-  "testTypeBalance": 0,
-  "overall": 0.85,
-  "details": []
+  "testTypeBalance": 1,
+  "overall": 0.77,
+  "details": [
+    "约束 CON_FUNC_ADMINS_SET_USER_PROFILES_PZCG 未被测试用例覆盖",
+    "约束 CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_9TTB 未被测试用例覆盖",
+    "约束 CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66 未被测试用例覆盖",
+    "约束 CON_FUNC_SYSTEM_PROVIDE_INTERFACE_LOGGING_CVQW 未被测试用例覆盖",
+    "约束 CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F 未被测试用例覆盖",
+    "约束 CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH 未被测试用例覆盖",
+    "约束 CON_FUNC_SYSTEM_SEND_ALERTS_ACTIONS_MEQI 未被测试用例覆盖",
+    "约束 CON_FUNC_SYSTEM_SUPPORT_OFFLINE_OPERATION_9MXN 未被测试用例覆盖",
+    "约束 CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_M82F 未被测试用例覆盖",
+    "约束 CON_FUNC_USER_INTERFACE_CUSTOMIZABLE_SAVED_V6CO 未被测试用例覆盖",
+    "约束 CON_PERF_SYSTEM_PROVIDE_ADEQUATE_RESPONSE_2US4 未被测试用例覆盖",
+    "约束 CON_SEC_AUDIT_TRAIL_DATA_MAINTAINED_HNV3 未被测试用例覆盖",
+    "约束 CON_SEC_GFUDBQ00 未被测试用例覆盖",
+    "约束 CON_SEC_HTTPS_SSL_HTTP_OZXC 未被测试用例覆盖",
+    "约束 CON_SEC_SECURITY_ATTRIBUTE_CHANGES_MADE_FM6A 未被测试用例覆盖",
+    "异常 EXC_IUOTOB00 未被测试用例覆盖",
+    "异常 EXC_IUOTOB00_2 未被测试用例覆盖",
+    "异常 EXC_N7KH6A00 未被测试用例覆盖",
+    "异常 EXC_CASE_FOUND 未被测试用例覆盖",
+    "异常 EXC_CASE_RETRIEVAL_TIMEOUT 未被测试用例覆盖",
+    "异常 EXC_UNAUTHORIZED_ACCESS_ATTEMPT 未被测试用例覆盖"
+  ]
 }

@@ -1,24 +1,157 @@
 {
   "functionCoverage": {
-    "total": 0,
-    "covered": 0,
-    "uncovered": []
+    "total": 14,
+    "covered": 9,
+    "uncovered": [
+      {
+        "id": "FUN_ACCESS_CONTROL",
+        "displayId": "F001",
+        "name": "AccessControl"
+      },
+      {
+        "id": "FUN_INVESTIGATE_CASE",
+        "displayId": "F005",
+        "name": "InvestigateCase"
+      },
+      {
+        "id": "FUN_NAVIGATE",
+        "displayId": "F008",
+        "name": "Navigate"
+      },
+      {
+        "id": "FUN_PROSECUTE_CASE",
+        "displayId": "F009",
+        "name": "ProsecuteCase"
+      },
+      {
+        "id": "FUN_TRACK_DEFECT",
+        "displayId": "F014",
+        "name": "TrackDefect"
+      }
+    ]
   },
   "constraintTestCoverage": {
-    "total": 0,
-    "covered": 0,
-    "uncovered": []
+    "total": 21,
+    "covered": 6,
+    "uncovered": [
+      {
+        "id": "CON_FUNC_ADMINS_SET_USER_PROFILES_PZCG",
+        "displayId": "C002",
+        "description": "Only admins can set up user profiles"
+      },
+      {
+        "id": "CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_9TTB",
+        "displayId": "C003",
+        "description": "Planned downtime must not exceed specified limits"
+      },
+      {
+        "id": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
+        "displayId": "C005",
+        "description": "System must provide detailed context-sensitive help material"
+      },
+      {
+        "id": "CON_FUNC_SYSTEM_PROVIDE_INTERFACE_LOGGING_CVQW",
+        "displayId": "C006",
+        "description": "System must provide interface for logging defects"
+      },
+      {
+        "id": "CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F",
+        "displayId": "C007",
+        "description": "System must be restorable within specified time after failure"
+      },
+      {
+        "id": "CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH",
+        "displayId": "C008",
+        "description": "System must be scalable for different police station sizes"
+      },
+      {
+        "id": "CON_FUNC_SYSTEM_SEND_ALERTS_ACTIONS_MEQI",
+        "displayId": "C009",
+        "description": "System must send alerts when actions are taken"
+      },
+      {
+        "id": "CON_FUNC_SYSTEM_SUPPORT_OFFLINE_OPERATION_9MXN",
+        "displayId": "C011",
+        "description": "System must support offline operation with critical functionality"
+      },
+      {
+        "id": "CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_M82F",
+        "displayId": "C012",
+        "description": "Unplanned downtime must not exceed specified limits"
+      },
+      {
+        "id": "CON_FUNC_USER_INTERFACE_CUSTOMIZABLE_SAVED_V6CO",
+        "displayId": "C013",
+        "description": "User interface must be customizable and saved in user profile"
+      },
+      {
+        "id": "CON_PERF_SYSTEM_PROVIDE_ADEQUATE_RESPONSE_2US4",
+        "displayId": "C016",
+        "description": "System must provide adequate response times under standard and peak conditions"
+      },
+      {
+        "id": "CON_SEC_AUDIT_TRAIL_DATA_MAINTAINED_HNV3",
+        "displayId": "C017",
+        "description": "Audit trail data must be maintained for at least the life of the case"
+      },
+      {
+        "id": "CON_SEC_GFUDBQ00",
+        "displayId": "C018",
+        "description": "系统必须能够维护一个不可更改的审计跟踪，自动捕获和存储关于关键实体（案件、嫌疑人、财产等）的所有操作（创建/读取/更新/删除）的信息。"
+      },
+      {
+        "id": "CON_SEC_HTTPS_SSL_HTTP_OZXC",
+        "displayId": "C019",
+        "description": "系统必须使用HTTPS作为通信协议，即通过加密的安全套接字层（SSL）的HTTP。"
+      },
+      {
+        "id": "CON_SEC_SECURITY_ATTRIBUTE_CHANGES_MADE_FM6A",
+        "displayId": "C020",
+        "description": "Security attribute changes can only be made by super-users"
+      }
+    ]
   },
   "constraintDesignCoverage": {
-    "total": 0,
-    "covered": 0,
+    "total": 21,
+    "covered": 21,
     "uncovered": []
   },
   "exceptionCoverage": {
-    "total": 0,
-    "covered": 0,
-    "uncovered": []
+    "total": 12,
+    "covered": 6,
+    "uncovered": [
+      {
+        "id": "EXC_IUOTOB00",
+        "displayId": "X002",
+        "description": "用户尝试访问无权限的案件"
+      },
+      {
+        "id": "EXC_IUOTOB00_2",
+        "displayId": "X003",
+        "description": "用户尝试访问无权限的案件"
+      },
+      {
+        "id": "EXC_N7KH6A00",
+        "displayId": "X004",
+        "description": "用户尝试执行无权限的操作"
+      },
+      {
+        "id": "EXC_CASE_FOUND",
+        "displayId": "X006",
+        "description": "Case not found"
+      },
+      {
+        "id": "EXC_CASE_RETRIEVAL_TIMEOUT",
+        "displayId": "X007",
+        "description": "Case retrieval timeout"
+      },
+      {
+        "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT",
+        "displayId": "X011",
+        "description": "Unauthorized access attempt"
+      }
+    ]
   },
   "invalidReferences": [],
-  "overall": 100
+  "overall": 62
 }
