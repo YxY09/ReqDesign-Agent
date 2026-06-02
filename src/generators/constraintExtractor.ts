@@ -71,7 +71,7 @@ export class ConstraintExtractor extends BaseGenerator<ConstraintCandidate[]> {
       requirement_text: requirementText,
     });
 
-    const raw = await this.llm.generateJson(prompt, "");
+    const raw = await this.llm.generateJson(prompt, "", undefined, 0);
     const result = BaseGenerator.unwrapContent(raw);
 
     const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
