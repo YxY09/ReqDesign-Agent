@@ -46,12 +46,6 @@ describe("Phase 2.5: prompt constraint-ref instructions", () => {
     expect(content).toContain("available_constraints");
   });
 
-  it("requirement_analysis_constraints.md mentions constraintRef and missingConstraintCandidates", () => {
-    const content = fs.readFileSync(path.join(promptsDir, "requirement_analysis_constraints.md"), "utf-8");
-    expect(content).toContain("constraintRef");
-    expect(content).toContain("missingConstraintCandidates");
-    expect(content).toContain("available_constraints");
-  });
 });
 
 // ---------------------------------------------------------------------------

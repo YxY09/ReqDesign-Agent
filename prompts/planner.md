@@ -50,36 +50,6 @@ analyze-3(库存/物流域)  ─┘              →  diagrams-activity
 | 中等 | 2 | 1 | 3 | 1 | 7 |
 | 复杂 | 3-4 | 1 | 3 | 1 | 8-9 |
 
-## 约束与异常全量提取
-
-对于所有中等复杂度及以上(analyze ≥ 2)的需求,额外创建一个 analyze 任务,**全量提取约束(constraints)和异常(exceptions)**。
-
-约束不只出现在"非功能需求"章节--它们散布在全文中:
-- 功能描述中的"System must/shall..."句式
-- 数据完整性规则(唯一性、必填、格式)
-- 权限和访问控制规则
-- 性能和可用性要求
-- 异常处理和错误路径
-- 业务流程的前置条件和后置条件
-
-示例任务:
-```json
-{
-  "id": "analyze-constraints",
-  "type": "analyze",
-  "analysisMode": "constraints",
-  "description": "全量约束与异常提取:通读全文,提取所有业务规则、数据约束、权限规则、异常路径",
-  "context_hints": {
-    "suggested_entities": ["SecurityPolicy", "AuditTrail", "AccessControl"],
-    "suggested_functions": ["EnforceAccessControl", "LogAuditEvent"],
-    "focus_areas": [],
-    "note": "通读全文提取 constraints 和 exceptions。不要局限于某个章节。每个包含 must/shall/only/required/prohibited 的句子都是潜在约束。同时提取与约束直接相关的 entities 和 functions。"
-  }
-}
-```
-
-关键:focus_areas 留空(不限制范围),note 强调"通读全文"。
-
 ## 输出格式
 
 严格输出 JSON,不要有任何其他文字:

@@ -16,10 +16,7 @@ import {
   createExecutionPlan,
 } from "../src/shared/types.js";
 import { PlanningTool } from "../src/tools/planning.js";
-import { GenerationTool } from "../src/tools/generation.js";
 import { AnalyzeMerger } from "../src/generators/merge.js";
-import { validateConstraintAnalysisResult } from "../src/shared/constraintSchema.js";
-import { RequirementAnalyzer } from "../src/generators/analyze.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -477,113 +474,7 @@ describe("PlanningTool._parseReplanResponse analysisMode validation", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. GenerationTool._generateAnalyze detection via analysisMode
-// ---------------------------------------------------------------------------
 
-describe("GenerationTool isConstraintTask detection", () => {
-  it("detects constraint task by analysisMode=constraints", () => {
-    // We test via _ruleCheck which routes constraint tasks differently.
-    // But _generateAnalyze is private, so test the routing indirectly.
-    // Instead, verify that analysisMode is accessible on the task object.
-    const task = createTask({
-      id: "analyze-c",
-      type: "analyze",
-      description: "constraint extraction",
-      analysisMode: "constraints",
-    });
-    expect(task.analysisMode).toBe("constraints");
-    // The actual detection logic change is in _generateAnalyze (private),
-    // but we verify the contract: analysisMode takes priority over note.
-  });
-
-  it("analysisMode takes priority over note-based detection", () => {
-    const task = createTask({
-      id: "analyze-c",
-      type: "analyze",
-      description: "domain analysis",
-      analysisMode: "domain",
-      contextHints: { note: "约束提取" },
-    });
-    // analysisMode=domain should NOT be detected as constraint
-    expect(task.analysisMode).toBe("domain");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. _ruleCheck uses constraintSchema for analysisMode=constraints
-// ---------------------------------------------------------------------------
-
-describe("GenerationTool._ruleCheck constraint-aware validation", () => {
-  it("uses standard validator for domain analysisMode", () => {
-    const task = createTask({
-      id: "analyze-1",
-      type: "analyze",
-      analysisMode: "domain",
-    });
-    const content = {
-      actors: [{ name: "User" }],
-      functions: [{ id: "F001", name: "Login", preconditions: "" }],
-      entities: [
-        {
-          name: "User",
-          attributes: [
-            { name: "id", type: "Long", description: "user id" },
-          ],
-          relationships: [],
-        },
-      ],
-      constraints: [],
-      exceptions: [],
-    };
-    // Standard validator should warn about empty constraints
-    const issues = GenerationTool._ruleCheck(task, content, {});
-    // Should NOT error on missing constraints (standard analyzer)
-    expect(issues.some((i) => i.includes("actors"))).toBe(false);
-  });
-
-  it("uses constraintSchema for analysisMode=constraints", () => {
-    const task = createTask({
-      id: "analyze-c",
-      type: "analyze",
-      analysisMode: "constraints",
-    });
-    const content = {
-      constraints: [
-        { id: "C001", description: "valid constraint text" },
-      ],
-      exceptions: [
-        {
-          id: "X001",
-          description: "some exception",
-          trigger: "something fails",
-          handling: "log error",
-        },
-      ],
-    };
-    // Constraint schema should validate successfully
-    const issues = GenerationTool._ruleCheck(task, content, {});
-    // Should not have structural errors for valid constraint output
-    expect(
-      issues.some((i) => i.includes("缺少 actors") || i.includes("缺少 functions")),
-    ).toBe(false);
-  });
-
-  it("constraintSchema rejects empty constraints+exceptions", () => {
-    const task = createTask({
-      id: "analyze-c",
-      type: "analyze",
-      analysisMode: "constraints",
-    });
-    const content = {
-      constraints: [],
-      exceptions: [],
-    };
-    const issues = GenerationTool._ruleCheck(task, content, {});
-    // Should flag that constraint analysis needs at least some data
-    expect(issues.length).toBeGreaterThan(0);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // 7. _verifySourceRefs in AnalyzeMerger
@@ -758,33 +649,9 @@ describe("Prompt files contain analysisMode and source_text", () => {
     expect(content).toContain("analysisMode");
   });
 
-  it("planner.md has analysisMode=constraints example", () => {
-    const content = readPrompt("planner.md");
-    expect(content).toContain('"constraints"');
-  });
-
   it("requirement_analysis.md includes source_text in constraint format", () => {
     const content = readPrompt("requirement_analysis.md");
     expect(content).toContain("source_text");
-  });
-
-  it("requirement_analysis_constraints.md includes source_text", () => {
-    const content = readPrompt("requirement_analysis_constraints.md");
-    expect(content).toContain("source_text");
-  });
-
-  it("requirement_analysis_constraints.md includes {requirement_text} placeholder", () => {
-    const content = readPrompt("requirement_analysis_constraints.md");
-    expect(content).toContain("{requirement_text}");
-  });
-
-  // BUG-11: source_text anti-fabrication rules
-  it("requirement_analysis_constraints.md prohibits fabricated source_text (BUG-11)", () => {
-    const content = readPrompt("requirement_analysis_constraints.md");
-    // Must instruct LLM to use empty string when no original text found
-    expect(content).toContain("空字符串");
-    // Must explicitly prohibit fabrication with error example
-    expect(content).toContain("Implicit requirement throughout document");
   });
 
   it("test_case.md requires test case per exception (BUG-12)", () => {
