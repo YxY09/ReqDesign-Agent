@@ -1,0 +1,24 @@
+{
+  "functionCoverage": {
+    "total": 0,
+    "covered": 0,
+    "uncovered": []
+  },
+  "constraintTestCoverage": {
+    "total": 0,
+    "covered": 0,
+    "uncovered": []
+  },
+  "constraintDesignCoverage": {
+    "total": 0,
+    "covered": 0,
+    "uncovered": []
+  },
+  "exceptionCoverage": {
+    "total": 0,
+    "covered": 0,
+    "uncovered": []
+  },
+  "invalidReferences": [],
+  "overall": 100
+}

@@ -92,7 +92,7 @@ function restoreTask(value: unknown): Task | null {
 
 function restoreAnalysisMode(value: unknown): Task["analysisMode"] | undefined {
   const mode = String(value ?? "").trim();
-  return mode === "domain" || mode === "constraints" ? mode : undefined;
+  return mode === "domain" ? mode : undefined;
 }
 
 function restoreIssue(value: unknown): Issue | null {

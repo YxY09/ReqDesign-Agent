@@ -486,6 +486,50 @@ describe("RequirementAnalyzer normalization", () => {
 });
 
 // ===========================================================================
+// RequirementAnalyzer.validateResult — entityRef attribute tolerance
+// ===========================================================================
+
+describe("RequirementAnalyzer.validateResult", () => {
+  it("does not warn when entity with entityRef has empty attributes", () => {
+    const warnings = RequirementAnalyzer.validateResult({
+      actors: [{ name: "User", description: "用户" }],
+      functions: [{ id: "F001", name: "创建案件", description: "...", preconditions: "登录", priority: "high" }],
+      entities: [
+        { name: "Case", entityRef: "E_CASE", attributes: [], relationships: [] },
+      ],
+    });
+    // Must NOT contain "缺少 attributes" for the Case entity
+    expect(warnings.filter((w) => w.includes("Case") && w.includes("缺少 attributes")))
+      .toHaveLength(0);
+  });
+
+  it("warns when entity WITHOUT entityRef has empty attributes", () => {
+    const warnings = RequirementAnalyzer.validateResult({
+      actors: [{ name: "User", description: "用户" }],
+      functions: [{ id: "F001", name: "创建案件", description: "...", preconditions: "登录", priority: "high" }],
+      entities: [
+        { name: "Merchant", attributes: [], relationships: [] },
+      ],
+    });
+    expect(warnings).toContain("实体 Merchant 缺少 attributes");
+  });
+
+  it("still warns when entity with entityRef has non-array attributes", () => {
+    const warnings = RequirementAnalyzer.validateResult({
+      actors: [{ name: "User", description: "用户" }],
+      functions: [{ id: "F001", name: "创建案件", description: "...", preconditions: "登录", priority: "high" }],
+      entities: [
+        { name: "Case", entityRef: "E_CASE", attributes: undefined as unknown as unknown[], relationships: [] },
+      ],
+    });
+    expect(warnings.filter((w) => w.includes("Case") && w.includes("缺少 attributes")))
+      .toBeTruthy();
+    expect(warnings.some((w) => w.includes("Case") && w.includes("缺少 attributes")))
+      .toBe(true);
+  });
+});
+
+// ===========================================================================
 // OutputManager
 // ===========================================================================
 

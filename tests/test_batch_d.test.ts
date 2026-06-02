@@ -464,13 +464,13 @@ describe("Step 6d: PlanningTool._ensureSectionCoverage", () => {
     expect(a2.contextHints!.assignedSections).toHaveLength(3);
   });
 
-  it("does not append unassigned sections to constraints tasks when domain tasks exist", () => {
+  it("appends unassigned sections to the lightest analyze task", () => {
     const sectionIndex: SectionIndex[] = [
       { id: "s1-1", depth: 1, title: "用户管理", body: "注册和登录", charRange: [0, 10] },
       { id: "s2-8", depth: 1, title: "帮助模块", body: "帮助中心功能", charRange: [10, 20] },
     ];
 
-    // s2-8 (Help Module) is unassigned — the bug would append it to analyze-constraints
+    // s2-8 (Help Module) is unassigned
     const plan = createExecutionPlan({
       tasks: [
         createTask({
@@ -481,10 +481,10 @@ describe("Step 6d: PlanningTool._ensureSectionCoverage", () => {
           contextHints: { assignedSections: ["s1-1"] },
         }),
         createTask({
-          id: "analyze-constraints",
+          id: "analyze-2",
           type: "analyze",
-          description: "约束提取",
-          analysisMode: "constraints",
+          description: "extra analysis",
+          analysisMode: "domain",
           contextHints: { assignedSections: [] },
         }),
       ],
@@ -494,37 +494,11 @@ describe("Step 6d: PlanningTool._ensureSectionCoverage", () => {
 
     const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
 
-    // s2-8 should go to the domain task (analyze-1), NOT to constraints task
-    const domainTask = result.tasks.find((t) => t.id === "analyze-1")!;
-    const constraintTask = result.tasks.find((t) => t.id === "analyze-constraints")!;
-    expect(domainTask.contextHints!.assignedSections).toContain("s2-8");
-    expect(constraintTask.contextHints!.assignedSections).not.toContain("s2-8");
-  });
-
-  it("falls back to constraints tasks when no domain analyze tasks exist", () => {
-    const sectionIndex: SectionIndex[] = [
-      { id: "s1-1", depth: 1, title: "用户管理", body: "注册和登录", charRange: [0, 10] },
-    ];
-
-    // Only constraint tasks — should still get unassigned sections as fallback
-    const plan = createExecutionPlan({
-      tasks: [
-        createTask({
-          id: "analyze-constraints",
-          type: "analyze",
-          description: "约束提取",
-          analysisMode: "constraints",
-          contextHints: { assignedSections: [] },
-        }),
-      ],
-      goal: "design",
-      reasoning: "test",
-    });
-
-    const result = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
-
-    const constraintTask = result.tasks.find((t) => t.id === "analyze-constraints")!;
-    expect(constraintTask.contextHints!.assignedSections).toContain("s1-1");
+    // s2-8 should go to the lighter task (analyze-2, which has 0 sections)
+    const analyze2 = result.tasks.find((t) => t.id === "analyze-2")!;
+    const analyze1 = result.tasks.find((t) => t.id === "analyze-1")!;
+    expect(analyze2.contextHints!.assignedSections).toContain("s2-8");
+    expect(analyze1.contextHints!.assignedSections).not.toContain("s2-8");
   });
 });
 

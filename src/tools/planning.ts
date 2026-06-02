@@ -274,10 +274,7 @@ export class PlanningTool extends BaseTool {
         rawMode = String(hints.analysisMode ?? hints.analysis_mode ?? "").trim();
       }
     }
-    return rawMode.toLowerCase() === "constraints" ? "constraints"
-      : rawMode.toLowerCase() === "domain" ? "domain"
-      : rawMode ? "domain"
-      : undefined;
+    return rawMode.toLowerCase() === "domain" ? "domain" : undefined;
   }
 
   _parseResponse(response: Record<string, unknown>, goal: string): ExecutionPlan {
@@ -314,7 +311,6 @@ export class PlanningTool extends BaseTool {
     if (goal.toLowerCase().includes("analyze")) {
       tasks = tasks.filter((t) => t.type === "analyze");
     }
-    tasks = tasks.filter((t) => t.analysisMode !== "constraints");
     tasks = PlanningTool._splitDiagramTasks(tasks);
     tasks = PlanningTool._ensureOrder(tasks);
 
@@ -340,7 +336,6 @@ export class PlanningTool extends BaseTool {
           ...(analysisMode ? { analysisMode } : {}),
         });
       })
-      .filter((t) => t.analysisMode !== "constraints");
 
     const updateRaw = (response.update_tasks as Array<Record<string, unknown>>) ?? [];
     const updateTasks = updateRaw
@@ -356,7 +351,6 @@ export class PlanningTool extends BaseTool {
           ...(analysisMode ? { analysisMode } : {}),
         });
       })
-      .filter((t) => t.analysisMode !== "constraints");
 
     const dropIds = ((response.drop_task_ids as string[]) ?? [])
       .map((d) => String(d).trim())
@@ -656,18 +650,13 @@ export class PlanningTool extends BaseTool {
 
     if (unassigned.length === 0) return plan;
 
-    // Prefer domain analyze tasks over constraints tasks for appending unassigned sections.
-    // Constraints tasks only extract rules, not full functional requirements.
-    const domainTasks = analyzeTasks.filter((t) => t.analysisMode !== "constraints");
-    const candidates = domainTasks.length > 0 ? domainTasks : analyzeTasks;
-
-    // Find the candidate task with the fewest assigned sections (lightest)
-    let lightest = candidates[0];
+    // Find the analyze task with the fewest assigned sections (lightest)
+    let lightest = analyzeTasks[0];
     let lightestCount = getAssignedCount(lightest);
-    for (let i = 1; i < candidates.length; i++) {
-      const count = getAssignedCount(candidates[i]);
+    for (let i = 1; i < analyzeTasks.length; i++) {
+      const count = getAssignedCount(analyzeTasks[i]);
       if (count < lightestCount) {
-        lightest = candidates[i];
+        lightest = analyzeTasks[i];
         lightestCount = count;
       }
     }

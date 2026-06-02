@@ -1,0 +1,10 @@
+{
+  "entityCoverage": 1,
+  "functionIdCoverage": 1,
+  "constraintIdCoverage": 1,
+  "exceptionIdCoverage": 1,
+  "namingConsistency": 1,
+  "testTypeBalance": 0,
+  "overall": 0.85,
+  "details": []
+}

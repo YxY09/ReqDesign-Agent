@@ -1,0 +1,12 @@
+{
+  "functionToConstraints": {},
+  "constraintToFunctions": {},
+  "constraintToDesign": {},
+  "constraintToTests": {},
+  "constraintToEvidence": {},
+  "functionToTests": {},
+  "exceptionToTests": {},
+  "uncoveredConstraints": [],
+  "uncoveredFunctions": [],
+  "uncoveredExceptions": []
+}

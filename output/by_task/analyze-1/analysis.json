@@ -1,0 +1,201 @@
+{
+  "project_name": "CCTNS",
+  "project_overview": "CCTNS V1.0 is a system designed to improve crime investigation and criminal detection by providing critical functionality to police personnel.",
+  "actors": [
+    {
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "Administrator with full system access"
+    },
+    {
+      "actorRef": "A_POLICE_OFFICER",
+      "name": "PoliceOfficer",
+      "description": "Investigating officer handling cases"
+    },
+    {
+      "actorRef": "A_CITIZEN",
+      "name": "Citizen",
+      "description": "Public user who can register complaints"
+    },
+    {
+      "actorRef": "A_HELP_DESK",
+      "name": "HelpDesk",
+      "description": "Support staff handling user issues"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "External auditor reviewing system activity"
+    }
+  ],
+  "functions": [
+    {
+      "id": "FUN_REGISTER_CASE",
+      "name": "RegisterCase",
+      "description": "Register new police cases from citizen complaints",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "Case details must be captured accurately",
+        "Complaint must be linked to case"
+      ],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "User must be authenticated"
+    },
+    {
+      "id": "FUN_INVESTIGATE_CASE",
+      "name": "InvestigateCase",
+      "description": "Process case investigation",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "Case must be registered"
+    },
+    {
+      "id": "FUN_PROSECUTE_CASE",
+      "name": "ProsecuteCase",
+      "description": "Handle case prosecution",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "medium",
+      "preconditions": "Case investigation must be complete"
+    }
+  ],
+  "entities": [
+    {
+      "entityRef": "E_CASE",
+      "name": "Case",
+      "description": "Police case record",
+      "attributes": [
+        {
+          "name": "caseId",
+          "type": "String",
+          "description": "Unique case identifier"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "Current status of the case"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_COMPLAINT",
+          "type": "one-to-one",
+          "description": "Case is created from a complaint"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_COMPLAINT",
+      "name": "Complaint",
+      "description": "Citizen complaint that initiates a case",
+      "attributes": [
+        {
+          "name": "complaintId",
+          "type": "String",
+          "description": "Unique complaint identifier"
+        },
+        {
+          "name": "details",
+          "type": "String",
+          "description": "Complaint details"
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "entityRef": "E_USER_PROFILE",
+      "name": "UserProfile",
+      "description": "User configuration and preferences",
+      "attributes": [
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "Unique user identifier"
+        },
+        {
+          "name": "role",
+          "type": "String",
+          "description": "User role/access level"
+        }
+      ],
+      "relationships": []
+    }
+  ],
+  "constraints": [
+    {
+      "constraintRef": "C_RULE_001",
+      "description": "Provide context-sensitive help for all UI actions",
+      "related_functions": [
+        "FUN_REGISTER_CASE"
+      ],
+      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
+    },
+    {
+      "constraintRef": "C_RULE_002",
+      "description": "Provide interface for defect/enhancement logging",
+      "related_functions": [],
+      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
+    },
+    {
+      "constraintRef": "C_RULE_004",
+      "description": "Maintain unalterable audit trail",
+      "related_functions": [
+        "FUN_REGISTER_CASE",
+        "FUN_INVESTIGATE_CASE"
+      ],
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+    }
+  ],
+  "missingConstraintCandidates": [],
+  "exceptions": [
+    {
+      "id": "X001",
+      "description": "Unauthorized case access attempt",
+      "trigger": "User tries to access case without permission",
+      "handling": "Log attempt in audit trail and show appropriate error"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "performance",
+      "description": "Simple search must complete within 5-8 seconds"
+    },
+    {
+      "category": "security",
+      "description": "System must prevent SQL injection"
+    },
+    {
+      "category": "usability",
+      "description": "UI must comply with ISO 9241 standards"
+    }
+  ],
+  "business_processes": [
+    {
+      "name": "CaseRegistration",
+      "steps": [
+        "RegisterComplaint",
+        "CreateCase",
+        "AssignInvestigator"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ]
+    }
+  ],
+  "proposeNewEntities": [],
+  "proposeNewFunctions": [],
+  "proposeNewConstraints": [],
+  "proposeNewExceptions": []
+}

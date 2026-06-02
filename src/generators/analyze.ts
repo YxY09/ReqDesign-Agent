@@ -105,7 +105,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
         if (typeof ent !== "object" || ent === null) continue;
         const rec = ent as Record<string, unknown>;
         const name = String(rec.name ?? "unknown");
-        if (!Array.isArray(rec.attributes) || rec.attributes.length === 0) {
+        if (!Array.isArray(rec.attributes) || (rec.attributes.length === 0 && !rec.entityRef)) {
           warnings.push(`实体 ${name} 缺少 attributes`);
         } else if (rec.attributes.some((attr) =>
           typeof attr !== "object" ||

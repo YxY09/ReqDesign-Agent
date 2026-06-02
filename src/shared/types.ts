@@ -103,8 +103,8 @@ export interface Task {
     targetSections?: string[];
   };
 
-  /** Analysis mode for analyze tasks: domain extraction or constraint extraction. */
-  analysisMode?: "domain" | "constraints";
+  /** Analysis mode for analyze tasks. */
+  analysisMode?: "domain";
 }
 
 /** PlanningTool output. */

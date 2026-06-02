@@ -1,0 +1,35 @@
+{
+  "goal": "design",
+  "run_status": "paused",
+  "quality_status": "unknown",
+  "persist_status": "not_saved",
+  "finished": true,
+  "persisted": false,
+  "duration": 288.91,
+  "artifact_count": 4,
+  "artifact_counts": {
+    "analyze": 4
+  },
+  "decision_count": 65,
+  "review_rounds": 0,
+  "final_review_done": false,
+  "final_review_passed": false,
+  "plan_task_count": 10,
+  "plan_revision_count": 0,
+  "issue_counts": {
+    "severity": {},
+    "scope": {},
+    "target_type": {}
+  },
+  "budget_counters": {
+    "regenerate_count:analyze-2": 1
+  },
+  "failure_categories": [],
+  "recovered_incidents": [],
+  "errors": [
+    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes",
+    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes",
+    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes",
+    "实体 Case 缺少 attributes; 实体 Investigation 缺少 attributes; 实体 Prosecution 缺少 attributes; 实体 Suspect 缺少 attributes; 实体 Property 缺少 attributes"
+  ]
+}

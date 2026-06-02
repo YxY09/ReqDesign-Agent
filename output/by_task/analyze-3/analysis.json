@@ -1,0 +1,329 @@
+{
+  "project_name": "CCTNS",
+  "project_overview": "CCTNS是一个为警察和公民提供案件管理和信息交换的系统，包含案件注册、调查、起诉、搜索等功能模块。",
+  "actors": [
+    {
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "系统管理员，负责用户管理和系统配置"
+    },
+    {
+      "actorRef": "A_POLICE_OFFICER",
+      "name": "PoliceOfficer",
+      "description": "警务人员，负责案件调查和处理"
+    },
+    {
+      "actorRef": "A_CITIZEN",
+      "name": "Citizen",
+      "description": "公民用户，可以提交投诉和查询案件信息"
+    },
+    {
+      "actorRef": "A_HELP_DESK",
+      "name": "HelpDesk",
+      "description": "帮助台人员，负责处理用户问题和缺陷报告"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "审计员，负责审查系统操作记录"
+    },
+    {
+      "actorRef": "A_SYSTEM",
+      "name": "System",
+      "description": "系统自动执行的功能"
+    }
+  ],
+  "functions": [
+    {
+      "id": "FUN_SEARCH_CASE",
+      "name": "SearchCase",
+      "description": "搜索案件",
+      "sub_capabilities": [
+        "基本搜索",
+        "高级搜索",
+        "按人员搜索",
+        "按犯罪类型搜索",
+        "按作案手法搜索",
+        "按财产搜索",
+        "自定义结果视图"
+      ],
+      "acceptance_criteria": [
+        "搜索结果应在5-8秒内返回(基本搜索)",
+        "搜索结果应在10-15秒内返回(高级搜索)",
+        "搜索结果不应包含用户无权访问的记录"
+      ],
+      "related_actors": [
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "用户已登录并具有搜索权限"
+    },
+    {
+      "id": "FUN_RETRIEVE_CASE",
+      "name": "RetrieveCase",
+      "description": "检索案件详情",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "最近2个月内访问过的案件应在5-8秒内显示",
+        "超过2个月未访问的案件应在20秒内显示"
+      ],
+      "related_actors": [
+        "A_POLICE_OFFICER",
+        "A_CITIZEN"
+      ],
+      "priority": "high",
+      "preconditions": "用户已登录并具有案件访问权限"
+    }
+  ],
+  "entities": [
+    {
+      "entityRef": "E_SEARCH_RESULT",
+      "name": "SearchResult",
+      "description": "搜索结果",
+      "attributes": [
+        {
+          "name": "resultId",
+          "type": "String",
+          "description": "结果唯一标识"
+        },
+        {
+          "name": "searchCriteria",
+          "type": "Object",
+          "description": "搜索条件"
+        },
+        {
+          "name": "resultItems",
+          "type": "List",
+          "description": "结果项列表"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "搜索时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-many",
+          "description": "搜索结果关联的案件"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_COMPLAINT",
+      "name": "Complaint",
+      "description": "公民投诉",
+      "attributes": [
+        {
+          "name": "complaintId",
+          "type": "String",
+          "description": "投诉唯一标识"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "投诉标题"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "投诉详情"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "投诉状态"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        },
+        {
+          "name": "updatedAt",
+          "type": "DateTime",
+          "description": "更新时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "one-to-one",
+          "description": "投诉关联的案件"
+        },
+        {
+          "target": "E_USER_PROFILE",
+          "type": "many-to-one",
+          "description": "投诉提交人"
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "constraintRef": "C_RULE_010",
+      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system. In this context, performing a search means returning a result list. It does not include retrieving the records themselves."
+    },
+    {
+      "constraintRef": "C_RULE_007",
+      "description": "系统必须允许用户将案件访问权限限制为特定用户或用户组",
+      "related_functions": [
+        "FUN_RETRIEVE_CASE"
+      ],
+      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
+    },
+    {
+      "constraintRef": "C_RULE_008",
+      "description": "系统必须仅允许管理员用户设置用户配置文件并将用户分配到组",
+      "related_functions": [],
+      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+    },
+    {
+      "constraintRef": "C_RULE_009",
+      "description": "系统必须确保所有错误消息都是有意义的，用户可以采取适当行动",
+      "related_functions": [
+        "FUN_SEARCH_CASE",
+        "FUN_RETRIEVE_CASE"
+      ],
+      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
+    },
+    {
+      "constraintRef": "C_RULE_011",
+      "description": "系统必须支持多语言界面",
+      "related_functions": [
+        "FUN_SEARCH_CASE",
+        "FUN_RETRIEVE_CASE"
+      ],
+      "source_text": "The system should support multilingual interface"
+    },
+    {
+      "constraintRef": "C_RULE_012",
+      "description": "系统必须使用HTTPS作为通信协议",
+      "related_functions": [],
+      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)"
+    },
+    {
+      "constraintRef": "C_RULE_013",
+      "description": "系统必须支持选择性加密存储数据",
+      "related_functions": [],
+      "source_text": "The system should support selective encryption of the stored data"
+    },
+    {
+      "constraintRef": "C_RULE_014",
+      "description": "系统必须防止跨站脚本攻击",
+      "related_functions": [],
+      "source_text": "Prevent cross-site scripting"
+    },
+    {
+      "constraintRef": "C_RULE_015",
+      "description": "系统必须防止SQL注入",
+      "related_functions": [],
+      "source_text": "Prevent SQL Injection"
+    },
+    {
+      "constraintRef": "C_RULE_016",
+      "description": "系统不得允许硬删除，只能进行软标记删除",
+      "related_functions": [],
+      "source_text": "Do not allow hard delete and perform only soft tagging the row for deletion"
+    },
+    {
+      "constraintRef": "C_RULE_017",
+      "description": "系统必须能够在离线模式下工作并提供关键功能",
+      "related_functions": [
+        "FUN_SEARCH_CASE",
+        "FUN_RETRIEVE_CASE"
+      ],
+      "source_text": "The system should work even in an offline mode with the critical functionality"
+    },
+    {
+      "constraintRef": "C_RULE_018",
+      "description": "系统必须设计为即使在低带宽连接的警察局也能提供满意的性能",
+      "related_functions": [
+        "FUN_SEARCH_CASE",
+        "FUN_RETRIEVE_CASE"
+      ],
+      "source_text": "The system should be designed to have satisfactory performance even in Police Stations connected on low-bandwidth"
+    },
+    {
+      "constraintRef": "C_RULE_019",
+      "description": "系统必须实现服务导向架构(SOA)并具有模块化设计",
+      "related_functions": [],
+      "source_text": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design"
+    },
+    {
+      "constraintRef": "C_RULE_020",
+      "description": "系统必须支持多浏览器运行",
+      "related_functions": [],
+      "source_text": "The system should run on multiple browsers"
+    }
+  ],
+  "missingConstraintCandidates": [],
+  "exceptions": [
+    {
+      "id": "X001",
+      "description": "用户尝试访问无权限的案件",
+      "trigger": "用户请求访问或搜索没有权限的案件",
+      "handling": "系统根据配置显示不同级别的响应：显示标题和元数据/仅显示案件存在/不显示任何信息"
+    },
+    {
+      "id": "X002",
+      "description": "搜索结果为空",
+      "trigger": "搜索条件不匹配任何案件",
+      "handling": "显示友好的空结果提示"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "性能",
+      "description": "系统应提供足够的响应时间，在标准和高峰条件下执行常用功能"
+    },
+    {
+      "category": "可用性",
+      "description": "用户界面应设计得直观易用，符合ISO 9241标准"
+    },
+    {
+      "category": "安全",
+      "description": "系统应确保高标准的安全和访问控制"
+    },
+    {
+      "category": "可扩展性",
+      "description": "系统应可扩展，没有妨碍在小或大型警察局使用的特性"
+    }
+  ],
+  "business_processes": [
+    {
+      "name": "案件搜索流程",
+      "steps": [
+        "输入搜索条件",
+        "执行搜索",
+        "查看结果列表",
+        "选择案件查看详情"
+      ],
+      "actors": [
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "公民投诉流程",
+      "steps": [
+        "公民提交投诉",
+        "系统记录投诉",
+        "警察处理投诉",
+        "系统通知公民处理结果"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ]
+    }
+  ],
+  "proposeNewEntities": [],
+  "proposeNewFunctions": [],
+  "proposeNewConstraints": [],
+  "proposeNewExceptions": []
+}

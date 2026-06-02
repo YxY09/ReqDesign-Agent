@@ -54,22 +54,22 @@ describe("SessionContext", () => {
     });
     const ctx = new SessionContext({
       task: createTask({
-        id: "analyze-constraints",
+        id: "analyze-domain",
         type: "analyze",
-        description: "extract constraints",
-        dependsOn: ["analyze-domain"],
+        description: "domain analysis",
+        dependsOn: [],
         contextHints: { assignedSections: ["S1"] },
-        analysisMode: "constraints",
+        analysisMode: "domain",
         targeted: true,
         targetIssues: [issue],
         patchContext: {
           targetArtifactId: "analysis",
-          targetSections: ["constraints"],
+          targetSections: ["entities"],
         },
       }),
-      taskId: "analyze-constraints",
+      taskId: "analyze-domain",
       taskType: "analyze",
-      taskDescription: "extract constraints",
+      taskDescription: "domain analysis",
       registry: { entities: [], actors: [], functions: [] },
       previousIssues: [{ severity: "major", description: "old issue" }],
       provenance: {
@@ -82,10 +82,10 @@ describe("SessionContext", () => {
 
     const restored = SessionContext.fromDict(ctx.toDict());
 
-    expect(restored.task?.analysisMode).toBe("constraints");
-    expect(restored.task?.dependsOn).toEqual(["analyze-domain"]);
+    expect(restored.task?.analysisMode).toBe("domain");
+    expect(restored.task?.dependsOn).toEqual([]);
     expect(restored.task?.targeted).toBe(true);
-    expect(restored.task?.patchContext?.targetSections).toEqual(["constraints"]);
+    expect(restored.task?.patchContext?.targetSections).toEqual(["entities"]);
     expect(restored.provenance).toEqual({
       scope: "task",
       contentKind: "effective",
@@ -115,23 +115,23 @@ describe("Worker sessions", () => {
         captured.task = task;
         captured.context = context;
         return createArtifact({
-          taskId: "analyze-constraints",
+          taskId: "analyze-domain",
           type: "analyze",
-          content: { constraints: [] },
+          content: { entities: [] },
         });
       },
     };
     const ctx = new SessionContext({
       task: createTask({
-        id: "analyze-constraints",
+        id: "analyze-domain",
         type: "analyze",
-        description: "extract constraints",
-        analysisMode: "constraints",
+        description: "domain analysis",
+        analysisMode: "domain",
         contextHints: { availableConstraints: [] },
       }),
-      taskId: "analyze-constraints",
+      taskId: "analyze-domain",
       taskType: "analyze",
-      taskDescription: "extract constraints",
+      taskDescription: "domain analysis",
       requirementText: "req",
       diagrams: { sequence: "diagram" },
       testCases: "TC-001",
@@ -146,11 +146,11 @@ describe("Worker sessions", () => {
     });
     const session = new GenerationSession("s1", ctx, null, null, agent as never);
 
-    await session.run(createTaskMessage({ type: "spawn", taskId: "analyze-constraints" }));
+    await session.run(createTaskMessage({ type: "spawn", taskId: "analyze-domain" }));
 
     const task = captured.task as ReturnType<typeof createTask>;
     const toolContext = captured.context as Record<string, unknown>;
-    expect(task.analysisMode).toBe("constraints");
+    expect(task.analysisMode).toBe("domain");
     expect(toolContext.requirement_text).toBe("req");
     expect(toolContext.diagrams).toBeUndefined();
     expect(toolContext.test_cases).toBeUndefined();
