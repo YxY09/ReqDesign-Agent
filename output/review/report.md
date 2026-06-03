@@ -2,659 +2,154 @@
 
 ## Summary
 
-Total issues: 130
+Total issues: 29
 - Blockers: 0
-- Major: 126
-- Minor: 4
+- Major: 29
+- Minor: 0
 
 ## Issues
 
-### [MAJOR] 约束 C045 未在设计中体现
+### [MAJOR] 约束 C009 未在设计中体现
 Target: design-1 (design)
 Scope: local
 Suggestion: 补充对应模块、实体或章节，并保持与需求一致
 
-### [MAJOR] 约束 C071 未在设计中体现
+### [MAJOR] 约束 C010 未在设计中体现
 Target: design-1 (design)
 Scope: local
 Suggestion: 补充对应模块、实体或章节，并保持与需求一致
 
-### [MAJOR] 约束 C099 未在设计中体现
+### [MAJOR] 约束 C015 未在设计中体现
 Target: design-1 (design)
 Scope: local
 Suggestion: 补充对应模块、实体或章节，并保持与需求一致
 
-### [MAJOR] 设计中出现未在需求中识别的核心类: HelpSystem
+### [MAJOR] 约束 C018 未在设计中体现
 Target: design-1 (design)
 Scope: local
-Suggestion: 删除或下沉多余的核心类，只保留需求中识别的业务实体
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
 
-### [MAJOR] 类图缺少需求分析中的核心实体: Cache, Alert, Defect, Property, Enhancement, Report, UserInterface, Metadata
+### [MAJOR] 约束 C019 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 约束 C021 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 约束 C023 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 约束 C026 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 约束 C027 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 约束 C028 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 约束 C030 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 异常 X003 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 异常 X007 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 异常 X008 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 异常 X011 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 异常 X012 未在设计中体现
+Target: design-1 (design)
+Scope: local
+Suggestion: 补充对应模块、实体或章节，并保持与需求一致
+
+### [MAJOR] 测试用例引用了未定义的需求 ID: XSS
+Target: tests-1 (tests)
+Scope: local
+Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
+
+### [MAJOR] 测试用例引用了未定义的需求 ID: Chrome
+Target: tests-1 (tests)
+Scope: local
+Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
+
+### [MAJOR] 测试用例引用了未定义的功能 ID: Firefox
+Target: tests-1 (tests)
+Scope: local
+Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
+
+### [MAJOR] 测试用例引用了未定义的需求 ID: Edge
+Target: tests-1 (tests)
+Scope: local
+Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
+
+### [MAJOR] 活动图未覆盖业务流程: CaseRegistration, CaseInvestigation, DefectHandling, CaseRegistrationProcess, CaseInvestigationProcess, DefectManagementProcess, AuditReviewProcess
 Target: diagrams-final (diagrams)
 Scope: local
-Suggestion: 在类图中补充以下实体的类定义: Cache, Alert, Defect, Property, Enhancement, Report, UserInterface, Metadata
+Suggestion: 活动图应至少包含以下业务流程的完整路径: CaseRegistration, CaseInvestigation, DefectHandling, CaseRegistrationProcess, CaseInvestigationProcess, DefectManagementProcess, AuditReviewProcess
 
-### [MAJOR] 测试用例编号不合法: TC-F008-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-F008-002
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-F009-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-F009-002
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-002
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-003
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-004
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-005
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-006
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-007
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-008
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-009
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-CON-010
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-HELP-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-HELP-002
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-AUDIT-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-LANG-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 测试用例编号不合法: TC-UI-001
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 补充对应功能 ID 的正常/异常/边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CASES_LEAST_ONE_ASSOCIATED_XNZS 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CASES_LEAST_ONE_ASSOCIATED_XNZS 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CLEARLY_DISTINGUISH_NAVIGATION_LINKS_20W7 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CLEARLY_DISTINGUISH_NAVIGATION_LINKS_20W7 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CLEARLY_DISTINGUISH_WITHIN_PAGE_WJG3 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CLEARLY_DISTINGUISH_WITHIN_PAGE_WJG3 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CLEARLY_MARK_LINKS_OPEN_T5ZT 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CLEARLY_MARK_LINKS_OPEN_T5ZT 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_COMPLAINTS_ASSOCIATED_LEAST_ONE_C92H 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_COMPLAINTS_ASSOCIATED_LEAST_ONE_C92H 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CONFIGURE_HIERARCHICAL_CACHE_FREQUENTLY_CL6V 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CONFIGURE_HIERARCHICAL_CACHE_FREQUENTLY_CL6V 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CONSIDER_AGGRESSIVE_PAGE_LOADING_O4KT 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CONSIDER_AGGRESSIVE_PAGE_LOADING_O4KT 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_CONSIDER_PRINCIPLES_HUMAN_PERCEPTION_H9SX 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_CONSIDER_PRINCIPLES_HUMAN_PERCEPTION_H9SX 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DESIGN_CENTRALIZED_DEPLOYMENT_MAINTENANCE_HUR0 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DESIGN_CENTRALIZED_DEPLOYMENT_MAINTENANCE_HUR0 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DESIGN_INPUT_DEVICE_INDEPENDENCE_78G8 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DESIGN_INPUT_DEVICE_INDEPENDENCE_78G8 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DESIGN_NAVIGATION_HELP_USERS_I3HK 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DESIGN_NAVIGATION_HELP_USERS_I3HK 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DESIGN_PREVENT_OPERATIONAL_DATA_PQ27 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DESIGN_PREVENT_OPERATIONAL_DATA_PQ27 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DESIGN_ROBUST_AGAINST_TECHNOLOGY_M66J 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DESIGN_ROBUST_AGAINST_TECHNOLOGY_M66J 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DESIGN_TIER_ARCHITECTURE_SEPARATING_2PKW 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DESIGN_TIER_ARCHITECTURE_SEPARATING_2PKW 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DEVELOP_DEPLOYMENT_TIER_DATACENTER_J09W 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DEVELOP_DEPLOYMENT_TIER_DATACENTER_J09W 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DEVELOP_OPEN_STANDARDS_ASY7 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DEVELOP_OPEN_STANDARDS_ASY7 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_DISPLAY_RECORDS_BATCHES_PAGED_37JL 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_DISPLAY_RECORDS_BATCHES_PAGED_37JL 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_EMPLOY_CONSISTENT_RULES_COMMON_1NPG 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_EMPLOY_CONSISTENT_RULES_COMMON_1NPG 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_ENSURE_ACCEPTABLE_PAGE_OPENING_VD99 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_ENSURE_ACCEPTABLE_PAGE_OPENING_VD99 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_ENSURE_SECURE_DATA_TRANSMISSION_FO5Q 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_ENSURE_SECURE_DATA_TRANSMISSION_FO5Q 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_ENSURE_SUITABLE_USERS_SPECIAL_2K37 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_ENSURE_SUITABLE_USERS_SPECIAL_2K37 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_ENSURE_TEXT_QUALITY_IMPEDE_HF9P 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_ENSURE_TEXT_QUALITY_IMPEDE_HF9P 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_ERROR_MESSAGES_MEANINGFUL_ELNV 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_ERROR_MESSAGES_MEANINGFUL_ELNV 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_FETCH_FIELDS_NEEDED_DISPLAY_YWH2 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_FETCH_FIELDS_NEEDED_DISPLAY_YWH2 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_FETCH_SEARCH_RESULTS_BATCHES_7T2L 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_FETCH_SEARCH_RESULTS_BATCHES_7T2L 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_HARD_DELETES_SOFT_TAGGING_I6CO 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_HARD_DELETES_SOFT_TAGGING_I6CO 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_HOST_STATIC_CONTENT_WEB_BTJV 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_HOST_STATIC_CONTENT_WEB_BTJV 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_IMPLEMENT_USING_SERVICE_ORIENTED_O28B 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_IMPLEMENT_USING_SERVICE_ORIENTED_O28B 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_INCLUDE_LINK_HOME_LANDMARK_7PK9 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_INCLUDE_LINK_HOME_LANDMARK_7PK9 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_LEVERAGE_ASYNCHRONOUS_HTTP_SOCKET_MIUY 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_LEVERAGE_ASYNCHRONOUS_HTTP_SOCKET_MIUY 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_MAINTAIN_CONSISTENCY_NAVIGATION_COMPONENTS_OS75 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_MAINTAIN_CONSISTENCY_NAVIGATION_COMPONENTS_OS75 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_MAKE_CURRENT_USER_PROFILE_OZ5G 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_MAKE_CURRENT_USER_PROFILE_OZ5G 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_MAKE_INDIVIDUALIZATION_ADAPTATION_EVIDENT_TELE 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_MAKE_INDIVIDUALIZATION_ADAPTATION_EVIDENT_TELE 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_MINIMIZE_POTENTIAL_USER_ERRORS_OMWR 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_MINIMIZE_POTENTIAL_USER_ERRORS_OMWR 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_AVOID_B6KD 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_AVOID_B6KD 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_NUMBER_UNPLANNED_DOWNTIME_INCIDENTS_9S1K 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_NUMBER_UNPLANNED_DOWNTIME_INCIDENTS_9S1K 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PERFORM_SIMPLE_SEARCH_WITHIN_VXP4 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PERFORM_SIMPLE_SEARCH_WITHIN_VXP4 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PLACE_NAVIGATION_COMPONENTS_CONSISTENTLY_KF9T 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PLACE_NAVIGATION_COMPONENTS_CONSISTENTLY_KF9T 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PLACE_TITLE_INFORMATION_CONSISTENTLY_NMS9 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PLACE_TITLE_INFORMATION_CONSISTENTLY_NMS9 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_SYZH 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PLANNED_DOWNTIME_EXCEED_SPECIFIED_SYZH 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PREVENT_CROSS_SITE_SCRIPTING_9KJT 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PREVENT_CROSS_SITE_SCRIPTING_9KJT 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PREVENT_SQL_INJECTION_A5J8 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PREVENT_SQL_INJECTION_A5J8 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROSECUTION_RECORDS_REFERENCE_EXISTING_7XMR 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROSECUTION_RECORDS_REFERENCE_EXISTING_7XMR 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_CLEAR_ERROR_MESSAGES_DX98 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_CLEAR_ERROR_MESSAGES_DX98 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_DETAILED_CONTEXT_SENSITIVE_Z1RT 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_DETAILED_CONTEXT_SENSITIVE_Z1RT 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_INTERFACE_LOGGING_TRACKING_LRSN 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_INTERFACE_LOGGING_TRACKING_LRSN 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_PRINTABLE_VERSIONS_LONG_1FWA 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_PRINTABLE_VERSIONS_LONG_1FWA 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_G6KT 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_G6KT 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_SITE_MAP_SHOWING_NTJ8 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_SITE_MAP_SHOWING_NTJ8 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_PROVIDE_TEXT_EQUIVALENTS_NON_R92W 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_PROVIDE_TEXT_EQUIVALENTS_NON_R92W 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_RETRIEVE_DISPLAY_INFREQUENTLY_ACCESSED_G1KO 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_RETRIEVE_DISPLAY_INFREQUENTLY_ACCESSED_G1KO 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_RETRIEVE_DISPLAY_RECENTLY_ACCESSED_LE13 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_RETRIEVE_DISPLAY_RECENTLY_ACCESSED_LE13 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_RUN_MULTIPLE_BROWSERS_DJZO 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_RUN_MULTIPLE_BROWSERS_DJZO 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SELECT_APPROPRIATE_PAGE_LENGTHS_7UBV 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SELECT_APPROPRIATE_PAGE_LENGTHS_7UBV 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SEND_ALERTS_USERS_ACTIONS_7TC9 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SEND_ALERTS_USERS_ACTIONS_7TC9 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_L4SD 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_L4SD 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SUPPORT_FAST_TEXT_SKIMMING_4V5I 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SUPPORT_FAST_TEXT_SKIMMING_4V5I 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SUPPORT_MULTILINGUAL_INTERFACE_HD4F 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SUPPORT_MULTILINGUAL_INTERFACE_HD4F 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SUPPORT_SECURE_VIRTUAL_PRIVATE_IK45 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SUPPORT_SECURE_VIRTUAL_PRIVATE_IK45 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SYSTEM_AVAILABLE_SPECIFIED_TIMES_NGSR 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SYSTEM_AVAILABLE_SPECIFIED_TIMES_NGSR 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SYSTEM_RESTORABLE_WITHIN_SPECIFIED_FU5F 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_SYSTEM_SCALABLE_DIFFERENT_POLICE_QLYH 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_YCF1 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_UNPLANNED_DOWNTIME_EXCEED_SPECIFIED_YCF1 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_AJAX_IMPROVE_USER_2VHI 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_AJAX_IMPROVE_USER_2VHI 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_CACHE_STORING_FREQUENT_AXET 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_CACHE_STORING_FREQUENT_AXET 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_COLOR_CAREFULLY_SOLE_JFHD 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_COLOR_CAREFULLY_SOLE_JFHD 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_CONSISTENT_LAYOUT_SCHEMES_CDOT 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_CONSISTENT_LAYOUT_SCHEMES_CDOT 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_DESCRIPTIVE_LINK_LABELS_AUL7 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_DESCRIPTIVE_LINK_LABELS_AUL7 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_FAMILIAR_TERMINOLOGY_NAVIGATION_60MX 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_FAMILIAR_TERMINOLOGY_NAVIGATION_60MX 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_FRAMES_CAREFULLY_ALTERNATIVES_RWY2 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_FRAMES_CAREFULLY_ALTERNATIVES_RWY2 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_HTTPS_COMMUNICATION_PROTOCOL_X2RJ 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_HTTPS_COMMUNICATION_PROTOCOL_X2RJ 的边界测试用例
-
-### [MAJOR] 约束 CON_FUNC_USE_WHITE_SPACE_CAREFULLY_4N60 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_FUNC_USE_WHITE_SPACE_CAREFULLY_4N60 的边界测试用例
-
-### [MAJOR] 约束 CON_PERF_DESIGN_SATISFACTORY_PERFORMANCE_LOW_2WDG 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_PERF_DESIGN_SATISFACTORY_PERFORMANCE_LOW_2WDG 的边界测试用例
-
-### [MAJOR] 约束 CON_PERF_PROVIDE_ADEQUATE_RESPONSE_TIMES_AIKP 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_PERF_PROVIDE_ADEQUATE_RESPONSE_TIMES_AIKP 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_ALLOW_LIMITING_CASE_ACCESS_O7KY 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_ALLOW_LIMITING_CASE_ACCESS_O7KY 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_AUDIT_TRAILS_CAPTURE_CASE_XRR2 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_AUDIT_TRAILS_CAPTURE_CASE_XRR2 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_AUTOMATICALLY_TRACK_EVENTS_STORE_421Z 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_AUTOMATICALLY_TRACK_EVENTS_STORE_421Z 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_BUILD_COMMON_USER_ACCESS_ANXR 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_BUILD_COMMON_USER_ACCESS_ANXR 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_DESIGN_BROWSER_BASED_ACCESS_SW9Y 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_DESIGN_BROWSER_BASED_ACCESS_SW9Y 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_ENSURE_AUDIT_TRAIL_DATA_A7DX 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_ENSURE_AUDIT_TRAIL_DATA_A7DX 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_EXTENSIBLE_PROVIDE_ACCESS_PDAS_QR0T 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_EXTENSIBLE_PROVIDE_ACCESS_PDAS_QR0T 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_LOG_UNAUTHORIZED_CASE_ACCESS_S3OR 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_LOG_UNAUTHORIZED_CASE_ACCESS_S3OR 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_MAINTAIN_AUDIT_TRAIL_LEAST_9PVS 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_MAINTAIN_AUDIT_TRAIL_LEAST_9PVS 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_CEPN 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_CEPN 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_PROVIDE_CONFIGURABLE_RESPONSES_UNAUTHORIZED_ECV4 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_PROVIDE_CONFIGURABLE_RESPONSES_UNAUTHORIZED_ECV4 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_SUPPORT_MULTI_TIER_AUTHENTICATION_JXGE 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_SUPPORT_MULTI_TIER_AUTHENTICATION_JXGE 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_SUPPORT_MULTIPLE_TYPES_REMOTE_1GD3 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_SUPPORT_MULTIPLE_TYPES_REMOTE_1GD3 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_SUPPORT_PUBLIC_ACCESS_SUBSET_3IYR 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_SUPPORT_PUBLIC_ACCESS_SUBSET_3IYR 的边界测试用例
-
-### [MAJOR] 约束 CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0 的边界测试用例
-
-### [MAJOR] 约束 CON_USAB_COMPLY_ISO_STANDARD_7NCW 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_USAB_COMPLY_ISO_STANDARD_7NCW 的边界测试用例
-
-### [MAJOR] 约束 CON_USAB_FOLLOW_USABILITY_GOV_GUIDELINES_1BGF 未被测试用例覆盖
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 添加针对约束 CON_USAB_FOLLOW_USABILITY_GOV_GUIDELINES_1BGF 的边界测试用例
-
-### [MAJOR] 活动图未覆盖业务流程: CaseRegistration, CitizenComplaintProcess, SystemConfiguration, AccessControlSetup, CaseInvestigation, CaseProsecution, DefectTracking, AuditTrailExport
-Target: diagrams-final (diagrams)
-Scope: local
-Suggestion: 活动图应至少包含以下业务流程的完整路径: CaseRegistration, CitizenComplaintProcess, SystemConfiguration, AccessControlSetup, CaseInvestigation, CaseProsecution, DefectTracking, AuditTrailExport
-
-### [MAJOR] 需求分析中缺少对C045、C071、C099约束的识别和定义
+### [MAJOR] 需求分析中缺少对C009、C010、C015、C018、C019、C021、C023、C026、C027、C028、C030等约束的识别
 Target: analyze-1 (analyze)
 Scope: upstream
-Suggestion: 补充缺失的约束定义，确保与原始需求完全匹配
+Suggestion: 补充缺失的约束定义
 
-### [MAJOR] 设计文档中未明确说明如何实现C045、C071、C099约束
+### [MAJOR] 设计文档未覆盖需求中提到的Help Module和Audit Module的详细设计
 Target: design-1 (design)
 Scope: local
-Suggestion: 在设计文档中补充对缺失约束的实现方案
+Suggestion: 补充Help Module和Audit Module的详细设计说明
 
-### [MAJOR] 测试用例未覆盖C002、C004、C005等大量约束(共78个未覆盖)
+### [MAJOR] 设计文档中提到的约束C033、C034未在需求分析的constraints中找到对应定义
+Target: design-1 (design)
+Scope: local
+Suggestion: 确保所有设计约束在需求分析中有明确定义
+
+### [MAJOR] 测试用例中引用了未在需求分析中定义的异常ID：EXC_AUDIT_TRAIL_MODIFICATION_ATTEMPT, EXC_CASE_ACCESS_RESTRICTION_VIOLATION, EXC_DATA_ENCRYPTION_FAILURE, EXC_MFA_FAILURE等
 Target: tests-1 (tests)
 Scope: local
-Suggestion: 补充测试用例以覆盖所有约束条件
+Suggestion: 确保所有测试用例引用的异常ID在需求分析中有明确定义
 
-### [MAJOR] 设计文档中的'案件起诉流程'与状态图中的状态转换不完全一致
-Target: design-1 (design)
+### [MAJOR] 测试用例未覆盖需求中的所有约束，特别是C001、C002、C003、C005、C007、C008、C009、C010、C013、C015等
+Target: tests-1 (tests)
 Scope: local
-Suggestion: 确保流程描述与状态图的状态转换逻辑完全一致
+Suggestion: 补充针对未覆盖约束的测试用例
 
-### [MAJOR] 状态图中缺少'帮助请求(HelpRequest)'状态的完整转换路径
+### [MAJOR] 类图中缺少Help和Audit相关类的定义
+Target: diagrams-class (diagrams)
+Scope: local
+Suggestion: 补充Help和Audit相关类的定义
+
+### [MAJOR] 状态图中缺少Help和Audit相关实体的状态流转
 Target: diagrams-state (diagrams)
 Scope: local
-Suggestion: 完善HelpRequest状态的状态转换定义
+Suggestion: 补充Help和Audit相关实体的状态流转
 
-### [MINOR] 实体'Property'和'Enhancement'的描述信息不够详细
-Target: analyze-1 (analyze)
-Scope: upstream
-Suggestion: 补充这些实体的详细属性和关系定义
-
-### [MINOR] 设计文档中的技术选型部分可以更具体
-Target: design-1 (design)
-Scope: local
-Suggestion: 明确具体的技术栈版本和配置细节
-
-### [MINOR] 活动图中的'案件搜索流程'子图可以进一步优化布局
+### [MAJOR] 活动图中缺少Help和Audit相关流程
 Target: diagrams-activity (diagrams)
 Scope: local
-Suggestion: 调整活动图布局以提高可读性
-
-### [MINOR] 部分测试用例的预期结果可以更具体量化
-Target: tests-1 (tests)
-Scope: local
-Suggestion: 为性能相关的测试用例添加具体的响应时间阈值
+Suggestion: 补充Help和Audit相关流程

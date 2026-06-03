@@ -1,6 +1,6 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "CCTNS V1.0 is a police case management system designed to improve crime investigation and criminal detection processes.",
+  "project_overview": "CCTNS V1.0 is a police case management system focusing on crime investigation and criminal detection, providing value to police personnel and citizens.",
   "actors": [
     {
       "actorRef": "A_ADMIN",
@@ -15,55 +15,106 @@
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "Complainant or general user of the system"
+      "description": "Complainant or public user reporting cases"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "Support staff handling system issues"
+      "description": "Support staff handling defects and enhancement requests"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "External personnel auditing system activities"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
       "description": "Staff managing case records"
-    },
-    {
-      "actorRef": "A_EXTERNAL_AUDITOR",
-      "name": "ExternalAuditor",
-      "description": "External personnel auditing system activities"
-    },
-    {
-      "actorRef": "A_SYSTEM",
-      "name": "System",
-      "description": "Automated system processes"
     }
   ],
   "functions": [
     {
       "id": "FUN_REGISTER_CASE",
       "name": "RegisterCase",
-      "description": "Register new police cases from citizen complaints",
+      "description": "Citizens can register complaints with police",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Case is created with all required fields",
+        "Citizen receives confirmation of case registration"
+      ],
       "related_actors": [
         "A_CITIZEN",
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "User must be authenticated"
+      "preconditions": "Citizen must be authenticated"
     },
     {
-      "id": "FUN_VIEW_CASE",
-      "name": "ViewCase",
-      "description": "View case details and information",
+      "id": "FUN_INVESTIGATE_CASE",
+      "name": "InvestigateCase",
+      "description": "Police initiates investigation process after complaint registration",
       "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "acceptance_criteria": [
+        "Case status is updated to 'Under Investigation'",
+        "All investigation actions are recorded in audit trail"
+      ],
+      "related_actors": [
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "high",
+      "preconditions": "Case must be registered"
+    },
+    {
+      "id": "FUN_SEARCH_CASE",
+      "name": "SearchCase",
+      "description": "Search for cases with various criteria",
+      "sub_capabilities": [
+        "Simple search",
+        "Advanced search"
+      ],
+      "acceptance_criteria": [
+        "Search results are returned within performance requirements",
+        "Only cases with proper access rights are shown"
+      ],
       "related_actors": [
         "A_POLICE_OFFICER",
-        "A_CITIZEN"
+        "A_ADMIN"
       ],
       "priority": "high",
       "preconditions": "User must have appropriate access rights"
+    },
+    {
+      "id": "FUN_TRACK_DEFECT",
+      "name": "TrackDefect",
+      "description": "Track submitted defects or enhancement requests",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "Defect status updates are visible to submitter",
+        "Help desk can generate reports on defects"
+      ],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_HELP_DESK"
+      ],
+      "priority": "medium",
+      "preconditions": "Defect must be logged first"
+    },
+    {
+      "id": "FUN_EXPORT_AUDIT_TRAIL",
+      "name": "ExportAuditTrail",
+      "description": "Export audit trails for specified cases",
+      "sub_capabilities": [],
+      "acceptance_criteria": [
+        "Audit data is exported without affecting stored trail",
+        "Exported data contains all required information"
+      ],
+      "related_actors": [
+        "A_AUDITOR",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "User must have export permissions"
     }
   ],
   "entities": [
@@ -85,70 +136,294 @@
         {
           "name": "createdDate",
           "type": "DateTime",
-          "description": "Date when case was created"
+          "description": "Date when case was registered"
+        },
+        {
+          "name": "lastAccessed",
+          "type": "DateTime",
+          "description": "Last time case was accessed"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_SUSPECT",
+          "type": "one-to-many",
+          "description": "Case can have multiple suspects"
+        },
+        {
+          "target": "E_PROPERTY",
+          "type": "one-to-many",
+          "description": "Case can involve multiple properties"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_SUSPECT",
+      "name": "Suspect",
+      "description": "Person accused in a case",
+      "attributes": [
+        {
+          "name": "suspectId",
+          "type": "String",
+          "description": "Unique identifier for the suspect"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "Full name of suspect"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "Current status in investigation"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-one",
+          "description": "Suspect belongs to a case"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_PROPERTY",
+      "name": "Property",
+      "description": "Assets involved in a case",
+      "attributes": [
+        {
+          "name": "propertyId",
+          "type": "String",
+          "description": "Unique identifier for the property"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "Description of the property"
+        },
+        {
+          "name": "value",
+          "type": "Decimal",
+          "description": "Estimated value of property"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-one",
+          "description": "Property belongs to a case"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_AUDIT_TRAIL",
+      "name": "AuditTrail",
+      "description": "Record of system activities",
+      "attributes": [
+        {
+          "name": "eventId",
+          "type": "String",
+          "description": "Unique identifier for the event"
+        },
+        {
+          "name": "eventType",
+          "type": "String",
+          "description": "Type of event (create/read/update/delete)"
+        },
+        {
+          "name": "timestamp",
+          "type": "DateTime",
+          "description": "When event occurred"
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "Who initiated the event"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-one",
+          "description": "Audit events related to cases"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_USER_PROFILE",
+      "name": "UserProfile",
+      "description": "User configuration and preferences",
+      "attributes": [
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "Unique user identifier"
+        },
+        {
+          "name": "role",
+          "type": "String",
+          "description": "User's role in system"
+        },
+        {
+          "name": "uiPreferences",
+          "type": "Object",
+          "description": "User interface customization settings"
         }
       ],
       "relationships": []
     },
     {
-      "entityRef": "E_COMPLAINT",
-      "name": "Complaint",
-      "description": "Citizen complaint information",
+      "entityRef": "E_DEFECT",
+      "name": "Defect",
+      "description": "System defect or enhancement request",
       "attributes": [
         {
-          "name": "complaintId",
+          "name": "defectId",
           "type": "String",
-          "description": "Unique identifier for the complaint"
+          "description": "Unique identifier for the defect"
         },
         {
           "name": "description",
           "type": "String",
-          "description": "Details of the complaint"
+          "description": "Details about the defect"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "Current status of the defect"
+        },
+        {
+          "name": "priority",
+          "type": "String",
+          "description": "Priority level of the defect"
         }
       ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "one-to-one",
-          "description": "Complaint leads to a case"
-        }
-      ]
+      "relationships": []
     }
   ],
   "constraints": [
     {
       "constraintRef": "C_RULE_001",
       "description": "Provide context-sensitive help for all UI actions",
-      "related_functions": [],
+      "related_functions": [
+        "FUN_REGISTER_CASE",
+        "FUN_INVESTIGATE_CASE",
+        "FUN_SEARCH_CASE"
+      ],
       "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
     },
     {
       "constraintRef": "C_RULE_002",
-      "description": "Provide interface for defect/enhancement tracking",
-      "related_functions": [],
+      "description": "Provide interface for logging defects",
+      "related_functions": [
+        "FUN_TRACK_DEFECT"
+      ],
       "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
     },
     {
-      "constraintRef": "C_RULE_004",
+      "constraintRef": "C_RULE_003",
       "description": "Maintain unalterable audit trail",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT_TRAIL"
+      ],
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+    },
+    {
+      "constraintRef": "C_RULE_004",
+      "description": "Track events automatically in audit trail",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT_TRAIL"
+      ],
+      "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them."
+    },
+    {
+      "constraintRef": "C_RULE_005",
+      "description": "Allow limiting case access to specific users/groups",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
+    },
+    {
+      "constraintRef": "C_RULE_006",
+      "description": "Only admins can set up user profiles",
       "related_functions": [],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+    },
+    {
+      "constraintRef": "C_RULE_007",
+      "description": "Simple search within 5-8 seconds",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system."
+    },
+    {
+      "constraintRef": "C_RULE_008",
+      "description": "Advanced search within 10-15 seconds",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system."
+    },
+    {
+      "constraintRef": "C_RULE_019",
+      "description": "Retrieve recently accessed cases within 5-8 seconds",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system."
+    },
+    {
+      "constraintRef": "C_RULE_020",
+      "description": "Retrieve inactive cases within 20 seconds",
+      "related_functions": [
+        "FUN_SEARCH_CASE"
+      ],
+      "source_text": "The System must be able to retrieve and display within 20 seconds the case which has not been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system."
     }
   ],
   "missingConstraintCandidates": [],
-  "exceptions": [],
+  "exceptions": [
+    {
+      "id": "X001",
+      "description": "Unauthorized access attempt",
+      "trigger": "User tries to access case without proper rights",
+      "handling": "Log attempt in audit trail, show appropriate error message"
+    },
+    {
+      "id": "X002",
+      "description": "Case not found",
+      "trigger": "Search returns no results",
+      "handling": "Inform user and suggest alternative search criteria"
+    },
+    {
+      "id": "X003",
+      "description": "System offline",
+      "trigger": "Network connection lost",
+      "handling": "Continue operation in offline mode with limited functionality"
+    }
+  ],
   "non_functional_requirements": [
     {
-      "category": "Performance",
-      "description": "Simple search within 5-8 seconds, advanced search within 10-15 seconds"
+      "category": "performance",
+      "description": "System must provide adequate response times under standard and peak conditions"
     },
     {
-      "category": "Security",
-      "description": "Unalterable audit trail with automatic capture of system activities"
+      "category": "security",
+      "description": "System must prevent SQL injection and cross-site scripting"
     },
     {
-      "category": "Usability",
-      "description": "User interface must comply with Standard ISO 9241"
+      "category": "availability",
+      "description": "System must be available during specified hours with minimal downtime"
+    },
+    {
+      "category": "usability",
+      "description": "User interfaces must comply with ISO 9241 standards"
+    },
+    {
+      "category": "scalability",
+      "description": "System must work in small and large police stations"
     }
   ],
   "business_processes": [
@@ -156,12 +431,25 @@
       "name": "CaseRegistration",
       "steps": [
         "Citizen submits complaint",
-        "Police review complaint",
-        "Case created",
-        "Case assigned"
+        "Police officer reviews complaint",
+        "Case is registered in system",
+        "Confirmation is sent to citizen"
       ],
       "actors": [
         "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ]
+    },
+    {
+      "name": "CaseInvestigation",
+      "steps": [
+        "Police officer accesses case",
+        "Evidence is collected",
+        "Suspects are identified",
+        "Case status is updated",
+        "Findings are recorded"
+      ],
+      "actors": [
         "A_POLICE_OFFICER"
       ]
     }

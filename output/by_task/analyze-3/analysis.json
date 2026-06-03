@@ -1,190 +1,216 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "警察案件跟踪系统，用于记录和管理案件调查、起诉过程，提供与法院的交互平台",
+  "project_overview": "CCTNS是一个警务案件管理系统，提供案件注册、调查、起诉、搜索等功能，并包含公民界面和系统配置模块。",
   "actors": [
-    {
-      "actorRef": "A_POLICE_OFFICER",
-      "name": "PoliceOfficer",
-      "description": "警务人员，负责案件调查和起诉"
-    },
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "管理员，负责系统配置和用户管理"
+      "description": "管理员"
+    },
+    {
+      "actorRef": "A_POLICE_OFFICER",
+      "name": "PoliceOfficer",
+      "description": "警务人员"
+    },
+    {
+      "actorRef": "A_CITIZEN",
+      "name": "Citizen",
+      "description": "公民"
+    },
+    {
+      "actorRef": "A_HELP_DESK",
+      "name": "HelpDesk",
+      "description": "帮助台"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "审计员"
+    },
+    {
+      "actorRef": "A_RECORDS_STAFF",
+      "name": "RecordsStaff",
+      "description": "记录室工作人员"
     }
   ],
   "functions": [
     {
-      "id": "FUN_PROSECUTE_CASE",
-      "name": "ProsecuteCase",
-      "description": "起诉案件，记录与法院的交互过程",
+      "id": "FUN_MANAGE_USER_PROFILE",
+      "name": "ManageUserProfile",
+      "description": "管理用户配置文件",
       "sub_capabilities": [],
-      "acceptance_criteria": [
-        "能够记录案件起诉的详细信息",
-        "能够跟踪案件在法院的进展状态"
-      ],
+      "acceptance_criteria": [],
       "related_actors": [
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "high",
-      "preconditions": "案件必须已完成调查阶段"
-    },
-    {
-      "id": "FUN_GENERATE_REPORT",
-      "name": "GenerateReport",
-      "description": "生成案件报告",
-      "sub_capabilities": [],
-      "acceptance_criteria": [
-        "能够生成案件详细报告",
-        "报告格式应符合标准要求"
-      ],
-      "related_actors": [
-        "A_POLICE_OFFICER",
         "A_ADMIN"
       ],
+      "priority": "high",
+      "preconditions": "用户必须具有管理员权限"
+    },
+    {
+      "id": "FUN_CONFIGURE_ACCESS",
+      "name": "ConfigureAccess",
+      "description": "配置访问权限",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "用户必须具有管理员权限"
+    },
+    {
+      "id": "FUN_LOG_DEFECT",
+      "name": "LogDefect",
+      "description": "记录缺陷",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ],
       "priority": "medium",
-      "preconditions": "案件必须已存在"
+      "preconditions": "用户必须登录系统"
+    },
+    {
+      "id": "FUN_TRACK_DEFECT",
+      "name": "TrackDefect",
+      "description": "跟踪缺陷",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER",
+        "A_HELP_DESK"
+      ],
+      "priority": "medium",
+      "preconditions": "缺陷必须已记录"
     }
   ],
   "entities": [
     {
-      "entityRef": "E_CASE",
-      "name": "Case",
-      "description": "案件记录",
+      "entityRef": "E_USER_PROFILE",
+      "name": "UserProfile",
+      "description": "用户配置文件",
       "attributes": [
         {
-          "name": "caseId",
+          "name": "userId",
           "type": "String",
-          "description": "案件唯一标识"
+          "description": "用户唯一标识"
+        },
+        {
+          "name": "role",
+          "type": "String",
+          "description": "用户角色"
+        },
+        {
+          "name": "preferences",
+          "type": "Object",
+          "description": "用户偏好设置"
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "entityRef": "E_DEFECT",
+      "name": "Defect",
+      "description": "缺陷",
+      "attributes": [
+        {
+          "name": "defectId",
+          "type": "String",
+          "description": "缺陷唯一标识"
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "缺陷描述"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "案件当前状态"
+          "description": "缺陷状态"
         },
         {
           "name": "createdAt",
           "type": "DateTime",
-          "description": "案件创建时间"
+          "description": "创建时间"
         }
       ],
       "relationships": [
         {
-          "target": "E_SUSPECT",
-          "type": "one-to-many",
-          "description": "案件关联的嫌疑人"
-        },
-        {
-          "target": "E_DOCUMENT",
-          "type": "one-to-many",
-          "description": "案件关联的文档"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_SUSPECT",
-      "name": "Suspect",
-      "description": "案件嫌疑人",
-      "attributes": [
-        {
-          "name": "suspectId",
-          "type": "String",
-          "description": "嫌疑人唯一标识"
-        },
-        {
-          "name": "name",
-          "type": "String",
-          "description": "嫌疑人姓名"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_CASE",
+          "target": "UserProfile",
           "type": "many-to-one",
-          "description": "嫌疑人关联的案件"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_DOCUMENT",
-      "name": "Document",
-      "description": "案件相关文档",
-      "attributes": [
-        {
-          "name": "documentId",
-          "type": "String",
-          "description": "文档唯一标识"
-        },
-        {
-          "name": "type",
-          "type": "String",
-          "description": "文档类型"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_CASE",
-          "type": "many-to-one",
-          "description": "文档关联的案件"
+          "description": "缺陷由用户创建"
         }
       ]
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_004",
-      "description": "系统必须维护不可更改的审计跟踪",
+      "constraintRef": "C_RULE_002",
+      "description": "系统必须提供用户界面用于记录应用程序的缺陷或增强请求并跟踪",
       "related_functions": [
-        "FUN_PROSECUTE_CASE",
-        "FUN_GENERATE_REPORT"
+        "FUN_LOG_DEFECT",
+        "FUN_TRACK_DEFECT"
       ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
     },
     {
-      "constraintRef": "C_RULE_010",
-      "description": "系统必须允许用户将案件访问限制为指定用户或用户组",
+      "constraintRef": "C_RULE_006",
+      "description": "系统必须仅允许管理员用户设置用户配置文件并将用户分配到组",
       "related_functions": [
-        "FUN_PROSECUTE_CASE"
+        "FUN_MANAGE_USER_PROFILE"
+      ],
+      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+    },
+    {
+      "constraintRef": "C_RULE_005",
+      "description": "系统必须允许用户将案件访问权限限制为特定用户或用户组",
+      "related_functions": [
+        "FUN_CONFIGURE_ACCESS"
       ],
       "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
-    },
-    {
-      "constraintRef": "C_RULE_011",
-      "description": "系统应提供基于角色的功能控制",
-      "related_functions": [
-        "FUN_PROSECUTE_CASE",
-        "FUN_GENERATE_REPORT"
-      ],
-      "source_text": "The system should provide for role-based control for the functionality within the system"
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [],
   "non_functional_requirements": [
     {
-      "category": "性能",
-      "description": "系统必须能够在5-8秒内执行简单搜索，在10-15秒内执行高级搜索"
+      "category": "安全",
+      "description": "系统必须使用HTTPS作为通信协议"
     },
     {
-      "category": "安全",
-      "description": "系统应防止SQL注入"
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索"
     },
     {
       "category": "可用性",
-      "description": "系统用户界面必须适合有特殊需求的用户"
+      "description": "系统必须支持多语言界面"
     }
   ],
   "business_processes": [
     {
-      "name": "案件起诉流程",
+      "name": "缺陷管理流程",
       "steps": [
-        "准备起诉材料",
-        "提交法院",
-        "记录法院反馈",
-        "更新案件状态"
+        "记录缺陷",
+        "跟踪缺陷状态",
+        "解决缺陷"
       ],
       "actors": [
-        "A_POLICE_OFFICER"
+        "A_CITIZEN",
+        "A_POLICE_OFFICER",
+        "A_HELP_DESK"
+      ]
+    },
+    {
+      "name": "用户配置流程",
+      "steps": [
+        "管理员创建用户配置文件",
+        "分配用户到组",
+        "设置访问权限"
+      ],
+      "actors": [
+        "A_ADMIN"
       ]
     }
   ],

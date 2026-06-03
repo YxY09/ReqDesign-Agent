@@ -19,6 +19,10 @@ logging:
   level: INFO
   log_dir: logs/
 
+# Orchestration configuration
+orchestration:
+  skip_evaluation: false
+
 # Benchmark configuration
 benchmark:
   entity_name_map:

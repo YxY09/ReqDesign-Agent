@@ -5,43 +5,47 @@
   "persist_status": "not_saved",
   "finished": true,
   "persisted": false,
-  "duration": 1516.57,
-  "artifact_count": 12,
+  "duration": 1102.73,
+  "artifact_count": 10,
   "artifact_counts": {
-    "analyze": 7,
+    "analyze": 5,
     "design": 1,
     "diagrams": 3,
     "tests": 1
   },
-  "decision_count": 321,
-  "review_rounds": 3,
+  "decision_count": 244,
+  "review_rounds": 4,
   "final_review_done": true,
   "final_review_passed": true,
-  "plan_task_count": 12,
+  "plan_task_count": 10,
   "plan_revision_count": 0,
   "issue_counts": {
     "severity": {
-      "major": 479,
+      "major": 110,
       "minor": 8
     },
     "scope": {
-      "local": 483,
-      "upstream": 4
+      "local": 112,
+      "upstream": 6
     },
     "target_type": {
-      "analyze": 4,
-      "design": 113,
-      "diagrams": 11,
-      "tests": 359
+      "analyze": 6,
+      "design": 46,
+      "diagrams": 13,
+      "tests": 53
     }
   },
   "budget_counters": {
+    "regenerate_count:design-1": 1,
+    "regenerate_count:diagrams-class": 1,
     "repair_count:design-1": 2,
-    "repair_count:diagrams-class": 1,
+    "repair_count:diagrams-class": 2,
     "repair_count:diagrams-state": 1,
-    "repair_count:tests-1": 2
+    "repair_count:tests-1": 3
   },
-  "failure_categories": [],
+  "failure_categories": [
+    "repair_budget_exhausted"
+  ],
   "recovered_incidents": [],
   "errors": []
 }

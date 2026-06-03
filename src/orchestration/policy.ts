@@ -105,7 +105,7 @@ export class PolicyGuard {
     if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) return false;
     if (snapshot.planReady && !snapshot.planAllCompleted) return false;
     if (snapshot.unacceptedArtifacts.length > 0) return false;
-    if (!snapshot.finalReviewCurrent) return false;
+    if (!this.budget.skipEvaluation && !snapshot.finalReviewCurrent) return false;
     if (snapshot.latestIssues.filter((issue) => issue["severity"] === "blocker").length > 0) return false;
     const finalMajorCount = snapshot.latestIssues.filter((issue) => issue["severity"] === "major").length;
     return finalMajorCount <= this.budget.maxFinalMajorIssues;
@@ -116,6 +116,7 @@ export class PolicyGuard {
   }
 
   canRunFinalReview(snapshot: OrchestratorSnapshot): boolean {
+    if (this.budget.skipEvaluation) return false;
     if (snapshot.evaluatorRunning || snapshot.runningTasks.length > 0) return false;
     if (!snapshot.hasArtifacts) return false;
     if (!snapshot.planReady) return false;
@@ -175,11 +176,13 @@ export class PolicyGuard {
     }
 
     if (snapshot.readyTasks.length > 0) return createStrategyDecision({ strategy: "advance_ready_work", reason });
-    if (this.canRunFinalReview(snapshot)) return createStrategyDecision({ strategy: "run_final_review", reason });
+    if (!this.budget.skipEvaluation && this.canRunFinalReview(snapshot)) return createStrategyDecision({ strategy: "run_final_review", reason });
 
-    const reviewPlan = this.reviewScheduler.nextScope(snapshot);
-    if (reviewPlan.hasScope && !snapshot.evaluatorRunning) {
-      return createStrategyDecision({ strategy: "run_opportunistic_review", affectedTaskIds: [...reviewPlan.scopeTaskIds], reason });
+    if (!this.budget.skipEvaluation) {
+      const reviewPlan = this.reviewScheduler.nextScope(snapshot);
+      if (reviewPlan.hasScope && !snapshot.evaluatorRunning) {
+        return createStrategyDecision({ strategy: "run_opportunistic_review", affectedTaskIds: [...reviewPlan.scopeTaskIds], reason });
+      }
     }
 
     if (snapshot.outputSaved) return createStrategyDecision({ strategy: "finish", reason });
@@ -353,7 +356,8 @@ export class DeterministicPolicy {
     // 7) 最终审查发现重大问题 —— 尝试按任务修复
     // 即使 finalReviewCurrent 为 false 也会触发：如果评估器发现了重大问题，
     // 我们应该在重新运行评估之前尝试修复。
-    if (snapshot.majorPendingTaskIds.length > 0) {
+    // 当 skipEvaluation 为 true 时跳过（无评估 → 无重大问题）。
+    if (!this.budget.skipEvaluation && snapshot.majorPendingTaskIds.length > 0) {
       const target = this._selectFinalMajorRepairTarget(snapshot);
       if (target) {
         return createStrategyDecision({
@@ -393,7 +397,8 @@ export class DeterministicPolicy {
     }
 
     // 8) 当前最终审查被拒绝，但没有安全的自动修复方案。
-    if (snapshot.finalReviewCurrent && !snapshot.finalReviewPassed) {
+    //    当 skipEvaluation 为 true 时跳过。
+    if (!this.budget.skipEvaluation && snapshot.finalReviewCurrent && !snapshot.finalReviewPassed) {
       return createStrategyDecision({
         strategy: "pause_for_user",
         reason: "final review rejected and no automatic repair target remains",
@@ -442,7 +447,8 @@ export class DeterministicPolicy {
     }
 
     // 13) 最终审查已就绪
-    if (this.guard.canRunFinalReview(snapshot)) {
+    //    当 skipEvaluation 为 true 时跳过（canRunFinalReview 始终返回 false）。
+    if (!this.budget.skipEvaluation && this.guard.canRunFinalReview(snapshot)) {
       return createStrategyDecision({
         strategy: "run_final_review",
         reason: "final full review is required",
@@ -450,13 +456,16 @@ export class DeterministicPolicy {
     }
 
     // 14) 机会性审查
-    const reviewPlan = this.reviewScheduler.nextScope(snapshot);
-    if (reviewPlan.hasScope) {
-      return createStrategyDecision({
-        strategy: "run_opportunistic_review",
-        affectedTaskIds: [...reviewPlan.scopeTaskIds],
-        reason: reviewPlan.reason,
-      });
+    //    当 skipEvaluation 为 true 时跳过。
+    if (!this.budget.skipEvaluation) {
+      const reviewPlan = this.reviewScheduler.nextScope(snapshot);
+      if (reviewPlan.hasScope) {
+        return createStrategyDecision({
+          strategy: "run_opportunistic_review",
+          affectedTaskIds: [...reviewPlan.scopeTaskIds],
+          reason: reviewPlan.reason,
+        });
+      }
     }
 
     // 15) 质量门和保存门都已通过

@@ -17,6 +17,7 @@ export interface OrchestrationConfigRaw {
   max_final_major_repair_per_task?: number;
   max_concurrent_evaluators?: number;
   min_runtime_remaining_for_new_work_seconds?: number;
+  skip_evaluation?: boolean;
 }
 
 export class OrchestrationConfig {
@@ -34,6 +35,7 @@ export class OrchestrationConfig {
   maxFinalMajorRepairPerTask = 3;
   maxConcurrentEvaluators = 2;
   minRuntimeRemainingForNewWorkSeconds = 120;
+  skipEvaluation = false;
 
   static fromRaw(raw: OrchestrationConfigRaw): OrchestrationConfig {
     const cfg = new OrchestrationConfig();
@@ -51,6 +53,7 @@ export class OrchestrationConfig {
     if (raw.max_final_major_repair_per_task !== undefined) cfg.maxFinalMajorRepairPerTask = raw.max_final_major_repair_per_task;
     if (raw.max_concurrent_evaluators !== undefined) cfg.maxConcurrentEvaluators = raw.max_concurrent_evaluators;
     if (raw.min_runtime_remaining_for_new_work_seconds !== undefined) cfg.minRuntimeRemainingForNewWorkSeconds = raw.min_runtime_remaining_for_new_work_seconds;
+    if (raw.skip_evaluation !== undefined) cfg.skipEvaluation = raw.skip_evaluation;
     return cfg;
   }
 }
@@ -79,6 +82,7 @@ export class BudgetManager {
   maxFinalMajorIssues: number;
   maxFinalMajorRepairPerTask: number;
   minRuntimeRemainingForNewWorkSeconds: number;
+  skipEvaluation: boolean;
 
   constructor(config?: OrchestrationConfig) {
     const c = config ?? new OrchestrationConfig();
@@ -96,6 +100,7 @@ export class BudgetManager {
     this.maxFinalMajorRepairPerTask = c.maxFinalMajorRepairPerTask;
     this.minRuntimeRemainingForNewWorkSeconds =
       c.minRuntimeRemainingForNewWorkSeconds;
+    this.skipEvaluation = c.skipEvaluation;
   }
 
   runtimeDeadline(startTime: number): number {

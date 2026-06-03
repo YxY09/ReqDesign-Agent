@@ -3,95 +3,89 @@ classDiagram
         -String caseId
         -String status
         -DateTime createdDate
+        -DateTime lastAccessed
         -String title
         -String description
-        -DateTime lastAccessedAt
+        -DateTime createdAt
         +register()
         +investigate()
         +prosecute()
     }
-    class Complaint {
-        -String complaintId
-        -String description
-        -String status
-        -DateTime createdAt
-        -String reportedBy
-        +submit()
-        +updateStatus()
-    }
     class Suspect {
         -String suspectId
         -String name
-        -String description
         -String status
+        -String description
         +addToCase()
         +updateStatus()
     }
-    class Evidence {
-        -String evidenceId
-        -String type
+    class Property {
+        -String propertyId
         -String description
-        -DateTime collectedAt
-        +validate()
-        +store()
-    }
-    class Document {
-        -String documentId
-        -String type
-        -String title
-        -Object content
-        +upload()
-        +encrypt()
-    }
-    class SearchResult {
-        -String searchId
-        -String query
-        -Integer resultCount
-        -DateTime executedAt
-        +filterByAccess()
-        +paginate()
-    }
-    class UserProfile {
-        -String userId
-        -String username
-        -String displayName
-        -String role
-        -Object uiSettings
-        +checkPermission()
-        +updateProfile()
-    }
-    class AccessControl {
-        -String accessId
-        -String resourceType
-        -String resourceId
-        -String permission
-        +verifyAccess()
-        +grantPermission()
+        -Decimal value
+        -String status
+        +assignToCase()
+        +updateValue()
     }
     class AuditTrail {
+        -String eventId
+        -String eventType
+        -DateTime timestamp
+        -String userId
         -String auditId
         -String action
         -String entityType
         -String entityId
-        -DateTime timestamp
-        +export()
-        +filterByDate()
+        -String details
+        +logEvent()
+        +exportEvents()
     }
-    class Configuration {
-        -String configId
-        -String key
-        -String value
-        -String scope
-        +update()
-        +getValue()
+    class UserProfile {
+        -String userId
+        -String role
+        -Object uiPreferences
+        -Object preferences
+        -String username
+        -List groups
+        -String name
+        -List groupMemberships
+        +createProfile()
+        +updatePermissions()
+    }
+    class Defect {
+        -String defectId
+        -String description
+        -String status
+        -String priority
+        -DateTime createdAt
+        -String title
+        -String reportedBy
+        -DateTime reportedAt
+        -String category
+        +logDefect()
+        +updateStatus()
+    }
+    class Document {
+        -String documentId
+        -String type
+        -Object content
+        -String title
+        -DateTime createdAt
+        -String name
+        -Long size
+        -DateTime uploadedAt
+        +upload()
+        +download()
     }
     Case "1" --> "*" Suspect : contains
-    Case "1" --> "*" Evidence : has
-    Case "1" --> "*" Document : includes
-    Complaint "1" --> "1" Case : leads to
-    UserProfile "1" --> "*" AccessControl : has
-    AccessControl "*" --> "1" Case : controls
-    Case "1" --> "*" AuditTrail : generates
+    Case "1" --> "*" Property : involves
+    Case "1" --> "*" Document : has
+    Case "1" --> "*" AuditTrail : tracks
+    UserProfile "1" --> "*" Case : assigned
     UserProfile "1" --> "*" AuditTrail : performs
-    SearchResult "*" --> "*" Case : references
-
+    UserProfile "1" --> "*" Defect : reports
+    Suspect "1" --> "1" Case : belongs_to
+    Property "1" --> "1" Case : belongs_to
+    Document "1" --> "1" Case : associated_with
+    AuditTrail "1" --> "1" Case : related_to
+    Defect "1" --> "1" UserProfile : created_by
