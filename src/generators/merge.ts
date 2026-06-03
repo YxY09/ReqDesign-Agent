@@ -16,6 +16,8 @@ import {
   canonicalizeConstraints as canonicalizeConstraintsNew,
   type ConstraintCandidate,
 } from "../shared/constraintCanonicalizer.js";
+import type { EntityRegistry } from "../shared/types.js";
+import { resolveEntityRef, normalizeRelationType } from "../shared/referenceNormalizer.js";
 
 /**
  * Convert merged constraints to ConstraintCandidate[], run the new
@@ -110,6 +112,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     artifacts: Array<{ taskId: string; content: Record<string, unknown> }>,
     requirementText: string,
     systemPrompt?: string,
+    registry?: EntityRegistry,
   ): Promise<Record<string, unknown>> {
     if (artifacts.length === 0) {
       throw createToolError("MERGE_NO_RESULTS", "没有可合并的分析结果", { recoverable: false });
@@ -129,7 +132,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     }
 
     // 程序化预合并：将所有分析结果按名称去重取并集
-    const preMerged = this.preMerge(artifacts);
+    const preMerged = this.preMerge(artifacts, registry);
     const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
 
     // 直接用 preMerge 结果（保全集），跳过 LLM merge
@@ -137,7 +140,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const merged = preMerged;
 
     // 统一补全：关系补全 + 约束补全 + 功能去重
-    await this._postProcess(merged, safeText, systemPrompt);
+    await this._postProcess(merged, safeText, systemPrompt, registry);
 
     RequirementNormalizer.normalize(merged);
     RequirementNormalizer.normalizeAgainstSource(merged, requirementText);
@@ -167,6 +170,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     merged: Record<string, unknown>,
     requirementText: string,
     systemPrompt?: string,
+    registry?: EntityRegistry,
   ): Promise<void> {
     if (!this.postProcessPromptTemplate) {
       return;
@@ -253,7 +257,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
           });
         }
       }
-      AnalyzeMerger._applyRelationshipPatches(merged, typedRelPatches);
+      AnalyzeMerger._applyRelationshipPatches(merged, typedRelPatches, registry);
 
       // 2. 应用约束补丁
       const constPatches = Array.isArray(obj.constraints) ? obj.constraints : [];
@@ -287,6 +291,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
    */
   preMerge(
     artifacts: Array<{ taskId: string; content: Record<string, unknown> }>,
+    registry?: EntityRegistry,
   ): Record<string, unknown> {
     // Collect all items from all artifacts, grouped by type
     const allActors: Record<string, unknown>[] = [];
@@ -327,7 +332,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     // --- Phase 2: Smart merge each type ---
 
     const mergedActors = AnalyzeMerger._mergeActors(allActors);
-    const mergedEntities = AnalyzeMerger._mergeEntities(allEntities);
+    const mergedEntities = AnalyzeMerger._mergeEntities(allEntities, registry);
     const mergedFunctions = AnalyzeMerger._mergeFunctions(allFunctions);
     const mergedConstraints = AnalyzeMerger._mergeByConstraintRef(allConstraints);
     const mergedExceptions = AnalyzeMerger._mergeByExceptionRef(allExceptions);
@@ -414,7 +419,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   }
 
   // --- Entities: merge by entityRef first, then by normalized name ---
-  private static _mergeEntities(items: Record<string, unknown>[]): Record<string, unknown>[] {
+  private static _mergeEntities(items: Record<string, unknown>[], registry?: EntityRegistry): Record<string, unknown>[] {
     // Phase 1: group by entityRef if present
     const refGroups = new Map<string, Record<string, unknown>[]>();
     const noRefItems: Record<string, unknown>[] = [];
@@ -440,7 +445,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
       const merged = { ...group[0] };
       for (let i = 1; i < group.length; i++) {
-        AnalyzeMerger._mergeEntityInPlace(merged, group[i]);
+        AnalyzeMerger._mergeEntityInPlace(merged, group[i], registry);
       }
       const attrs = merged.attributes as Array<Record<string, unknown>> | undefined;
       if (Array.isArray(attrs) && attrs.length > 20) {
@@ -483,7 +488,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         // Merge: longer description, attribute union, relationship union
         const merged = { ...group[0] };
         for (let i = 1; i < group.length; i++) {
-          AnalyzeMerger._mergeEntityInPlace(merged, group[i]);
+          AnalyzeMerger._mergeEntityInPlace(merged, group[i], registry);
         }
         const attrs = merged.attributes as Array<Record<string, unknown>> | undefined;
         if (Array.isArray(attrs) && attrs.length > 20) {
@@ -500,6 +505,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private static _mergeEntityInPlace(
     target: Record<string, unknown>,
     source: Record<string, unknown>,
+    registry?: EntityRegistry,
   ): void {
     // Description: keep longer
     const tDesc = String(target.description ?? "");
@@ -530,13 +536,15 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     }
     target.attributes = [...attrMap.values()];
 
-    // Relationships: union by target+type
+    // Relationships: union by normalized target+type
     const tRels = (Array.isArray(target.relationships) ? target.relationships : []) as Record<string, unknown>[];
     const sRels = (Array.isArray(source.relationships) ? source.relationships : []) as Record<string, unknown>[];
     const relKeys = new Set<string>();
     const mergedRels: Record<string, unknown>[] = [];
     for (const r of [...tRels, ...sRels]) {
-      const relKey = `${String(r.target ?? "")}|${String(r.type ?? "")}`;
+      const normalizedTarget = resolveEntityRef(String(r.target ?? ""), registry);
+      const normalizedType = normalizeRelationType(String(r.type ?? ""));
+      const relKey = `${normalizedTarget}|${normalizedType}`;
       if (!relKeys.has(relKey)) {
         relKeys.add(relKey);
         mergedRels.push(r);
@@ -1048,6 +1056,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private static _applyRelationshipPatches(
     merged: Record<string, unknown>,
     patches: Array<{ entity: string; target: string; type: string; description: string }>,
+    registry?: EntityRegistry,
   ): void {
     if (!patches || patches.length === 0) return;
 
@@ -1068,9 +1077,10 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         entity.relationships = relationships;
       }
 
-      // 去重：如果已有同名 target 的关系则跳过
+      // 去重：如果已有同名 target 的关系则跳过（使用 normalized comparison）
+      const normalizedPatchTarget = resolveEntityRef(patch.target, registry);
       const exists = relationships.some(
-        (r) => String(r.target ?? "").trim() === patch.target,
+        (r) => resolveEntityRef(String(r.target ?? "").trim(), registry) === normalizedPatchTarget,
       );
       if (exists) continue;
 
