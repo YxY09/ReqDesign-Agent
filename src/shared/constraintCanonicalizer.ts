@@ -74,7 +74,7 @@ function simpleHash(str: string): string {
 }
 
 /** Normalize text for dedup comparison: lowercase, strip punctuation, collapse whitespace. */
-function normalizeForComparison(text: string): string {
+export function normalizeForComparison(text: string): string {
   // \w only matches [A-Za-z0-9_], so CJK characters get stripped.
   // Instead, use Unicode property escapes: keep letters (\p{L}), digits, and spaces.
   return text
@@ -201,6 +201,12 @@ interface MergedGroup {
   relatedFunctionCandidates?: string[];
 }
 
+import {
+  findDuplicateCandidates,
+  applyDeterministicMerges,
+  type DedupConfig,
+} from "./semanticDeduper.js";
+
 // ---------------------------------------------------------------------------
 // Core function
 // ---------------------------------------------------------------------------
@@ -208,75 +214,96 @@ interface MergedGroup {
 export function canonicalizeConstraints(
   candidates: ConstraintCandidate[],
   existingFunctions: Array<{ id: string; displayId: string; name: string }>,
+  _opts?: { enableLlmAdjudication?: boolean },
 ): CanonicalConstraint[] {
   if (candidates.length === 0) return [];
 
-  // --- Step 1: Deduplication ---
-  // Layer 1: normalizeForComparison(sourceText) exact match
-  // Layer 2: normalizeForComparison(description) exact match
+  // --- Step 1: Deduplication via SemanticDeduper ---
+  const dedupConfig: DedupConfig<ConstraintCandidate> = {
+    items: candidates,
+    getId: (_item, index) => `c_${index}`,
+    getText: (item) => (item.description ?? "").trim(),
+    getSourceText: (item) => (item.sourceText ?? "").trim(),
+    normalize: normalizeForComparison,
+  };
+
+  const dupCandidates = findDuplicateCandidates(dedupConfig);
+  const dedupResult = applyDeterministicMerges(candidates, dupCandidates, dedupConfig);
+
+  // Convert DedupResult → MergedGroup[]
   const groups: MergedGroup[] = [];
-  const sourceTextIndex = new Map<string, number>(); // normalized sourceText → group index
-  const descIndex = new Map<string, number>();       // normalized description → group index
 
-  for (const candidate of candidates) {
-    const rawSource = (candidate.sourceText ?? "").trim();
-    const rawDesc = (candidate.description ?? "").trim();
+  // Process merged groups first
+  for (const mg of dedupResult.merged) {
+    const allItems = [...mg.survivors, ...mg.absorbed];
+    // Sort by description length descending (best survivor first)
+    allItems.sort((a, b) => (b.description ?? "").length - (a.description ?? "").length);
+    const primary = allItems[0];
 
-    const normSource = normalizeForComparison(rawSource);
-    const normDesc = normalizeForComparison(rawDesc);
+    const sourceTexts: Array<{ sourceText: string; sectionId?: string }> = [];
+    const descriptions: string[] = [];
+    const relatedFunctions: string[] = [];
 
-    let groupIdx: number | undefined;
-
-    // Layer 1: sourceText match
-    if (normSource) {
-      groupIdx = sourceTextIndex.get(normSource);
-    }
-
-    // Layer 2: description match (only if no sourceText match)
-    if (groupIdx === undefined && normDesc) {
-      groupIdx = descIndex.get(normDesc);
-    }
-
-    if (groupIdx !== undefined) {
-      // Merge into existing group
-      const group = groups[groupIdx];
-      // Collect LLM-generated description
-      if (rawDesc && !group.descriptions.includes(rawDesc)) {
-        group.descriptions.push(rawDesc);
-      }
-      // Add evidence (avoid duplicate sourceText)
+    for (const item of allItems) {
+      const rawSource = (item.sourceText ?? "").trim();
+      const rawDesc = (item.description ?? "").trim();
       const evidenceText = rawSource || rawDesc;
-      if (evidenceText && !group.sourceTexts.some((s) => s.sourceText === evidenceText)) {
-        group.sourceTexts.push({ sourceText: evidenceText, sectionId: candidate.sectionId });
-      } else if (evidenceText) {
-        // Already exists — still add if sectionId differs
-        const existing = group.sourceTexts.find((s) => s.sourceText === evidenceText);
-        if (existing && candidate.sectionId && existing.sectionId !== candidate.sectionId) {
-          group.sourceTexts.push({ sourceText: evidenceText, sectionId: candidate.sectionId });
+
+      // Add evidence (avoid duplicate sourceText, but allow different sectionId)
+      if (evidenceText) {
+        const existing = sourceTexts.find((s) => s.sourceText === evidenceText);
+        if (!existing) {
+          sourceTexts.push({ sourceText: evidenceText, sectionId: item.sectionId });
+        } else if (item.sectionId && existing.sectionId !== item.sectionId) {
+          sourceTexts.push({ sourceText: evidenceText, sectionId: item.sectionId });
         }
       }
-    } else {
-      // New group
-      groupIdx = groups.length;
-      const evidenceText = rawSource || rawDesc;
-      const sourceTexts: Array<{ sourceText: string; sectionId?: string }> = [];
-      if (evidenceText) {
-        sourceTexts.push({ sourceText: evidenceText, sectionId: candidate.sectionId });
+
+      // Collect descriptions
+      if (rawDesc && !descriptions.includes(rawDesc)) {
+        descriptions.push(rawDesc);
       }
 
-      groups.push({
-        description: rawDesc || rawSource,
-        sourceTexts,
-        descriptions: rawDesc ? [rawDesc] : [],
-        canonicalRuleEn: candidate.canonicalRuleEn,
-        candidateType: candidate.type,
-        candidateSubtype: candidate.subtype,
-        relatedFunctionCandidates: candidate.relatedFunctionCandidates,
-      });
-
-      if (normSource) sourceTextIndex.set(normSource, groupIdx);
-      if (normDesc) descIndex.set(normDesc, groupIdx);
+      // Union relatedFunctionCandidates
+      if (item.relatedFunctionCandidates) {
+        for (const fn of item.relatedFunctionCandidates) {
+          if (!relatedFunctions.includes(fn)) {
+            relatedFunctions.push(fn);
+          }
+        }
+      }
     }
+
+    groups.push({
+      description: (primary.description ?? "").trim() || (primary.sourceText ?? "").trim(),
+      sourceTexts,
+      descriptions,
+      canonicalRuleEn: primary.canonicalRuleEn,
+      candidateType: primary.type,
+      candidateSubtype: primary.subtype,
+      relatedFunctionCandidates: relatedFunctions.length > 0 ? relatedFunctions : undefined,
+    });
+  }
+
+  // Process kept items (not merged)
+  for (const item of dedupResult.kept) {
+    const rawSource = (item.sourceText ?? "").trim();
+    const rawDesc = (item.description ?? "").trim();
+    const evidenceText = rawSource || rawDesc;
+    const sourceTexts: Array<{ sourceText: string; sectionId?: string }> = [];
+    if (evidenceText) {
+      sourceTexts.push({ sourceText: evidenceText, sectionId: item.sectionId });
+    }
+
+    groups.push({
+      description: rawDesc || rawSource,
+      sourceTexts,
+      descriptions: rawDesc ? [rawDesc] : [],
+      canonicalRuleEn: item.canonicalRuleEn,
+      candidateType: item.type,
+      candidateSubtype: item.subtype,
+      relatedFunctionCandidates: item.relatedFunctionCandidates,
+    });
   }
 
   // --- Step 2: For each group, build CanonicalConstraint ---

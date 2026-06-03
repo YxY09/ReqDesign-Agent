@@ -18,6 +18,11 @@ import {
 } from "../shared/constraintCanonicalizer.js";
 import type { EntityRegistry } from "../shared/types.js";
 import { resolveEntityRef, normalizeRelationType } from "../shared/referenceNormalizer.js";
+import {
+  findDuplicateCandidates,
+  applyDeterministicMerges,
+  type DedupConfig,
+} from "../shared/semanticDeduper.js";
 
 /**
  * Convert merged constraints to ConstraintCandidate[], run the new
@@ -630,24 +635,24 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
     }
 
-    // Fallback: group by normalized source_text; items without source_text stay separate
+    // Fallback: semantic dedup for noRefItems
     if (noRefItems.length > 0) {
-      const sourceGroups = new Map<string, Record<string, unknown>[]>();
-      let uniqueCounter = 0;
-      for (const item of noRefItems) {
-        const normalized = AnalyzeMerger._normalizeForMatch(String(item.source_text ?? ""));
-        const key = normalized || `__item_${uniqueCounter++}`;
-        let group = sourceGroups.get(key);
-        if (!group) { group = []; sourceGroups.set(key, group); }
-        group.push(item);
-      }
-      for (const [_key, group] of sourceGroups) {
-        if (group.length === 1) {
-          result.push(group[0]);
-        } else {
-          group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
-          result.push(group[0]);
+      if (noRefItems.length === 1) {
+        result.push(noRefItems[0]);
+      } else {
+        const dedupConfig: DedupConfig<Record<string, unknown>> = {
+          items: noRefItems,
+          getId: (_item, index) => `noreq_c_${index}`,
+          getText: (item) => String(item.description ?? ""),
+          getSourceText: (item) => String(item.source_text ?? ""),
+          normalize: (text) => AnalyzeMerger._normalizeForMatch(text),
+        };
+        const dupCandidates = findDuplicateCandidates(dedupConfig);
+        const dedupResult = applyDeterministicMerges(noRefItems, dupCandidates, dedupConfig);
+        for (const mg of dedupResult.merged) {
+          result.push(...mg.survivors);
         }
+        result.push(...dedupResult.kept);
       }
     }
 
@@ -687,24 +692,24 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
     }
 
-    // Fallback: group by normalized source_text; items without source_text stay separate
+    // Fallback: semantic dedup for noRefItems
     if (noRefItems.length > 0) {
-      const sourceGroups = new Map<string, Record<string, unknown>[]>();
-      let uniqueCounter = 0;
-      for (const item of noRefItems) {
-        const normalized = AnalyzeMerger._normalizeForMatch(String(item.source_text ?? ""));
-        const key = normalized || `__item_${uniqueCounter++}`;
-        let group = sourceGroups.get(key);
-        if (!group) { group = []; sourceGroups.set(key, group); }
-        group.push(item);
-      }
-      for (const [_key, group] of sourceGroups) {
-        if (group.length === 1) {
-          result.push(group[0]);
-        } else {
-          group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
-          result.push(group[0]);
+      if (noRefItems.length === 1) {
+        result.push(noRefItems[0]);
+      } else {
+        const dedupConfig: DedupConfig<Record<string, unknown>> = {
+          items: noRefItems,
+          getId: (_item, index) => `noreq_e_${index}`,
+          getText: (item) => String(item.description ?? ""),
+          getSourceText: (item) => String(item.source_text ?? ""),
+          normalize: (text) => AnalyzeMerger._normalizeForMatch(text),
+        };
+        const dupCandidates = findDuplicateCandidates(dedupConfig);
+        const dedupResult = applyDeterministicMerges(noRefItems, dupCandidates, dedupConfig);
+        for (const mg of dedupResult.merged) {
+          result.push(...mg.survivors);
         }
+        result.push(...dedupResult.kept);
       }
     }
 
