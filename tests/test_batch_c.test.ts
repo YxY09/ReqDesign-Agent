@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { AnalyzeMerger } from "../src/generators/merge.js";
+import { AnalyzeMerger, canonicalizeConstraintsPipeline } from "../src/generators/merge.js";
 import { checkAnalysisQuality, type QualityCheckResult } from "../src/shared/analysisQualityGate.js";
 
 // ---------------------------------------------------------------------------
@@ -1127,6 +1127,9 @@ describe("_applyConstraintPatches prevents exception descriptions from becoming 
     // Only the original constraint should remain; "Network failure" should not be added
     expect(constraints.length).toBe(1);
     expect(constraints[0].description).toBe("Must be secure");
+    // Filtered patch should NOT appear in missingConstraintCandidates either
+    const candidates = merged.missingConstraintCandidates as Array<Record<string, unknown>> | undefined;
+    expect(candidates).toBeUndefined();
   });
 
   it("still adds constraint when description does NOT match any exception", () => {
@@ -1142,8 +1145,13 @@ describe("_applyConstraintPatches prevents exception descriptions from becoming 
     };
     (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
     const constraints = merged.constraints as Array<Record<string, unknown>>;
-    expect(constraints.length).toBe(2);
-    expect(constraints[1].description).toBe("Must respond within 200ms");
+    // Original constraints should remain unchanged
+    expect(constraints.length).toBe(1);
+    expect(constraints[0].description).toBe("Must be secure");
+    // New constraint should be routed to missingConstraintCandidates
+    const candidates = merged.missingConstraintCandidates as Array<Record<string, unknown>>;
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].description).toBe("Must respond within 200ms");
   });
 
   it("filters constraint case-insensitively against exception descriptions", () => {
@@ -1160,5 +1168,87 @@ describe("_applyConstraintPatches prevents exception descriptions from becoming 
     (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
     const constraints = merged.constraints as Array<Record<string, unknown>>;
     expect(constraints.length).toBe(0);
+    // Filtered patch should NOT appear in missingConstraintCandidates either
+    const candidates = merged.missingConstraintCandidates as Array<Record<string, unknown>> | undefined;
+    expect(candidates).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _applyConstraintPatches: exception patches routed to missingExceptionCandidates
+// ---------------------------------------------------------------------------
+
+describe("_applyConstraintPatches routes exception patches to missingExceptionCandidates", () => {
+  it("routes exception patches to missingExceptionCandidates instead of exceptions", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [],
+      exceptions: [],
+    };
+    const patches = {
+      constraints: [],
+      exceptions: [
+        { description: "Timeout exceeded" },
+        { description: "Service unavailable" },
+      ],
+    };
+    (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions.length).toBe(0);
+    const excCandidates = merged.missingExceptionCandidates as Array<Record<string, unknown>>;
+    expect(excCandidates).toHaveLength(2);
+    expect(excCandidates.map((e) => e.description)).toContain("Timeout exceeded");
+    expect(excCandidates.map((e) => e.description)).toContain("Service unavailable");
+  });
+
+  it("deduplicates exception candidates by description", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [],
+      exceptions: [],
+    };
+    const patches = {
+      constraints: [],
+      exceptions: [
+        { description: "Timeout exceeded" },
+        { description: "Timeout exceeded" },
+      ],
+    };
+    (AnalyzeMerger as any)._applyConstraintPatches(merged, patches);
+    const excCandidates = merged.missingExceptionCandidates as Array<Record<string, unknown>>;
+    expect(excCandidates).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// canonicalizeConstraintsPipeline: missingExceptionCandidates processing
+// ---------------------------------------------------------------------------
+
+describe("canonicalizeConstraintsPipeline processes missingExceptionCandidates", () => {
+  it("appends deduped exception candidates to exceptions", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [],
+      exceptions: [{ description: "Existing exception" }],
+      missingExceptionCandidates: [
+        { description: "New exception" },
+        { description: "Existing exception" }, // duplicate, should be filtered
+      ],
+    };
+    canonicalizeConstraintsPipeline(merged);
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions).toHaveLength(2);
+    expect(exceptions.map((e) => e.description)).toContain("Existing exception");
+    expect(exceptions.map((e) => e.description)).toContain("New exception");
+    // missingExceptionCandidates should be cleaned up
+    expect(merged.missingExceptionCandidates).toBeUndefined();
+  });
+
+  it("skips when no missingExceptionCandidates", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [],
+      exceptions: [{ description: "Only existing" }],
+    };
+    canonicalizeConstraintsPipeline(merged);
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions).toHaveLength(1);
+    expect(exceptions[0].description).toBe("Only existing");
   });
 });

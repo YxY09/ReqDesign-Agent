@@ -34,47 +34,70 @@ import {
 export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>): void {
   const rawConstraints = asArray(merged["constraints"]);
   const rawMissing = asArray(merged["missingConstraintCandidates"]);
-  if (!rawConstraints.length && !rawMissing.length) return;
 
-  // Convert regular constraints to ConstraintCandidate[]
-  const candidates: ConstraintCandidate[] = rawConstraints.map((c) => ({
-    description: String(c.description ?? "").trim(),
-    sourceText: String(c.source_text ?? "").trim(),
-    sectionId: c.sectionId as string | undefined,
-    relatedFunctionCandidates: Array.isArray(c.related_functions)
-      ? (c.related_functions as unknown[]).map((r) => String(r))
-      : undefined,
-  }));
+  // --- Handle constraints ---
+  if (rawConstraints.length || rawMissing.length) {
+    // Convert regular constraints to ConstraintCandidate[]
+    const candidates: ConstraintCandidate[] = rawConstraints.map((c) => ({
+      description: String(c.description ?? "").trim(),
+      sourceText: String(c.source_text ?? "").trim(),
+      sectionId: c.sectionId as string | undefined,
+      relatedFunctionCandidates: Array.isArray(c.related_functions)
+        ? (c.related_functions as unknown[]).map((r) => String(r))
+        : undefined,
+    }));
 
-  // Convert missingConstraintCandidates to ConstraintCandidate[] and append
-  const missingCandidates: ConstraintCandidate[] = rawMissing.map((c) => ({
-    description: String(c.description ?? "").trim(),
-    sourceText: String(c.source_text ?? c.sourceText ?? "").trim(),
-    sectionId: c.sectionId as string | undefined,
-    relatedFunctionCandidates: Array.isArray(c.related_functions)
-      ? (c.related_functions as unknown[]).map((r) => String(r))
-      : undefined,
-  }));
-  candidates.push(...missingCandidates);
+    // Convert missingConstraintCandidates to ConstraintCandidate[] and append
+    const missingCandidates: ConstraintCandidate[] = rawMissing.map((c) => ({
+      description: String(c.description ?? "").trim(),
+      sourceText: String(c.source_text ?? c.sourceText ?? "").trim(),
+      sectionId: c.sectionId as string | undefined,
+      relatedFunctionCandidates: Array.isArray(c.related_functions)
+        ? (c.related_functions as unknown[]).map((r) => String(r))
+        : undefined,
+    }));
+    candidates.push(...missingCandidates);
 
-  // Get functions for linking (already canonical IDs after canonicalizeAndLink)
-  const rawFunctions = asArray(merged["functions"]);
-  const funcInputs = rawFunctions.map((f) => ({
-    id: String(f.id ?? ""),
-    displayId: String(f.displayId ?? ""),
-    name: String(f.name ?? ""),
-  }));
+    // Get functions for linking (already canonical IDs after canonicalizeAndLink)
+    const rawFunctions = asArray(merged["functions"]);
+    const funcInputs = rawFunctions.map((f) => ({
+      id: String(f.id ?? ""),
+      displayId: String(f.displayId ?? ""),
+      name: String(f.name ?? ""),
+    }));
 
-  const canonical = canonicalizeConstraintsNew(candidates, funcInputs);
+    const canonical = canonicalizeConstraintsNew(candidates, funcInputs);
 
-  // Add compatibility fields for downstream consumers (quality gate, resolveReferences, etc.)
-  for (const c of canonical) {
-    ((c as unknown) as Record<string, unknown>).id = c.canonicalId;
-    ((c as unknown) as Record<string, unknown>).source_text = c.sourceText;
-    ((c as unknown) as Record<string, unknown>).description = c.descriptionZh;
+    // Add compatibility fields for downstream consumers (quality gate, resolveReferences, etc.)
+    for (const c of canonical) {
+      ((c as unknown) as Record<string, unknown>).id = c.canonicalId;
+      ((c as unknown) as Record<string, unknown>).source_text = c.sourceText;
+      ((c as unknown) as Record<string, unknown>).description = c.descriptionZh;
+    }
+
+    merged["constraints"] = canonical;
+    // Clean up consumed candidates
+    delete merged["missingConstraintCandidates"];
   }
 
-  merged["constraints"] = canonical;
+  // --- Handle missingExceptionCandidates ---
+  // Dedup against existing exceptions and append survivors.
+  const rawExcCandidates = asArray(merged["missingExceptionCandidates"]);
+  if (rawExcCandidates.length > 0) {
+    const existingExceptions = asArray(merged["exceptions"]);
+    const existingExcDescs = new Set(
+      existingExceptions.map((e) => String(e.description ?? "").trim().toLowerCase()),
+    );
+    for (const candidate of rawExcCandidates) {
+      const desc = String(candidate.description ?? "").trim();
+      if (desc && !existingExcDescs.has(desc.toLowerCase())) {
+        existingExcDescs.add(desc.toLowerCase());
+        existingExceptions.push(candidate);
+      }
+    }
+    merged["exceptions"] = existingExceptions;
+    delete merged["missingExceptionCandidates"];
+  }
 }
 
 /** Coerce unknown to Record array. */
@@ -309,6 +332,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const allProposedEntities: Record<string, unknown>[] = [];
     const allProposedFunctions: Record<string, unknown>[] = [];
     const allMissingConstraintCandidates: Record<string, unknown>[] = [];
+    const allMissingExceptionCandidates: Record<string, unknown>[] = [];
     let projectName = "";
     let projectOverview = "";
 
@@ -332,6 +356,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       for (const item of (c.proposeNewEntities as Array<Record<string, unknown>>) ?? []) allProposedEntities.push(item);
       for (const item of (c.proposeNewFunctions as Array<Record<string, unknown>>) ?? []) allProposedFunctions.push(item);
       for (const item of (c.missingConstraintCandidates as Array<Record<string, unknown>>) ?? []) allMissingConstraintCandidates.push(item);
+      for (const item of (c.missingExceptionCandidates as Array<Record<string, unknown>>) ?? []) allMissingExceptionCandidates.push(item);
     }
 
     // --- Phase 2: Smart merge each type ---
@@ -350,6 +375,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     // Collect missing constraint candidates, dedup by description
     const missingConstraintCandidates = AnalyzeMerger._dedupByDescription(allMissingConstraintCandidates);
+    // Collect missing exception candidates, dedup by description
+    const missingExceptionCandidates = AnalyzeMerger._dedupByDescription(allMissingExceptionCandidates);
 
     return {
       project_name: projectName,
@@ -364,6 +391,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       proposeNewEntities: proposedEntities,
       proposeNewFunctions: proposedFunctions,
       missingConstraintCandidates,
+      missingExceptionCandidates,
     };
   }
 
@@ -1003,23 +1031,19 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   ): void {
     if (!patches) return;
 
-    // 追加 constraints
+    // Route constraint patches to missingConstraintCandidates (NOT directly to merged.constraints).
+    // This ensures all items go through canonicalizeConstraintsPipeline → SemanticDeduper.
     if (patches.constraints && patches.constraints.length > 0) {
-      let mergedConstraints = merged.constraints as Array<Record<string, unknown>> | undefined;
-      if (!mergedConstraints) {
-        mergedConstraints = [];
-        merged.constraints = mergedConstraints;
-      }
       const existingDescs = new Set(
-        mergedConstraints.map((c) => String(c.description ?? "").trim()),
+        asArray(merged["missingConstraintCandidates"]).map((c) => String(c.description ?? "").trim()),
       );
-      // Bug fix: also check against exception descriptions to prevent
-      // postProcess LLM from converting exceptions into duplicate constraints
+      // Also filter: don't add constraints whose description matches an existing exception
       const exceptionDescs = new Set(
         asArray(merged["exceptions"]).map((e) =>
           String(e.description ?? e.text ?? "").trim().toLowerCase(),
         ),
       );
+      const accepted: Array<Record<string, unknown>> = [];
       for (const c of patches.constraints) {
         const desc = String(c.description ?? "").trim();
         if (desc && !existingDescs.has(desc)) {
@@ -1029,27 +1053,34 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
           // Skip if description matches an existing exception description (case-insensitive)
           if (exceptionDescs.has(desc.toLowerCase())) continue;
           existingDescs.add(desc);
-          mergedConstraints.push(c);
+          accepted.push(c);
         }
+      }
+      if (accepted.length > 0) {
+        const candidates = asArray(merged["missingConstraintCandidates"]);
+        candidates.push(...accepted);
+        merged["missingConstraintCandidates"] = candidates;
       }
     }
 
-    // 追加 exceptions
+    // Route exception patches to missingExceptionCandidates (NOT directly to merged.exceptions).
+    // This ensures all items go through dedup before being merged.
     if (patches.exceptions && patches.exceptions.length > 0) {
-      let mergedExceptions = merged.exceptions as Array<Record<string, unknown>> | undefined;
-      if (!mergedExceptions) {
-        mergedExceptions = [];
-        merged.exceptions = mergedExceptions;
-      }
       const existingDescs = new Set(
-        mergedExceptions.map((e) => String(e.description ?? "").trim()),
+        asArray(merged["missingExceptionCandidates"]).map((e) => String(e.description ?? "").trim()),
       );
+      const accepted: Array<Record<string, unknown>> = [];
       for (const e of patches.exceptions) {
         const desc = String(e.description ?? "").trim();
         if (desc && !existingDescs.has(desc)) {
           existingDescs.add(desc);
-          mergedExceptions.push(e);
+          accepted.push(e);
         }
+      }
+      if (accepted.length > 0) {
+        const excCandidates = asArray(merged["missingExceptionCandidates"]);
+        excCandidates.push(...accepted);
+        merged["missingExceptionCandidates"] = excCandidates;
       }
     }
   }
