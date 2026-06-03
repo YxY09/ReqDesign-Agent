@@ -2,6 +2,116 @@ import { describe, it, expect, vi } from "vitest";
 import { TestCaseGenerator } from "../src/generators/tests.js";
 
 describe("TestCaseGenerator.validateTestCases", () => {
+  it("normalizes structured test case IDs generated from requirement IDs", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-F010-001",
+          title: "帮助功能正常测试",
+          type: "正常",
+          target: "F010 帮助功能",
+          preconditions: "用户已登录",
+          steps: ["打开帮助"],
+          expected_result: "显示帮助内容",
+          priority: "P1",
+        },
+        {
+          id: "TC-X002-001",
+          title: "权限异常测试",
+          type: "异常",
+          target: "X002 权限不足",
+          preconditions: "用户权限不足",
+          steps: ["访问受限资源"],
+          expected_result: "触发 X002",
+          priority: "P0",
+        },
+        {
+          id: "TC-CON-001",
+          title: "审计约束测试",
+          type: "边界",
+          target: "C001 审计约束",
+          preconditions: "审计模块启用",
+          steps: ["修改审计日志"],
+          expected_result: "C001 阻止篡改",
+          priority: "P0",
+        },
+      ],
+    });
+
+    const normalized = TestCaseGenerator.normalizeStructuredTestCaseIds(testCases);
+    expect(normalized).not.toBeNull();
+    const parsed = JSON.parse(normalized!);
+    expect(parsed.test_cases.map((tc: Record<string, unknown>) => tc.id)).toEqual([
+      "TC-N-001",
+      "TC-E-001",
+      "TC-B-001",
+    ]);
+
+    const warnings = TestCaseGenerator.validateTestCases(normalized!, {
+      functions: [{ id: "F010", name: "Help" }],
+      exceptions: [{ id: "X002", description: "Denied" }],
+      constraints: [{ id: "C001", description: "Audit cannot be altered" }],
+    });
+    expect(warnings.some((warning) => warning.includes("编号不合法"))).toBe(false);
+  });
+
+  it("normalizes structured target display/canonical pairs to requirement IDs", () => {
+    const req = {
+      functions: [
+        { id: "FUN_VIEW_REPORTS", displayId: "F010", name: "ViewReports" },
+      ],
+      exceptions: [
+        { id: "EXC_UNAUTHORIZED_ACCESS_ATTEMPT", displayId: "X010", description: "Unauthorized access attempt" },
+      ],
+      constraints: [
+        { id: "CON_FUNC_IMPLEMENT_SOA_MODULAR_DESIGN_P598", displayId: "C008", description: "Implement SOA with modular design" },
+        { id: "CON_FUNC_SYSTEM_SCALABLE_5TAK", displayId: "C019", description: "System must be scalable" },
+      ],
+    };
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-B-011",
+          title: "SOA modular design verification",
+          type: "边界",
+          target: "C008 | CON_ARC_SOA_MODULAR_DESIGN_9J2F",
+          preconditions: "System is deployed",
+          steps: ["Verify modular service boundary"],
+          expected_result: "C008 is satisfied",
+          priority: "P1",
+        },
+        {
+          id: "TC-E-011",
+          title: "Context help unavailable for new feature",
+          type: "异常",
+          target: "X010 | EXC_CONTEXT_HELP_UNAVAILABLE, C019 | CON_FUNC_CONTEXT_SENSITIVE_HELP_AVAILABLE_3K7P",
+          preconditions: "User is logged in",
+          steps: ["Trigger X010"],
+          expected_result: "System blocks unauthorized access",
+          priority: "P1",
+        },
+        {
+          id: "TC-N-012",
+          title: "User successfully accesses context-sensitive help",
+          type: "正常",
+          target: "F011 | FUN_ACCESS_HELP",
+          preconditions: "User is logged in",
+          steps: ["Open help panel"],
+          expected_result: "Help content is displayed",
+          priority: "P2",
+        },
+      ],
+    });
+
+    const normalized = TestCaseGenerator.normalizeStructuredTestCases(testCases, req);
+    expect(normalized).not.toBeNull();
+    const parsed = JSON.parse(normalized!);
+    expect(parsed.test_cases[0].target).toBe("C008 | CON_FUNC_IMPLEMENT_SOA_MODULAR_DESIGN_P598");
+    expect(parsed.test_cases[1].target).toBe("X010 | EXC_UNAUTHORIZED_ACCESS_ATTEMPT, C019 | CON_FUNC_SYSTEM_SCALABLE_5TAK");
+    expect(parsed.test_cases[2].target).toBe("F010 | FUN_VIEW_REPORTS");
+    expect(TestCaseGenerator.validateTestCases(normalized!, req)).toEqual([]);
+  });
+
   it("accepts structured JSON test_cases arrays", () => {
     const testCases = JSON.stringify({
       test_cases: [
@@ -343,5 +453,146 @@ describe("TestCaseGenerator.validateStructuredTestCases — Bug A: target triple
     // X999 and EXC_NONEXISTENT are not defined in req — they must be flagged as unknown
     expect(warnings.some((w) => w.includes("X999"))).toBe(true);
     expect(warnings.some((w) => w.includes("EXC_NONEXISTENT"))).toBe(true);
+  });
+
+  it("does not treat browser names or XSS text as IDs", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-N-001",
+          title: "Normal browser use",
+          type: "正常",
+          target: "C001 | CON_BROWSER_COMPAT",
+          preconditions: "Chrome, Firefox, and Edge are installed",
+          steps: ["Open the app in Chrome", "Repeat in Firefox and Edge", "Try an XSS payload as text"],
+          expected_result: "All browsers work and XSS text is escaped",
+          priority: "P1",
+        },
+        {
+          id: "TC-E-001",
+          title: "Browser failure",
+          type: "异常",
+          target: "C001 | CON_BROWSER_COMPAT",
+          preconditions: "Unsupported browser",
+          steps: ["Open the app"],
+          expected_result: "A supported-browser message is shown",
+          priority: "P2",
+        },
+        {
+          id: "TC-B-001",
+          title: "Browser boundary",
+          type: "边界",
+          target: "C001 | CON_BROWSER_COMPAT",
+          preconditions: "Multiple browser versions",
+          steps: ["Test oldest supported version"],
+          expected_result: "Layout remains usable",
+          priority: "P1",
+        },
+      ],
+    });
+    const req = {
+      functions: [],
+      exceptions: [],
+      constraints: [{ displayId: "C001", id: "CON_BROWSER_COMPAT", description: "Browser compatibility" }],
+    };
+
+    const warnings = TestCaseGenerator.validateTestCases(testCases, req);
+
+    expect(warnings.some((w) => /Chrome|Firefox|Edge|XSS/.test(w))).toBe(false);
+  });
+
+  it("detects duplicate structured test case IDs", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-N-001",
+          title: "First",
+          type: "正常",
+          target: "C001 | CON_BROWSER_COMPAT",
+          preconditions: "Ready",
+          steps: ["Run"],
+          expected_result: "Pass",
+          priority: "P1",
+        },
+        {
+          id: "TC-N-001",
+          title: "Duplicate",
+          type: "异常",
+          target: "C001 | CON_BROWSER_COMPAT",
+          preconditions: "Ready",
+          steps: ["Run"],
+          expected_result: "Pass",
+          priority: "P1",
+        },
+        {
+          id: "TC-B-001",
+          title: "Boundary",
+          type: "边界",
+          target: "C001 | CON_BROWSER_COMPAT",
+          preconditions: "Ready",
+          steps: ["Run"],
+          expected_result: "Pass",
+          priority: "P1",
+        },
+      ],
+    });
+    const req = {
+      functions: [],
+      exceptions: [],
+      constraints: [{ displayId: "C001", id: "CON_BROWSER_COMPAT", description: "Browser compatibility" }],
+    };
+
+    const warnings = TestCaseGenerator.validateTestCases(testCases, req);
+
+    expect(warnings).toContain("测试用例编号重复: TC-N-001");
+  });
+
+  it("detects mismatched display/canonical target ID pairs", () => {
+    const testCases = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-N-001",
+          title: "Normal",
+          type: "正常",
+          target: "X001 | EXC_B",
+          preconditions: "Ready",
+          steps: ["Run"],
+          expected_result: "Pass",
+          priority: "P1",
+        },
+        {
+          id: "TC-E-001",
+          title: "Exception",
+          type: "异常",
+          target: "X001 | EXC_B",
+          preconditions: "Ready",
+          steps: ["Run"],
+          expected_result: "Pass",
+          priority: "P1",
+        },
+        {
+          id: "TC-B-001",
+          title: "Boundary",
+          type: "边界",
+          target: "X002 | EXC_B",
+          preconditions: "Ready",
+          steps: ["Run"],
+          expected_result: "Pass",
+          priority: "P1",
+        },
+      ],
+    });
+    const req = {
+      functions: [],
+      constraints: [],
+      exceptions: [
+        { displayId: "X001", id: "EXC_A", description: "A" },
+        { displayId: "X002", id: "EXC_B", description: "B" },
+      ],
+    };
+
+    const warnings = TestCaseGenerator.validateTestCases(testCases, req);
+
+    expect(warnings.some((w) => w.includes("target ID 配对不一致") && w.includes("X001"))).toBe(true);
   });
 });

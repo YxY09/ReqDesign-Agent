@@ -1,21 +1,34 @@
 /**
  * TestCaseGenerator — 正常/异常/边界测试用例生成。
+ *
+ * 使用 task-first 架构：
+ *   Phase 1: buildTestPlan (程序化规划)
+ *   Phase 2: grouped LLM calls (按模块分组生成)
+ *   Phase 3: quality validation (程序化质量校验)
  */
 
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
+import { RequirementIndex } from "../shared/requirementIndex.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
+import { buildTestPlan, groupByModule, formatTaskGroupForPrompt } from "./testPlanBuilder.js";
+import { validateTestCases as validateTestQuality } from "./testQualityValidator.js";
 
 export class TestCaseGenerator extends BaseGenerator<string> {
   private promptTemplate: string;
+  private taskPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
     this.promptTemplate = loadPrompt(
       "test_case.md",
       "请根据以下需求和设计生成测试用例：\n\n{requirement_json}\n\n{design_text}",
+    );
+    this.taskPromptTemplate = loadPrompt(
+      "test_case_task.md",
+      "请根据以下测试任务生成测试用例：\n\n{test_tasks}\n\n{design_text}",
     );
   }
 
@@ -33,6 +46,79 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     }
     designText = designText || "";
 
+    // --- Task-first architecture ---
+
+    // Phase 1: Programmatic test plan
+    const testPlan = buildTestPlan(requirementJson);
+    if (testPlan.length === 0) {
+      // No coverage targets — fall back to single-shot
+      return this.generateSingleShot(requirementJson, designText, systemPrompt);
+    }
+
+    // Phase 2: Group tasks and generate with LLM per group
+    const groups = groupByModule(testPlan);
+    const allRawResults: string[] = [];
+
+    let safeDesign = this.sanitizePlaceholder(designText, "requirement_json");
+    safeDesign = this.sanitizePlaceholder(safeDesign, "design_text");
+    safeDesign = this.sanitizePlaceholder(safeDesign, "test_tasks");
+
+    for (const group of groups) {
+      const taskText = formatTaskGroupForPrompt(group);
+      let taskPrompt = this.taskPromptTemplate.replace(/\{test_tasks\}/g, taskText);
+      taskPrompt = taskPrompt.replace(
+        /\{design_text\}/g,
+        `${TestCaseGenerator.buildTestContract(requirementJson)}\n\n${safeDesign}`,
+      );
+
+      const result = await this.llm.generateText(taskPrompt, systemPrompt ?? "");
+      allRawResults.push(result);
+    }
+
+    // Merge all group results into a single test_cases array
+    const allTestCases = TestCaseGenerator.mergeGroupResults(allRawResults);
+
+    if (allTestCases.length === 0) {
+      // All groups failed to parse — fall back to single-shot
+      return this.generateSingleShot(requirementJson, designText, systemPrompt);
+    }
+
+    // Phase 3: Quality validation
+    const issues = validateTestQuality(allTestCases, requirementJson);
+    const rejectedIds = new Set(
+      issues.filter((i) => i.severity === "reject").map((i) => i.testId),
+    );
+    const goodCases = allTestCases.filter(
+      (tc) => !rejectedIds.has(String(tc.id ?? "").trim()),
+    );
+
+    // Log quality summary
+    if (issues.length > 0) {
+      const rejectCount = issues.filter((i) => i.severity === "reject").length;
+      const warnCount = issues.filter((i) => i.severity === "warning").length;
+      console.warn(
+        `[TestCaseGenerator] Quality validation: ${goodCases.length} passed, ${rejectCount} rejected, ${warnCount} warnings`,
+      );
+    }
+
+    // If all cases were rejected, fall back to single-shot as safety net
+    if (goodCases.length === 0) {
+      console.warn("[TestCaseGenerator] All test cases rejected by quality validator, falling back to single-shot generation");
+      return this.generateSingleShot(requirementJson, designText, systemPrompt);
+    }
+
+    const mergedJson = JSON.stringify({ test_cases: goodCases }, null, 2);
+    return TestCaseGenerator.normalizeStructuredTestCases(mergedJson, requirementJson) ?? mergedJson;
+  }
+
+  /**
+   * Fallback single-shot generation using the original prompt template.
+   */
+  private async generateSingleShot(
+    requirementJson: Record<string, unknown>,
+    designText: string,
+    systemPrompt?: string,
+  ): Promise<string> {
     let reqStr = JSON.stringify(minimizeForPrompt(requirementJson), null, 2);
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");
     let safeDesign = this.sanitizePlaceholder(designText, "requirement_json");
@@ -44,7 +130,23 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     );
 
     const result = await this.llm.generateText(prompt, systemPrompt ?? "");
-    return result;
+    return TestCaseGenerator.normalizeStructuredTestCases(result, requirementJson) ?? result;
+  }
+
+  /**
+   * Merge raw LLM results from multiple groups into a single test_cases array.
+   */
+  private static mergeGroupResults(rawResults: string[]): Array<Record<string, unknown>> {
+    const allCases: Array<Record<string, unknown>> = [];
+    for (const raw of rawResults) {
+      const normalized = TestCaseGenerator.normalizeStructuredTestCaseIds(raw);
+      const text = normalized ?? raw;
+      const parsed = TestCaseGenerator.parseStructuredTestCases(text);
+      if (parsed) {
+        allCases.push(...parsed);
+      }
+    }
+    return allCases;
   }
 
   static buildTestContract(requirementJson: Record<string, unknown>): string {
@@ -221,14 +323,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
   }
 
   static parseStructuredTestCases(testCases: string): Array<Record<string, unknown>> | null {
-    let text = testCases.trim();
-    if (text.startsWith("```")) {
-      const firstNewline = text.indexOf("\n");
-      const lastFence = text.lastIndexOf("```");
-      if (firstNewline >= 0 && lastFence > firstNewline) {
-        text = text.slice(firstNewline + 1, lastFence).trim();
-      }
-    }
+    const text = TestCaseGenerator.stripStructuredJsonText(testCases);
     if (!text.startsWith("{") && !text.startsWith("[")) return null;
     try {
       const parsed = JSON.parse(text) as unknown;
@@ -249,6 +344,128 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       return null;
     }
     return null;
+  }
+
+  static normalizeStructuredTestCaseIds(testCases: string): string | null {
+    const text = TestCaseGenerator.stripStructuredJsonText(testCases);
+    if (!text.startsWith("{") && !text.startsWith("[")) return null;
+
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      const root = Array.isArray(parsed)
+        ? { test_cases: parsed }
+        : typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+          ? { ...(parsed as Record<string, unknown>) }
+          : null;
+      if (!root || !Array.isArray(root.test_cases)) return null;
+
+      const cases = root.test_cases.filter((item): item is Record<string, unknown> =>
+        typeof item === "object" && item !== null && !Array.isArray(item),
+      );
+      const maxByPrefix: Record<string, number> = { N: 0, E: 0, B: 0 };
+      for (const tc of cases) {
+        const match = String(tc.id ?? "").trim().match(/^TC-([NEB])-(\d{3,})$/);
+        if (!match) continue;
+        const prefix = match[1];
+        const value = Number.parseInt(match[2], 10);
+        if (Number.isFinite(value)) {
+          maxByPrefix[prefix] = Math.max(maxByPrefix[prefix] ?? 0, value);
+        }
+      }
+
+      const used = new Set<string>();
+      for (const tc of cases) {
+        const currentId = String(tc.id ?? "").trim();
+        if (/^TC-[NEB]-\d{3,}$/.test(currentId) && !used.has(currentId)) {
+          used.add(currentId);
+          continue;
+        }
+
+        const prefix = TestCaseGenerator.testIdPrefixForCase(tc);
+        let next = (maxByPrefix[prefix] ?? 0) + 1;
+        let id = `TC-${prefix}-${String(next).padStart(3, "0")}`;
+        while (used.has(id)) {
+          next += 1;
+          id = `TC-${prefix}-${String(next).padStart(3, "0")}`;
+        }
+        maxByPrefix[prefix] = next;
+        tc.id = id;
+        used.add(id);
+      }
+
+      root.test_cases = cases;
+      return JSON.stringify(root, null, 2);
+    } catch {
+      return null;
+    }
+  }
+
+  static normalizeStructuredTestCases(
+    testCases: string,
+    requirementJson?: Record<string, unknown>,
+  ): string | null {
+    const normalizedIds = TestCaseGenerator.normalizeStructuredTestCaseIds(testCases);
+    if (!requirementJson) return normalizedIds;
+
+    const text = normalizedIds ?? TestCaseGenerator.stripStructuredJsonText(testCases);
+    if (!text.startsWith("{") && !text.startsWith("[")) return normalizedIds;
+
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      const root = Array.isArray(parsed)
+        ? { test_cases: parsed }
+        : typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+          ? { ...(parsed as Record<string, unknown>) }
+          : null;
+      if (!root || !Array.isArray(root.test_cases)) return normalizedIds;
+
+      const contract = RequirementIndex.fromRequirementJson(requirementJson);
+      const cases = root.test_cases.filter((item): item is Record<string, unknown> =>
+        typeof item === "object" && item !== null && !Array.isArray(item),
+      );
+      for (const tc of cases) {
+        tc.target = contract.normalizeTargetReferences(
+          String(tc.target ?? ""),
+          tc,
+        );
+        for (const field of ["preconditions", "expected_result"]) {
+          if (typeof tc[field] === "string") {
+            tc[field] = contract.removeUnknownRefs(String(tc[field]));
+          }
+        }
+        if (Array.isArray(tc.steps)) {
+          tc.steps = tc.steps.map((step) =>
+            contract.removeUnknownRefs(String(step)),
+          );
+        }
+      }
+      root.test_cases = cases;
+      return JSON.stringify(root, null, 2);
+    } catch {
+      return normalizedIds;
+    }
+  }
+
+  private static stripStructuredJsonText(testCases: string): string {
+    let text = testCases.trim();
+    if (text.startsWith("```")) {
+      const firstNewline = text.indexOf("\n");
+      const lastFence = text.lastIndexOf("```");
+      if (firstNewline >= 0 && lastFence > firstNewline) {
+        text = text.slice(firstNewline + 1, lastFence).trim();
+      }
+    }
+    return text;
+  }
+
+  private static testIdPrefixForCase(testCase: Record<string, unknown>): "N" | "E" | "B" {
+    const type = String(testCase.type ?? "").trim();
+    if (type === "异常") return "E";
+    if (type === "边界") return "B";
+    const currentId = String(testCase.id ?? "").trim();
+    const match = currentId.match(/^TC-([NEB])-/);
+    if (match?.[1] === "E" || match?.[1] === "B") return match[1];
+    return "N";
   }
 
   static renderStructuredTestCasesMarkdown(testCases: string): string {
@@ -284,8 +501,15 @@ export class TestCaseGenerator extends BaseGenerator<string> {
 
     const text = JSON.stringify(cases);
     const requiredFields = ["id", "title", "type", "target", "preconditions", "steps", "expected_result", "priority"];
+    const seenCaseIds = new Set<string>();
     for (const tc of cases) {
       const id = String(tc.id ?? "").trim();
+      if (id) {
+        if (seenCaseIds.has(id)) {
+          warnings.push(`测试用例编号重复: ${id}`);
+        }
+        seenCaseIds.add(id);
+      }
       for (const field of requiredFields) {
         if (!(field in tc) || tc[field] === null || tc[field] === "") {
           warnings.push(`测试用例 ${id || "unknown"} 缺少字段: ${field}`);
@@ -311,53 +535,11 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     if (!cases.some((tc) => String(tc.type ?? "") === "异常")) warnings.push("缺少异常场景测试");
     if (!cases.some((tc) => String(tc.type ?? "") === "边界")) warnings.push("缺少边界场景测试");
 
-    const collectIds = (items: unknown): string[] => {
-      if (!Array.isArray(items)) return [];
-      return items
-        .map((item) => typeof item === "object" && item !== null ? String((item as Record<string, unknown>).displayId ?? (item as Record<string, unknown>).id ?? "").trim() : "")
-        .filter(Boolean);
-    };
-    // Also collect ALL ID forms (both displayId and canonicalId) for unknown-ref checking
-    const collectAllIdForms = (items: unknown): string[] => {
-      if (!Array.isArray(items)) return [];
-      const ids: string[] = [];
-      for (const item of items) {
-        if (typeof item === "object" && item !== null) {
-          const rec = item as Record<string, unknown>;
-          const displayId = String(rec.displayId ?? "").trim();
-          const id = String(rec.id ?? "").trim();
-          if (displayId) ids.push(displayId);
-          if (id && id !== displayId) ids.push(id);
-        }
-      }
-      return ids;
-    };
-    const functionIds = new Set(collectIds(requirementJson.functions));
-    const exceptionIds = new Set(collectIds(requirementJson.exceptions));
-    const allAllowedIds = new Set([
-      ...collectAllIdForms(requirementJson.functions),
-      ...collectAllIdForms(requirementJson.exceptions),
-      ...collectAllIdForms(requirementJson.constraints),
-    ]);
-
-    // Build map from displayId to canonicalId for dual-ID coverage checking
-    const buildIdMap = (items: unknown): Map<string, string> => {
-      const map = new Map<string, string>();
-      if (!Array.isArray(items)) return map;
-      for (const item of items) {
-        if (typeof item === "object" && item !== null) {
-          const rec = item as Record<string, unknown>;
-          const displayId = String(rec.displayId ?? "").trim();
-          const canonicalId = String(rec.id ?? "").trim();
-          if (displayId && canonicalId && displayId !== canonicalId) {
-            map.set(displayId, canonicalId);
-          }
-        }
-      }
-      return map;
-    };
-    const functionIdMap = buildIdMap(requirementJson.functions);
-    const exceptionIdMap = buildIdMap(requirementJson.exceptions);
+    const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
+    const functionIds = new Set(requirementIndex.idsFor("function"));
+    const exceptionIds = new Set(requirementIndex.idsFor("exception"));
+    const functionIdMap = requirementIndex.idMapFor("function");
+    const exceptionIdMap = requirementIndex.idMapFor("exception");
 
     const isCovered = (text: string, displayId: string, idMap: Map<string, string>): boolean => {
       if (text.includes(displayId)) return true;
@@ -373,55 +555,40 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       if (!isCovered(text, eid, exceptionIdMap)) warnings.push(`异常 ${eid} 未被测试用例覆盖`);
     }
 
-    // Extract IDs referenced in test cases, parsing target triplets correctly.
-    // Target format: "displayId | canonicalId | description" — only extract IDs from fields 1 & 2.
-    // Multi-target: comma-separated triplets, but commas inside description text must be handled.
-    // We split on pipe (|) and only take the first two segments of each triplet.
-    const extractTargetIds = (target: string): string[] => {
-      const ids: string[] = [];
-      // Use regex to match each triplet: displayId | canonicalId | description
-      // The description group stops before the next triplet's displayId (lookahead).
-      const tripletRe = /\b([FCEX]\d+)\s*\|\s*((?:FUN|CON|EXC)_\w+)\s*\|\s*((?:(?!\b[FCEX]\d+\s*\|).)*)/g;
-      let m;
-      while ((m = tripletRe.exec(target)) !== null) {
-        ids.push(m[1]); // displayId
-        ids.push(m[2]); // canonicalId
-        // m[3] = description, skipped
-      }
-      return ids;
-    };
-
     // Collect all referenced IDs from structured test cases
     const referencedIds = new Set<string>();
+    const pairWarnings = new Set<string>();
     for (const tc of cases) {
       // Extract from target field with triplet-aware parsing
       const target = String(tc.target ?? "");
-      if (target.includes("|")) {
-        for (const id of extractTargetIds(target)) {
-          referencedIds.add(id);
+      const targetRefs = requirementIndex.extractTargetRefs(target);
+      if (targetRefs.length > 0) {
+        for (const ref of targetRefs) {
+          referencedIds.add(ref.displayId);
+          referencedIds.add(ref.canonicalId);
+        }
+        for (const warning of requirementIndex.pairWarnings(targetRefs, `测试用例 ${String(tc.id ?? "unknown")}`)) {
+          pairWarnings.add(warning);
         }
       } else {
-        // Simple target without pipe separators — extract IDs with regex
-        const matches = target.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [];
-        for (const m of matches) referencedIds.add(m);
+        for (const id of requirementIndex.extractIds(target)) referencedIds.add(id);
       }
       // Extract from other text fields with standard regex
       for (const field of ["preconditions", "expected_result"]) {
         const val = String(tc[field] ?? "");
-        const matches = val.match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [];
-        for (const m of matches) referencedIds.add(m);
+        for (const id of requirementIndex.extractIds(val)) referencedIds.add(id);
       }
       if (Array.isArray(tc.steps)) {
         for (const step of tc.steps) {
-          const matches = String(step).match(/\b[FCEX][A-Za-z0-9_]+\b/g) ?? [];
-          for (const m of matches) referencedIds.add(m);
+          for (const id of requirementIndex.extractIds(String(step))) referencedIds.add(id);
         }
       }
     }
+    warnings.push(...pairWarnings);
 
-    const unknownRefs = [...referencedIds].filter((id) => !allAllowedIds.has(id));
+    const unknownRefs = requirementIndex.unknownReferences(referencedIds);
     for (const id of unknownRefs) {
-      const kind = id.startsWith("F") ? "功能" : "需求";
+      const kind = requirementIndex.kindLabelForId(id);
       warnings.push(`测试用例引用了未定义的${kind} ID: ${id}`);
     }
 
