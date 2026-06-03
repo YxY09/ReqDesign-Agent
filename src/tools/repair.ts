@@ -5,11 +5,13 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { SystemDesigner } from "../generators/design.js";
+import { TestCaseGenerator } from "../generators/tests.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { ArtifactPatcher, type PatchOp, type Section, type JsonPatchOp } from "./artifactPatcher.js";
 import type { Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
+import { isTemplateLike } from "../generators/testQualityValidator.js";
 
 export class RepairTool extends BaseTool {
   constructor(llm: LLMClient) {
@@ -57,6 +59,13 @@ export class RepairTool extends BaseTool {
       content = null;
     }
 
+    if (content != null && task.type === "tests") {
+      content = this._normalizeAndValidateTestRepair(task, content, context);
+      if (content != null) {
+        content = this._rejectTemplateLikeRepair(task, content);
+      }
+    }
+
     // 保护机制：如果输出小于原始内容的 50%，则丢弃
     if (content != null && currentContent != null) {
       const origStr = task.type === "diagrams" ? JSON.stringify(currentContent) : String(currentContent);
@@ -72,6 +81,195 @@ export class RepairTool extends BaseTool {
     } else {
       this.logger.warn(`repair: task=${task.id} 修复返回空结果`);
     }
+    return content;
+  }
+
+  private _normalizeAndValidateTestRepair(
+    task: Task,
+    content: unknown,
+    context: Record<string, unknown>,
+  ): unknown | null {
+    const text = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    const requirementJson = isRecord(context.requirement_json)
+      ? context.requirement_json
+      : undefined;
+    const normalized = TestCaseGenerator.normalizeStructuredTestCases(text, requirementJson)
+      ?? TestCaseGenerator.normalizeStructuredTestCaseIds(text);
+    if (normalized === null) {
+      return content;
+    }
+
+    if (normalized !== text) {
+      this.logger.info(`repair: task=${task.id} 已规范化结构化测试用例编号`);
+    }
+
+    if (!requirementJson) {
+      return normalized;
+    }
+
+    const warnings = TestCaseGenerator.validateTestCases(normalized, requirementJson);
+    const structuralWarnings = warnings.filter((warning) =>
+      warning.includes("编号不合法") ||
+      warning.includes("编号重复") ||
+      warning.includes("缺少字段") ||
+      warning.includes("type 必须") ||
+      warning.includes("priority 必须") ||
+      warning.includes("steps 必须") ||
+      warning.includes("test_cases 数组为空"),
+    );
+    if (structuralWarnings.length > 0) {
+      this.logger.warn(
+        `repair: task=${task.id} 修复后的测试结构仍不合法: ${structuralWarnings.join("; ")}`,
+      );
+      return null;
+    }
+
+    return normalized;
+  }
+
+  // ------------------------------------------------------------------
+  // Ops validation: convert append→replace for test repair
+  // ------------------------------------------------------------------
+
+  /**
+   * Validate JSON ops before applying: for test_cases append ops, check if
+   * the target is already covered by an existing test. If so, convert
+   * the append to a replace op (matching on the first existing test with
+   * the same target) so we don't accumulate duplicate/template-like tests.
+   */
+  private _validateOpsBeforeApply(ops: JsonPatchOp[], currentJson: string): JsonPatchOp[] {
+    let existingTests: Array<Record<string, unknown>> = [];
+    try {
+      const doc = JSON.parse(currentJson);
+      if (Array.isArray(doc.test_cases)) {
+        existingTests = doc.test_cases.filter(
+          (tc: unknown) => typeof tc === "object" && tc !== null,
+        ) as Array<Record<string, unknown>>;
+      }
+    } catch {
+      // Cannot parse existing tests; skip validation
+      return ops;
+    }
+
+    const validated: JsonPatchOp[] = [];
+    for (const op of ops) {
+      if (op.action === "append" && op.path === "test_cases" && op.items) {
+        const stillAppend: unknown[] = [];
+        for (const item of op.items) {
+          if (typeof item !== "object" || item === null) {
+            stillAppend.push(item);
+            continue;
+          }
+          const rec = item as Record<string, unknown>;
+          const target = String(rec.target ?? "").trim();
+
+          if (!target) {
+            // No target to match; allow append
+            stillAppend.push(item);
+            continue;
+          }
+
+          // Check if an existing test already covers this target
+          const existingMatch = existingTests.find((tc: Record<string, unknown>) => {
+            const tcTarget = String(tc.target ?? "").trim();
+            if (tcTarget === target) return true;
+            // Also check trace constraints/functions
+            const tcTrace = tc.trace as Record<string, unknown> | undefined;
+            if (tcTrace) {
+              const tcConstraints = Array.isArray(tcTrace.constraints)
+                ? tcTrace.constraints.map(String)
+                : [];
+              const tcFunctions = Array.isArray(tcTrace.functions)
+                ? tcTrace.functions.map(String)
+                : [];
+              if (tcConstraints.includes(target) || tcFunctions.includes(target)) return true;
+            }
+            return false;
+          });
+
+          if (existingMatch) {
+            // Convert to replace: target is already covered, replace the poor test
+            const existingId = String(existingMatch.id ?? "").trim();
+            if (existingId) {
+              validated.push({
+                action: "replace",
+                path: "test_cases",
+                match: { field: "id", value: existingId },
+                value: item,
+              });
+              this.logger.info(
+                `repair: converting append→replace for target "${target}" (replacing ${existingId})`,
+              );
+            } else {
+              // No ID to match; still allow append as fallback
+              stillAppend.push(item);
+            }
+          } else {
+            // Genuinely missing coverage; allow append
+            stillAppend.push(item);
+          }
+        }
+        if (stillAppend.length > 0) {
+          validated.push({ ...op, items: stillAppend });
+        }
+      } else {
+        validated.push(op);
+      }
+    }
+    return validated;
+  }
+
+  /**
+   * Post-repair check: reject the repair result if any test cases are still
+   * template-like. Returns null to reject, or the original content if acceptable.
+   */
+  private _rejectTemplateLikeRepair(task: Task, content: unknown): unknown | null {
+    // Parse test cases from content
+    let tests: Array<Record<string, unknown>> = [];
+    try {
+      if (typeof content === "string") {
+        const clean = content.trim();
+        if (clean.startsWith("{")) {
+          const doc = JSON.parse(clean);
+          if (Array.isArray(doc.test_cases)) {
+            tests = doc.test_cases.filter(
+              (tc: unknown) => typeof tc === "object" && tc !== null,
+            ) as Array<Record<string, unknown>>;
+          }
+        }
+      }
+    } catch {
+      // Cannot parse; skip check
+      return content;
+    }
+
+    if (tests.length === 0) return content;
+
+    let templateCount = 0;
+    for (const tc of tests) {
+      if (isTemplateLike(tc)) {
+        templateCount++;
+        this.logger.warn(
+          `repair: task=${task.id} post-repair test ${String(tc.id ?? "?")} is still template-like`,
+        );
+      }
+    }
+
+    if (templateCount > 0 && templateCount >= tests.length) {
+      // All tests are template-like; reject entirely
+      this.logger.warn(
+        `repair: task=${task.id} all ${templateCount} repaired tests are template-like, rejecting repair`,
+      );
+      return null;
+    }
+
+    // Some tests are template-like but not all; log warning but keep result
+    if (templateCount > 0) {
+      this.logger.warn(
+        `repair: task=${task.id} ${templateCount}/${tests.length} repaired tests are still template-like`,
+      );
+    }
+
     return content;
   }
 
@@ -500,14 +698,16 @@ export class RepairTool extends BaseTool {
           }))
           .filter((o: JsonPatchOp) => o.path && (o.action === "append" || o.action === "replace" || o.action === "delete"));
         if (ops.length > 0) {
+          // Validate ops: convert append→replace when target already covered
+          const validatedOps = task.type === "tests" ? this._validateOpsBeforeApply(ops, contentStr) : ops;
           try {
-            const patched = ArtifactPatcher.applyJsonOps(contentStr, ops);
+            const patched = ArtifactPatcher.applyJsonOps(contentStr, validatedOps);
             if (patched !== contentStr) {
               this.logger.info(`repair: task=${task.id} 成功应用 ${ops.length} 个JSON ops`);
+              return patched;
             } else {
               this.logger.warn(`repair: task=${task.id} ${ops.length} 个JSON ops无效果`);
             }
-            return patched;
           } catch {
             this.logger.warn(`repair: task=${task.id} applyJsonOps失败，fallback`);
           }
@@ -528,11 +728,17 @@ export class RepairTool extends BaseTool {
     const patchesRaw = parsed.patches;
     if (!Array.isArray(patchesRaw) || patchesRaw.length === 0) {
       this.logger.warn(`repair: task=${task.id} LLM未返回有效的patches/ops数组，fallback到完整替换`);
-      // Maybe the LLM returned the full content directly
+      // Try parsed.content fallback before giving up — even when ops existed
+      // but failed, the LLM may have also returned the full content.
       if (typeof parsed.content === "string") {
+        this.logger.info(`repair: task=${task.id} ops/patches无效，使用parsed.content回退`);
         return task.type === "diagrams"
           ? RepairTool._wrapDiagramText(task, parsed.content)
           : parsed.content;
+      }
+      if (Array.isArray(opsRaw) && opsRaw.length > 0) {
+        this.logger.warn(`repair: task=${task.id} ops未产生有效修复且没有完整内容，返回空结果`);
+        return null;
       }
       return RepairTool._wrapDiagramText(task, llmText);
     }
@@ -590,10 +796,13 @@ export class RepairTool extends BaseTool {
 
     if (patchedText !== originalText) {
       this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
+      return patchedText;
     } else {
       this.logger.warn(`repair: task=${task.id} ${patches.length} 个patches无效果`);
     }
-    return patchedText;
+    // Intentional: no-effect patches return null rather than patchedText,
+    // signaling to callers that the repair had no effect.
+    return null;
   }
 
   // ------------------------------------------------------------------
@@ -634,6 +843,12 @@ export class RepairTool extends BaseTool {
 
     sections.push(`## 当前产物\n${RepairTool._formatContent(currentContent)}`);
 
+    // For tests: add test quality diagnostics identifying template-like tests
+    if (task.type === "tests") {
+      const diagSection = this._buildTestQualityDiagnostic(currentContent);
+      if (diagSection) sections.push(diagSection);
+    }
+
     const aux = RepairTool._formatAuxContext(context);
     if (aux) sections.push(`## 辅助上下文\n${aux}`);
 
@@ -659,7 +874,7 @@ export class RepairTool extends BaseTool {
     if (task.type === "analyze") {
       fmtNote = '- 严格输出 JSON 格式：{"content": <修复后的完整产物>}';
     } else if (task.type === "tests") {
-      fmtNote = '- 如果当前产物是 JSON 格式（{"test_cases": [...]}），使用 ops 格式：{"ops": [{"action": "replace|append|delete", "path": "test_cases", "match": {"field": "id", "value": "..."}, "value": {...}|"items": [...]}]}\n- 如果当前产物是 Markdown 格式，使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整内容"}\n- 不要重写未出问题的内容';
+      fmtNote = '- 如果当前产物是 JSON 格式（{"test_cases": [...]}），使用 ops 格式：{"ops": [{"action": "replace|append|delete", "path": "test_cases", "match": {"field": "id", "value": "..."}, "value": {...}|"items": [...]}]}\n- 如果当前产物是 Markdown 格式，使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整内容"}\n- 测试用例 id 只能使用 TC-N-###、TC-E-###、TC-B-###，分别对应正常/异常/边界；禁止使用 TC-F010、TC-X002、TC-CON-001 或把需求 ID 拼进测试用例 id\n- 需求 ID 只能写在 target、steps 或 expected_result 中，不要写进测试用例 id\n- 不要重写未出问题的内容\n- **优先使用 replace 修复低质量/模板化测试**，仅在完全无覆盖时使用 append\n- **禁止在已有相同 target 测试时 append 新测试**——必须 replace 已有测试';
     } else if (task.type === "design") {
       fmtNote = '- 使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整 Markdown"}\n- 不要重写未出问题的章节';
     } else {
@@ -675,6 +890,64 @@ export class RepairTool extends BaseTool {
     }
 
     return sections.join("\n\n");
+  }
+
+  /**
+   * Build a diagnostic section identifying template-like tests and listing
+   * their IDs, so the repair LLM knows which tests must be replaced.
+   */
+  private _buildTestQualityDiagnostic(currentContent: unknown): string | null {
+    let tests: Array<Record<string, unknown>> = [];
+    try {
+      if (typeof currentContent === "string") {
+        const clean = currentContent.trim();
+        if (clean.startsWith("{")) {
+          const doc = JSON.parse(clean);
+          if (Array.isArray(doc.test_cases)) {
+            tests = doc.test_cases.filter(
+              (tc: unknown) => typeof tc === "object" && tc !== null,
+            ) as Array<Record<string, unknown>>;
+          }
+        }
+      } else if (typeof currentContent === "object" && currentContent !== null) {
+        const doc = currentContent as Record<string, unknown>;
+        if (Array.isArray(doc.test_cases)) {
+          tests = doc.test_cases.filter(
+            (tc: unknown) => typeof tc === "object" && tc !== null,
+          ) as Array<Record<string, unknown>>;
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    if (tests.length === 0) return null;
+
+    const templateIds: string[] = [];
+    const coveredTargets = new Set<string>();
+
+    for (const tc of tests) {
+      const id = String(tc.id ?? "").trim();
+      if (isTemplateLike(tc)) {
+        templateIds.push(id);
+      }
+      const target = String(tc.target ?? "").trim();
+      if (target) coveredTargets.add(target);
+    }
+
+    if (templateIds.length === 0) return null;
+
+    const lines: string[] = ["## 现有测试质量诊断"];
+    lines.push("");
+    lines.push(`以下测试用例被检测为模板化/低质量，**必须使用 replace 替换**（不要 append 新测试）：`);
+    for (const id of templateIds) {
+      lines.push(`- \`${id}\` ← 必须用 replace(action="replace", match={"field":"id","value":"${id}"}) 替换为高质量测试`);
+    }
+    lines.push("");
+    lines.push(`已覆盖的 target: ${coveredTargets.size > 0 ? Array.from(coveredTargets).map(t => `\`${t}\``).join(", ") : "(无)"}`);
+    lines.push("如果某个 target 已有测试（即使质量低），使用 replace 而非 append。");
+
+    return lines.join("\n");
   }
 
   // ------------------------------------------------------------------

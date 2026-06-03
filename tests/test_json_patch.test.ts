@@ -129,7 +129,7 @@ describe("RepairTool._applyPatchResponse routing", () => {
     // not a string. The ops branch must still be routed in that case.
     const originalObj = {
       test_cases: [
-        { id: "TC-001", name: "Login", steps: "step1", expected: "ok" },
+        { id: "TC-001", name: "Login", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
       ],
     };
 
@@ -141,7 +141,7 @@ describe("RepairTool._applyPatchResponse routing", () => {
             action: "replace",
             path: "test_cases",
             match: { field: "id", value: "TC-001" },
-            value: { id: "TC-001", name: "Login Fixed", steps: "step1f", expected: "ok" },
+            value: { id: "TC-001", name: "Login Fixed", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
           },
         ],
       }),
@@ -167,17 +167,7 @@ describe("RepairTool._applyPatchResponse routing", () => {
     const originalJson = JSON.stringify(
       {
         test_cases: [
-          { id: "TC-001", name: "Login", steps: "step1", expected: "ok" },
-        ],
-      },
-      null,
-      2,
-    );
-
-    const fixedJson = JSON.stringify(
-      {
-        test_cases: [
-          { id: "TC-001", name: "Login Fixed", steps: "step1f", expected: "ok" },
+          { id: "TC-001", name: "Login", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
         ],
       },
       null,
@@ -192,7 +182,7 @@ describe("RepairTool._applyPatchResponse routing", () => {
             action: "replace",
             path: "test_cases",
             match: { field: "id", value: "TC-001" },
-            value: { id: "TC-001", name: "Login Fixed", steps: "step1f", expected: "ok" },
+            value: { id: "TC-001", name: "Login Fixed", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
           },
         ],
       }),
@@ -212,6 +202,94 @@ describe("RepairTool._applyPatchResponse routing", () => {
     expect(result).not.toBeNull();
     const parsed = JSON.parse(result as string);
     expect(parsed.test_cases[0].name).toBe("Login Fixed");
+  });
+
+  it("normalizes invalid structured test IDs after ops repair", async () => {
+    const originalJson = JSON.stringify(
+      {
+        test_cases: [
+          {
+            id: "TC-N-001",
+            title: "已有正常测试",
+            type: "正常",
+            target: "F010",
+            preconditions: "ready",
+            steps: ["准备测试环境", "执行正常操作"],
+            expected_result: "操作成功完成",
+            priority: "P1",
+          },
+        ],
+      },
+      null,
+      2,
+    );
+
+    const llm = makeLlm(
+      JSON.stringify({
+        ops: [
+          {
+            action: "append",
+            path: "test_cases",
+            items: [
+              {
+                id: "TC-F010-001",
+                title: "帮助功能正常测试",
+                type: "正常",
+                target: "F010",
+                preconditions: "ready",
+                steps: ["导航到帮助页面", "查看帮助内容"],
+                expected_result: "帮助内容正确显示",
+                priority: "P1",
+              },
+              {
+                id: "TC-X002-001",
+                title: "权限异常测试",
+                type: "异常",
+                target: "X002",
+                preconditions: "denied",
+                steps: ["以无权限用户登录", "访问受限资源"],
+                expected_result: "系统拒绝访问并提示权限不足",
+                priority: "P0",
+              },
+              {
+                id: "TC-CON-001",
+                title: "审计约束测试",
+                type: "边界",
+                target: "C001",
+                preconditions: "audit enabled",
+                steps: ["获取审计日志记录", "尝试篡改审计日志内容"],
+                expected_result: "系统阻止篡改并记录安全事件",
+                priority: "P0",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
+
+    const result = await agent.repair(task, originalJson, [
+      { severity: "major", description: "missing coverage", suggestion: "add tests" },
+    ], {
+      requirement_json: {
+        functions: [{ id: "F010", name: "Help" }],
+        exceptions: [{ id: "X002", description: "Denied" }],
+        constraints: [{ id: "C001", description: "Audit cannot be altered" }],
+      },
+    });
+
+    expect(result).not.toBeNull();
+    const parsed = JSON.parse(result as string);
+    // First appended test (target F010, type "正常") gets converted from
+    // append→replace because existing TC-N-001 also targets F010.
+    // Result: 3 tests (original replaced + 2 new appended).
+    expect(parsed.test_cases.map((tc: Record<string, unknown>) => tc.id)).toEqual([
+      "TC-N-001",
+      "TC-E-001",
+      "TC-B-001",
+    ]);
   });
 
   it("routes full_replace for markdown content", async () => {

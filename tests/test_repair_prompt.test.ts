@@ -121,15 +121,15 @@ describe("RepairTool prompt building", () => {
     // Fix: when patches don't apply and content is JSON, fall back to full content.
     const originalJson = JSON.stringify({
       test_cases: [
-        { id: "TC-B-001", name: "Boundary test 1", steps: "step 1", expected: "result 1" },
-        { id: "TC-B-002", name: "Boundary test 2", steps: "step 2", expected: "result 2" },
+        { id: "TC-B-001", name: "Boundary test 1", target: "C001", steps: ["构造边界数据", "执行校验"], expected_result: "系统在边界处正确执行校验" },
+        { id: "TC-B-002", name: "Boundary test 2", target: "C002", steps: ["构造边界数据2", "执行校验2"], expected_result: "系统在边界处正确执行校验2" },
       ],
     }, null, 2);
 
     const fixedJson = JSON.stringify({
       test_cases: [
-        { id: "TC-B-001", name: "Fixed boundary test 1", steps: "fixed step 1", expected: "fixed result 1" },
-        { id: "TC-B-002", name: "Boundary test 2", steps: "step 2", expected: "result 2" },
+        { id: "TC-B-001", name: "Fixed boundary test 1", target: "C001", steps: ["构造修复后边界数据", "执行修复后校验"], expected_result: "修复后预期结果" },
+        { id: "TC-B-002", name: "Boundary test 2", target: "C002", steps: ["构造边界数据2", "执行校验2"], expected_result: "系统在边界处正确执行校验2" },
       ],
     }, null, 2);
 
@@ -181,9 +181,9 @@ describe("RepairTool prompt building", () => {
   it("patches fallback handles fenced JSON content", async () => {
     // The currentContent is wrapped in code fences — the patches fallback
     // should still detect it as JSON and apply the full content fallback.
-    const originalJson = JSON.stringify({ test_cases: [{ id: "TC-1", name: "test" }] }, null, 2);
+    const originalJson = JSON.stringify({ test_cases: [{ id: "TC-1", name: "test", target: "F001", steps: ["输入测试数据", "验证输出"], expected_result: "输出结果正确且完整" }] }, null, 2);
     const fencedJson = "```json\n" + originalJson + "\n```";
-    const fixedJson = JSON.stringify({ test_cases: [{ id: "TC-1", name: "fixed" }] }, null, 2);
+    const fixedJson = JSON.stringify({ test_cases: [{ id: "TC-1", name: "fixed", target: "F001", steps: ["输入修复数据", "验证修复输出"], expected_result: "修复后输出完整正确" }] }, null, 2);
 
     const llm = designRepairLlm(JSON.stringify({
       patches: [{ op: "replace_section", section: "TC-1", content: "## TC-1\nfixed" }],
