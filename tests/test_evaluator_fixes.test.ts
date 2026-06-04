@@ -404,7 +404,7 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
           task_id: "design-1",
           type: "design",
           revision: 1,
-          content: "## 模块划分\n支付失败按 E001 处理。\n## 核心类\nUser\n## 数据流\nOrder -> Payment",
+          content: "## 模块划分\n支付失败按 X999 处理。\n## 核心类\nUser\n## 数据流\nOrder -> Payment",
         },
       },
       "design",
@@ -415,7 +415,7 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
     // majors no longer prevent pass; only blockers do
     expect(verdict.passed).toBe(true);
     expect(verdict.issues.some((issue) =>
-      issue.description.includes("未定义的异常 ID: E001"),
+      issue.description.includes("未定义的异常 ID: X999"),
     )).toBe(true);
   });
 
@@ -451,6 +451,77 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
     expect(verdict.issues.some((issue) =>
       issue.description.includes("完整退货退款正常流程"),
     )).toBe(false);
+  });
+
+  it("maps diagrams-final activity issues back to the source diagram task", async () => {
+    const evaluator = new EvaluationTool(noopLlm());
+
+    const verdict = await evaluator.evaluate(
+      "case workflow",
+      {
+        business_processes: [
+          { name: "CaseRegistration", steps: ["register case", "assign officer"] },
+          { name: "AuditReviewProcess", steps: ["review audit trail", "approve finding"] },
+        ],
+      },
+      "",
+      {},
+      "",
+      { "diagrams-final": { type: "diagrams", revision: 1 } },
+      {
+        "diagrams-final": {
+          task_id: "diagrams-final",
+          type: "diagrams",
+          revision: 1,
+          content: {
+            activity_diagram: "flowchart TD\nA[Start] --> B[Done]",
+          },
+          sourceTaskIds: ["diagrams-activity"],
+          sourceRevisions: { "diagrams-activity": 1 },
+        },
+      },
+      "design",
+      false,
+      ["diagrams-final"],
+    );
+
+    expect(verdict.issues.some((issue) =>
+      issue.targetTaskId === "diagrams-activity" &&
+      issue.targetField === "diagrams.activity_diagram",
+    )).toBe(true);
+  });
+
+  it("unwraps nested diagrams before Mermaid header checks", async () => {
+    const evaluator = new EvaluationTool(noopLlm());
+
+    const verdict = await evaluator.evaluate(
+      "",
+      {},
+      "",
+      {},
+      "",
+      { "diagrams-activity": { type: "diagrams", revision: 1 } },
+      {
+        "diagrams-activity": {
+          task_id: "diagrams-activity",
+          type: "diagrams",
+          revision: 1,
+          content: {
+            diagrams: {
+              activity_diagram: "flowchart TD\nA[Start] --> B[Done]",
+            },
+          },
+        },
+      },
+      "design",
+      false,
+      ["diagrams-activity"],
+    );
+
+    expect(verdict.issues.some((issue) =>
+      issue.description.includes("Mermaid 头部"),
+    )).toBe(false);
+    expect(verdict.passed).toBe(true);
   });
 });
 

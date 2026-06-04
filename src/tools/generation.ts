@@ -15,6 +15,7 @@ import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
 import { TestCaseGenerator } from "../generators/tests.js";
+import { RequirementIndex } from "../shared/requirementIndex.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -272,9 +273,9 @@ ${text}`;
       issues.push(...GenerationTool._checkUndefinedExceptionIds(String(content), reqJson, "设计"));
     }
     else if (taskType === "diagrams") {
-      if (typeof content !== "object" || content === null || Array.isArray(content))
+      const c = GenerationTool._diagramContent(content);
+      if (!c)
         return ["图表结果格式错误（非 dict）"];
-      const c = content as Record<string, string>;
       const diagramKind = GenerationTool._diagramKindForTask(task, hints, task.description);
       const required = diagramKind ? [diagramKind] : ["class_diagram", "activity_diagram", "state_diagram"];
       for (const key of required) {
@@ -343,19 +344,35 @@ ${text}`;
     return "";
   }
 
+  private static _diagramContent(content: unknown): Record<string, string> | null {
+    if (!content || typeof content !== "object" || Array.isArray(content)) {
+      return null;
+    }
+    const record = content as Record<string, unknown>;
+    const nested = record.diagrams;
+    const source = nested && typeof nested === "object" && !Array.isArray(nested)
+      ? nested as Record<string, unknown>
+      : record;
+    const diagrams: Record<string, string> = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (!["class_diagram", "activity_diagram", "state_diagram"].includes(key)) {
+        continue;
+      }
+      diagrams[key] = typeof value === "string" ? value : String(value ?? "");
+    }
+    return diagrams;
+  }
+
   private static _checkUndefinedExceptionIds(
     text: string,
     requirementJson: Record<string, unknown>,
     label: string,
   ): string[] {
-    const defined = new Set(
-      ((requirementJson.exceptions ?? []) as Array<Record<string, unknown>>)
-        .flatMap((item) => [String(item.id ?? "").trim(), String(item.displayId ?? "").trim()])
-        .filter(Boolean),
-    );
-    if (defined.size === 0) return [];
-    const referenced = new Set(text.match(/\b[EX]\d{3}\b/g) ?? []);
-    const unknown = [...referenced].filter((id) => !defined.has(id)).sort();
+    const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
+    if (requirementIndex.exceptions.length === 0) return [];
+    const referenced = requirementIndex.extractIds(text)
+      .filter((id) => id.startsWith("X") || id.startsWith("EXC_"));
+    const unknown = requirementIndex.unknownReferences(referenced);
     return unknown.length > 0
       ? [`${label} 引用了未定义的异常 ID: ${unknown.join(", ")}`]
       : [];

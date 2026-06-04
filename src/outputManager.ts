@@ -25,6 +25,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { Logger, setupLogger } from "./logger.js";
 import { formatReviewReport } from "./formatReviewReport.js";
 import { TestCaseGenerator } from "./generators/tests.js";
+import type { OutputSnapshot } from "./shared/outputSnapshot.js";
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -38,6 +39,7 @@ const SUBDIR_REVIEW = "review";
 const SUBDIR_TRACES = "traces";
 
 const SAFE_NAME_RE = /^[\w\u4e00-\u9fff\-\.]+$/;
+const WRITE_RETRY_DELAYS_MS = [50, 150, 350, 700];
 
 // ---------------------------------------------------------------------------
 // 辅助函数
@@ -63,6 +65,18 @@ function sanitizeFilename(name: string): string {
 function escapeMdCell(text: unknown): string {
   if (!text) return "";
   return String(text).replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function isRetryableWriteError(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code ?? "")
+    : "";
+  if (["UNKNOWN", "EBUSY", "EPERM", "EACCES"].includes(code)) return true;
+  return String(error).includes("UNKNOWN: unknown error");
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +130,7 @@ export class OutputManager {
     const filePath = this._resolvePath(targetDir, filename);
     try {
       mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, content, { encoding: "utf8" });
+      this._writeTextWithRetry(filePath, content);
       this._logger.debug(`已写入: ${filePath}`);
     } catch (e) {
       this._logger.error(`写入文件失败 ${filePath}: ${e}`);
@@ -132,12 +146,33 @@ export class OutputManager {
     const filePath = this._resolvePath(subdir, filename);
     try {
       mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, JSON.stringify(data, null, 2), { encoding: "utf8" });
+      this._writeTextWithRetry(filePath, JSON.stringify(data, null, 2));
       this._logger.debug(`已写入: ${filePath}`);
     } catch (e) {
       this._logger.error(`写入JSON失败 ${filePath}: ${e}`);
       throw e;
     }
+  }
+
+  private _writeTextWithRetry(filePath: string, content: string): void {
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt <= WRITE_RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        writeFileSync(filePath, content, { encoding: "utf8" });
+        return;
+      } catch (error) {
+        lastError = error;
+        if (!isRetryableWriteError(error) || attempt === WRITE_RETRY_DELAYS_MS.length) {
+          throw error;
+        }
+        const delayMs = WRITE_RETRY_DELAYS_MS[attempt];
+        this._logger.warn(
+          `写入暂时失败，${delayMs}ms 后重试 ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        sleepSync(delayMs);
+      }
+    }
+    throw lastError;
   }
 
   // ---------------------------------------------------------------
@@ -247,6 +282,22 @@ export class OutputManager {
   saveTraceJson(filename: string, data: Record<string, unknown>): void {
     this._writeJson(filename, data, SUBDIR_TRACES);
     this._logger.info(`追踪文件已保存 → ${SUBDIR_TRACES}/${filename}`);
+  }
+
+  /** 一次调用保存所有产物。 */
+  saveSnapshot(snapshot: OutputSnapshot): void {
+    if (snapshot.goal === "analyze") {
+      this.saveRequirementAnalysis(snapshot.requirementJson, snapshot.requirementText);
+      return;
+    }
+    this.saveAll(
+      snapshot.requirementJson,
+      snapshot.requirementText,
+      snapshot.designText,
+      snapshot.diagrams,
+      snapshot.testCases,
+      snapshot.reviewResult,
+    );
   }
 
   /** 一次调用保存所有产物。 */

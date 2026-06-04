@@ -159,6 +159,43 @@ describe("Plan mutation", () => {
     expect(taskInfo).not.toBeNull();
     expect(taskInfo!.description).toBe("updated description");
   });
+
+  it("should ignore immutable changes to completed tasks while applying other replan mutations", () => {
+    const state = new WorkflowState();
+    state.plan = makePlan([
+      makeTask("analyze-1", "analyze"),
+      makeTask("design-1", "design", "original design", ["analyze-1"]),
+    ]);
+    state.markTaskStatus("analyze-1", "completed");
+    state.markTaskStatus("design-1", "completed");
+
+    const mutation = createPlanMutation({
+      updateTasks: [
+        createTask({
+          id: "design-1",
+          type: "tests",
+          description: "annotated completed task",
+          dependsOn: [],
+          contextHints: { note: "keep artifact, do not rerun" },
+        }),
+      ],
+      addTasks: [
+        makeTask("tests-help-audit", "tests", "add missing help and audit tests", ["design-1"]),
+      ],
+      reasoning: "repair remaining final review issues",
+    });
+
+    const errors = state.mutatePlan(mutation);
+
+    expect(errors).toEqual([]);
+    const design = state.plan!.tasks.find((task) => task.id === "design-1")!;
+    expect(design.type).toBe("design");
+    expect(design.dependsOn).toEqual(["analyze-1"]);
+    expect(design.description).toBe("annotated completed task");
+    expect(design.contextHints.note).toBe("keep artifact, do not rerun");
+    expect(state.plan!.tasks.map((task) => task.id)).toContain("tests-help-audit");
+    expect(state.taskStatus("tests-help-audit")).toBe("pending");
+  });
 });
 
 // ---------------------------------------------------------------------------

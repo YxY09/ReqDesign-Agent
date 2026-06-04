@@ -18,11 +18,6 @@ import {
 } from "../shared/constraintCanonicalizer.js";
 import type { EntityRegistry } from "../shared/types.js";
 import { resolveEntityRef, normalizeRelationType } from "../shared/referenceNormalizer.js";
-import {
-  findDuplicateCandidates,
-  applyDeterministicMerges,
-  type DedupConfig,
-} from "../shared/semanticDeduper.js";
 
 /**
  * Convert merged constraints to ConstraintCandidate[], run the new
@@ -80,24 +75,282 @@ export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>)
     delete merged["missingConstraintCandidates"];
   }
 
-  // --- Handle missingExceptionCandidates ---
+  // --- Handle exceptions / missingExceptionCandidates ---
+  if (Array.isArray(merged["exceptions"])) {
+    merged["exceptions"] = dedupeExceptions(asArray(merged["exceptions"]));
+  }
+
   // Dedup against existing exceptions and append survivors.
   const rawExcCandidates = asArray(merged["missingExceptionCandidates"]);
   if (rawExcCandidates.length > 0) {
     const existingExceptions = asArray(merged["exceptions"]);
-    const existingExcDescs = new Set(
-      existingExceptions.map((e) => String(e.description ?? "").trim().toLowerCase()),
-    );
     for (const candidate of rawExcCandidates) {
       const desc = String(candidate.description ?? "").trim();
-      if (desc && !existingExcDescs.has(desc.toLowerCase())) {
-        existingExcDescs.add(desc.toLowerCase());
+      if (desc) {
         existingExceptions.push(candidate);
       }
     }
-    merged["exceptions"] = existingExceptions;
     delete merged["missingExceptionCandidates"];
   }
+
+  const exceptions = dedupeExceptions(asArray(merged["exceptions"]));
+  if (exceptions.length > 0) {
+    merged["exceptions"] = exceptions;
+    canonicalizeAppendedExceptions(exceptions);
+  }
+}
+
+function canonicalizeAppendedExceptions(exceptions: Record<string, unknown>[]): void {
+  const usedCanonicalIds = new Set<string>();
+  let maxDisplay = 0;
+
+  for (const exception of exceptions) {
+    const canonicalId = String(exception.id ?? "").trim();
+    if (canonicalId && canonicalId.startsWith("EXC_")) {
+      usedCanonicalIds.add(canonicalId);
+    }
+    const displayId = String(exception.displayId ?? "").trim();
+    const match = displayId.match(/^X(\d{3,})$/);
+    if (match) {
+      maxDisplay = Math.max(maxDisplay, Number.parseInt(match[1], 10));
+    }
+  }
+
+  for (const exception of exceptions) {
+    const displayId = String(exception.displayId ?? "").trim();
+    const canonicalId = String(exception.id ?? "").trim();
+    if (/^X\d{3,}$/.test(displayId) && canonicalId.startsWith("EXC_")) {
+      continue;
+    }
+
+    const text = String(
+      exception.description ??
+      exception.trigger ??
+      exception.text ??
+      canonicalId,
+    ).trim();
+    if (!text) continue;
+
+    let nextCanonicalId = exceptionCanonicalId(text);
+    if (usedCanonicalIds.has(nextCanonicalId)) {
+      let suffix = 2;
+      while (usedCanonicalIds.has(`${nextCanonicalId}_${suffix}`)) suffix++;
+      nextCanonicalId = `${nextCanonicalId}_${suffix}`;
+    }
+    usedCanonicalIds.add(nextCanonicalId);
+    maxDisplay += 1;
+
+    if (canonicalId && !canonicalId.startsWith("EXC_")) {
+      exception.originalId = canonicalId;
+    }
+    exception.id = nextCanonicalId;
+    exception.displayId = `X${String(maxDisplay).padStart(3, "0")}`;
+  }
+}
+
+function dedupeExceptions(exceptions: Record<string, unknown>[]): Record<string, unknown>[] {
+  const result: Record<string, unknown>[] = [];
+  const exactSeen = new Map<string, number>();
+  const semanticSeen = new Map<string, number>();
+
+  for (const exception of exceptions) {
+    const text = String(exception.description ?? exception.text ?? exception.trigger ?? "").trim();
+    if (!text) {
+      result.push(exception);
+      continue;
+    }
+
+    const exactKey = normalizeExceptionText(text);
+    const semanticKey = exceptionSemanticKey(text);
+    const existingIndex = exactSeen.get(exactKey) ??
+      (semanticKey ? semanticSeen.get(semanticKey) : undefined);
+
+    if (existingIndex !== undefined) {
+      result[existingIndex] = mergeExceptionRecords(result[existingIndex], exception);
+      continue;
+    }
+
+    const index = result.length;
+    result.push(exception);
+    exactSeen.set(exactKey, index);
+    if (semanticKey) semanticSeen.set(semanticKey, index);
+  }
+
+  return result;
+}
+
+function mergeExceptionRecords(
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined || value === null || value === "") continue;
+    const current = merged[key];
+    if (current === undefined || current === null || current === "") {
+      merged[key] = value;
+      continue;
+    }
+    if (Array.isArray(current) || Array.isArray(value)) {
+      const set = new Set<string>();
+      for (const item of Array.isArray(current) ? current : [current]) {
+        const text = String(item).trim();
+        if (text) set.add(text);
+      }
+      for (const item of Array.isArray(value) ? value : [value]) {
+        const text = String(item).trim();
+        if (text) set.add(text);
+      }
+      merged[key] = [...set];
+      continue;
+    }
+    if (
+      (key === "description" || key === "handling" || key === "trigger") &&
+      String(value).length > String(current).length
+    ) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function normalizeExceptionText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const GENERIC_EXCEPTION_SEMANTIC_KEYS = new Set([
+  "not found",
+  "found",
+  "failure",
+  "error",
+  "invalid",
+]);
+
+function exceptionSemanticKey(text: string): string {
+  if (!/^[A-Za-z]/.test(text.trim())) return "";
+  const words = text
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !EXCEPTION_ID_STOP_WORDS.has(word));
+  const key = [...new Set(words)].join(" ");
+  if (!key || GENERIC_EXCEPTION_SEMANTIC_KEYS.has(key)) return "";
+  return key;
+}
+
+function exceptionCanonicalId(text: string): string {
+  if (/^[A-Za-z]/.test(text)) {
+    const words = text
+      .toLowerCase()
+      .replace(/[^a-z\s]/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 2 && !EXCEPTION_ID_STOP_WORDS.has(word))
+      .slice(0, 4)
+      .map((word) => word.toUpperCase());
+    if (words.length > 0) return `EXC_${words.join("_")}`;
+  }
+  return `EXC_${simpleTextHash(text)}`;
+}
+
+const EXCEPTION_ID_STOP_WORDS = new Set([
+  "the", "and", "for", "with", "from", "that", "this", "when", "user",
+  "users", "system", "case", "cases", "attempt", "attempts", "fails",
+  "failure", "error", "invalid",
+]);
+
+function simpleTextHash(text: string): string {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36).toUpperCase().slice(0, 8).padEnd(8, "0");
+}
+
+function normalizeEntityIdentities(
+  merged: Record<string, unknown>,
+  registry?: EntityRegistry,
+): void {
+  const entities = asArray(merged["entities"]);
+  if (entities.length === 0) return;
+
+  const usedIds = new Set<string>();
+  const nameToId = new Map<string, string>();
+
+  for (const entity of entities) {
+    const name = String(entity.name ?? entity.canonicalName ?? "").trim();
+    const rawRef = String(entity.entityRef ?? entity.id ?? "").trim();
+    let canonicalId = rawRef ? resolveEntityRef(rawRef, registry) : "";
+    if (!canonicalId || !canonicalId.startsWith("E_")) {
+      canonicalId = name ? entityCanonicalId(name) : entityCanonicalId(rawRef || "Entity");
+    }
+    if (usedIds.has(canonicalId)) {
+      let suffix = 2;
+      while (usedIds.has(`${canonicalId}_${suffix}`)) suffix++;
+      canonicalId = `${canonicalId}_${suffix}`;
+    }
+    usedIds.add(canonicalId);
+
+    const oldId = String(entity.id ?? "").trim();
+    if (oldId && oldId !== canonicalId && !oldId.startsWith("E_")) {
+      entity.originalId = oldId;
+    }
+    entity.id = canonicalId;
+    entity.entityRef = canonicalId;
+    if (!String(entity.canonicalName ?? "").trim()) entity.canonicalName = name || canonicalId;
+    if (!String(entity.displayName ?? "").trim() && name) entity.displayName = name;
+
+    for (const alias of [
+      name,
+      String(entity.canonicalName ?? "").trim(),
+      String(entity.displayName ?? "").trim(),
+      canonicalId,
+    ]) {
+      if (alias) nameToId.set(alias.toLowerCase(), canonicalId);
+    }
+  }
+
+  for (const entity of entities) {
+    const relationships = Array.isArray(entity.relationships)
+      ? entity.relationships as Record<string, unknown>[]
+      : [];
+    const normalizedRelationships: Record<string, unknown>[] = [];
+    const seen = new Set<string>();
+    for (const relationship of relationships) {
+      const target = String(relationship.target ?? "").trim();
+      let normalizedTarget = target ? resolveEntityRef(target, registry) : "";
+      if (normalizedTarget && !normalizedTarget.startsWith("E_")) {
+        normalizedTarget = nameToId.get(normalizedTarget.toLowerCase()) ?? normalizedTarget;
+      }
+      if (!normalizedTarget) continue;
+      const normalizedType = normalizeRelationType(String(relationship.type ?? ""));
+      const key = `${normalizedTarget}|${normalizedType}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalizedRelationships.push({
+        ...relationship,
+        target: normalizedTarget,
+        type: normalizedType,
+      });
+    }
+    entity.relationships = normalizedRelationships;
+  }
+}
+
+function entityCanonicalId(name: string): string {
+  const snake = name
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  return `E_${snake || simpleTextHash(name)}`;
 }
 
 /** Coerce unknown to Record array. */
@@ -156,6 +409,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       // Canonicalize IDs & resolve cross-references first, then constraints
       canonicalizeAndLink(single);
       canonicalizeConstraintsPipeline(single);
+      normalizeEntityIdentities(single, registry);
       return single;
     }
 
@@ -182,6 +436,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     // Canonicalize IDs & resolve cross-references first, then constraints
     canonicalizeAndLink(merged);
     canonicalizeConstraintsPipeline(merged);
+    normalizeEntityIdentities(merged, registry);
 
     // Quality gate: attach result without blocking
     const qualityResult = checkAnalysisQuality(merged, requirementText);
@@ -287,7 +542,18 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
       AnalyzeMerger._applyRelationshipPatches(merged, typedRelPatches, registry);
 
-      // 2. 应用约束补丁
+      // 2. 应用关系实体补丁
+      const entityPatches = Array.isArray(obj.relationship_entities)
+        ? obj.relationship_entities
+        : [];
+      AnalyzeMerger._applyEntityPatches(
+        merged,
+        entityPatches.filter(
+          (entity) => typeof entity === "object" && entity !== null && "name" in entity,
+        ) as Array<Record<string, unknown>>,
+      );
+
+      // 3. 应用约束补丁
       const constPatches = Array.isArray(obj.constraints) ? obj.constraints : [];
       const excPatches = Array.isArray(obj.exceptions) ? obj.exceptions : [];
       AnalyzeMerger._applyConstraintPatches(merged, {
@@ -299,7 +565,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         ) as Array<Record<string, unknown>>,
       });
 
-      // 3. 应用功能去重 — 已禁用。
+      // 4. 应用功能去重 — 已禁用。
       // LLM dedup 不可靠，曾误删 BasicSearch（被错误合并到 AdvancedSearch）。
       // preMerge 已按名称合并功能，无需 LLM 再判断语义重复。
       // 保留此注释块以便将来需要时恢复。
@@ -663,26 +929,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
     }
 
-    // Fallback: semantic dedup for noRefItems
-    if (noRefItems.length > 0) {
-      if (noRefItems.length === 1) {
-        result.push(noRefItems[0]);
-      } else {
-        const dedupConfig: DedupConfig<Record<string, unknown>> = {
-          items: noRefItems,
-          getId: (_item, index) => `noreq_c_${index}`,
-          getText: (item) => String(item.description ?? ""),
-          getSourceText: (item) => String(item.source_text ?? ""),
-          normalize: (text) => AnalyzeMerger._normalizeForMatch(text),
-        };
-        const dupCandidates = findDuplicateCandidates(dedupConfig);
-        const dedupResult = applyDeterministicMerges(noRefItems, dupCandidates, dedupConfig);
-        for (const mg of dedupResult.merged) {
-          result.push(...mg.survivors);
-        }
-        result.push(...dedupResult.kept);
-      }
-    }
+    result.push(...AnalyzeMerger._mergeBySourceText(noRefItems));
 
     return result;
   }
@@ -720,25 +967,38 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
     }
 
-    // Fallback: semantic dedup for noRefItems
-    if (noRefItems.length > 0) {
-      if (noRefItems.length === 1) {
-        result.push(noRefItems[0]);
-      } else {
-        const dedupConfig: DedupConfig<Record<string, unknown>> = {
-          items: noRefItems,
-          getId: (_item, index) => `noreq_e_${index}`,
-          getText: (item) => String(item.description ?? ""),
-          getSourceText: (item) => String(item.source_text ?? ""),
-          normalize: (text) => AnalyzeMerger._normalizeForMatch(text),
-        };
-        const dupCandidates = findDuplicateCandidates(dedupConfig);
-        const dedupResult = applyDeterministicMerges(noRefItems, dupCandidates, dedupConfig);
-        for (const mg of dedupResult.merged) {
-          result.push(...mg.survivors);
-        }
-        result.push(...dedupResult.kept);
+    result.push(...AnalyzeMerger._mergeBySourceText(noRefItems));
+
+    return result;
+  }
+
+  private static _mergeBySourceText(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    const result: Record<string, unknown>[] = [];
+    const sourceGroups = new Map<string, Record<string, unknown>[]>();
+
+    for (const item of items) {
+      const source = AnalyzeMerger._normalizeForMatch(String(item.source_text ?? ""));
+      if (!source) {
+        result.push(item);
+        continue;
       }
+      let group = sourceGroups.get(source);
+      if (!group) {
+        group = [];
+        sourceGroups.set(source, group);
+      }
+      group.push(item);
+    }
+
+    for (const group of sourceGroups.values()) {
+      if (group.length === 1) {
+        result.push(group[0]);
+        continue;
+      }
+      group.sort((a, b) =>
+        String(b.description ?? "").length - String(a.description ?? "").length,
+      );
+      result.push(group[0]);
     }
 
     return result;
@@ -1082,6 +1342,43 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
         excCandidates.push(...accepted);
         merged["missingExceptionCandidates"] = excCandidates;
       }
+    }
+  }
+
+  /**
+   * 应用关系实体补丁：补充 CaseRegistration / EnrollmentRecord 等关系实体。
+   * 只追加缺失实体，不覆盖已有实体；后续 normalizer/canonicalizer 会统一字段和 ID。
+   */
+  private static _applyEntityPatches(
+    merged: Record<string, unknown>,
+    patches: Array<Record<string, unknown>>,
+  ): void {
+    if (!patches || patches.length === 0) return;
+
+    const entities = asArray(merged["entities"]);
+    const existingNames = new Set(
+      entities.map((entity) => String(entity.name ?? "").trim().toLowerCase()),
+    );
+    const accepted: Record<string, unknown>[] = [];
+
+    for (const patch of patches) {
+      const name = String(patch.name ?? "").trim();
+      if (!name || existingNames.has(name.toLowerCase())) continue;
+      if (!/^[A-Z][A-Za-z0-9]*$/.test(name)) continue;
+
+      const attributes = Array.isArray(patch.attributes) ? patch.attributes : [];
+      const relationships = Array.isArray(patch.relationships) ? patch.relationships : [];
+      accepted.push({
+        ...patch,
+        entityKind: String(patch.entityKind ?? "process_record"),
+        attributes,
+        relationships,
+      });
+      existingNames.add(name.toLowerCase());
+    }
+
+    if (accepted.length > 0) {
+      merged["entities"] = [...entities, ...accepted];
     }
   }
 

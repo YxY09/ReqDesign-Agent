@@ -495,6 +495,90 @@ describe("RequirementNormalizer", () => {
     expect(rels.some(r => r.target === "Product" && r.type === "many-to-many")).toBe(false);
   });
 
+  it("promotes process records when business processes have their own lifecycle data", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "Case", attributes: [{ name: "caseId", type: "Long", description: "案件ID" }], relationships: [] },
+        { name: "Complaint", attributes: [{ name: "complaintId", type: "Long", description: "投诉ID" }], relationships: [] },
+        { name: "Document", attributes: [{ name: "documentId", type: "Long", description: "文档ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+      business_processes: [
+        {
+          name: "CaseRegistration",
+          steps: ["Register complaint", "Assign case number", "Update registration status"],
+          actors: ["Citizen"],
+        },
+        {
+          name: "CaseInvestigation",
+          steps: ["Gather evidence", "Write investigation report", "Record conclusion"],
+          actors: ["Officer"],
+        },
+        {
+          name: "CaseProsecution",
+          steps: ["Prepare charges", "Track court dates", "Update prosecution status"],
+          actors: ["Prosecutor"],
+        },
+      ],
+    };
+
+    RequirementNormalizer.normalize(input);
+    const result = RequirementNormalizer.normalizeAgainstSource(
+      input,
+      "CaseRegistration has a registration number, timestamp, and status. CaseInvestigation stores evidence, report, conclusion, and status. CaseProsecution stores court dates, judgment result, sentence, and status.",
+    );
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const names = entities.map(e => e.name);
+    expect(names).toContain("CaseRegistration");
+    expect(names).toContain("CaseInvestigation");
+    expect(names).toContain("CaseProsecution");
+
+    const registration = entities.find(e => e.name === "CaseRegistration")!;
+    expect(registration.entityKind).toBe("process_record");
+    const attrs = registration.attributes as Array<Record<string, unknown>>;
+    expect(attrs.some(a => a.name === "businessNo")).toBe(true);
+    expect(attrs.some(a => a.name === "status")).toBe(true);
+    const rels = registration.relationships as Array<Record<string, unknown>>;
+    expect(rels.some(r => r.target === "Case" && r.type === "many-to-one")).toBe(true);
+    expect(rels.some(r => r.target === "Complaint" && r.type === "many-to-one")).toBe(true);
+
+    const caseEntity = entities.find(e => e.name === "Case")!;
+    const caseRels = caseEntity.relationships as Array<Record<string, unknown>>;
+    expect(caseRels.some(r => r.target === "CaseRegistration" && r.type === "one-to-many")).toBe(true);
+    expect(caseRels.some(r => r.target === "CaseInvestigation" && r.type === "one-to-many")).toBe(true);
+    expect(caseRels.some(r => r.target === "CaseProsecution" && r.type === "one-to-many")).toBe(true);
+  });
+
+  it("does not promote ordinary processes without relationship-entity evidence", () => {
+    const input = {
+      actors: [],
+      entities: [
+        { name: "Case", attributes: [{ name: "caseId", type: "Long", description: "案件ID" }], relationships: [] },
+        { name: "SearchResult", attributes: [{ name: "resultId", type: "Long", description: "结果ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+      business_processes: [
+        {
+          name: "SearchCase",
+          steps: ["Enter keyword", "Execute search", "Display matching cases"],
+          actors: ["Officer"],
+        },
+      ],
+    };
+
+    RequirementNormalizer.normalize(input);
+    const result = RequirementNormalizer.normalizeAgainstSource(
+      input,
+      "The system allows users to search cases and display matching results.",
+    );
+    const names = (result.entities as Array<Record<string, unknown>>).map(e => e.name);
+    expect(names).not.toContain("SearchCase");
+  });
+
   // ----------------------------------------------------------------
   // Edge cases
   // ----------------------------------------------------------------

@@ -59,6 +59,7 @@
 - **禁止改名**：如果需求分析中有一个实体叫 `Review`，你不能在设计里把它改成 `Evaluation` 或 `Comment`。必须使用完全相同的英文名。
 - 如果需求分析结果中明确提到了某个业务概念但未列入 entities，你可以在核心类表中补充该类，但不能凭空创造。
 - 如果需求中存在“明细/商品明细/订单行/列表项”等聚合子项，设计中必须用独立明细类承载数量、单价、金额快照等信息，不能让聚合根直接多对多关联资源对象。
+- 如果需求实体带有 `entityKind: "process_record"` 或 `entityKind: "association"`，它表示被实体化的流程/关系，必须作为独立核心类保留。例如 `CaseRegistration`、`CaseInvestigation`、`EnrollmentRecord` 不能被折叠成 `Case.register()` 或 `Student -> Course` 的普通关系。
 - 输出前做一次实体名自检：逐一核对 `requirement_json.entities[].name` 列表，确认每个实体都在核心类表中有对应条目，且类名完全一致。如果发现遗漏或改名，立即修正。
 
 ### 5. 数据流说明

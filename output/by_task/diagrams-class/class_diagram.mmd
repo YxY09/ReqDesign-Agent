@@ -2,11 +2,9 @@ classDiagram
     class Case {
         -String caseId
         -String status
-        -DateTime createdDate
-        -DateTime lastAccessed
-        -String title
-        -String description
         -DateTime createdAt
+        -String title
+        -DateTime updatedAt
         +register()
         +investigate()
         +prosecute()
@@ -15,77 +13,70 @@ classDiagram
         -String suspectId
         -String name
         -String status
-        -String description
         +addToCase()
-        +updateStatus()
-    }
-    class Property {
-        -String propertyId
-        -String description
-        -Decimal value
-        -String status
-        +assignToCase()
-        +updateValue()
-    }
-    class AuditTrail {
-        -String eventId
-        -String eventType
-        -DateTime timestamp
-        -String userId
-        -String auditId
-        -String action
-        -String entityType
-        -String entityId
-        -String details
-        +logEvent()
-        +exportEvents()
-    }
-    class UserProfile {
-        -String userId
-        -String role
-        -Object uiPreferences
-        -Object preferences
-        -String username
-        -List groups
-        -String name
-        -List groupMemberships
-        +createProfile()
-        +updatePermissions()
-    }
-    class Defect {
-        -String defectId
-        -String description
-        -String status
-        -String priority
-        -DateTime createdAt
-        -String title
-        -String reportedBy
-        -DateTime reportedAt
-        -String category
-        +logDefect()
         +updateStatus()
     }
     class Document {
         -String documentId
         -String type
-        -Object content
         -String title
-        -DateTime createdAt
-        -String name
-        -Long size
-        -DateTime uploadedAt
         +upload()
         +download()
+        +linkToCase()
+    }
+    class AuditTrail {
+        -String action
+        -DateTime timestamp
+        -String actionType
+        -String userId
+        -String entityId
+        -String auditId
+        +logAction()
+        +exportTrail()
+    }
+    class Property {
+        -String propertyId
+        -String description
+        -String status
+        +register()
+        +updateStatus()
+    }
+    class SearchResult {
+        -String resultId
+        -List items
+        -String query
+        -List results
+        +search()
+        +filterByAccess()
+    }
+    class UserProfile {
+        -String userId
+        -Object interfacePreferences
+        -String securityLevel
+        -List privileges
+        -String role
+        +savePreferences()
+        +assignToGroup()
+    }
+    class Complaint {
+        -String complaintId
+        -String description
+        -String status
+        +register()
+        +linkToCase()
     }
     Case "1" --> "*" Suspect : contains
-    Case "1" --> "*" Property : involves
     Case "1" --> "*" Document : has
-    Case "1" --> "*" AuditTrail : tracks
-    UserProfile "1" --> "*" Case : assigned
-    UserProfile "1" --> "*" AuditTrail : performs
-    UserProfile "1" --> "*" Defect : reports
-    Suspect "1" --> "1" Case : belongs_to
-    Property "1" --> "1" Case : belongs_to
-    Document "1" --> "1" Case : associated_with
-    AuditTrail "1" --> "1" Case : related_to
-    Defect "1" --> "1" UserProfile : created_by
+    Case "1" --> "*" Property : includes
+    Case "1" --> "*" AuditTrail : generates
+    Case "1" --> "*" SearchResult : produces
+    Suspect "*" --> "1" Case : belongs_to
+    Document "*" --> "1" Case : associated_with
+    Document "1" --> "1" Property : references
+    AuditTrail "*" --> "1" Case : records
+    AuditTrail "*" --> "1" UserProfile : performed_by
+    Property "*" --> "1" Case : part_of
+    Complaint "1" --> "1" Case : linked_to
+    Complaint "*" --> "1" UserProfile : filed_by
+
+    UserProfile "*" --> "*" Case : accesses

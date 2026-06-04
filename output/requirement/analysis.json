@@ -1,162 +1,161 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "CCTNS V1.0 is a police case management system focusing on crime investigation and criminal detection, providing value to police personnel and citizens.",
+  "project_overview": "CCTNS V1.0 is a system designed to improve crime investigation and criminal detection by providing value to police personnel and citizens through automation and efficient information exchange.",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "Administrator with privileges to manage user profiles and system configurations"
+      "description": "Administrator with full system access and configuration privileges"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "Law enforcement personnel who investigate and manage cases"
+      "description": "Police personnel responsible for investigating cases"
     },
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "Public user who may report cases or access limited case information"
+      "description": "General public user who can register complaints"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "Support staff who handle defect reports and enhancement requests"
+      "description": "Support staff handling defects and enhancement requests"
     },
     {
       "actorRef": "A_AUDITOR",
       "name": "Auditor",
-      "description": "External personnel who review system activity and audit trails"
+      "description": "External auditor who can examine audit trails"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
-      "description": "Staff responsible for maintaining case records"
+      "description": "Records room staff managing case documentation"
     }
   ],
   "functions": [
     {
-      "id": "FUN_CONFIGURE_ACCESS",
-      "name": "ConfigureAccess",
-      "description": "Configure case access permissions",
-      "sub_capabilities": [],
+      "id": "FUN_ACCESS_CONTROL",
+      "name": "AccessControl",
+      "description": "Manage access control for cases",
+      "sub_capabilities": [
+        "限制案件访问权限",
+        "设置用户组权限",
+        "记录访问违规行为"
+      ],
       "acceptance_criteria": [
-        "Access rights are set correctly",
-        "Changes are logged in audit trail"
+        "应能限制案件访问到特定用户或用户组",
+        "应记录所有访问控制违规行为"
       ],
       "related_actors": [
         "A_ADMIN"
       ],
       "priority": "high",
-      "preconditions": "用户必须具有管理员权限",
+      "preconditions": "用户具有管理员权限",
       "displayId": "F001"
+    },
+    {
+      "id": "FUN_CUSTOMIZE_INTERFACE",
+      "name": "CustomizeInterface",
+      "description": "Customize user interface settings",
+      "sub_capabilities": [
+        "调整表格中显示的列",
+        "移动界面元素",
+        "调整界面元素大小",
+        "修改界面外观"
+      ],
+      "acceptance_criteria": [
+        "用户能够保存界面配置",
+        "配置保存在用户配置文件中"
+      ],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "用户已登录系统",
+      "displayId": "F002"
     },
     {
       "id": "FUN_EXPORT_AUDIT_TRAIL",
       "name": "ExportAuditTrail",
-      "description": "Export audit trails for specified cases",
+      "description": "Exports audit trails for specified cases",
       "sub_capabilities": [],
       "acceptance_criteria": [
-        "Audit data is exported without affecting stored trail",
-        "Exported data contains all required information",
-        "Audit trail is exported without affecting stored data",
-        "Exported data is complete and accurate"
+        "Audit data is exported without affecting stored trails",
+        "Exported data is complete and accurate",
+        "审计跟踪数据应完整导出",
+        "导出操作不应影响系统存储的审计跟踪"
       ],
       "related_actors": [
-        "A_AUDITOR",
-        "A_ADMIN"
+        "A_AUDITOR"
       ],
       "priority": "medium",
       "preconditions": "User must have export permissions",
-      "displayId": "F002"
+      "displayId": "F003"
     },
     {
       "id": "FUN_GENERATE_REPORT",
       "name": "GenerateReport",
-      "description": "Generate reports on defects or cases",
-      "sub_capabilities": [
-        "CategoryWiseReport",
-        "StatusWiseReport",
-        "AgeWiseReport"
-      ],
-      "acceptance_criteria": [
-        "Reports are generated accurately",
-        "Reports can be filtered by various criteria"
-      ],
+      "description": "Generate reports on system activity",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
       "related_actors": [
-        "Admin",
-        "Auditor"
+        "A_ADMIN",
+        "A_AUDITOR"
       ],
       "priority": "medium",
-      "preconditions": "User must have reporting permissions",
-      "displayId": "F003"
+      "preconditions": "User must have appropriate access rights",
+      "displayId": "F004"
     },
     {
       "id": "FUN_INVESTIGATE_CASE",
       "name": "InvestigateCase",
-      "description": "Police initiates investigation process after complaint registration",
+      "description": "Facilitates the investigation process after complaint registration",
       "sub_capabilities": [],
       "acceptance_criteria": [
-        "Case status is updated to 'Under Investigation'",
-        "All investigation actions are recorded in audit trail",
-        "Investigation details are recorded",
-        "Case status is updated appropriately"
+        "Case details can be updated",
+        "Evidence can be attached"
       ],
       "related_actors": [
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
       "preconditions": "Case must be registered",
-      "displayId": "F004"
-    },
-    {
-      "id": "FUN_LOG_DEFECT",
-      "name": "LogDefect",
-      "description": "Log system defects or enhancement requests",
-      "sub_capabilities": [],
-      "acceptance_criteria": [
-        "Defect is logged with all required details",
-        "User receives confirmation"
-      ],
-      "related_actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "medium",
-      "preconditions": "用户必须登录系统",
       "displayId": "F005"
     },
     {
       "id": "FUN_MANAGE_USER_PROFILE",
       "name": "ManageUserProfile",
-      "description": "Manage user profiles and configurations",
-      "sub_capabilities": [],
+      "description": "Manage user profiles and group assignments",
+      "sub_capabilities": [
+        "设置用户界面偏好",
+        "保存用户配置",
+        "设置用户配置文件",
+        "分配用户到组"
+      ],
       "acceptance_criteria": [
-        "Profiles are created/updated accurately",
-        "Only admin users can perform this function"
+        "用户能够修改个人配置",
+        "配置变更后立即生效",
+        "应能设置用户安全属性",
+        "应能将用户分配到多个组"
       ],
       "related_actors": [
-        "A_ADMIN"
+        "A_ADMIN",
+        "A_CITIZEN"
       ],
       "priority": "high",
-      "preconditions": "用户必须具有管理员权限",
+      "preconditions": "用户已登录系统",
       "displayId": "F006"
     },
     {
       "id": "FUN_PROSECUTE_CASE",
       "name": "ProsecuteCase",
-      "description": "Initiate prosecution for a case",
-      "sub_capabilities": [
-        "记录法庭交互条目",
-        "跟踪案件起诉状态"
-      ],
-      "acceptance_criteria": [
-        "能够记录与法庭的所有交互",
-        "能够跟踪案件起诉进度",
-        "Prosecution details are recorded",
-        "Case status is updated to reflect prosecution"
-      ],
+      "description": "Handle prosecution for a case",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
       "related_actors": [
-        "PoliceOfficer"
+        "A_POLICE_OFFICER"
       ],
       "priority": "high",
       "preconditions": "案件必须已完成调查",
@@ -165,70 +164,56 @@
     {
       "id": "FUN_REGISTER_CASE",
       "name": "RegisterCase",
-      "description": "Citizens can register complaints with police",
+      "description": "Allows citizens to register complaints with police",
       "sub_capabilities": [],
       "acceptance_criteria": [
-        "Case is created with all required fields",
-        "Citizen receives confirmation of case registration",
-        "Case details are captured accurately",
-        "Case is assigned a unique identifier"
+        "Complaint details are captured accurately",
+        "Case reference number is generated"
       ],
       "related_actors": [
         "A_CITIZEN",
         "A_POLICE_OFFICER"
       ],
       "priority": "high",
-      "preconditions": "Citizen must be authenticated",
+      "preconditions": "User must be authenticated",
       "displayId": "F008"
     },
     {
       "id": "FUN_SEARCH_CASE",
       "name": "SearchCase",
-      "description": "Search for cases based on various criteria",
+      "description": "Search for cases",
       "sub_capabilities": [
-        "Simple search",
-        "Advanced search",
         "基本搜索",
         "高级搜索",
-        "自定义结果视图",
-        "执行不同类型查询",
-        "SimpleSearch",
+        "QuickSearch",
         "AdvancedSearch"
       ],
       "acceptance_criteria": [
-        "Search results are returned within performance requirements",
-        "Only cases with proper access rights are shown",
-        "能够按人员、犯罪类型、作案手法、财产等搜索",
-        "能够按案件或嫌疑人/被告自定义结果视图",
-        "能够执行月报、RTI相关等查询",
-        "Search results are returned within specified time limits",
-        "Only cases accessible to user are shown"
+        "搜索结果必须在5-8秒内返回",
+        "搜索结果不得包含用户无权访问的记录"
       ],
       "related_actors": [
         "A_POLICE_OFFICER",
         "A_ADMIN"
       ],
       "priority": "high",
-      "preconditions": "User must have appropriate access rights",
+      "preconditions": "用户必须已登录",
       "displayId": "F009"
     },
     {
       "id": "FUN_TRACK_DEFECT",
       "name": "TrackDefect",
-      "description": "Track submitted defects or enhancement requests",
+      "description": "Allows users to log and track defects or enhancement requests",
       "sub_capabilities": [],
       "acceptance_criteria": [
-        "Defect status updates are visible to submitter",
-        "Help desk can generate reports on defects",
-        "Defect status is accurately tracked",
-        "Users receive alerts on status changes"
+        "Defect details are captured",
+        "Status updates are visible"
       ],
       "related_actors": [
-        "A_CITIZEN",
         "A_HELP_DESK"
       ],
       "priority": "medium",
-      "preconditions": "Defect must be logged first",
+      "preconditions": "User must be authenticated",
       "displayId": "F010"
     }
   ],
@@ -236,7 +221,7 @@
     {
       "entityRef": "E_CASE",
       "name": "Case",
-      "description": "Police case record",
+      "description": "Police case record containing investigation details",
       "attributes": [
         {
           "name": "caseId",
@@ -249,14 +234,9 @@
           "description": "Current status of the case"
         },
         {
-          "name": "createdDate",
+          "name": "createdAt",
           "type": "DateTime",
-          "description": "Date when case was registered"
-        },
-        {
-          "name": "lastAccessed",
-          "type": "DateTime",
-          "description": "Date and time when case was last accessed"
+          "description": "Date and time when the case was created"
         },
         {
           "name": "title",
@@ -264,59 +244,46 @@
           "description": "Title of the case"
         },
         {
-          "name": "description",
-          "type": "String",
-          "description": "Detailed description of the case"
-        },
-        {
-          "name": "createdAt",
+          "name": "updatedAt",
           "type": "DateTime",
-          "description": "Date and time when case was created"
+          "description": "Date and time when the case was last updated"
         }
       ],
       "relationships": [
         {
           "target": "E_SUSPECT",
           "type": "one-to-many",
-          "description": "Case can have multiple suspects"
-        },
-        {
-          "target": "E_PROPERTY",
-          "type": "one-to-many",
-          "description": "Case can involve multiple properties"
-        },
-        {
-          "target": "Document",
-          "type": "one-to-many",
-          "description": "案件关联的文档"
-        },
-        {
-          "target": "Suspect",
-          "type": "one-to-many",
-          "description": "Case can have multiple suspects"
-        },
-        {
-          "target": "Property",
-          "type": "one-to-many",
-          "description": "Case can involve multiple properties"
+          "description": "A case can have multiple suspects"
         },
         {
           "target": "E_DOCUMENT",
           "type": "one-to-many",
-          "description": "Case may have multiple documents"
+          "description": "A case can have multiple documents"
         },
         {
-          "target": "AuditTrail",
-          "type": "o2m",
-          "description": "Case should have a one-to-many relationship with AuditTrail to track all actions related to a specific case."
+          "target": "E_PROPERTY",
+          "type": "one-to-many",
+          "description": "Case can have multiple properties"
+        },
+        {
+          "target": "E_AUDIT_TRAIL",
+          "type": "one-to-many",
+          "description": "Case can have multiple audit entries"
+        },
+        {
+          "target": "E_SEARCH_RESULT",
+          "type": "one-to-many",
+          "description": "A case can generate multiple search results when queried"
         }
       ],
-      "id": "E_CASE"
+      "id": "E_CASE",
+      "canonicalName": "Case",
+      "displayName": "Case"
     },
     {
       "entityRef": "E_SUSPECT",
       "name": "Suspect",
-      "description": "Person suspected in a case",
+      "description": "Person suspected of involvement in a case",
       "attributes": [
         {
           "name": "suspectId",
@@ -326,37 +293,123 @@
         {
           "name": "name",
           "type": "String",
-          "description": "Full name of suspect"
+          "description": "Full name of the suspect"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "Current status in investigation"
-        },
-        {
-          "name": "description",
-          "type": "String",
-          "description": "Description of the suspect"
+          "description": "Current status of the suspect"
         }
       ],
       "relationships": [
         {
           "target": "E_CASE",
           "type": "many-to-one",
-          "description": "Suspect belongs to a case"
-        },
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "Suspect belongs to a case"
+          "description": "Suspect is associated with a case"
         }
       ],
-      "id": "E_SUSPECT"
+      "id": "E_SUSPECT",
+      "canonicalName": "Suspect",
+      "displayName": "Suspect"
+    },
+    {
+      "entityRef": "E_DOCUMENT",
+      "name": "Document",
+      "description": "Document or file associated with a case",
+      "attributes": [
+        {
+          "name": "documentId",
+          "type": "String",
+          "description": "Unique identifier for the document"
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "description": "Type of document (e.g., evidence, report)"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "Title of the document"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-one",
+          "description": "Document is associated with a case"
+        },
+        {
+          "target": "E_PROPERTY",
+          "type": "one-to-one",
+          "description": "Documents may be associated with specific properties in a case"
+        }
+      ],
+      "id": "E_DOCUMENT",
+      "canonicalName": "Document",
+      "displayName": "Document"
+    },
+    {
+      "entityRef": "E_AUDIT_TRAIL",
+      "name": "AuditTrail",
+      "description": "Record of actions taken on critical entities",
+      "attributes": [
+        {
+          "name": "action",
+          "type": "String",
+          "description": "Type of action performed"
+        },
+        {
+          "name": "timestamp",
+          "type": "DateTime",
+          "description": "Date and time of the action"
+        },
+        {
+          "name": "actionType",
+          "type": "String",
+          "description": "操作类型(创建/读取/更新/删除)"
+        },
+        {
+          "name": "userId",
+          "type": "String",
+          "description": "User who performed the action"
+        },
+        {
+          "name": "entityId",
+          "type": "String",
+          "description": "被操作的实体ID"
+        },
+        {
+          "name": "entityType",
+          "type": "String",
+          "description": "被操作的实体类型"
+        },
+        {
+          "name": "auditId",
+          "type": "String",
+          "description": "Unique identifier for the audit entry"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_CASE",
+          "type": "many-to-one",
+          "description": "Audit trail entry is associated with a case"
+        },
+        {
+          "target": "E_USER_PROFILE",
+          "type": "many-to-one",
+          "description": "Audit trails record actions taken by specific users"
+        }
+      ],
+      "id": "E_AUDIT_TRAIL",
+      "canonicalName": "AuditTrail",
+      "displayName": "AuditTrail"
     },
     {
       "entityRef": "E_PROPERTY",
       "name": "Property",
-      "description": "Property involved in a case",
+      "description": "Property related to a case",
       "attributes": [
         {
           "name": "propertyId",
@@ -369,11 +422,6 @@
           "description": "Description of the property"
         },
         {
-          "name": "value",
-          "type": "Decimal",
-          "description": "Estimated value of the property"
-        },
-        {
           "name": "status",
           "type": "String",
           "description": "Current status of the property"
@@ -384,275 +432,212 @@
           "target": "E_CASE",
           "type": "many-to-one",
           "description": "Property belongs to a case"
-        },
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "Property belongs to a case"
         }
       ],
-      "id": "E_PROPERTY"
+      "id": "E_PROPERTY",
+      "canonicalName": "Property",
+      "displayName": "Property"
     },
     {
-      "entityRef": "E_AUDIT_TRAIL",
-      "name": "AuditTrail",
-      "description": "Record of system activities",
+      "entityRef": "E_SEARCH_RESULT",
+      "name": "SearchResult",
+      "description": "Result of a search query",
       "attributes": [
         {
-          "name": "eventId",
+          "name": "resultId",
           "type": "String",
-          "description": "Unique identifier for the event"
+          "description": "结果唯一标识"
         },
         {
-          "name": "eventType",
-          "type": "String",
-          "description": "Type of event (create/read/update/delete)"
+          "name": "items",
+          "type": "List",
+          "description": "搜索结果项列表"
         },
         {
-          "name": "timestamp",
-          "type": "DateTime",
-          "description": "Date and time of the action"
+          "name": "query",
+          "type": "String",
+          "description": "Search query"
         },
         {
-          "name": "userId",
-          "type": "String",
-          "description": "User who performed the action"
-        },
-        {
-          "name": "auditId",
-          "type": "String",
-          "description": "Unique identifier for the audit record"
-        },
-        {
-          "name": "action",
-          "type": "String",
-          "description": "Action performed (create/read/update/delete)"
-        },
-        {
-          "name": "entityType",
-          "type": "String",
-          "description": "Type of entity affected"
-        },
-        {
-          "name": "entityId",
-          "type": "String",
-          "description": "Identifier of affected entity"
-        },
-        {
-          "name": "details",
-          "type": "String",
-          "description": "Additional details about the action"
+          "name": "results",
+          "type": "List",
+          "description": "List of matching cases"
         }
       ],
-      "relationships": [
-        {
-          "target": "E_CASE",
-          "type": "many-to-one",
-          "description": "Audit events related to cases"
-        }
-      ],
-      "id": "E_AUDIT_TRAIL"
+      "relationships": [],
+      "id": "E_SEARCH_RESULT",
+      "canonicalName": "SearchResult",
+      "displayName": "SearchResult"
     },
     {
       "entityRef": "E_USER_PROFILE",
       "name": "UserProfile",
-      "description": "User profile and access configuration",
+      "description": "User configuration and settings",
       "attributes": [
+        {
+          "name": "interfacePreferences",
+          "type": "Object",
+          "description": "用户界面偏好设置"
+        },
+        {
+          "name": "lastModified",
+          "type": "DateTime",
+          "description": "最后修改时间"
+        },
         {
           "name": "userId",
           "type": "String",
           "description": "Unique identifier for the user"
         },
         {
+          "name": "securityLevel",
+          "type": "String",
+          "description": "安全级别"
+        },
+        {
+          "name": "privileges",
+          "type": "List",
+          "description": "权限列表"
+        },
+        {
+          "name": "uiConfig",
+          "type": "Object",
+          "description": "用户界面配置"
+        },
+        {
           "name": "role",
           "type": "String",
-          "description": "User role (admin, police, etc)"
+          "description": "User role"
         },
         {
-          "name": "uiPreferences",
-          "type": "Object",
-          "description": "User interface customization settings"
-        },
-        {
-          "name": "preferences",
+          "name": "uiSettings",
           "type": "Object",
           "description": "User interface preferences"
-        },
-        {
-          "name": "username",
-          "type": "String",
-          "description": "User login name"
-        },
-        {
-          "name": "groups",
-          "type": "List",
-          "description": "Groups the user belongs to"
-        },
-        {
-          "name": "name",
-          "type": "String",
-          "description": "Name of the user"
-        },
-        {
-          "name": "groupMemberships",
-          "type": "List",
-          "description": "Groups the user belongs to"
         }
       ],
       "relationships": [
         {
-          "target": "Case",
-          "type": "o2m",
-          "description": "UserProfile should have a one-to-many relationship with Case to track which cases are assigned to which users."
+          "target": "Group",
+          "type": "many-to-many",
+          "description": "用户所属的组"
         },
         {
-          "target": "AuditTrail",
-          "type": "o2m",
-          "description": "UserProfile should have a one-to-many relationship with AuditTrail to track which user performed which actions."
-        },
-        {
-          "target": "Defect",
-          "type": "o2m",
-          "description": "UserProfile should have a one-to-many relationship with Defect to track which user logged which defects."
+          "target": "E_CASE",
+          "type": "many-to-many",
+          "description": "Users can have access to multiple cases through their profiles and groups"
         }
       ],
-      "id": "E_USER_PROFILE"
+      "id": "E_USER_PROFILE",
+      "canonicalName": "UserProfile",
+      "displayName": "UserProfile"
     },
     {
-      "entityRef": "E_DEFECT",
-      "name": "Defect",
-      "description": "System defect or enhancement request",
+      "entityRef": "E_COMPLAINT",
+      "name": "Complaint",
+      "description": "Complaint filed by a citizen",
       "attributes": [
         {
-          "name": "defectId",
+          "name": "id",
           "type": "String",
-          "description": "Unique identifier for the defect"
+          "description": "投诉ID"
         },
         {
           "name": "description",
           "type": "String",
-          "description": "Description of the defect"
+          "description": "Description of the complaint"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "Current status of the defect"
+          "description": "Current status of the complaint"
         },
         {
-          "name": "priority",
+          "name": "complaintId",
           "type": "String",
-          "description": "Priority level of the defect"
-        },
-        {
-          "name": "createdAt",
-          "type": "DateTime",
-          "description": "创建时间"
-        },
-        {
-          "name": "title",
-          "type": "String",
-          "description": "Defect title"
-        },
-        {
-          "name": "reportedBy",
-          "type": "String",
-          "description": "User who reported the defect"
-        },
-        {
-          "name": "reportedAt",
-          "type": "DateTime",
-          "description": "Date and time when defect was reported"
-        },
-        {
-          "name": "category",
-          "type": "String",
-          "description": "Category of the defect"
+          "description": "Unique identifier for the complaint"
         }
       ],
       "relationships": [
-        {
-          "target": "UserProfile",
-          "type": "many-to-one",
-          "description": "缺陷由用户创建"
-        }
-      ],
-      "id": "E_DEFECT"
-    },
-    {
-      "entityRef": "E_DOCUMENT",
-      "name": "Document",
-      "description": "Document or file related to a case",
-      "attributes": [
-        {
-          "name": "documentId",
-          "type": "String",
-          "description": "Unique identifier for the document"
-        },
-        {
-          "name": "type",
-          "type": "String",
-          "description": "Type of the document"
-        },
-        {
-          "name": "content",
-          "type": "Object",
-          "description": "Document content or reference"
-        },
-        {
-          "name": "title",
-          "type": "String",
-          "description": "Document title"
-        },
-        {
-          "name": "createdAt",
-          "type": "DateTime",
-          "description": "When the document was created"
-        },
-        {
-          "name": "name",
-          "type": "String",
-          "description": "Name of the document"
-        },
-        {
-          "name": "size",
-          "type": "Long",
-          "description": "Size of the document in bytes"
-        },
-        {
-          "name": "uploadedAt",
-          "type": "DateTime",
-          "description": "Date and time when document was uploaded"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "Case",
-          "type": "many-to-one",
-          "description": "关联的案件"
-        },
         {
           "target": "E_CASE",
+          "type": "one-to-one",
+          "description": "Complaint may be associated with a case"
+        },
+        {
+          "target": "E_USER_PROFILE",
           "type": "many-to-one",
-          "description": "Document is associated with a case"
+          "description": "Complaints are filed by citizens who have user profiles"
         }
       ],
-      "id": "E_DOCUMENT"
+      "id": "E_COMPLAINT",
+      "canonicalName": "Complaint",
+      "displayName": "Complaint"
     }
   ],
   "constraints": [
     {
-      "constraintUid": "ct_PZCGAY00",
+      "constraintUid": "ct_AWQ78I00",
       "displayId": "C001",
-      "canonicalId": "CON_FUNC_ADMINS_SET_USER_PROFILES_PZCG",
+      "canonicalId": "CON_DATA_SYSTEM_MAINTAIN_CASE_DATA_AWQ7",
+      "type": "data",
+      "subtype": "integrity",
+      "descriptionZh": "System must maintain case data integrity during prosecution process",
+      "canonicalRuleEn": "System must maintain case data integrity during prosecution process",
+      "sourceText": "Interfacing with the courts during the prosecution of cases is an integral part of the responsibilities of police personnel",
+      "normalizedRule": {
+        "subject": "system must maintain case data integrity during prosecution process",
+        "modality": "must",
+        "action": "system must maintain case data integrity during prosecution process"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "Interfacing with the courts during the prosecution of cases is an integral part of the responsibilities of police personnel"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "data_validation_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_DATA_SYSTEM_MAINTAIN_CASE_DATA_AWQ7",
+      "source_text": "Interfacing with the courts during the prosecution of cases is an integral part of the responsibilities of police personnel",
+      "description": "System must maintain case data integrity during prosecution process"
+    },
+    {
+      "constraintUid": "ct_L1DCIE00",
+      "displayId": "C002",
+      "canonicalId": "CON_FUNC_ADMIN_SET_USER_PROFILES_L1DC",
       "type": "functional",
       "subtype": "general",
-      "descriptionZh": "Only admins can set up user profiles",
-      "canonicalRuleEn": "Only admins can set up user profiles",
+      "descriptionZh": "Only admin can set up user profiles and groups",
+      "canonicalRuleEn": "Only admin can set up user profiles and groups",
       "sourceText": "The System must allow only admin-users to set up user profiles and allocate users to groups.",
       "normalizedRule": {
-        "subject": "only admins can set up user profiles",
+        "subject": "only admin can set up user profiles and groups",
         "modality": "must",
-        "action": "only admins can set up user profiles"
+        "action": "only admin can set up user profiles and groups"
       },
       "relatedFunctions": [
         {
@@ -671,23 +656,162 @@
         "recommendedType": "functional_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_FUNC_ADMINS_SET_USER_PROFILES_PZCG",
+      "id": "CON_FUNC_ADMIN_SET_USER_PROFILES_L1DC",
       "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups.",
-      "description": "Only admins can set up user profiles"
+      "description": "Only admin can set up user profiles and groups"
     },
     {
-      "constraintUid": "ct_MSQB8B00",
-      "displayId": "C002",
-      "canonicalId": "CON_FUNC_DESIGN_PREVENT_DATA_LOSS_MSQB",
+      "constraintUid": "ct_BN8AP500",
+      "displayId": "C003",
+      "canonicalId": "CON_FUNC_ALLOW_USERS_BELONG_MULTIPLE_BN8A",
       "type": "functional",
       "subtype": "general",
-      "descriptionZh": "Design to prevent data loss in case of failure",
-      "canonicalRuleEn": "Design to prevent data loss in case of failure",
+      "descriptionZh": "Allow users to belong to multiple groups",
+      "canonicalRuleEn": "Allow users to belong to multiple groups",
+      "sourceText": "The System must allow a user to be a member of more than one group.",
+      "normalizedRule": {
+        "subject": "allow users to belong to multiple groups",
+        "modality": "must",
+        "action": "allow users to belong to multiple groups"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must allow a user to be a member of more than one group."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_ALLOW_USERS_BELONG_MULTIPLE_BN8A",
+      "source_text": "The System must allow a user to be a member of more than one group.",
+      "description": "Allow users to belong to multiple groups"
+    },
+    {
+      "constraintUid": "ct_5PBFCF00",
+      "displayId": "C004",
+      "canonicalId": "CON_FUNC_AUTOMATICALLY_TRACK_EVENTS_WITHOUT_5PBF",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Automatically track events without manual intervention",
+      "canonicalRuleEn": "Automatically track events without manual intervention",
+      "sourceText": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them.",
+      "normalizedRule": {
+        "subject": "automatically track events without manual intervention",
+        "modality": "must",
+        "action": "automatically track events without manual intervention"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_DEFECT",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_AUTOMATICALLY_TRACK_EVENTS_WITHOUT_5PBF",
+      "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them.",
+      "description": "Automatically track events without manual intervention"
+    },
+    {
+      "constraintUid": "ct_SPGUX400",
+      "displayId": "C005",
+      "canonicalId": "CON_FUNC_AVOID_HORIZONTAL_SCROLLING_SPGU",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Avoid horizontal scrolling",
+      "canonicalRuleEn": "Avoid horizontal scrolling",
+      "sourceText": "Horizontal scrolling should be avoided wherever possible.",
+      "normalizedRule": {
+        "subject": "avoid horizontal scrolling",
+        "modality": "must",
+        "action": "avoid horizontal scrolling"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "Horizontal scrolling should be avoided wherever possible."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_AVOID_HORIZONTAL_SCROLLING_SPGU",
+      "source_text": "Horizontal scrolling should be avoided wherever possible.",
+      "description": "Avoid horizontal scrolling"
+    },
+    {
+      "constraintUid": "ct_OMQB5L00",
+      "displayId": "C006",
+      "canonicalId": "CON_FUNC_AVOID_SPLASH_SCREENS_UNLESS_OMQB",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Avoid splash screens unless useful",
+      "canonicalRuleEn": "Avoid splash screens unless useful",
+      "sourceText": "Splash screens should be avoided unless they provide useful content or feedback about the application state to the user. If a splash screen is used, a navigation option to skip it should be offered.",
+      "normalizedRule": {
+        "subject": "avoid splash screens unless useful",
+        "modality": "must",
+        "action": "avoid splash screens unless useful"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "Splash screens should be avoided unless they provide useful content or feedback about the application state to the user. If a splash screen is used, a navigation option to skip it should be offered."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_AVOID_SPLASH_SCREENS_UNLESS_OMQB",
+      "source_text": "Splash screens should be avoided unless they provide useful content or feedback about the application state to the user. If a splash screen is used, a navigation option to skip it should be offered.",
+      "description": "Avoid splash screens unless useful"
+    },
+    {
+      "constraintUid": "ct_AUUCKD00",
+      "displayId": "C007",
+      "canonicalId": "CON_FUNC_CASE_DATA_RECOVERABLE_SYSTEM_AUUC",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "All case data must be recoverable after system failure",
+      "canonicalRuleEn": "All case data must be recoverable after system failure",
       "sourceText": "The system should be designed in manner that operational data is not lost in case of any failure of equipment or communication network.",
       "normalizedRule": {
-        "subject": "design to prevent data loss in case of failure",
+        "subject": "all case data must be recoverable after system failure",
         "modality": "must",
-        "action": "design to prevent data loss in case of failure"
+        "action": "all case data must be recoverable after system failure"
       },
       "relatedFunctions": [
         {
@@ -721,28 +845,54 @@
         "recommendedType": "functional_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_FUNC_DESIGN_PREVENT_DATA_LOSS_MSQB",
+      "id": "CON_FUNC_CASE_DATA_RECOVERABLE_SYSTEM_AUUC",
       "source_text": "The system should be designed in manner that operational data is not lost in case of any failure of equipment or communication network.",
-      "description": "Design to prevent data loss in case of failure"
+      "description": "All case data must be recoverable after system failure"
     },
     {
-      "constraintUid": "ct_4TZ8FM00",
-      "displayId": "C003",
-      "canonicalId": "CON_FUNC_ENSURE_SECURE_DATA_TRANSMISSION_4TZ8",
+      "constraintUid": "ct_HY7NXP00",
+      "displayId": "C008",
+      "canonicalId": "CON_FUNC_CASES_ACCESSIBLE_OFFLINE_CRITICAL_HY7N",
       "type": "functional",
       "subtype": "general",
-      "descriptionZh": "Ensure secure data transmission with SSL and 2-way digital signatures",
-      "canonicalRuleEn": "Ensure secure data transmission with SSL and 2-way digital signatures",
-      "sourceText": "The system should ensure secure transmission of data over the network and utilize SSL and 2-way digital signatures",
+      "descriptionZh": "Cases must be accessible offline with critical functionality",
+      "canonicalRuleEn": "Cases must be accessible offline with critical functionality",
+      "sourceText": "The system should work even in an offline mode with the critical functionality",
       "normalizedRule": {
-        "subject": "ensure secure data transmission with ssl and 2-way digital signatures",
+        "subject": "cases must be accessible offline with critical functionality",
         "modality": "must",
-        "action": "ensure secure data transmission with ssl and 2-way digital signatures"
+        "action": "cases must be accessible offline with critical functionality"
       },
-      "relatedFunctions": [],
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
       "evidence": [
         {
-          "sourceText": "The system should ensure secure transmission of data over the network and utilize SSL and 2-way digital signatures"
+          "sourceText": "The system should work even in an offline mode with the critical functionality"
         }
       ],
       "verification": {
@@ -750,28 +900,34 @@
         "recommendedType": "functional_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_FUNC_ENSURE_SECURE_DATA_TRANSMISSION_4TZ8",
-      "source_text": "The system should ensure secure transmission of data over the network and utilize SSL and 2-way digital signatures",
-      "description": "Ensure secure data transmission with SSL and 2-way digital signatures"
+      "id": "CON_FUNC_CASES_ACCESSIBLE_OFFLINE_CRITICAL_HY7N",
+      "source_text": "The system should work even in an offline mode with the critical functionality",
+      "description": "Cases must be accessible offline with critical functionality"
     },
     {
-      "constraintUid": "ct_U9VL7S00",
-      "displayId": "C004",
-      "canonicalId": "CON_FUNC_HARD_DELETES_SOFT_DELETES_U9VL",
+      "constraintUid": "ct_DQ2KPE00",
+      "displayId": "C009",
+      "canonicalId": "CON_FUNC_DESIGN_NAVIGATION_SELF_DESCRIPTIVE_DQ2K",
       "type": "functional",
       "subtype": "general",
-      "descriptionZh": "No hard deletes, only soft deletes",
-      "canonicalRuleEn": "No hard deletes, only soft deletes",
-      "sourceText": "Do not allow hard delete and perform only soft tagging the row for deletion",
+      "descriptionZh": "Design navigation to be self-descriptive",
+      "canonicalRuleEn": "Design navigation to be self-descriptive",
+      "sourceText": "Making navigation self-descriptive: Navigation should be designed to help users understand where they are, where they have been and where they can go next. General guidance on achieving self-descriptiveness is given in ISO 9241-110.",
       "normalizedRule": {
-        "subject": "no hard deletes, only soft deletes",
+        "subject": "design navigation to be self-descriptive",
         "modality": "must",
-        "action": "no hard deletes, only soft deletes"
+        "action": "design navigation to be self-descriptive"
       },
-      "relatedFunctions": [],
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
       "evidence": [
         {
-          "sourceText": "Do not allow hard delete and perform only soft tagging the row for deletion"
+          "sourceText": "Making navigation self-descriptive: Navigation should be designed to help users understand where they are, where they have been and where they can go next. General guidance on achieving self-descriptiveness is given in ISO 9241-110."
         }
       ],
       "verification": {
@@ -779,28 +935,49 @@
         "recommendedType": "functional_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_FUNC_HARD_DELETES_SOFT_DELETES_U9VL",
-      "source_text": "Do not allow hard delete and perform only soft tagging the row for deletion",
-      "description": "No hard deletes, only soft deletes"
+      "id": "CON_FUNC_DESIGN_NAVIGATION_SELF_DESCRIPTIVE_DQ2K",
+      "source_text": "Making navigation self-descriptive: Navigation should be designed to help users understand where they are, where they have been and where they can go next. General guidance on achieving self-descriptiveness is given in ISO 9241-110.",
+      "description": "Design navigation to be self-descriptive"
     },
     {
-      "constraintUid": "ct_9NDO9J00",
-      "displayId": "C005",
-      "canonicalId": "CON_FUNC_IMPLEMENT_USING_SOA_MODULAR_9NDO",
+      "constraintUid": "ct_211YH300",
+      "displayId": "C010",
+      "canonicalId": "CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y",
       "type": "functional",
       "subtype": "general",
-      "descriptionZh": "Implement using SOA and modular design",
-      "canonicalRuleEn": "Implement using SOA and modular design",
-      "sourceText": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design",
+      "descriptionZh": "Display multiple entities simultaneously",
+      "canonicalRuleEn": "Display multiple entities simultaneously",
+      "sourceText": "The System must be able to display several entities (cases, suspects) simultaneously.",
       "normalizedRule": {
-        "subject": "implement using soa and modular design",
+        "subject": "display multiple entities simultaneously",
         "modality": "must",
-        "action": "implement using soa and modular design"
+        "action": "display multiple entities simultaneously"
       },
-      "relatedFunctions": [],
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
       "evidence": [
         {
-          "sourceText": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design"
+          "sourceText": "The System must be able to display several entities (cases, suspects) simultaneously."
         }
       ],
       "verification": {
@@ -808,23 +985,501 @@
         "recommendedType": "functional_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_FUNC_IMPLEMENT_USING_SOA_MODULAR_9NDO",
-      "source_text": "The system should be implemented using Service Oriented Architecture (SOA) and have a modular design",
-      "description": "Implement using SOA and modular design"
+      "id": "CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y",
+      "source_text": "The System must be able to display several entities (cases, suspects) simultaneously.",
+      "description": "Display multiple entities simultaneously"
     },
     {
-      "constraintUid": "ct_M632SS00",
-      "displayId": "C006",
-      "canonicalId": "CON_FUNC_PERFORM_ADVANCED_SEARCH_WITHIN_M632",
+      "constraintUid": "ct_Q01PVB00",
+      "displayId": "C011",
+      "canonicalId": "CON_FUNC_EMPLOY_CONSISTENT_RULES_Q01P",
       "type": "functional",
       "subtype": "general",
-      "descriptionZh": "Perform advanced search within 10-15 seconds",
-      "canonicalRuleEn": "Perform advanced search within 10-15 seconds",
+      "descriptionZh": "Employ consistent UI rules",
+      "canonicalRuleEn": "Employ consistent UI rules",
+      "sourceText": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application.",
+      "normalizedRule": {
+        "subject": "employ consistent ui rules",
+        "modality": "must",
+        "action": "employ consistent ui rules"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_EMPLOY_CONSISTENT_RULES_Q01P",
+      "source_text": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application.",
+      "description": "Employ consistent UI rules"
+    },
+    {
+      "constraintUid": "ct_KPKV4400",
+      "displayId": "C012",
+      "canonicalId": "CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_KPKV",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Make interfaces customizable",
+      "canonicalRuleEn": "Make interfaces customizable",
+      "sourceText": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile.",
+      "normalizedRule": {
+        "subject": "make interfaces customizable",
+        "modality": "must",
+        "action": "make interfaces customizable"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_KPKV",
+      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile.",
+      "description": "Make interfaces customizable"
+    },
+    {
+      "constraintUid": "ct_B41U8B00",
+      "displayId": "C013",
+      "canonicalId": "CON_FUNC_MINIMIZE_NAVIGATION_STEPS_B41U",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Minimize navigation steps",
+      "canonicalRuleEn": "Minimize navigation steps",
+      "sourceText": "Minimizing navigation effort: The number of navigation steps needed to reach a certain piece of content should be minimized as long as different mental models, navigation strategies and tasks of the user are taken into account.",
+      "normalizedRule": {
+        "subject": "minimize navigation steps",
+        "modality": "must",
+        "action": "minimize navigation steps"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "Minimizing navigation effort: The number of navigation steps needed to reach a certain piece of content should be minimized as long as different mental models, navigation strategies and tasks of the user are taken into account."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_MINIMIZE_NAVIGATION_STEPS_B41U",
+      "source_text": "Minimizing navigation effort: The number of navigation steps needed to reach a certain piece of content should be minimized as long as different mental models, navigation strategies and tasks of the user are taken into account.",
+      "description": "Minimize navigation steps"
+    },
+    {
+      "constraintUid": "ct_B1VMTC00",
+      "displayId": "C014",
+      "canonicalId": "CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_B1VM",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Minimize vertical scrolling",
+      "canonicalRuleEn": "Minimize vertical scrolling",
+      "sourceText": "Vertical scrolling should be minimized. This may be done by placing important information at the top and providing links to information that is further down the page. Horizontal scrolling should be avoided wherever possible.",
+      "normalizedRule": {
+        "subject": "minimize vertical scrolling",
+        "modality": "must",
+        "action": "minimize vertical scrolling"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "Vertical scrolling should be minimized. This may be done by placing important information at the top and providing links to information that is further down the page. Horizontal scrolling should be avoided wherever possible."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_B1VM",
+      "source_text": "Vertical scrolling should be minimized. This may be done by placing important information at the top and providing links to information that is further down the page. Horizontal scrolling should be avoided wherever possible.",
+      "description": "Minimize vertical scrolling"
+    },
+    {
+      "constraintUid": "ct_KKESHT00",
+      "displayId": "C015",
+      "canonicalId": "CON_FUNC_PRODUCE_MEANINGFUL_ERROR_MESSAGES_KKES",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Produce meaningful error messages",
+      "canonicalRuleEn": "Produce meaningful error messages",
+      "sourceText": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error.",
+      "normalizedRule": {
+        "subject": "produce meaningful error messages",
+        "modality": "must",
+        "action": "produce meaningful error messages"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_PRODUCE_MEANINGFUL_ERROR_MESSAGES_KKES",
+      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error.",
+      "description": "Produce meaningful error messages"
+    },
+    {
+      "constraintUid": "ct_AMXCSP00",
+      "displayId": "C016",
+      "canonicalId": "CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Provide interface for logging defects",
+      "canonicalRuleEn": "Provide interface for logging defects",
+      "sourceText": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
+      "normalizedRule": {
+        "subject": "provide interface for logging defects",
+        "modality": "must",
+        "action": "provide interface for logging defects"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_TRACK_DEFECT",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC",
+      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
+      "description": "Provide interface for logging defects"
+    },
+    {
+      "constraintUid": "ct_NUULQA00",
+      "displayId": "C017",
+      "canonicalId": "CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_NUUL",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Provide role-based control for functionality",
+      "canonicalRuleEn": "Provide role-based control for functionality",
+      "sourceText": "The system should provide for role-based control for the functionality within the system",
+      "normalizedRule": {
+        "subject": "provide role-based control for functionality",
+        "modality": "must",
+        "action": "provide role-based control for functionality"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The system should provide for role-based control for the functionality within the system"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_NUUL",
+      "source_text": "The system should provide for role-based control for the functionality within the system",
+      "description": "Provide role-based control for functionality"
+    },
+    {
+      "constraintUid": "ct_5K9FC700",
+      "displayId": "C018",
+      "canonicalId": "CON_FUNC_PROVIDE_TEXT_ALTERNATIVES_NON_5K9F",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Provide text alternatives for non-text media",
+      "canonicalRuleEn": "Provide text alternatives for non-text media",
+      "sourceText": "All non-text media objects, such as graphical images or video, should be provided with alternative equivalent textual descriptions and/or with equivalent text-based functionality.",
+      "normalizedRule": {
+        "subject": "provide text alternatives for non-text media",
+        "modality": "must",
+        "action": "provide text alternatives for non-text media"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "All non-text media objects, such as graphical images or video, should be provided with alternative equivalent textual descriptions and/or with equivalent text-based functionality."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_PROVIDE_TEXT_ALTERNATIVES_NON_5K9F",
+      "source_text": "All non-text media objects, such as graphical images or video, should be provided with alternative equivalent textual descriptions and/or with equivalent text-based functionality.",
+      "description": "Provide text alternatives for non-text media"
+    },
+    {
+      "constraintUid": "ct_XNJME600",
+      "displayId": "C019",
+      "canonicalId": "CON_FUNC_SEND_ALERTS_USERS_ACTIONS_XNJM",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Send alerts to users when actions are taken",
+      "canonicalRuleEn": "Send alerts to users when actions are taken",
+      "sourceText": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
+      "normalizedRule": {
+        "subject": "send alerts to users when actions are taken",
+        "modality": "must",
+        "action": "send alerts to users when actions are taken"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SEND_ALERTS_USERS_ACTIONS_XNJM",
+      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
+      "description": "Send alerts to users when actions are taken"
+    },
+    {
+      "constraintUid": "ct_SVNZ8000",
+      "displayId": "C020",
+      "canonicalId": "CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_SVNZ",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "Show users their location in navigation",
+      "canonicalRuleEn": "Show users their location in navigation",
+      "sourceText": "Showing users where they are: Each presentation segment (page or window) should provide the user with a clear and sufficient indication of where he or she is in the navigation structure and of the current segment position with respect to the overall structure.",
+      "normalizedRule": {
+        "subject": "show users their location in navigation",
+        "modality": "must",
+        "action": "show users their location in navigation"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "Showing users where they are: Each presentation segment (page or window) should provide the user with a clear and sufficient indication of where he or she is in the navigation structure and of the current segment position with respect to the overall structure."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_SVNZ",
+      "source_text": "Showing users where they are: Each presentation segment (page or window) should provide the user with a clear and sufficient indication of where he or she is in the navigation structure and of the current segment position with respect to the overall structure.",
+      "description": "Show users their location in navigation"
+    },
+    {
+      "constraintUid": "ct_4ESETS00",
+      "displayId": "C021",
+      "canonicalId": "CON_FUNC_SUITABLE_USERS_SPECIAL_NEEDS_4ESE",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "UI must be suitable for users with special needs",
+      "canonicalRuleEn": "UI must be suitable for users with special needs",
+      "sourceText": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines",
+      "normalizedRule": {
+        "subject": "ui must be suitable for users with special needs",
+        "modality": "must",
+        "action": "ui must be suitable for users with special needs"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SUITABLE_USERS_SPECIAL_NEEDS_4ESE",
+      "source_text": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines",
+      "description": "UI must be suitable for users with special needs"
+    },
+    {
+      "constraintUid": "ct_PB66O100",
+      "displayId": "C022",
+      "canonicalId": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "System must provide detailed context-sensitive help material",
+      "canonicalRuleEn": "System must provide detailed context-sensitive help material",
+      "sourceText": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application.",
+      "normalizedRule": {
+        "subject": "system must provide detailed context-sensitive help material",
+        "modality": "must",
+        "action": "system must provide detailed context-sensitive help material"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
+      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application.",
+      "description": "System must provide detailed context-sensitive help material"
+    },
+    {
+      "constraintUid": "ct_QKE96N00",
+      "displayId": "C023",
+      "canonicalId": "CON_FUNC_USER_INTERFACE_SUPPORT_MULTILINGUAL_QKE9",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "User interface must support multilingual capabilities",
+      "canonicalRuleEn": "User interface must support multilingual capabilities",
+      "sourceText": "The system should support multilingual interface",
+      "normalizedRule": {
+        "subject": "user interface must support multilingual capabilities",
+        "modality": "must",
+        "action": "user interface must support multilingual capabilities"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The system should support multilingual interface"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_USER_INTERFACE_SUPPORT_MULTILINGUAL_QKE9",
+      "source_text": "The system should support multilingual interface",
+      "description": "User interface must support multilingual capabilities"
+    },
+    {
+      "constraintUid": "ct_SOBXHN00",
+      "displayId": "C024",
+      "canonicalId": "CON_PERF_SEARCH_FUNCTIONALITY_MAINTAIN_PERFORMANCE_SOBX",
+      "type": "performance",
+      "subtype": "response_time",
+      "descriptionZh": "Search functionality must maintain performance regardless of data volume",
+      "canonicalRuleEn": "Search functionality must maintain performance regardless of data volume",
       "sourceText": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system.",
       "normalizedRule": {
-        "subject": "perform advanced search within 10-15 seconds",
+        "subject": "search functionality must maintain performance regardless of data volume",
         "modality": "must",
-        "action": "perform advanced search within 10-15 seconds"
+        "action": "search functionality must maintain performance regardless of data volume"
       },
       "relatedFunctions": [
         {
@@ -855,732 +1510,360 @@
       ],
       "verification": {
         "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_PERFORM_ADVANCED_SEARCH_WITHIN_M632",
-      "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system.",
-      "description": "Perform advanced search within 10-15 seconds"
-    },
-    {
-      "constraintUid": "ct_4CYU2000",
-      "displayId": "C007",
-      "canonicalId": "CON_FUNC_PREVENT_CROSS_SITE_SCRIPTING_4CYU",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Prevent cross-site scripting",
-      "canonicalRuleEn": "Prevent cross-site scripting",
-      "sourceText": "Prevent cross-site scripting Validate the incoming data / user request Encode the incoming data / user request",
-      "normalizedRule": {
-        "subject": "prevent cross-site scripting",
-        "modality": "must",
-        "action": "prevent cross-site scripting"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "Prevent cross-site scripting Validate the incoming data / user request Encode the incoming data / user request"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_PREVENT_CROSS_SITE_SCRIPTING_4CYU",
-      "source_text": "Prevent cross-site scripting Validate the incoming data / user request Encode the incoming data / user request",
-      "description": "Prevent cross-site scripting"
-    },
-    {
-      "constraintUid": "ct_9BDLKK00",
-      "displayId": "C008",
-      "canonicalId": "CON_FUNC_PREVENT_SQL_INJECTION_9BDL",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Prevent SQL injection",
-      "canonicalRuleEn": "Prevent SQL injection",
-      "sourceText": "Prevent SQL Injection Utilize parameterized queries Sanitize the user-inputs",
-      "normalizedRule": {
-        "subject": "prevent sql injection",
-        "modality": "must",
-        "action": "prevent sql injection"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "Prevent SQL Injection Utilize parameterized queries Sanitize the user-inputs"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_PREVENT_SQL_INJECTION_9BDL",
-      "source_text": "Prevent SQL Injection Utilize parameterized queries Sanitize the user-inputs",
-      "description": "Prevent SQL injection"
-    },
-    {
-      "constraintUid": "ct_5S582Z00",
-      "displayId": "C009",
-      "canonicalId": "CON_FUNC_PROVIDE_CONTEXT_SENSITIVE_HELP_5S58",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Provide context-sensitive help for all UI actions",
-      "canonicalRuleEn": "Provide context-sensitive help for all UI actions",
-      "sourceText": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application.",
-      "normalizedRule": {
-        "subject": "provide context-sensitive help for all ui actions",
-        "modality": "must",
-        "action": "provide context-sensitive help for all ui actions"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_PROVIDE_CONTEXT_SENSITIVE_HELP_5S58",
-      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application.",
-      "description": "Provide context-sensitive help for all UI actions"
-    },
-    {
-      "constraintUid": "ct_AMXCSP00",
-      "displayId": "C010",
-      "canonicalId": "CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Provide interface for logging defects",
-      "canonicalRuleEn": "Provide interface for logging defects",
-      "sourceText": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
-      "normalizedRule": {
-        "subject": "provide interface for logging defects",
-        "modality": "must",
-        "action": "provide interface for logging defects"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_LOG_DEFECT",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_TRACK_DEFECT",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC",
-      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
-      "description": "Provide interface for logging defects"
-    },
-    {
-      "constraintUid": "ct_12RXYN00",
-      "displayId": "C011",
-      "canonicalId": "CON_FUNC_RETRIEVE_DISPLAY_RECENTLY_ACCESSED_12RX",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Retrieve and display not recently accessed cases within 20 seconds",
-      "canonicalRuleEn": "Retrieve and display not recently accessed cases within 20 seconds",
-      "sourceText": "The System must be able to retrieve and display within 20 seconds the case which has not been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system.",
-      "normalizedRule": {
-        "subject": "retrieve and display not recently accessed cases within 20 seconds",
-        "modality": "must",
-        "action": "retrieve and display not recently accessed cases within 20 seconds"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_CONFIGURE_ACCESS",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_INVESTIGATE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_PROSECUTE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_REGISTER_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_SEARCH_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The System must be able to retrieve and display within 20 seconds the case which has not been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_RETRIEVE_DISPLAY_RECENTLY_ACCESSED_12RX",
-      "source_text": "The System must be able to retrieve and display within 20 seconds the case which has not been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system.",
-      "description": "Retrieve and display not recently accessed cases within 20 seconds"
-    },
-    {
-      "constraintUid": "ct_41WPBH00",
-      "displayId": "C012",
-      "canonicalId": "CON_FUNC_RETRIEVE_DISPLAY_RECENTLY_ACCESSED_41WP",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Retrieve and display recently accessed cases within 5-8 seconds",
-      "canonicalRuleEn": "Retrieve and display recently accessed cases within 5-8 seconds",
-      "sourceText": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system.",
-      "normalizedRule": {
-        "subject": "retrieve and display recently accessed cases within 5-8 seconds",
-        "modality": "must",
-        "action": "retrieve and display recently accessed cases within 5-8 seconds"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_CONFIGURE_ACCESS",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_INVESTIGATE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_PROSECUTE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_REGISTER_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_SEARCH_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_RETRIEVE_DISPLAY_RECENTLY_ACCESSED_41WP",
-      "source_text": "The System must be able to retrieve and display within 5-8 seconds the case which has been accessed within the previous 2 months, regardless of storage capacity or number of cases in the system.",
-      "description": "Retrieve and display recently accessed cases within 5-8 seconds"
-    },
-    {
-      "constraintUid": "ct_DJZOG900",
-      "displayId": "C013",
-      "canonicalId": "CON_FUNC_RUN_MULTIPLE_BROWSERS_DJZO",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Run on multiple browsers",
-      "canonicalRuleEn": "Run on multiple browsers",
-      "sourceText": "The system should run on multiple browsers",
-      "normalizedRule": {
-        "subject": "run on multiple browsers",
-        "modality": "must",
-        "action": "run on multiple browsers"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should run on multiple browsers"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_RUN_MULTIPLE_BROWSERS_DJZO",
-      "source_text": "The system should run on multiple browsers",
-      "description": "Run on multiple browsers"
-    },
-    {
-      "constraintUid": "ct_HD4FHB00",
-      "displayId": "C014",
-      "canonicalId": "CON_FUNC_SUPPORT_MULTILINGUAL_INTERFACE_HD4F",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Support multilingual interface",
-      "canonicalRuleEn": "Support multilingual interface",
-      "sourceText": "The system should support multilingual interface",
-      "normalizedRule": {
-        "subject": "support multilingual interface",
-        "modality": "must",
-        "action": "support multilingual interface"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should support multilingual interface"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SUPPORT_MULTILINGUAL_INTERFACE_HD4F",
-      "source_text": "The system should support multilingual interface",
-      "description": "Support multilingual interface"
-    },
-    {
-      "constraintUid": "ct_TLTSNF00",
-      "displayId": "C015",
-      "canonicalId": "CON_FUNC_SUPPORT_SECURE_VPN_CONNECTIONS_TLTS",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Support secure VPN connections",
-      "canonicalRuleEn": "Support secure VPN connections",
-      "sourceText": "The system should support secure virtual private network connections",
-      "normalizedRule": {
-        "subject": "support secure vpn connections",
-        "modality": "must",
-        "action": "support secure vpn connections"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should support secure virtual private network connections"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SUPPORT_SECURE_VPN_CONNECTIONS_TLTS",
-      "source_text": "The system should support secure virtual private network connections",
-      "description": "Support secure VPN connections"
-    },
-    {
-      "constraintUid": "ct_FJONLX00",
-      "displayId": "C016",
-      "canonicalId": "CON_FUNC_SYSTEM_ALLOW_USERS_CUSTOMIZE_FJON",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "The system must allow users to customize the user interface, including menu contents, layout of screens, use of function keys, on-screen colours, fonts and font sizes.",
-      "canonicalRuleEn": "The system must allow users to customize the user interface, including menu contents, layout of screens, use of function keys, on-screen colours, fonts and font sizes.",
-      "sourceText": "Where the System employs a graphical user interface, it must allow users to customise it. Customisation should include, but need not be limited to the following changes: menu contents; layout of screens; use of function keys; on-screen colours, fonts and font sizes;",
-      "normalizedRule": {
-        "subject": "the system must allow users to customize the user interface, including menu contents, layout of screens, use of function keys, on-screen colours, fonts and font sizes.",
-        "modality": "must",
-        "action": "the system must allow users to customize the user interface, including menu contents, layout of screens, use of function keys, on-screen colours, fonts and font sizes."
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "Where the System employs a graphical user interface, it must allow users to customise it. Customisation should include, but need not be limited to the following changes: menu contents; layout of screens; use of function keys; on-screen colours, fonts and font sizes;"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SYSTEM_ALLOW_USERS_CUSTOMIZE_FJON",
-      "source_text": "Where the System employs a graphical user interface, it must allow users to customise it. Customisation should include, but need not be limited to the following changes: menu contents; layout of screens; use of function keys; on-screen colours, fonts and font sizes;",
-      "description": "The system must allow users to customize the user interface, including menu contents, layout of screens, use of function keys, on-screen colours, fonts and font sizes."
-    },
-    {
-      "constraintUid": "ct_EVO7SR00",
-      "displayId": "C017",
-      "canonicalId": "CON_FUNC_SYSTEM_ENSURE_TEXT_RESIZABLE_EVO7",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "The system must ensure that text is resizable by the user, using functions provided by the user agent or other appropriate means.",
-      "canonicalRuleEn": "The system must ensure that text is resizable by the user, using functions provided by the user agent or other appropriate means.",
-      "sourceText": "Making text resizable by the user: Text should be able to be resized by the user, using functions provided by the user agent or other appropriate means i.e. see ISO 9241-171.",
-      "normalizedRule": {
-        "subject": "the system must ensure that text is resizable by the user, using functions provided by the user agent or other appropriate means.",
-        "modality": "must",
-        "action": "the system must ensure that text is resizable by the user, using functions provided by the user agent or other appropriate means."
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "Making text resizable by the user: Text should be able to be resized by the user, using functions provided by the user agent or other appropriate means i.e. see ISO 9241-171."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SYSTEM_ENSURE_TEXT_RESIZABLE_EVO7",
-      "source_text": "Making text resizable by the user: Text should be able to be resized by the user, using functions provided by the user agent or other appropriate means i.e. see ISO 9241-171.",
-      "description": "The system must ensure that text is resizable by the user, using functions provided by the user agent or other appropriate means."
-    },
-    {
-      "constraintUid": "ct_J9NF7L00",
-      "displayId": "C018",
-      "canonicalId": "CON_FUNC_SYSTEM_PROVIDE_REPORTS_ACTIONS_J9NF",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "The system must provide reports for actions on cases organized by workstation and (where technically appropriate) by network address.",
-      "canonicalRuleEn": "The system must provide reports for actions on cases organized by workstation and (where technically appropriate) by network address.",
-      "sourceText": "The System should be able to provide reports for actions on cases organised by workstation and (where technically appropriate) by network address.",
-      "normalizedRule": {
-        "subject": "the system must provide reports for actions on cases organized by workstation and (where technically appropriate) by network address.",
-        "modality": "must",
-        "action": "the system must provide reports for actions on cases organized by workstation and (where technically appropriate) by network address."
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_GENERATE_REPORT",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_INVESTIGATE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_PROSECUTE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_REGISTER_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_SEARCH_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The System should be able to provide reports for actions on cases organised by workstation and (where technically appropriate) by network address."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SYSTEM_PROVIDE_REPORTS_ACTIONS_J9NF",
-      "source_text": "The System should be able to provide reports for actions on cases organised by workstation and (where technically appropriate) by network address.",
-      "description": "The system must provide reports for actions on cases organized by workstation and (where technically appropriate) by network address."
-    },
-    {
-      "constraintUid": "ct_W3N25600",
-      "displayId": "C019",
-      "canonicalId": "CON_FUNC_SYSTEM_PROVIDE_SITE_MAP_W3N2",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "The system must provide a site map showing the structure of the site in an overview form.",
-      "canonicalRuleEn": "The system must provide a site map showing the structure of the site in an overview form.",
-      "sourceText": "A separate navigation overview such as a site map should be provided for application showing the structure of the site in an overview form.",
-      "normalizedRule": {
-        "subject": "the system must provide a site map showing the structure of the site in an overview form.",
-        "modality": "must",
-        "action": "the system must provide a site map showing the structure of the site in an overview form."
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "A separate navigation overview such as a site map should be provided for application showing the structure of the site in an overview form."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SYSTEM_PROVIDE_SITE_MAP_W3N2",
-      "source_text": "A separate navigation overview such as a site map should be provided for application showing the structure of the site in an overview form.",
-      "description": "The system must provide a site map showing the structure of the site in an overview form."
-    },
-    {
-      "constraintUid": "ct_5TAK1900",
-      "displayId": "C020",
-      "canonicalId": "CON_FUNC_SYSTEM_SCALABLE_5TAK",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "System must be scalable",
-      "canonicalRuleEn": "System must be scalable",
-      "sourceText": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled.",
-      "normalizedRule": {
-        "subject": "system must be scalable",
-        "modality": "must",
-        "action": "system must be scalable"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_INVESTIGATE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_PROSECUTE_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_REGISTER_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_SEARCH_CASE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SYSTEM_SCALABLE_5TAK",
-      "source_text": "The System be scaleable and must not have any features which would preclude use in small or large police stations, with varying numbers of cases handled.",
-      "description": "System must be scalable"
-    },
-    {
-      "constraintUid": "ct_OKAYAO00",
-      "displayId": "C021",
-      "canonicalId": "CON_FUNC_SYSTEM_SEND_ALERTS_EMAIL_OKAY",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "The system must send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
-      "canonicalRuleEn": "The system must send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
-      "sourceText": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
-      "normalizedRule": {
-        "subject": "the system must send alerts (e.g., email, sms) to the user if the user chooses to whenever any action has been taken on the alert.",
-        "modality": "must",
-        "action": "the system must send alerts (e.g., email, sms) to the user if the user chooses to whenever any action has been taken on the alert."
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_SYSTEM_SEND_ALERTS_EMAIL_OKAY",
-      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
-      "description": "The system must send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
-    },
-    {
-      "constraintUid": "ct_H3TOB500",
-      "displayId": "C022",
-      "canonicalId": "CON_FUNC_USE_HTTPS_COMMUNICATION_PROTOCOL_H3TO",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Use HTTPS as communication protocol",
-      "canonicalRuleEn": "Use HTTPS as communication protocol",
-      "sourceText": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)",
-      "normalizedRule": {
-        "subject": "use https as communication protocol",
-        "modality": "must",
-        "action": "use https as communication protocol"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_USE_HTTPS_COMMUNICATION_PROTOCOL_H3TO",
-      "source_text": "The system should use HTTPS as the communication protocol, i.e., HTTP over an encrypted secure socket layer (SSL)",
-      "description": "Use HTTPS as communication protocol"
-    },
-    {
-      "constraintUid": "ct_B6CM9L00",
-      "displayId": "C023",
-      "canonicalId": "CON_FUNC_VALIDATE_DATA_CLIENT_SERVER_B6CM",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Validate data at client and server",
-      "canonicalRuleEn": "Validate data at client and server",
-      "sourceText": "Validate the data both at the client and server",
-      "normalizedRule": {
-        "subject": "validate data at client and server",
-        "modality": "must",
-        "action": "validate data at client and server"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "Validate the data both at the client and server"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_VALIDATE_DATA_CLIENT_SERVER_B6CM",
-      "source_text": "Validate the data both at the client and server",
-      "description": "Validate data at client and server"
-    },
-    {
-      "constraintUid": "ct_R4ZT3X00",
-      "displayId": "C024",
-      "canonicalId": "CON_FUNC_WORK_OFFLINE_MODE_CRITICAL_R4ZT",
-      "type": "functional",
-      "subtype": "general",
-      "descriptionZh": "Work in offline mode with critical functionality",
-      "canonicalRuleEn": "Work in offline mode with critical functionality",
-      "sourceText": "The system should work even in an offline mode with the critical functionality",
-      "normalizedRule": {
-        "subject": "work in offline mode with critical functionality",
-        "modality": "must",
-        "action": "work in offline mode with critical functionality"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should work even in an offline mode with the critical functionality"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "functional_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_FUNC_WORK_OFFLINE_MODE_CRITICAL_R4ZT",
-      "source_text": "The system should work even in an offline mode with the critical functionality",
-      "description": "Work in offline mode with critical functionality"
-    },
-    {
-      "constraintUid": "ct_SF44ZK00",
-      "displayId": "C025",
-      "canonicalId": "CON_PERF_DESIGN_SATISFACTORY_PERFORMANCE_LOW_SF44",
-      "type": "performance",
-      "subtype": "response_time",
-      "descriptionZh": "Design for satisfactory performance on low-bandwidth",
-      "canonicalRuleEn": "Design for satisfactory performance on low-bandwidth",
-      "sourceText": "The system should be designed to have satisfactory performance even in Police Stations connected on low-bandwidth",
-      "normalizedRule": {
-        "subject": "design for satisfactory performance on low-bandwidth",
-        "modality": "must",
-        "action": "design for satisfactory performance on low-bandwidth"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should be designed to have satisfactory performance even in Police Stations connected on low-bandwidth"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
         "recommendedType": "performance_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_PERF_DESIGN_SATISFACTORY_PERFORMANCE_LOW_SF44",
-      "source_text": "The system should be designed to have satisfactory performance even in Police Stations connected on low-bandwidth",
-      "description": "Design for satisfactory performance on low-bandwidth"
+      "id": "CON_PERF_SEARCH_FUNCTIONALITY_MAINTAIN_PERFORMANCE_SOBX",
+      "source_text": "The System must be able to perform a simple search within 5-8 seconds and a advanced search (multiple search criteria) within 10-15 seconds regardless of the storage capacity or number of cases in the system.",
+      "description": "Search functionality must maintain performance regardless of data volume"
     },
     {
-      "constraintUid": "ct_O7KYDV00",
-      "displayId": "C026",
-      "canonicalId": "CON_SEC_ALLOW_LIMITING_CASE_ACCESS_O7KY",
+      "constraintUid": "ct_MJB5EC00",
+      "displayId": "C025",
+      "canonicalId": "CON_SEC_AUDIT_TRAIL_DATA_CANNOT_MJB5",
       "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Allow limiting case access to specified users/groups",
-      "canonicalRuleEn": "Allow limiting case access to specified users/groups",
-      "sourceText": "The System must allow the user to limit access to cases to specified users or user groups.",
+      "subtype": "audit",
+      "descriptionZh": "Audit trail data cannot be modified or deleted",
+      "canonicalRuleEn": "Audit trail data cannot be modified or deleted",
+      "sourceText": "The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user",
       "normalizedRule": {
-        "subject": "allow limiting case access to specified users/groups",
-        "modality": "must",
-        "action": "allow limiting case access to specified users/groups"
+        "subject": "audit trail data cannot be modified or deleted",
+        "modality": "must_not",
+        "action": "audit trail data cannot be modified or deleted"
       },
       "relatedFunctions": [
         {
-          "functionId": "FUN_CONFIGURE_ACCESS",
+          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_AUDIT_TRAIL_DATA_CANNOT_MJB5",
+      "source_text": "The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user",
+      "description": "Audit trail data cannot be modified or deleted"
+    },
+    {
+      "constraintUid": "ct_DQCQUA00",
+      "displayId": "C026",
+      "canonicalId": "CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "Capture and store access control violations",
+      "canonicalRuleEn": "Capture and store access control violations",
+      "sourceText": "The System must be able to capture and store violations (i.e. A user's attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms.",
+      "normalizedRule": {
+        "subject": "capture and store access control violations",
+        "modality": "must",
+        "action": "capture and store access control violations"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must be able to capture and store violations (i.e. A user's attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ",
+      "source_text": "The System must be able to capture and store violations (i.e. A user's attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms.",
+      "description": "Capture and store access control violations"
+    },
+    {
+      "constraintUid": "ct_7DBGTM00",
+      "displayId": "C027",
+      "canonicalId": "CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG",
+      "type": "security",
+      "subtype": "audit",
+      "descriptionZh": "Export audit trails for specified cases",
+      "canonicalRuleEn": "Export audit trails for specified cases",
+      "sourceText": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity.",
+      "normalizedRule": {
+        "subject": "export audit trails for specified cases",
+        "modality": "must",
+        "action": "export audit trails for specified cases"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG",
+      "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity.",
+      "description": "Export audit trails for specified cases"
+    },
+    {
+      "constraintUid": "ct_P2OYY200",
+      "displayId": "C028",
+      "canonicalId": "CON_SEC_MAINTAIN_AUDIT_TRAIL_CASE_P2OY",
+      "type": "security",
+      "subtype": "audit",
+      "descriptionZh": "Maintain audit trail for case lifetime",
+      "canonicalRuleEn": "Maintain audit trail for case lifetime",
+      "sourceText": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers.",
+      "normalizedRule": {
+        "subject": "maintain audit trail for case lifetime",
+        "modality": "must",
+        "action": "maintain audit trail for case lifetime"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_INVESTIGATE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_PROSECUTE_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_REGISTER_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_MAINTAIN_AUDIT_TRAIL_CASE_P2OY",
+      "source_text": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers.",
+      "description": "Maintain audit trail for case lifetime"
+    },
+    {
+      "constraintUid": "ct_7RBFQ700",
+      "displayId": "C029",
+      "canonicalId": "CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "Never include unauthorized records in search results",
+      "canonicalRuleEn": "Never include unauthorized records in search results",
+      "sourceText": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access.",
+      "normalizedRule": {
+        "subject": "never include unauthorized records in search results",
+        "modality": "must",
+        "action": "never include unauthorized records in search results"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_SEARCH_CASE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF",
+      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access.",
+      "description": "Never include unauthorized records in search results"
+    },
+    {
+      "constraintUid": "ct_2HSDZZ00",
+      "displayId": "C030",
+      "canonicalId": "CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_2HSD",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "Offer alternative access paths",
+      "canonicalRuleEn": "Offer alternative access paths",
+      "sourceText": "Offering alternative access paths: Alternative access paths for navigating to a specific unit of content should be offered to support different navigation strategies.",
+      "normalizedRule": {
+        "subject": "offer alternative access paths",
+        "modality": "must",
+        "action": "offer alternative access paths"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "Offering alternative access paths: Alternative access paths for navigating to a specific unit of content should be offered to support different navigation strategies."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_2HSD",
+      "source_text": "Offering alternative access paths: Alternative access paths for navigating to a specific unit of content should be offered to support different navigation strategies.",
+      "description": "Offer alternative access paths"
+    },
+    {
+      "constraintUid": "ct_J9UHSU00",
+      "displayId": "C031",
+      "canonicalId": "CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "Only super-user can change security attributes",
+      "canonicalRuleEn": "Only super-user can change security attributes",
+      "sourceText": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user.",
+      "normalizedRule": {
+        "subject": "only super-user can change security attributes",
+        "modality": "must",
+        "action": "only super-user can change security attributes"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH",
+      "source_text": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user.",
+      "description": "Only super-user can change security attributes"
+    },
+    {
+      "constraintUid": "ct_URACMR00",
+      "displayId": "C032",
+      "canonicalId": "CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_URAC",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "System must allow limiting case access to specified users/groups",
+      "canonicalRuleEn": "System must allow limiting case access to specified users/groups",
+      "sourceText": "The System must allow the user to limit access to cases to specified users or user groups.",
+      "normalizedRule": {
+        "subject": "system must allow limiting case access to specified users/groups",
+        "modality": "must",
+        "action": "system must allow limiting case access to specified users/groups"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
           "relation": "mentioned_in_source",
           "confidence": 0.7
         },
@@ -1620,216 +1903,19 @@
         "recommendedType": "security_integration_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_SEC_ALLOW_LIMITING_CASE_ACCESS_O7KY",
+      "id": "CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_URAC",
       "source_text": "The System must allow the user to limit access to cases to specified users or user groups.",
-      "description": "Allow limiting case access to specified users/groups"
+      "description": "System must allow limiting case access to specified users/groups"
     },
     {
-      "constraintUid": "ct_ANXR5800",
-      "displayId": "C027",
-      "canonicalId": "CON_SEC_BUILD_COMMON_USER_ACCESS_ANXR",
-      "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Build on common User Access and Authentication Service",
-      "canonicalRuleEn": "Build on common User Access and Authentication Service",
-      "sourceText": "The system should be built on a common User Access and Authentication Service to ensure Single-Sign on for the end-user",
-      "normalizedRule": {
-        "subject": "build on common user access and authentication service",
-        "modality": "must",
-        "action": "build on common user access and authentication service"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_CONFIGURE_ACCESS",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        },
-        {
-          "functionId": "FUN_MANAGE_USER_PROFILE",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The system should be built on a common User Access and Authentication Service to ensure Single-Sign on for the end-user"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "security_integration_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_SEC_BUILD_COMMON_USER_ACCESS_ANXR",
-      "source_text": "The system should be built on a common User Access and Authentication Service to ensure Single-Sign on for the end-user",
-      "description": "Build on common User Access and Authentication Service"
-    },
-    {
-      "constraintUid": "ct_SW9YFJ00",
-      "displayId": "C028",
-      "canonicalId": "CON_SEC_DESIGN_BROWSER_BASED_ACCESS_SW9Y",
-      "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Design for browser-based access with minimal client requirements",
-      "canonicalRuleEn": "Design for browser-based access with minimal client requirements",
-      "sourceText": "The system should be designed for access through browser-based systems and must impose minimal requirements on the client device",
-      "normalizedRule": {
-        "subject": "design for browser-based access with minimal client requirements",
-        "modality": "must",
-        "action": "design for browser-based access with minimal client requirements"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_CONFIGURE_ACCESS",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The system should be designed for access through browser-based systems and must impose minimal requirements on the client device"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "security_integration_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_SEC_DESIGN_BROWSER_BASED_ACCESS_SW9Y",
-      "source_text": "The system should be designed for access through browser-based systems and must impose minimal requirements on the client device",
-      "description": "Design for browser-based access with minimal client requirements"
-    },
-    {
-      "constraintUid": "ct_KV1BML00",
-      "displayId": "C029",
-      "canonicalId": "CON_SEC_SUPPORT_MULTI_TIER_AUTHENTICATION_KV1B",
-      "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Support multi-tier authentication",
-      "canonicalRuleEn": "Support multi-tier authentication",
-      "sourceText": "The system should support multi-tier authentication where required",
-      "normalizedRule": {
-        "subject": "support multi-tier authentication",
-        "modality": "must",
-        "action": "support multi-tier authentication"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should support multi-tier authentication where required"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "security_integration_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_SEC_SUPPORT_MULTI_TIER_AUTHENTICATION_KV1B",
-      "source_text": "The system should support multi-tier authentication where required",
-      "description": "Support multi-tier authentication"
-    },
-    {
-      "constraintUid": "ct_3PU1O900",
-      "displayId": "C030",
-      "canonicalId": "CON_SEC_SUPPORT_MULTIPLE_TYPES_COMMUNICATION_3PU1",
-      "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Support multiple types of communication services for remote access",
-      "canonicalRuleEn": "Support multiple types of communication services for remote access",
-      "sourceText": "The system must support multiple types of communication services for remote access",
-      "normalizedRule": {
-        "subject": "support multiple types of communication services for remote access",
-        "modality": "must",
-        "action": "support multiple types of communication services for remote access"
-      },
-      "relatedFunctions": [
-        {
-          "functionId": "FUN_CONFIGURE_ACCESS",
-          "relation": "mentioned_in_source",
-          "confidence": 0.7
-        }
-      ],
-      "evidence": [
-        {
-          "sourceText": "The system must support multiple types of communication services for remote access"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "security_integration_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_SEC_SUPPORT_MULTIPLE_TYPES_COMMUNICATION_3PU1",
-      "source_text": "The system must support multiple types of communication services for remote access",
-      "description": "Support multiple types of communication services for remote access"
-    },
-    {
-      "constraintUid": "ct_1PAVGA00",
-      "displayId": "C031",
-      "canonicalId": "CON_SEC_SUPPORT_SELECTIVE_ENCRYPTION_STORED_1PAV",
-      "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Support selective encryption of stored data",
-      "canonicalRuleEn": "Support selective encryption of stored data",
-      "sourceText": "The system should support selective encryption of the stored data",
-      "normalizedRule": {
-        "subject": "support selective encryption of stored data",
-        "modality": "must",
-        "action": "support selective encryption of stored data"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should support selective encryption of the stored data"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "security_integration_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_SEC_SUPPORT_SELECTIVE_ENCRYPTION_STORED_1PAV",
-      "source_text": "The system should support selective encryption of the stored data",
-      "description": "Support selective encryption of stored data"
-    },
-    {
-      "constraintUid": "ct_3QN05N00",
-      "displayId": "C032",
-      "canonicalId": "CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0",
-      "type": "security",
-      "subtype": "access_control",
-      "descriptionZh": "Support SSL encrypted connections",
-      "canonicalRuleEn": "Support SSL encrypted connections",
-      "sourceText": "The system should support SSL encrypted connections",
-      "normalizedRule": {
-        "subject": "support ssl encrypted connections",
-        "modality": "must",
-        "action": "support ssl encrypted connections"
-      },
-      "relatedFunctions": [],
-      "evidence": [
-        {
-          "sourceText": "The system should support SSL encrypted connections"
-        }
-      ],
-      "verification": {
-        "testability": "testable",
-        "recommendedType": "security_integration_test",
-        "acceptanceCriteria": []
-      },
-      "id": "CON_SEC_SUPPORT_SSL_ENCRYPTED_CONNECTIONS_3QN0",
-      "source_text": "The system should support SSL encrypted connections",
-      "description": "Support SSL encrypted connections"
-    },
-    {
-      "constraintUid": "ct_7WR01F00",
+      "constraintUid": "ct_Q4V62L00",
       "displayId": "C033",
-      "canonicalId": "CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_7WR0",
+      "canonicalId": "CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_Q4V6",
       "type": "security",
       "subtype": "audit",
       "descriptionZh": "System must maintain unalterable audit trail",
       "canonicalRuleEn": "System must maintain unalterable audit trail",
-      "sourceText": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged.",
+      "sourceText": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged.",
       "normalizedRule": {
         "subject": "system must maintain unalterable audit trail",
         "modality": "must",
@@ -1849,7 +1935,7 @@
       ],
       "evidence": [
         {
-          "sourceText": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
+          "sourceText": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
         }
       ],
       "verification": {
@@ -1857,156 +1943,164 @@
         "recommendedType": "security_integration_test",
         "acceptanceCriteria": []
       },
-      "id": "CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_7WR0",
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word \"unalterable\" is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged.",
+      "id": "CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_Q4V6",
+      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged.",
       "description": "System must maintain unalterable audit trail"
     },
     {
-      "constraintUid": "ct_2MH93600",
+      "constraintUid": "ct_XE8LLA00",
       "displayId": "C034",
-      "canonicalId": "CON_SEC_TRACK_EVENTS_AUTOMATICALLY_AUDIT_2MH9",
-      "type": "security",
-      "subtype": "audit",
-      "descriptionZh": "Track events automatically in audit trail",
-      "canonicalRuleEn": "Track events automatically in audit trail",
-      "sourceText": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them.",
+      "canonicalId": "CON_USAB_COMPLY_ISO_XE8L",
+      "type": "usability",
+      "subtype": "accessibility",
+      "descriptionZh": "UI must comply with ISO 9241",
+      "canonicalRuleEn": "UI must comply with ISO 9241",
+      "sourceText": "The user interfaces of the system should comply with Standard ISO 9241.",
       "normalizedRule": {
-        "subject": "track events automatically in audit trail",
+        "subject": "ui must comply with iso 9241",
         "modality": "must",
-        "action": "track events automatically in audit trail"
+        "action": "ui must comply with iso 9241"
       },
       "relatedFunctions": [
         {
-          "functionId": "FUN_EXPORT_AUDIT_TRAIL",
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
           "relation": "mentioned_in_source",
           "confidence": 0.7
         },
         {
-          "functionId": "FUN_TRACK_DEFECT",
+          "functionId": "FUN_MANAGE_USER_PROFILE",
           "relation": "mentioned_in_source",
           "confidence": 0.7
         }
       ],
       "evidence": [
         {
-          "sourceText": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them."
+          "sourceText": "The user interfaces of the system should comply with Standard ISO 9241."
         }
       ],
       "verification": {
         "testability": "testable",
-        "recommendedType": "security_integration_test",
+        "recommendedType": "manual_inspection",
         "acceptanceCriteria": []
       },
-      "id": "CON_SEC_TRACK_EVENTS_AUTOMATICALLY_AUDIT_2MH9",
-      "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them.",
-      "description": "Track events automatically in audit trail"
+      "id": "CON_USAB_COMPLY_ISO_XE8L",
+      "source_text": "The user interfaces of the system should comply with Standard ISO 9241.",
+      "description": "UI must comply with ISO 9241"
+    },
+    {
+      "constraintUid": "ct_F8FCV400",
+      "displayId": "C035",
+      "canonicalId": "CON_USAB_ICT_ACCESSIBILITY_STANDARD_F8FC",
+      "type": "usability",
+      "subtype": "accessibility",
+      "descriptionZh": "ICT accessibility standard",
+      "canonicalRuleEn": "ICT accessibility standard",
+      "sourceText": "ICT accessibility: ISO 9241-20 shall be the standard for guidance on ICT accessibility. Application user interfaces to meet its requirements and recommendations.",
+      "normalizedRule": {
+        "subject": "ict accessibility standard",
+        "modality": "must",
+        "action": "ict accessibility standard"
+      },
+      "relatedFunctions": [
+        {
+          "functionId": "FUN_ACCESS_CONTROL",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_CUSTOMIZE_INTERFACE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        },
+        {
+          "functionId": "FUN_MANAGE_USER_PROFILE",
+          "relation": "mentioned_in_source",
+          "confidence": 0.7
+        }
+      ],
+      "evidence": [
+        {
+          "sourceText": "ICT accessibility: ISO 9241-20 shall be the standard for guidance on ICT accessibility. Application user interfaces to meet its requirements and recommendations."
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "manual_inspection",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_USAB_ICT_ACCESSIBILITY_STANDARD_F8FC",
+      "source_text": "ICT accessibility: ISO 9241-20 shall be the standard for guidance on ICT accessibility. Application user interfaces to meet its requirements and recommendations.",
+      "description": "ICT accessibility standard"
     }
   ],
   "exceptions": [
     {
-      "id": "EXC_IUOTOB00",
-      "description": "用户尝试访问无权限的案件",
-      "trigger": "用户请求访问或搜索无权访问的案件",
-      "handling": "根据配置提供不同级别的响应：显示标题和元数据/仅显示案件存在/不显示任何信息",
+      "id": "EXC_Q7LRJX00",
+      "description": "用户尝试访问被拒绝访问的案件",
+      "trigger": "用户尝试访问权限外的案件",
+      "handling": "记录违规行为到审计跟踪",
       "displayId": "X001"
+    },
+    {
+      "id": "EXC_UDDJFZ00",
+      "description": "用户无权访问案件",
+      "trigger": "用户尝试访问无权限的案件",
+      "handling": "记录审计跟踪并显示错误消息",
+      "displayId": "X002"
     },
     {
       "id": "EXC_CASE_FOUND",
       "description": "Case not found",
-      "trigger": "Search returns no results",
-      "handling": "Inform user and suggest alternative search criteria",
-      "displayId": "X002"
-    },
-    {
-      "id": "EXC_CASE_FOUND_2",
-      "description": "Case not found",
-      "trigger": "User tries to access a non-existent case",
-      "handling": "Show error message",
+      "trigger": "User searches for non-existent case",
+      "handling": "Show error message and suggest alternative actions",
       "displayId": "X003"
     },
     {
-      "id": "EXC_CASE_FOUND_SEARCH",
-      "description": "Case not found in search",
-      "trigger": "User searches for a case that doesn't exist or they can't access",
-      "handling": "Return appropriate message without revealing existence of restricted cases",
+      "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT",
+      "description": "Unauthorized access attempt to case",
+      "trigger": "User attempts to access case without permission",
+      "handling": "Log violation in audit trail and show error message",
       "displayId": "X004"
     },
     {
-      "id": "EXC_INVALID_SEARCH_CRITERIA",
-      "description": "Invalid search criteria",
-      "trigger": "User provides invalid search parameters",
-      "handling": "Show validation errors",
+      "id": "EXC_ACCESS_OFFLINE_MODE_NOT",
+      "description": "Attempt to access case in offline mode when not cached locally",
+      "trigger": "User tries to access case data without network connection when data not pre-cached",
+      "handling": "System should display clear error message indicating offline data not available and prompt to reconnect",
+      "originalId": "X003",
       "displayId": "X005"
     },
     {
-      "id": "EXC_OFFLINE_MODE_LIMITATIONS",
-      "description": "Offline mode limitations",
-      "trigger": "System is operating in offline mode",
-      "handling": "Provide limited functionality with appropriate warnings",
+      "id": "EXC_MULTILINGUAL_INTERFACE_RESOURCE_NOT",
+      "description": "Multilingual interface resource not available",
+      "trigger": "Selected language pack not installed or corrupted",
+      "handling": "Fall back to default language and notify administrator",
+      "originalId": "X004",
       "displayId": "X006"
     },
     {
-      "id": "EXC_SYSTEM_FAILS_RESIZE_TEXT",
-      "description": "System fails to resize text as requested by the user.",
-      "trigger": "The user agent does not support text resizing or the system encounters an error.",
-      "handling": "Display a message indicating that text resizing is not supported and provide alternative options (e.g., zooming the entire page).",
+      "id": "EXC_SEARCH_TIMEOUT_DUE_OVERLOAD",
+      "description": "Search timeout due to system overload",
+      "trigger": "Complex search query exceeds maximum allowed time",
+      "handling": "Cancel search and suggest simplified query parameters",
+      "originalId": "X005",
       "displayId": "X007"
     },
     {
-      "id": "EXC_SYSTEM_FAILS_SEND_ALERT",
-      "description": "System fails to send an alert when an action is taken on a defect.",
-      "trigger": "The system encounters an error while trying to send an alert (e.g., email server down).",
-      "handling": "Log the error in the audit trail and retry sending the alert at a later time. Notify the system administrator if the issue persists.",
+      "id": "EXC_MODIFY_DURING_PROSECUTION_PHASE",
+      "description": "Attempt to modify case during prosecution phase",
+      "trigger": "User tries to edit case data after prosecution has begun",
+      "handling": "Block modifications and log attempt in audit trail",
+      "originalId": "X006",
       "displayId": "X008"
     },
     {
-      "id": "EXC_SYSTEM_OFFLINE",
-      "description": "System offline",
-      "trigger": "Network connection lost",
-      "handling": "Continue operation in offline mode with limited functionality",
+      "id": "EXC_OFFLINE_DATA_SYNCHRONIZATION_CONFLICT",
+      "description": "Offline data synchronization conflict",
+      "trigger": "Conflicting changes detected during offline-to-online synchronization",
+      "handling": "Flag conflict for administrator resolution and preserve both versions",
+      "originalId": "X007",
       "displayId": "X009"
-    },
-    {
-      "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT",
-      "description": "Unauthorized access attempt",
-      "trigger": "User tries to access case without proper rights",
-      "handling": "Log attempt in audit trail, show appropriate error message",
-      "displayId": "X010"
-    },
-    {
-      "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT_CASE",
-      "description": "Unauthorized access attempt to case",
-      "trigger": "User attempts to access a case they don't have rights to",
-      "handling": "Log in audit trail and provide appropriate response based on configuration",
-      "displayId": "X011"
-    },
-    {
-      "id": "EXC_UNAUTHORIZED_CASE_ACCESS_ATTEMPT",
-      "description": "Unauthorized case access attempt",
-      "trigger": "User tries to access a case they don't have permission for",
-      "handling": "Log in audit trail and show appropriate message",
-      "displayId": "X012"
-    },
-    {
-      "id": "EXC_USER_ATTEMPTS_ACCESS_CASE",
-      "description": "User attempts to access a case that is not assigned to them.",
-      "trigger": "User tries to access a case they do not have permission to view.",
-      "handling": "Log the attempt in the audit trail and display a message indicating that access is denied.",
-      "displayId": "X013"
-    },
-    {
-      "id": "EXC_USER_ATTEMPTS_CUSTOMIZE_BEYOND",
-      "description": "User attempts to customize UI beyond allowed parameters.",
-      "trigger": "User tries to modify UI elements that are not configurable.",
-      "handling": "Display an error message indicating which elements cannot be modified and provide a list of configurable options.",
-      "displayId": "X014"
-    },
-    {
-      "id": "EXC_USER_ATTEMPTS_GENERATE_REPORT",
-      "description": "User attempts to generate a report with invalid parameters.",
-      "trigger": "User provides invalid or conflicting parameters for report generation.",
-      "handling": "Display an error message with a list of valid parameters and examples of correct usage.",
-      "displayId": "X015"
     }
   ],
   "non_functional_requirements": [
@@ -2016,37 +2110,44 @@
     },
     {
       "category": "security",
-      "description": "System must prevent SQL injection and cross-site scripting"
-    },
-    {
-      "category": "availability",
-      "description": "System must be available during specified hours with minimal downtime"
+      "description": "System must maintain unalterable audit trails"
     },
     {
       "category": "usability",
       "description": "User interfaces must comply with ISO 9241 standards"
     },
     {
-      "category": "scalability",
-      "description": "System must work in small and large police stations"
+      "category": "可用性",
+      "description": "系统用户界面必须适合有特殊需求的用户"
     },
     {
-      "category": "安全性",
-      "description": "系统必须记录用户尝试访问无权限案件的行为"
+      "category": "标准合规",
+      "description": "用户界面应符合ISO 9241标准"
     },
     {
-      "category": "Reliability",
-      "description": "Operational data must not be lost in case of equipment or communication network failure"
+      "category": "合规",
+      "description": "系统用户界面必须符合ISO 9241标准"
+    },
+    {
+      "category": "Scalability",
+      "description": "System must scale for small and large police stations"
+    },
+    {
+      "category": "Architecture",
+      "description": "Service Oriented Architecture (SOA) with modular design"
+    },
+    {
+      "category": "Accessibility",
+      "description": "UI must be suitable for users with special needs"
     }
   ],
   "business_processes": [
     {
       "name": "CaseRegistration",
       "steps": [
-        "Citizen submits complaint",
-        "Police officer reviews complaint",
-        "Case is registered in system",
-        "Confirmation is sent to citizen"
+        "Register complaint",
+        "Assign case number",
+        "Notify police officer"
       ],
       "actors": [
         "A_CITIZEN",
@@ -2056,139 +2157,119 @@
     {
       "name": "CaseInvestigation",
       "steps": [
-        "Police officer accesses case",
-        "Evidence is collected",
-        "Suspects are identified",
-        "Case status is updated",
-        "Findings are recorded"
+        "Review case details",
+        "Gather evidence",
+        "Identify suspects",
+        "Update case status"
       ],
       "actors": [
         "A_POLICE_OFFICER"
       ]
     },
     {
-      "name": "案件起诉流程",
+      "name": "起诉流程",
       "steps": [
-        "记录法庭交互",
-        "更新案件状态",
-        "跟踪起诉进度"
+        "案件调查",
+        "准备起诉材料",
+        "提交法院",
+        "记录法院反馈"
       ],
       "actors": [
-        "PoliceOfficer"
+        "A_POLICE_OFFICER"
       ]
     },
     {
-      "name": "案件搜索流程",
+      "name": "搜索流程",
       "steps": [
         "输入搜索条件",
         "执行搜索",
         "查看结果",
-        "自定义结果视图"
+        "选择案件查看详情"
       ],
       "actors": [
-        "PoliceOfficer"
+        "A_POLICE_OFFICER",
+        "A_ADMIN"
       ]
     },
     {
-      "name": "缺陷管理流程",
+      "name": "界面定制流程",
       "steps": [
-        "记录缺陷",
-        "跟踪缺陷状态",
-        "解决缺陷"
+        "用户登录系统",
+        "访问界面设置",
+        "调整界面元素",
+        "保存配置"
       ],
       "actors": [
         "A_CITIZEN",
-        "A_POLICE_OFFICER",
-        "A_HELP_DESK"
+        "A_ADMIN"
       ]
     },
     {
-      "name": "用户配置流程",
+      "name": "审计跟踪导出流程",
       "steps": [
-        "管理员创建用户配置文件",
-        "分配用户到组",
-        "设置访问权限"
+        "选择案件",
+        "请求导出审计跟踪",
+        "系统生成审计报告",
+        "下载审计报告"
+      ],
+      "actors": [
+        "A_AUDITOR"
+      ]
+    },
+    {
+      "name": "用户权限管理流程",
+      "steps": [
+        "管理员登录",
+        "选择用户",
+        "设置权限",
+        "保存配置"
       ],
       "actors": [
         "A_ADMIN"
       ]
     },
     {
-      "name": "DefectHandling",
+      "name": "CaseProsecution",
       "steps": [
-        "LogDefect",
-        "AssignDefect",
-        "InvestigateDefect",
-        "ResolveDefect"
-      ],
-      "actors": [
-        "Citizen",
-        "HelpDesk"
-      ]
-    },
-    {
-      "name": "CaseRegistrationProcess",
-      "steps": [
-        "RegisterCase",
-        "AssignCase",
-        "InitiateInvestigation"
+        "PrepareCharges",
+        "FileWithCourt",
+        "TrackCourtDates",
+        "UpdateCaseStatus"
       ],
       "actors": [
         "A_POLICE_OFFICER"
       ]
     },
     {
-      "name": "CaseInvestigationProcess",
-      "steps": [
-        "ReviewCase",
-        "GatherEvidence",
-        "InterviewWitnesses",
-        "IdentifySuspects"
-      ],
-      "actors": [
-        "A_POLICE_OFFICER"
-      ]
-    },
-    {
-      "name": "DefectManagementProcess",
+      "name": "DefectTracking",
       "steps": [
         "LogDefect",
-        "AssignDefect",
-        "ResolveDefect",
+        "AssignPriority",
+        "Investigate",
+        "Resolve",
         "NotifyUser"
       ],
       "actors": [
+        "A_CITIZEN",
         "A_HELP_DESK"
-      ]
-    },
-    {
-      "name": "AuditReviewProcess",
-      "steps": [
-        "ExportAuditTrail",
-        "AnalyzeAuditData",
-        "GenerateAuditReport"
-      ],
-      "actors": [
-        "A_AUDITOR"
       ]
     }
   ],
   "proposeNewEntities": [],
   "proposeNewFunctions": [],
-  "missingConstraintCandidates": [],
   "__qualityGate": {
     "passed": true,
-    "score": 0.875,
+    "score": 0.75,
     "checks": [
       {
         "name": "required_fields_non_empty",
         "passed": true,
-        "detail": "actors=6, functions=10, entities=7"
+        "detail": "actors=6, functions=10, entities=8"
       },
       {
         "name": "entity_attribute_coverage",
         "passed": true,
-        "detail": "7/7 entities have attributes (100%)"
+        "detail": "8/8 entities have attributes (100%)"
       },
       {
         "name": "function_description_coverage",
@@ -2198,27 +2279,27 @@
       {
         "name": "constraints_non_empty",
         "passed": true,
-        "detail": "34 constraints, 15 exceptions"
+        "detail": "35 constraints, 9 exceptions"
       },
       {
         "name": "id_format",
         "passed": true,
-        "detail": "All 66 IDs valid"
+        "detail": "All 62 IDs valid"
       },
       {
         "name": "cross_reference_integrity",
-        "passed": true,
-        "detail": "All relationship targets resolve"
+        "passed": false,
+        "detail": "1 broken relationship target(s)"
       },
       {
         "name": "source_ref_coverage",
         "passed": true,
-        "detail": "34/34 constraints have source_text (100%)"
+        "detail": "35/35 constraints have source_text (100%)"
       },
       {
         "name": "no_unverified_constraints",
         "passed": false,
-        "detail": "1 unverified source_text reference(s)"
+        "detail": "2 unverified source_text reference(s)"
       }
     ]
   }

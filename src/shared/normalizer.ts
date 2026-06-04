@@ -39,6 +39,7 @@ export class RequirementNormalizer {
     const source = String(requirementText ?? "");
     RequirementNormalizer._removeUnsupportedRecordEntities(analysis, source);
     RequirementNormalizer._promoteAggregationLineItems(analysis, source);
+    RequirementNormalizer._promoteReifiedRelationships(analysis, source);
     return analysis;
   }
 
@@ -539,6 +540,259 @@ export class RequirementNormalizer {
     if (promoted) {
       analysis.entities = entityObjs;
     }
+  }
+
+  // ------------------------------------------------------------------
+  // 10. 关系实体化
+  // 当流程/关系本身有编号、时间、状态、结果、报告、证据等独立数据时，
+  // 将其提升为 process_record 实体，而不仅仅保留在 business_processes 中。
+  // ------------------------------------------------------------------
+  private static _promoteReifiedRelationships(
+    analysis: Record<string, unknown>,
+    requirementText: string,
+  ): void {
+    const entities = RequirementNormalizer._getEntities(analysis);
+    const processes = Array.isArray(analysis.business_processes)
+      ? analysis.business_processes as Record<string, unknown>[]
+      : [];
+    if (!entities || entities.length === 0 || processes.length === 0) return;
+
+    const entityObjs = entities.filter((e): e is Record<string, unknown> =>
+      typeof e === "object" && e !== null && !Array.isArray(e),
+    );
+    const entityNames = new Set(
+      entityObjs.map((e) => String(e.name ?? "").trim()).filter(Boolean),
+    );
+    const source = RequirementNormalizer._splitSearchableText(requirementText);
+    let promoted = false;
+
+    for (const process of processes) {
+      const rawName = String(process.name ?? process.id ?? "").trim();
+      const entityName = RequirementNormalizer._deriveReifiedEntityName(rawName);
+      if (!entityName || entityNames.has(entityName)) continue;
+      if (!RequirementNormalizer._looksLikeReifiableProcessName(rawName)) continue;
+
+      const processText = RequirementNormalizer._buildProcessEvidenceText(
+        process,
+        source,
+      );
+      const evidence = RequirementNormalizer._collectReificationEvidence(processText);
+      if (!RequirementNormalizer._hasEnoughReificationEvidence(rawName, evidence)) {
+        continue;
+      }
+
+      const endpoints = RequirementNormalizer._inferReifiedEndpoints(
+        entityName,
+        processText,
+        entityObjs,
+      );
+      const attributes = RequirementNormalizer._buildReifiedAttributes(entityName, evidence);
+      const relationships = endpoints.map((target) => ({
+        target,
+        type: "many-to-one",
+        description: `${entityName}关联${target}`,
+      }));
+
+      const entity: Record<string, unknown> = {
+        name: entityName,
+        entityKind: "process_record",
+        description: `${rawName}的一次业务执行记录，承载该关系/流程的独立数据和生命周期`,
+        attributes,
+        relationships,
+        reifies: {
+          source: "business_process",
+          sourceName: rawName,
+          endpoints,
+          evidence,
+        },
+      };
+
+      entityObjs.push(entity);
+      entityNames.add(entityName);
+      for (const endpoint of endpoints) {
+        RequirementNormalizer._addRelationship(
+          entityObjs,
+          endpoint,
+          entityName,
+          "one-to-many",
+          `${endpoint}包含多条${entityName}记录`,
+        );
+      }
+      promoted = true;
+    }
+
+    if (promoted) {
+      analysis.entities = entityObjs;
+    }
+  }
+
+  private static _deriveReifiedEntityName(rawName: string): string {
+    const cleaned = rawName.replace(/流程|过程|记录/g, "").trim();
+    if (/^[A-Z][A-Za-z0-9]*$/.test(cleaned)) return cleaned;
+    if (/^[A-Z][A-Za-z0-9]*$/.test(rawName)) return rawName;
+    return "";
+  }
+
+  private static _looksLikeReifiableProcessName(name: string): boolean {
+    return /Registration|Register|Investigation|Investigate|Prosecution|Prosecute|Submission|Submit|Approval|Approve|Enrollment|Enroll|Selection|Reservation|Booking|Borrowing|Borrow|Return|Payment|Refund|Transfer|Visit|Access|Session|Login|Filing|Application|Assignment|Review|Inspection/i.test(name) ||
+      /注册|登记|立案|报案|调查|侦查|起诉|提交|审批|选课|选修|预约|借阅|归还|支付|退款|访问|会话|登录|申请|分配|审核|检查/.test(name);
+  }
+
+  private static _buildProcessEvidenceText(
+    process: Record<string, unknown>,
+    sourceSentences: string[],
+  ): string {
+    const fields: string[] = [];
+    for (const key of ["name", "description", "id"]) {
+      const value = String(process[key] ?? "").trim();
+      if (value) fields.push(value);
+    }
+    for (const key of ["steps", "actors"]) {
+      const value = process[key];
+      if (Array.isArray(value)) {
+        fields.push(...value.map((item) => String(item)));
+      }
+    }
+
+    const seed = RequirementNormalizer._spacePascalCase(fields.join(" "));
+    const tokens = RequirementNormalizer._domainTokens(seed);
+    const relevant = sourceSentences.filter((sentence) => {
+      const spacedSentence = RequirementNormalizer._spacePascalCase(sentence).toLowerCase();
+      return tokens.some((token) => spacedSentence.includes(token));
+    });
+
+    return `${seed}\n${relevant.join("\n")}`;
+  }
+
+  private static _splitSearchableText(text: string): string[] {
+    return String(text ?? "")
+      .split(/(?<=[。！？.!?])|\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  private static _domainTokens(text: string): string[] {
+    const stopWords = new Set([
+      "case", "process", "flow", "record", "the", "and", "with", "for",
+      "system", "user", "users", "update", "create",
+    ]);
+    const tokens = RequirementNormalizer._spacePascalCase(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length >= 3 && !stopWords.has(token));
+    return [...new Set(tokens)];
+  }
+
+  private static _collectReificationEvidence(text: string): string[] {
+    const normalized = RequirementNormalizer._spacePascalCase(text);
+    const evidence: string[] = [];
+    const checks: Array<[string, RegExp]> = [
+      ["has_identifier", /编号|号码|单号|流水|唯一标识|\bid\b|identifier|number|token/i],
+      ["has_timestamp", /时间|日期|学期|期限|时长|timestamp|date|semester|duration|\bip\b/i],
+      ["has_status", /状态|进度|通过|关闭|完成|status|state|passed|closed|resolved|complete/i],
+      ["has_result", /结果|成绩|分数|判决|刑期|result|outcome|score|grade|judgment|sentence/i],
+      ["has_report_or_evidence", /报告|证据|证据链|结论|材料|庭审|report|evidence|conclusion|charge|court/i],
+      ["is_referenced_later", /后续|引用|关联|前提|追踪|follow|referenced|subsequent|prerequisite|track/i],
+    ];
+    for (const [label, re] of checks) {
+      if (re.test(normalized)) evidence.push(label);
+    }
+    return evidence;
+  }
+
+  private static _hasEnoughReificationEvidence(name: string, evidence: string[]): boolean {
+    if (evidence.length >= 2) return true;
+    if (evidence.length === 0) return false;
+    return /Registration|Investigation|Prosecution|Submission|Approval|Enrollment|Reservation|Payment|Visit|Access|Session|Application/i.test(name) ||
+      /注册|登记|立案|调查|侦查|起诉|提交|审批|选课|选修|预约|支付|访问|会话|申请/.test(name);
+  }
+
+  private static _inferReifiedEndpoints(
+    entityName: string,
+    processText: string,
+    entities: Record<string, unknown>[],
+  ): string[] {
+    const spacedEntityName = RequirementNormalizer._spacePascalCase(entityName).toLowerCase();
+    const spacedText = RequirementNormalizer._spacePascalCase(processText).toLowerCase();
+    const endpoints: string[] = [];
+
+    for (const entity of entities) {
+      const name = String(entity.name ?? "").trim();
+      if (!name || name === entityName) continue;
+      const spacedName = RequirementNormalizer._spacePascalCase(name).toLowerCase();
+      if (
+        spacedEntityName.includes(spacedName) ||
+        spacedText.includes(spacedName) ||
+        String(entity.description ?? "").trim() && spacedText.includes(String(entity.description).toLowerCase())
+      ) {
+        endpoints.push(name);
+      }
+    }
+
+    return [...new Set(endpoints)].slice(0, 4);
+  }
+
+  private static _buildReifiedAttributes(
+    entityName: string,
+    evidence: string[],
+  ): Record<string, string>[] {
+    const attrs: Record<string, string>[] = [
+      {
+        name: `${RequirementNormalizer._lowerFirst(entityName)}Id`,
+        type: "Long",
+        description: `${entityName}唯一标识`,
+      },
+      {
+        name: "createdAt",
+        type: "DateTime",
+        description: `${entityName}创建时间`,
+      },
+    ];
+    if (evidence.includes("has_identifier")) {
+      attrs.push({ name: "businessNo", type: "String", description: "业务编号" });
+    }
+    if (evidence.includes("has_status")) {
+      attrs.push({ name: "status", type: "String", description: "流程状态" });
+    }
+    if (evidence.includes("has_timestamp")) {
+      attrs.push({ name: "occurredAt", type: "DateTime", description: "发生时间或业务日期" });
+    }
+    if (evidence.includes("has_result")) {
+      attrs.push({ name: "result", type: "String", description: "处理结果" });
+    }
+    if (evidence.includes("has_report_or_evidence")) {
+      attrs.push({ name: "summary", type: "String", description: "报告、证据或结论摘要" });
+    }
+    return attrs;
+  }
+
+  private static _addRelationship(
+    entities: Record<string, unknown>[],
+    sourceName: string,
+    targetName: string,
+    type: string,
+    description: string,
+  ): void {
+    const source = entities.find((entity) => String(entity.name ?? "") === sourceName);
+    if (!source) return;
+    const rels = Array.isArray(source.relationships)
+      ? source.relationships as Record<string, unknown>[]
+      : [];
+    const exists = rels.some((rel) =>
+      String(rel.target ?? "") === targetName &&
+      String(rel.type ?? "") === type
+    );
+    if (!exists) {
+      rels.push({ target: targetName, type, description });
+      source.relationships = rels;
+    }
+  }
+
+  private static _spacePascalCase(text: string): string {
+    return String(text ?? "")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
   }
 
   private static _dropRelationshipsToMissingEntities(analysis: Record<string, unknown>): void {

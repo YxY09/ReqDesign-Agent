@@ -23,6 +23,7 @@ function makeDeps(): PersistenceServiceDeps {
       saveQualityScore() {}
       saveRequirementAnalysis() {}
       saveAll() {}
+      saveSnapshot() {}
     } as unknown as PersistenceServiceDeps["outputManagerCtor"],
     trace: { log: () => {}, child: () => ({ log: () => {} }) } as unknown as PersistenceServiceDeps["trace"],
     mailbox: { send: () => {}, receive: () => [] } as unknown as PersistenceServiceDeps["mailbox"],
@@ -98,10 +99,10 @@ describe("actionSaveIfQualityGatePassed", () => {
     return state;
   }
 
-  it("blocks final save when deterministic coverage/review validation fails", () => {
+  it("blocks final save when deterministic structural review validation fails", () => {
     const service = new PersistenceService(makeDeps());
     const state = makeWorkflowState();
-    state.testCases = "Test F001 only.";
+    state.testCases = "Test F001.\n步骤：\n预期结果：";
 
     const saved = service.actionSaveIfQualityGatePassed(state, "unit test");
 
@@ -110,6 +111,18 @@ describe("actionSaveIfQualityGatePassed", () => {
     expect(state.qualityStatus).toBe("rejected");
     expect(state.finalReviewPassed).toBe(false);
     expect(state.errors.some((item) => item.includes("deterministic quality gate failed"))).toBe(true);
+  });
+
+  it("allows final save when only coverage is incomplete", () => {
+    const service = new PersistenceService(makeDeps());
+    const state = makeWorkflowState();
+    state.testCases = "Test F001 only.";
+
+    const saved = service.actionSaveIfQualityGatePassed(state, "unit test");
+
+    expect(saved).toBe(true);
+    expect(state.persistStatus).toBe("final_saved");
+    expect(state.errors.some((item) => item.includes("review.覆盖率"))).toBe(false);
   });
 
   it("allows final save when deterministic validation passes", () => {

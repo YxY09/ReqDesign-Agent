@@ -5,6 +5,7 @@
 import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
+import { RequirementIndex } from "../shared/requirementIndex.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
@@ -280,6 +281,13 @@ export class SystemDesigner extends BaseGenerator<string> {
     if (!requirementJson || typeof requirementJson !== "object") {
       warnings.push("需求分析结果为空");
       return warnings;
+    }
+
+    const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
+    const referencedIds = requirementIndex.extractIds(designText);
+    const unknownRequirementIds = requirementIndex.unknownReferences(referencedIds);
+    if (unknownRequirementIds.length > 0) {
+      warnings.push(`设计文档引用了未定义的需求 ID: ${unknownRequirementIds.join(", ")}`);
     }
 
     const requiredSections = ["模块划分", "核心类", "数据流"];

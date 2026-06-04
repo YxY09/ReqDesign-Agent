@@ -32,6 +32,7 @@ import { PlanningTool } from "./tools/planning.js";
 import {
   createExecutionPlan,
   createTask,
+  type ActionType,
   type InflightWorker,
   type RuntimeAction,
   type WorkerKind,
@@ -55,6 +56,17 @@ function sleep(ms: number): Promise<void> {
 export interface RuntimeRunOptions {
   onEvent?: WorkflowEventSink;
 }
+
+interface ActionDispatchResult {
+  didDispatch: boolean;
+  breakLoop: boolean;
+  skipFinalSave: boolean;
+}
+
+type RuntimeActionHandler = (
+  state: WorkflowState,
+  decision: RuntimeAction,
+) => Promise<ActionDispatchResult> | ActionDispatchResult;
 
 export class MultiAgentRuntime {
   readonly config: AgentConfig;
@@ -91,6 +103,7 @@ export class MultiAgentRuntime {
   private readonly persistenceService: PersistenceService;
   private readonly workerDispatcher: WorkerDispatcher;
   private readonly resultHandler: ResultHandler;
+  private readonly actionHandlers: Record<ActionType, RuntimeActionHandler>;
 
   constructor(config: AgentConfig, executionBackend?: string | null) {
     this.config = config;
@@ -199,6 +212,7 @@ export class MultiAgentRuntime {
       onPersistValidatedCoordinatorDecision: (state, decision, validation) =>
         this.persistValidatedCoordinatorDecision(state, decision, validation),
     });
+    this.actionHandlers = this.createActionHandlers();
   }
 
   cancel(reason = "cancelled by user"): void {
@@ -225,14 +239,11 @@ export class MultiAgentRuntime {
     this.eventSink = options?.onEvent ?? null;
     this.llm.setStreamListener((event) => this.emitLlmChunk(event));
     const state = new WorkflowState();
-    state.goal = goal;
-    state.inputPath = inputPath;
-    state.outputDir = outputDir;
+    state.stores.execution.initializeRun(goal, inputPath, outputDir, Date.now() / 1000);
 
     // 设置实时追踪持久化
     const traceDir = join(outputDir, "traces");
     this.trace.setPersistPath(join(traceDir, "llm_trace.json"));
-    state.startTime = Date.now() / 1000;
 
     // 打开运行日志
     // 在 logs/ 目录中打开统一日志文件
@@ -271,7 +282,7 @@ export class MultiAgentRuntime {
       });
 
       if (goal === "analyze") {
-        state.setPlan(createExecutionPlan({
+        state.stores.plan.set(createExecutionPlan({
           goal: "analyze",
           reasoning: "analyze mode bootstrap",
           tasks: [
@@ -303,13 +314,7 @@ export class MultiAgentRuntime {
         }
 
         const decision = await this.coordinator.decide(state, this.mailbox);
-        state.actionHistory.push({
-          timestamp: Date.now() / 1000,
-          decisionCount: state.decisionCount,
-          action: decision.action,
-          taskId: decision.taskId,
-          reason: decision.reason,
-        });
+        state.stores.execution.recordDecision(decision);
 
         const control = await this.dispatchAction(state, decision);
         if (control.didDispatch) {
@@ -411,7 +416,16 @@ export class MultiAgentRuntime {
       this.logger.error(
         error instanceof Error ? (error.stack ?? error.message) : String(error),
       );
-      this.actionSave(state);
+      try {
+        this.actionSave(state);
+      } catch (saveError) {
+        const saveMessage = saveError instanceof Error ? saveError.message : String(saveError);
+        this.logger.error(`failed to save outputs while handling runtime failure: ${saveMessage}`);
+        state.stores.execution.addError(`failure recovery save failed: ${saveMessage}`);
+        if (state.persistStatus !== "final_saved") {
+          state.stores.execution.setPersistStatus("partial_saved");
+        }
+      }
       state.finished = true;
       this.emitRuntimeEvent(
         "run_failed",
@@ -424,8 +438,7 @@ export class MultiAgentRuntime {
       );
       return state;
     } finally {
-      state.endTime = Date.now() / 1000;
-      state.runSummary = RunSummaryBuilder.build(state);
+      state.stores.execution.finishTiming(Date.now() / 1000, RunSummaryBuilder.build(state));
       this.exportTrace(state);
       this.backend.shutdown();
       this.llm.setStreamListener();
@@ -440,110 +453,92 @@ export class MultiAgentRuntime {
   private async dispatchAction(
     state: WorkflowState,
     decision: RuntimeAction,
-  ): Promise<{
-    didDispatch: boolean;
-    breakLoop: boolean;
-    skipFinalSave: boolean;
-  }> {
-    if (decision.action === "spawn") {
-      return {
-        didDispatch: this.workerDispatcher.dispatchSpawn(state, decision),
-        breakLoop: false,
-        skipFinalSave: false,
-      };
-    }
+  ): Promise<ActionDispatchResult> {
+    return await this.actionHandlers[decision.action](state, decision);
+  }
 
-    if (decision.action === "spawn_all_ready") {
-      const ready = state.getReadyTaskIds();
-      let submitted = false;
-      for (const taskId of ready) {
-        submitted =
-          this.workerDispatcher.dispatchSpawn(state, { ...decision, action: "spawn", taskId }) ||
-          submitted;
-      }
-      return { didDispatch: submitted, breakLoop: false, skipFinalSave: false };
-    }
+  private createActionHandlers(): Record<ActionType, RuntimeActionHandler> {
+    const idle = (): ActionDispatchResult => ({
+      didDispatch: false,
+      breakLoop: false,
+      skipFinalSave: false,
+    });
+    const dispatched = (didDispatch: boolean): ActionDispatchResult => ({
+      didDispatch,
+      breakLoop: false,
+      skipFinalSave: false,
+    });
 
-    if (decision.action === "repair") {
-      if (!decision.taskId) {
-        return { didDispatch: false, breakLoop: false, skipFinalSave: false };
-      }
-      return {
-        didDispatch: this.workerDispatcher.submitRepairTask(
+    return {
+      spawn: (state, decision) =>
+        dispatched(this.workerDispatcher.dispatchSpawn(state, decision)),
+
+      spawn_all_ready: (state, decision) => {
+        const ready = state.getReadyTaskIds();
+        let submitted = false;
+        for (const taskId of ready) {
+          submitted =
+            this.workerDispatcher.dispatchSpawn(state, { ...decision, action: "spawn", taskId }) ||
+            submitted;
+        }
+        return dispatched(submitted);
+      },
+
+      repair: (state, decision) => {
+        if (!decision.taskId) return idle();
+        return dispatched(this.workerDispatcher.submitRepairTask(state, decision.taskId, decision));
+      },
+
+      regenerate: (state, decision) => {
+        if (!decision.taskId) return idle();
+        state.recordRegenerateAttempt(decision.taskId);
+        return dispatched(this.workerDispatcher.submitGeneratorTask(state, decision.taskId, decision));
+      },
+
+      replan: (state, decision) =>
+        dispatched(this.workerDispatcher.submitPlanner(state, "replan", decision)),
+
+      save: (state, decision) => {
+        const saved = this.actionSaveIfQualityGatePassed(
           state,
-          decision.taskId,
-          decision,
-        ),
-        breakLoop: false,
-        skipFinalSave: false,
-      };
-    }
-
-    if (decision.action === "regenerate") {
-      if (!decision.taskId) {
-        return { didDispatch: false, breakLoop: false, skipFinalSave: false };
-      }
-      state.recordRegenerateAttempt(decision.taskId);
-      return {
-        didDispatch: this.workerDispatcher.submitGeneratorTask(
-          state,
-          decision.taskId,
-          decision,
-        ),
-        breakLoop: false,
-        skipFinalSave: false,
-      };
-    }
-
-    if (decision.action === "replan") {
-      return {
-        didDispatch: this.workerDispatcher.submitPlanner(state, "replan", decision),
-        breakLoop: false,
-        skipFinalSave: false,
-      };
-    }
-
-    if (decision.action === "save") {
-      const saved = this.actionSaveIfQualityGatePassed(
-        state,
-        decision.reason || "explicit save action",
-      );
-      if (saved) {
-        this.persistValidatedCoordinatorDecision(
-          state,
-          decision,
-          "save action passed quality gate and persisted outputs",
+          decision.reason || "explicit save action",
         );
-        RunManager.markCompleted(state);
-        return { didDispatch: true, breakLoop: true, skipFinalSave: false };
-      }
-      return { didDispatch: true, breakLoop: false, skipFinalSave: false };
-    }
+        if (saved) {
+          this.persistValidatedCoordinatorDecision(
+            state,
+            decision,
+            "save action passed quality gate and persisted outputs",
+          );
+          RunManager.markCompleted(state);
+          return { didDispatch: true, breakLoop: true, skipFinalSave: false };
+        }
+        return dispatched(true);
+      },
 
-    if (decision.action === "finish") {
-      if (state.runStatus === "running" && !state.persisted) {
+      finish: (state, decision) => {
+        if (state.runStatus === "running" && !state.persisted) {
+          RunManager.markPaused(state);
+        } else if (state.persisted) {
+          this.persistValidatedCoordinatorDecision(
+            state,
+            decision,
+            "finish action reached after outputs were already persisted",
+          );
+        }
+        this.saveReviewIfPresent(state);
+        return { didDispatch: true, breakLoop: true, skipFinalSave: true };
+      },
+
+      pause: (state, decision) => {
         RunManager.markPaused(state);
-      } else if (state.persisted) {
-        this.persistValidatedCoordinatorDecision(
-          state,
-          decision,
-          "finish action reached after outputs were already persisted",
-        );
-      }
-      // finish 前保存 review result，防止最终保存被跳过时丢失审查结果
-      this.saveReviewIfPresent(state);
-      return { didDispatch: true, breakLoop: true, skipFinalSave: true };
-    }
+        this.logger.info("Workflow paused: " + (decision.reason || "user requested"));
+        this.saveReviewIfPresent(state);
+        return { didDispatch: true, breakLoop: true, skipFinalSave: true };
+      },
 
-    if (decision.action === "pause") {
-      RunManager.markPaused(state);
-      this.logger.info("Workflow paused: " + (decision.reason || "user requested"));
-      // 暂停前保存 review result，防止最终保存被跳过时丢失审查结果
-      this.saveReviewIfPresent(state);
-      return { didDispatch: true, breakLoop: true, skipFinalSave: true };
-    }
-
-    return { didDispatch: false, breakLoop: false, skipFinalSave: false };
+      inspect: idle,
+      stop: idle,
+    };
   }
 
   private persistValidatedCoordinatorDecision(

@@ -265,6 +265,19 @@ describe("DeterministicPolicy", () => {
     expect(result!.strategy).toBe("wait_for_running");
   });
 
+  it("waits when failed task needs replan but planner is already running", () => {
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      planReady: true,
+      failedTasks: ["design-1"],
+      runningTasks: ["planner"],
+      regenerateCountsByTask: { "design-1": 1 },
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    expect(result!.strategy).toBe("wait_for_running");
+  });
+
   it("repairs rejected artifact when budget allows", () => {
     const policy = new DeterministicPolicy();
     const snapshot = makeSnapshot({

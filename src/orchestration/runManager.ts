@@ -23,6 +23,9 @@ export class RunManager {
 
   static markPaused(state: WorkflowState, reason = ""): void {
     state.runStatus = "paused";
+    if (state.persistStatus === "not_saved" && Object.keys(state.artifacts).length > 0) {
+      state.persistStatus = "partial_saved";
+    }
     if (reason) state.errors.push(reason);
   }
 
@@ -68,9 +71,10 @@ export class RunSummaryBuilder {
     for (const [key, val] of Object.entries(counters).sort(([a], [b]) => a.localeCompare(b))) {
       if (budgetPrefixes.some((pre) => key.startsWith(pre))) budgetCounters[key] = val;
     }
+    const qualityStatus = RunSummaryBuilder._effectiveQualityStatus(state);
 
     return {
-      goal: state.goal, run_status: state.runStatus, quality_status: state.qualityStatus,
+      goal: state.goal, run_status: state.runStatus, quality_status: qualityStatus,
       persist_status: state.persistStatus, finished: state.finished, persisted: state.persisted,
       duration: Math.round(state.duration() * 100) / 100,
       artifact_count: Object.keys(state.artifacts).length,
@@ -104,13 +108,21 @@ export class RunSummaryBuilder {
     const counters: Record<string, number> = state.progress._counters ?? {};
     if (Object.entries(counters).some(([key, val]) => key.startsWith("repair_count:") && val >= 3)) categories.add("repair_budget_exhausted");
     if (state.runStatus === "partial") categories.add("partial_run");
-    if (state.qualityStatus === "rejected") categories.add("quality_rejected");
+    if (RunSummaryBuilder._effectiveQualityStatus(state) === "rejected") categories.add("quality_rejected");
     if (state.persistStatus === "partial_saved") categories.add("partial_saved");
     return Array.from(categories).sort();
   }
 
   private static _failureCategories(state: WorkflowState, incidents: string[]): string[] {
-    if (state.runStatus === "completed" && state.qualityStatus === "passed" && state.persistStatus === "final_saved") return [];
+    const qualityStatus = RunSummaryBuilder._effectiveQualityStatus(state);
+    if (state.runStatus === "completed" && qualityStatus === "passed" && state.persistStatus === "final_saved") return [];
     return [...incidents].sort();
+  }
+
+  private static _effectiveQualityStatus(state: WorkflowState): string {
+    if (state.finalReviewDone) {
+      return state.finalReviewPassed ? "passed" : "rejected";
+    }
+    return state.qualityStatus;
   }
 }

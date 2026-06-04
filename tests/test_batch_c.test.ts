@@ -1237,6 +1237,10 @@ describe("canonicalizeConstraintsPipeline processes missingExceptionCandidates",
     expect(exceptions).toHaveLength(2);
     expect(exceptions.map((e) => e.description)).toContain("Existing exception");
     expect(exceptions.map((e) => e.description)).toContain("New exception");
+    expect(exceptions.every((e) => String(e.id ?? "").startsWith("EXC_"))).toBe(true);
+    expect(exceptions.every((e) => /^X\d{3}$/.test(String(e.displayId ?? "")))).toBe(true);
+    expect(new Set(exceptions.map((e) => e.id)).size).toBe(2);
+    expect(new Set(exceptions.map((e) => e.displayId)).size).toBe(2);
     // missingExceptionCandidates should be cleaned up
     expect(merged.missingExceptionCandidates).toBeUndefined();
   });
@@ -1250,5 +1254,65 @@ describe("canonicalizeConstraintsPipeline processes missingExceptionCandidates",
     const exceptions = merged.exceptions as Array<Record<string, unknown>>;
     expect(exceptions).toHaveLength(1);
     expect(exceptions[0].description).toBe("Only existing");
+  });
+
+  it("deduplicates exact and safe semantic duplicate exceptions", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [],
+      exceptions: [
+        { description: "Case not found" },
+        { description: "Case not found" },
+        { description: "Unauthorized case access attempt" },
+        { description: "Unauthorized access attempt" },
+      ],
+    };
+
+    canonicalizeConstraintsPipeline(merged);
+
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions).toHaveLength(2);
+    expect(exceptions.map((e) => e.description)).toContain("Case not found");
+    expect(exceptions.some((e) => String(e.description).includes("Unauthorized"))).toBe(true);
+    expect(new Set(exceptions.map((e) => e.id)).size).toBe(exceptions.length);
+    expect(new Set(exceptions.map((e) => e.displayId)).size).toBe(exceptions.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Entity canonical IDs and relationship normalization
+// ---------------------------------------------------------------------------
+
+describe("merge entity canonical identity normalization", () => {
+  it("assigns E_ ids to entities missing ids and normalizes relationship targets", async () => {
+    const merger = new AnalyzeMerger(fakeLlm);
+    const result = await merger.merge([
+      artifact({
+        entities: [
+          {
+            name: "UserGroup",
+            relationships: [
+              { target: "UserPreference", type: "m2o", description: "inherits defaults" },
+            ],
+          },
+          {
+            name: "UserPreference",
+            relationships: [
+              { target: "UserGroup", type: "many-to-one", description: "belongs to group" },
+            ],
+          },
+        ],
+      }),
+    ], "requirement text");
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const userGroup = entities.find((e) => e.name === "UserGroup")!;
+    const userPreference = entities.find((e) => e.name === "UserPreference")!;
+    expect(userGroup.id).toBe("E_USER_GROUP");
+    expect(userGroup.entityRef).toBe("E_USER_GROUP");
+    expect(userPreference.id).toBe("E_USER_PREFERENCE");
+    expect(userPreference.entityRef).toBe("E_USER_PREFERENCE");
+    expect((userGroup.relationships as Array<Record<string, unknown>>)[0].target).toBe("E_USER_PREFERENCE");
+    expect((userGroup.relationships as Array<Record<string, unknown>>)[0].type).toBe("many-to-one");
+    expect((userPreference.relationships as Array<Record<string, unknown>>)[0].target).toBe("E_USER_GROUP");
   });
 });

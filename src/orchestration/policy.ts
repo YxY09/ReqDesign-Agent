@@ -246,6 +246,13 @@ export class DeterministicPolicy {
             reason: `${target} failed after regeneration budget was exhausted`,
           });
         }
+        if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
+          return createStrategyDecision({
+            strategy: "wait_for_running",
+            targetTaskId: target,
+            reason: `${target} failed after regeneration budget was exhausted, but workflow work is still running`,
+          });
+        }
         return createStrategyDecision({
           strategy: "pause_for_user",
           targetTaskId: target,

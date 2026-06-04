@@ -108,26 +108,12 @@ export class PlanMutator {
       }
     }
 
-    // --- Validate: completed tasks cannot be meaningfully updated ---
-    for (const task of mutation.updateTasks) {
-      if (this._state.isTaskCompleted(task.id)) {
-        const existing = this.getTaskById(task.id);
-        if (
-          existing &&
-          (task.type !== existing.type ||
-            JSON.stringify(task.dependsOn) !==
-              JSON.stringify(existing.dependsOn))
-        ) {
-          errors.push(
-            `cannot change type/dependsOn of completed task '${task.id}'`,
-          );
-        }
-      }
-    }
-
     // --- Validate: new task IDs must be unique ---
     const existingIds = new Set(this._state.plan.tasks.map((t) => t.id));
-    const dropSet = new Set(mutation.dropTaskIds);
+    const requestedDropSet = new Set(mutation.dropTaskIds);
+    const protectedDropSet = this._protectedDropIds(requestedDropSet);
+    const effectiveDropIds = mutation.dropTaskIds.filter((id) => !protectedDropSet.has(id));
+    const dropSet = new Set(effectiveDropIds);
     for (const task of mutation.addTasks) {
       if (existingIds.has(task.id) && !dropSet.has(task.id)) {
         errors.push(`new task id '${task.id}' conflicts with existing task`);
@@ -168,7 +154,7 @@ export class PlanMutator {
     }
 
     // Drop tasks
-    for (const taskId of mutation.dropTaskIds) {
+    for (const taskId of effectiveDropIds) {
       taskMap.delete(taskId);
       delete this._state.taskStatuses[taskId];
     }
@@ -272,6 +258,28 @@ export class PlanMutator {
     });
     this._state.progress.recordPlanMutation();
     return [];
+  }
+
+  private _protectedDropIds(requestedDropSet: Set<string>): Set<string> {
+    const protectedIds = new Set<string>();
+    if (!this._state.plan) return protectedIds;
+
+    for (const taskId of requestedDropSet) {
+      if (this._state.artifacts[taskId]) {
+        protectedIds.add(taskId);
+      }
+    }
+
+    for (const task of this._state.plan.tasks) {
+      if (requestedDropSet.has(task.id)) continue;
+      for (const dep of task.dependsOn) {
+        if (requestedDropSet.has(dep)) {
+          protectedIds.add(dep);
+        }
+      }
+    }
+
+    return protectedIds;
   }
 
   // ------------------------------------------------------------------

@@ -33,7 +33,8 @@
 14. **类名必须与需求分析 requirement_json.entities 中的实体名完全一致**，禁止改名（如 Logistics 不能改成 Shipment，Cart 不能改成 CartItem）。如果设计文档使用了不同的名称，以需求分析为准。如需补充分析遗漏的类，必须来源于需求分析结果
 15. 类图的属性和关系应与设计文档中核心类的描述对齐，保持语义一致
 16. 聚合根与明细实体必须画正确：如果存在 `OrderItem`、`CartItem`、`InvoiceLine` 等明细类，必须表达父对象 `1 --> * 明细类`，明细类再 `* --> 1` 关联资源对象；不要用 `Order --> Product` 替代明细行
-17. **输出前自检**：逐一核对 `requirement_json.entities[].name` 列表，确认每个实体在类图中都有对应类且名字完全一致。如果发现改名（如 WarehouseAdmin 变成了 WarehouseKeeper），立即改回原始名
+17. 关系实体必须画正确：如果需求实体带有 `entityKind: "process_record"` 或 `entityKind: "association"`，它是独立类，应通过关系连接两端实体；不要把它改成父实体的方法或普通箭头标签。
+18. **输出前自检**：逐一核对 `requirement_json.entities[].name` 列表，确认每个实体在类图中都有对应类且名字完全一致。如果发现改名（如 WarehouseAdmin 变成了 WarehouseKeeper），立即改回原始名
 
 示例格式：
 ```mermaid

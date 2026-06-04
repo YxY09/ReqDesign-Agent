@@ -102,4 +102,91 @@ describe("checkAnalysisQuality id_format check", () => {
     // No items with id → passed (vacuously true per the code: totalWithId === 0)
     expect(idCheck!.passed).toBe(true);
   });
+
+  it("flags missing reified process entities", () => {
+    const analysis = {
+      actors: [{ id: "A_OFFICER", name: "Officer" }],
+      entities: [
+        {
+          id: "E_CASE",
+          name: "Case",
+          attributes: [{ name: "caseId", type: "Long", description: "ID" }],
+          relationships: [],
+        },
+      ],
+      functions: [
+        { id: "FUN_INVESTIGATE_CASE", name: "InvestigateCase", description: "调查案件" },
+      ],
+      constraints: [
+        { id: "CON_CASE_STATUS", description: "Case status must be updated" },
+      ],
+      exceptions: [],
+      business_processes: [
+        {
+          name: "CaseInvestigation",
+          steps: ["Gather evidence", "Write investigation report", "Update status"],
+        },
+      ],
+    };
+
+    const result = checkAnalysisQuality(
+      analysis,
+      "CaseInvestigation stores evidence, investigation report, conclusion, and status.",
+    );
+    const check = result.checks.find((c) => c.name === "relationship_entity_coverage");
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(false);
+    expect(check!.detail).toContain("CaseInvestigation");
+  });
+
+  it("passes reified process entity check when the process record exists", () => {
+    const analysis = {
+      actors: [{ id: "A_OFFICER", name: "Officer" }],
+      entities: [
+        {
+          id: "E_CASE",
+          name: "Case",
+          attributes: [{ name: "caseId", type: "Long", description: "ID" }],
+          relationships: [{ target: "CaseInvestigation", type: "one-to-many", description: "调查记录" }],
+        },
+        {
+          id: "E_CASE_INVESTIGATION",
+          name: "CaseInvestigation",
+          entityKind: "process_record",
+          attributes: [
+            { name: "caseInvestigationId", type: "Long", description: "ID" },
+            { name: "status", type: "String", description: "状态" },
+          ],
+          relationships: [{ target: "Case", type: "many-to-one", description: "关联案件" }],
+          reifies: {
+            source: "business_process",
+            sourceName: "CaseInvestigation",
+            endpoints: ["Case"],
+            evidence: ["has_report_or_evidence", "has_status"],
+          },
+        },
+      ],
+      functions: [
+        { id: "FUN_INVESTIGATE_CASE", name: "InvestigateCase", description: "调查案件" },
+      ],
+      constraints: [
+        { id: "CON_CASE_STATUS", description: "Case status must be updated" },
+      ],
+      exceptions: [],
+      business_processes: [
+        {
+          name: "CaseInvestigation",
+          steps: ["Gather evidence", "Write investigation report", "Update status"],
+        },
+      ],
+    };
+
+    const result = checkAnalysisQuality(
+      analysis,
+      "CaseInvestigation stores evidence, investigation report, conclusion, and status.",
+    );
+    const check = result.checks.find((c) => c.name === "relationship_entity_coverage");
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(true);
+  });
 });

@@ -37,6 +37,7 @@ import { TaskLifecycleManager } from "./runtime/TaskLifecycleManager.js";
 import { PlanMutator } from "./runtime/PlanMutator.js";
 import { ArtifactManager } from "./runtime/ArtifactManager.js";
 import { ReviewManager } from "./runtime/ReviewManager.js";
+import { WorkflowStores } from "./runtime/workflowStores.js";
 
 export interface ArtifactsState {
   artifacts: Record<string, Artifact>;
@@ -184,12 +185,14 @@ export class WorkflowState {
   private readonly _artifactsStateView: ArtifactsState;
   private readonly _executionStateView: ExecutionState;
   private readonly _reviewStateView: ReviewState;
+  readonly stores: WorkflowStores;
 
   constructor() {
     this._taskLifecycleManager = new TaskLifecycleManager(this);
     this._planMutator = new PlanMutator(this);
     this._artifactManager = new ArtifactManager(this, () => this.majorPendingTaskIds.clear());
     this._reviewManager = new ReviewManager(this);
+    this.stores = new WorkflowStores(this);
     this._artifactsStateView = this._createArtifactsStateView();
     this._executionStateView = this._createExecutionStateView();
     this._reviewStateView = this._createReviewStateView();

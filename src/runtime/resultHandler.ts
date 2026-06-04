@@ -5,9 +5,9 @@ import type { WorkflowState } from "../state.js";
 import type { WorkflowEvent } from "../workflowEvents.js";
 import { isRecord } from "../utils/isRecord.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
-import { PostGenerationValidator } from "../tools/validator.js";
 import { persistMemoryWrites } from "../memory/extractors.js";
 import { extractGeneratorLesson } from "../memory/extractors.js";
+import { ArtifactAcceptanceService } from "./artifactAcceptanceService.js";
 import { extractEvaluatorInsight } from "../memory/extractors.js";
 import {
   TERMINAL_EVENTS,
@@ -123,6 +123,7 @@ export interface ResultHandlerDeps {
 
 export class ResultHandler {
   private readonly deps: ResultHandlerDeps;
+  private readonly artifactAcceptance = new ArtifactAcceptanceService();
 
   constructor(deps: ResultHandlerDeps) {
     this.deps = deps;
@@ -192,7 +193,7 @@ export class ResultHandler {
       summary: notif.summary,
     });
     if (notif.error || notif.summary) {
-      state.errors.push(notif.error || notif.summary);
+      state.stores.execution.addError(notif.error || notif.summary);
     }
   }
 
@@ -203,21 +204,21 @@ export class ResultHandler {
     decision?: RuntimeAction,
   ): void {
     if (messageType === "replan" && isPlanMutationResult(notif.result)) {
-      const errors = state.mutatePlan(notif.result);
+      const errors = state.stores.plan.mutate(notif.result);
       if (errors.length > 0) {
         state.markTaskStatus("planner", "failed", notif.sessionId, {
           errors,
         });
-        state.errors.push(...errors);
+        for (const error of errors) state.stores.execution.addError(error);
         return;
       }
     } else if (isExecutionPlanResult(notif.result)) {
-      state.setPlan(notif.result);
+      state.stores.plan.set(notif.result);
     } else {
       state.markTaskStatus("planner", "failed", notif.sessionId, {
         error: "planner returned invalid result",
       });
-      state.errors.push("planner returned invalid result");
+      state.stores.execution.addError("planner returned invalid result");
       return;
     }
 
@@ -252,25 +253,38 @@ export class ResultHandler {
       state.markTaskStatus(taskId, "failed", notif.sessionId, {
         error: "generator returned invalid artifact",
       });
-      state.errors.push(`generator returned invalid artifact for ${taskId}`);
+      state.stores.execution.addError(`generator returned invalid artifact for ${taskId}`);
       return;
     }
-    const artifact = notif.result;
-    artifact.taskId = taskId;
+    const candidate = notif.result;
+    candidate.taskId = taskId;
     if (messageType === "repair") {
       state.recordRepairAttempt(taskId);
     }
 
-    // 生成后验证：清理多余的类、幽灵 ID、重命名。
-    const cleaned = PostGenerationValidator.validate(
-      state.requirementJson,
-      artifact.type,
-      artifact.content,
-    );
-    if (cleaned !== null) {
-      artifact.content = cleaned;
+    const acceptance = this.artifactAcceptance.evaluateCandidate({
+      state,
+      taskId,
+      artifact: candidate,
+      decision,
+    });
+    if (acceptance.action === "keep_existing") {
+      state.markTaskStatus(taskId, "failed", notif.sessionId, acceptance.details);
+      state.stores.execution.addError(acceptance.error);
+      this.deps.onEmitRuntimeEvent(acceptance.eventKind, acceptance.error, {
+        goal: state.goal,
+        phase: "generation",
+        taskId,
+        taskType: acceptance.artifact.type,
+        status: "failed",
+        data: this.deps.onSnapshotState(state),
+      });
+      persistMemoryWrites(extractGeneratorLesson(acceptance.artifact));
+      return;
     }
-    state.addArtifact(artifact);
+
+    const artifact = acceptance.artifact;
+    state.stores.artifacts.add(artifact);
 
     state.markTaskStatus(taskId, "completed", notif.sessionId);
 
@@ -338,6 +352,8 @@ export class ResultHandler {
       const merged = await this.deps.analyzeMerger.merge(
         artifacts,
         state.requirementText ?? "",
+        undefined,
+        state.registry ?? undefined,
       );
       state.setRequirementJson(RequirementNormalizer.normalize(merged));
       RequirementNormalizer.normalizeAgainstSource(merged, state.requirementText ?? "");
@@ -367,7 +383,7 @@ export class ResultHandler {
       });
       // 合并失败：回退到程序化并集作为 requirementJson
       try {
-        const fallback = this.deps.analyzeMerger.preMerge(artifacts);
+        const fallback = this.deps.analyzeMerger.preMerge(artifacts, state.registry ?? undefined);
         state.setRequirementJson(RequirementNormalizer.normalize(fallback));
         RequirementNormalizer.normalizeAgainstSource(fallback, state.requirementText ?? "");
         const outputManager = new (this.deps.outputManagerCtor)(state.outputDir);
@@ -396,14 +412,14 @@ export class ResultHandler {
       state.markTaskStatus("evaluator", "failed", notif.sessionId, {
         error: "evaluator returned invalid verdict",
       });
-      state.errors.push("evaluator returned invalid verdict");
+      state.stores.execution.addError("evaluator returned invalid verdict");
       return;
     }
     const verdict = notif.result;
     if (verdict.evaluatedTaskIds.length === 0 && evaluateScope.length > 0) {
       verdict.evaluatedTaskIds = [...evaluateScope];
     }
-    state.addVerdict(verdict);
+    state.stores.review.add(verdict);
 
     state.markTaskStatus(
       "evaluator",

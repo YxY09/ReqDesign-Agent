@@ -81,8 +81,9 @@ export class ArtifactManager {
         this._state.designText = content;
       }
     } else if (key === "diagrams" && typeof content === "object" && !Array.isArray(content)) {
+      const diagrams = ArtifactManager._diagramContent(content);
       const existing: Record<string, unknown> = this._state.diagrams ?? {};
-      for (const [diagramKey, diagramValue] of Object.entries(content as Record<string, unknown>)) {
+      for (const [diagramKey, diagramValue] of Object.entries(diagrams)) {
         existing[diagramKey] = diagramValue;
         this._state.diagramSourcesByKey[diagramKey] = artifact.taskId;
       }
@@ -167,6 +168,25 @@ export class ArtifactManager {
 
   private _isPlainObject(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  private static _diagramContent(content: unknown): Record<string, unknown> {
+    if (!content || typeof content !== "object" || Array.isArray(content)) {
+      return {};
+    }
+    const record = content as Record<string, unknown>;
+    const nested = record.diagrams;
+    const source = nested && typeof nested === "object" && !Array.isArray(nested)
+      ? nested as Record<string, unknown>
+      : record;
+    const diagrams: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (["class_diagram", "activity_diagram", "state_diagram"].includes(key)) {
+        diagrams[key] = value;
+      }
+    }
+    if (Object.keys(diagrams).length > 0) return diagrams;
+    return source === record ? record : {};
   }
 
   // ------------------------------------------------------------------

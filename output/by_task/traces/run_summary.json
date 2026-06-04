@@ -1,0 +1,64 @@
+{
+  "goal": "design",
+  "run_status": "partial",
+  "quality_status": "rejected",
+  "persist_status": "partial_saved",
+  "finished": true,
+  "persisted": false,
+  "duration": 1801.51,
+  "artifact_count": 10,
+  "artifact_counts": {
+    "analyze": 5,
+    "design": 1,
+    "diagrams": 3,
+    "tests": 1
+  },
+  "decision_count": 391,
+  "review_rounds": 3,
+  "final_review_done": true,
+  "final_review_passed": false,
+  "plan_task_count": 10,
+  "plan_revision_count": 0,
+  "issue_counts": {
+    "severity": {
+      "major": 79,
+      "minor": 9
+    },
+    "scope": {
+      "local": 83,
+      "upstream": 5
+    },
+    "target_type": {
+      "analyze": 5,
+      "design": 36,
+      "diagrams": 9,
+      "tests": 38
+    }
+  },
+  "budget_counters": {
+    "regenerate_count:design-1": 1,
+    "regenerate_count:diagrams-activity": 1,
+    "regenerate_count:diagrams-class": 1,
+    "regenerate_count:tests-1": 1,
+    "repair_count:design-1": 2,
+    "repair_count:diagrams-activity": 2,
+    "repair_count:diagrams-class": 2,
+    "repair_count:diagrams-state": 1,
+    "repair_count:tests-1": 2
+  },
+  "failure_categories": [
+    "partial_run",
+    "partial_saved",
+    "quality_rejected",
+    "runtime_budget_exhausted"
+  ],
+  "recovered_incidents": [],
+  "errors": [
+    "repair returned no content",
+    "repair returned no content",
+    "design-1 regenerate candidate rejected by self-check; kept existing artifact revision 3",
+    "runtime budget exhausted",
+    "deterministic quality gate failed: review.引用完整性: 引用了未定义的 ID: X010",
+    "deterministic quality gate failed: review.自编 ID 检测: 检测到未在需求中定义的 ID: X010"
+  ]
+}

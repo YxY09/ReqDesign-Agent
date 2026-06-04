@@ -314,6 +314,86 @@ describe("AnalyzeMerger entityRef-based grouping", () => {
     const attrs = caseEntities[0].attributes as Array<Record<string, unknown>>;
     expect(attrs.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("merge applies relationship_entities returned by post-process", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const mockLlm = {
+      generateJson: vi.fn().mockResolvedValue({
+        relationships: [],
+        relationship_entities: [
+          {
+            name: "CaseRegistration",
+            entityKind: "process_record",
+            description: "案件注册记录",
+            attributes: [
+              { name: "caseRegistrationId", type: "Long", description: "ID" },
+              { name: "status", type: "String", description: "状态" },
+            ],
+            relationships: [
+              { target: "Case", type: "many-to-one", description: "关联案件" },
+              { target: "Complaint", type: "many-to-one", description: "关联投诉" },
+            ],
+            reifies: {
+              source: "business_process",
+              sourceName: "CaseRegistration",
+              endpoints: ["Case", "Complaint"],
+              evidence: ["has_identifier", "has_status"],
+            },
+          },
+        ],
+        constraints: [],
+        exceptions: [],
+      }),
+    };
+    const merger = new (AnalyzeMerger as any)(mockLlm);
+    (merger as any).postProcessPromptTemplate = "template {merged_summary} {requirement_text}";
+
+    const result = await merger.merge(
+      [
+        {
+          taskId: "a1",
+          content: {
+            actors: [],
+            functions: [],
+            entities: [
+              { name: "Case", attributes: [{ name: "caseId", type: "Long", description: "ID" }], relationships: [] },
+            ],
+            constraints: [],
+            exceptions: [],
+            non_functional_requirements: [],
+            business_processes: [
+              { name: "CaseRegistration", steps: ["Assign case number", "Update status"] },
+            ],
+          },
+        },
+        {
+          taskId: "a2",
+          content: {
+            actors: [],
+            functions: [],
+            entities: [
+              { name: "Complaint", attributes: [{ name: "complaintId", type: "Long", description: "ID" }], relationships: [] },
+            ],
+            constraints: [],
+            exceptions: [],
+            non_functional_requirements: [],
+            business_processes: [],
+          },
+        },
+      ],
+      "CaseRegistration has a registration number and status.",
+    );
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const registration = entities.find((entity) => entity.name === "CaseRegistration");
+    expect(registration).toBeDefined();
+    expect(registration!.entityKind).toBe("process_record");
+    expect(registration!.entityRef).toBe("E_CASE_REGISTRATION");
+    const relTargets = (registration!.relationships as Array<Record<string, unknown>>)
+      .map((rel) => rel.target);
+    expect(relTargets).toContain("E_CASE");
+    expect(relTargets).toContain("E_COMPLAINT");
+  });
 });
 
 // ---------------------------------------------------------------------------

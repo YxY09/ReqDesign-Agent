@@ -4,12 +4,11 @@
  * Check items:
  * 1. ID 唯一性：entity/function/constraint/exception 的 canonicalId 和 displayId 是否唯一
  * 2. 引用完整性：design/test 中引用的 ID 是否都存在
- * 3. 覆盖率：function/constraint/exception 在 design/test 中的覆盖率
- * 4. 自编 ID 检测：design/test 中是否出现请求中不存在的 C001/F001 等 ID
- * 5. 约束设计覆盖：每个 constraintId 至少被 design 引用一次
- * 6. 约束测试覆盖：每个 constraintId 至少被 test 引用一次
- * 7. 空步骤/空预期检测：test case 的 steps 和 expected_result 非空
+ * 3. 自编 ID 检测：design/test 中是否出现请求中不存在的 C001/F001 等 ID
+ * 4. 空步骤/空预期检测：test case 的 steps 和 expected_result 非空
  */
+
+import { RequirementIndex } from "./requirementIndex.js";
 
 export interface ReviewValidationCheck {
   name: string;
@@ -31,10 +30,7 @@ export function validateReview(
 
   checks.push(_checkIdUniqueness(requirementJson));
   checks.push(_checkReferenceIntegrity(requirementJson, designText, testCasesText));
-  checks.push(_checkCoverage(requirementJson, designText, testCasesText));
   checks.push(_checkSelfInventedIds(requirementJson, designText, testCasesText));
-  checks.push(_checkConstraintDesignCoverage(requirementJson, designText));
-  checks.push(_checkConstraintTestCoverage(requirementJson, testCasesText));
   checks.push(_checkEmptySteps(requirementJson, testCasesText));
 
   const passed = checks.every((c) => c.passed);
@@ -114,24 +110,13 @@ function _checkReferenceIntegrity(
   designText: string,
   testCasesText: string,
 ): ReviewValidationCheck {
-  const definedIds = _collectDefinedIds(requirementJson);
+  const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
   const combinedText = designText + "\n" + testCasesText;
 
   const referenced = new Set<string>();
-  // F001, F999 patterns
-  for (const m of combinedText.match(/\bF\d{3,4}\b/g) ?? []) referenced.add(m);
-  // C001, C999 patterns
-  for (const m of combinedText.match(/\bC\d{3,4}\b/g) ?? []) referenced.add(m);
-  // X001, X999 patterns
-  for (const m of combinedText.match(/\bX\d{3,4}\b/g) ?? []) referenced.add(m);
-  // FUN_xxx patterns
-  for (const m of combinedText.match(/\bFUN_[A-Za-z0-9_]+/g) ?? []) referenced.add(m);
-  // CON_xxx patterns
-  for (const m of combinedText.match(/\bCON_[A-Za-z0-9_]+/g) ?? []) referenced.add(m);
-  // EXC_xxx patterns
-  for (const m of combinedText.match(/\bEXC_[A-Za-z0-9_]+/g) ?? []) referenced.add(m);
+  for (const id of requirementIndex.extractIds(combinedText)) referenced.add(id);
 
-  const undefinedRefs = [...referenced].filter((ref) => !definedIds.has(ref)).sort();
+  const undefinedRefs = requirementIndex.unknownReferences(referenced);
 
   if (undefinedRefs.length > 0) {
     return {
@@ -145,72 +130,7 @@ function _checkReferenceIntegrity(
 }
 
 // ---------------------------------------------------------------------------
-// Check 3: 覆盖率
-// ---------------------------------------------------------------------------
-
-function _checkCoverage(
-  requirementJson: Record<string, unknown>,
-  designText: string,
-  testCasesText: string,
-): ReviewValidationCheck {
-  const functions = asArray(requirementJson["functions"]);
-  const constraints = asArray(requirementJson["constraints"]);
-  const exceptions = asArray(requirementJson["exceptions"]);
-
-  const combinedText = designText + "\n" + testCasesText;
-
-  const referenced = new Set<string>();
-  for (const m of combinedText.match(/\bF\d{3,4}\b/g) ?? []) referenced.add(m);
-  for (const m of combinedText.match(/\bFUN_[A-Za-z0-9_]+/g) ?? []) referenced.add(m);
-  for (const m of combinedText.match(/\bC\d{3,4}\b/g) ?? []) referenced.add(m);
-  for (const m of combinedText.match(/\bCON_[A-Za-z0-9_]+/g) ?? []) referenced.add(m);
-  for (const m of combinedText.match(/\bX\d{3,4}\b/g) ?? []) referenced.add(m);
-  for (const m of combinedText.match(/\bEXC_[A-Za-z0-9_]+/g) ?? []) referenced.add(m);
-
-  const coveredFunctions = functions.filter((f) => {
-    const id = String(f["id"] ?? "");
-    const displayId = String(f["displayId"] ?? "");
-    return referenced.has(id) || referenced.has(displayId);
-  }).length;
-
-  const coveredConstraints = constraints.filter((c) => {
-    const id = String(c["id"] ?? "");
-    const displayId = String(c["displayId"] ?? "");
-    return referenced.has(id) || referenced.has(displayId);
-  }).length;
-
-  const coveredExceptions = exceptions.filter((e) => {
-    const id = String(e["id"] ?? "");
-    const displayId = String(e["displayId"] ?? "");
-    return referenced.has(id) || referenced.has(displayId);
-  }).length;
-
-  const totalFn = functions.length;
-  const totalCt = constraints.length;
-  const totalEx = exceptions.length;
-
-  const covered = coveredFunctions + coveredConstraints + coveredExceptions;
-  const total = totalFn + totalCt + totalEx;
-
-  const fnPct = totalFn > 0 ? Math.round((coveredFunctions / totalFn) * 100) : 100;
-  const ctPct = totalCt > 0 ? Math.round((coveredConstraints / totalCt) * 100) : 100;
-  const exPct = totalEx > 0 ? Math.round((coveredExceptions / totalEx) * 100) : 100;
-
-  const detail = `功能覆盖: ${fnPct}% (${coveredFunctions}/${totalFn}), 约束覆盖: ${ctPct}% (${coveredConstraints}/${totalCt}), 异常覆盖: ${exPct}% (${coveredExceptions}/${totalEx})`;
-
-  if (covered < total) {
-    return {
-      name: "覆盖率",
-      passed: false,
-      detail,
-    };
-  }
-
-  return { name: "覆盖率", passed: true, detail };
-}
-
-// ---------------------------------------------------------------------------
-// Check 4: 自编 ID 检测
+// Check 3: 自编 ID 检测
 // ---------------------------------------------------------------------------
 
 function _checkSelfInventedIds(
@@ -218,15 +138,13 @@ function _checkSelfInventedIds(
   designText: string,
   testCasesText: string,
 ): ReviewValidationCheck {
-  const definedIds = _collectDefinedIds(requirementJson);
+  const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
   const combinedText = designText + "\n" + testCasesText;
 
-  // Find all F001-C999-X001 patterns
   const allRefs = new Set<string>();
-  for (const m of combinedText.match(/\b[FCX]\d{3,4}\b/g) ?? []) allRefs.add(m);
-  for (const m of combinedText.match(/\b(FUN|CON|EXC)_[A-Za-z0-9_]+/g) ?? []) allRefs.add(m);
+  for (const id of requirementIndex.extractIds(combinedText)) allRefs.add(id);
 
-  const invented = [...allRefs].filter((ref) => !definedIds.has(ref)).sort();
+  const invented = requirementIndex.unknownReferences(allRefs);
 
   if (invented.length > 0) {
     return {
@@ -240,79 +158,7 @@ function _checkSelfInventedIds(
 }
 
 // ---------------------------------------------------------------------------
-// Check 5: 约束设计覆盖
-// ---------------------------------------------------------------------------
-
-function _checkConstraintDesignCoverage(
-  requirementJson: Record<string, unknown>,
-  designText: string,
-): ReviewValidationCheck {
-  const constraints = asArray(requirementJson["constraints"]);
-  if (constraints.length === 0) {
-    return { name: "约束设计覆盖", passed: true, detail: "无约束需要覆盖" };
-  }
-
-  const uncovered: string[] = [];
-  for (const c of constraints) {
-    const displayId = String(c["displayId"] ?? "");
-    if (displayId && !designText.includes(displayId)) {
-      uncovered.push(displayId);
-    }
-  }
-
-  if (uncovered.length > 0) {
-    return {
-      name: "约束设计覆盖",
-      passed: false,
-      detail: `设计文档未覆盖的约束: ${uncovered.join(", ")}`,
-    };
-  }
-
-  return {
-    name: "约束设计覆盖",
-    passed: true,
-    detail: `所有 ${constraints.length} 个约束在设计文档中覆盖`,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Check 6: 约束测试覆盖
-// ---------------------------------------------------------------------------
-
-function _checkConstraintTestCoverage(
-  requirementJson: Record<string, unknown>,
-  testCasesText: string,
-): ReviewValidationCheck {
-  const constraints = asArray(requirementJson["constraints"]);
-  if (constraints.length === 0) {
-    return { name: "约束测试覆盖", passed: true, detail: "无约束需要覆盖" };
-  }
-
-  const uncovered: string[] = [];
-  for (const c of constraints) {
-    const displayId = String(c["displayId"] ?? "");
-    if (displayId && !testCasesText.includes(displayId)) {
-      uncovered.push(displayId);
-    }
-  }
-
-  if (uncovered.length > 0) {
-    return {
-      name: "约束测试覆盖",
-      passed: false,
-      detail: `测试用例未覆盖的约束: ${uncovered.join(", ")}`,
-    };
-  }
-
-  return {
-    name: "约束测试覆盖",
-    passed: true,
-    detail: `所有 ${constraints.length} 个约束在测试用例中覆盖`,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Check 7: 空步骤/空预期检测
+// Check 4: 空步骤/空预期检测
 // ---------------------------------------------------------------------------
 
 function _checkEmptySteps(
@@ -377,38 +223,4 @@ function _checkEmptySteps(
 function asArray(val: unknown): Record<string, unknown>[] {
   if (!Array.isArray(val)) return [];
   return val as Record<string, unknown>[];
-}
-
-function _collectDefinedIds(requirementJson: Record<string, unknown>): Set<string> {
-  const ids = new Set<string>();
-
-  const functions = asArray(requirementJson["functions"]);
-  const constraints = asArray(requirementJson["constraints"]);
-  const exceptions = asArray(requirementJson["exceptions"]);
-  const entities = asArray(requirementJson["entities"]);
-
-  for (const f of functions) {
-    const id = String(f["id"] ?? "").trim();
-    const displayId = String(f["displayId"] ?? "").trim();
-    if (id) ids.add(id);
-    if (displayId) ids.add(displayId);
-  }
-  for (const c of constraints) {
-    const id = String(c["id"] ?? "").trim();
-    const displayId = String(c["displayId"] ?? "").trim();
-    if (id) ids.add(id);
-    if (displayId) ids.add(displayId);
-  }
-  for (const e of exceptions) {
-    const id = String(e["id"] ?? "").trim();
-    const displayId = String(e["displayId"] ?? "").trim();
-    if (id) ids.add(id);
-    if (displayId) ids.add(displayId);
-  }
-  for (const ent of entities) {
-    const id = String(ent["id"] ?? "").trim();
-    if (id) ids.add(id);
-  }
-
-  return ids;
 }

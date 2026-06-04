@@ -8,6 +8,7 @@ import {
   createVerdict,
 } from "../src/shared/types.js";
 import { WorkflowState } from "../src/state.js";
+import { RunSummaryBuilder } from "../src/orchestration/runManager.js";
 
 describe("WorkflowState subdomain views", () => {
   it("keeps artifacts view and legacy fields synchronized", () => {
@@ -193,6 +194,35 @@ describe("WorkflowState subdomain views", () => {
     expect(state.getPlanTaskIds()).not.toContain("tests-1");
   });
 
+  it("mutatePlan protects artifact-backed tasks that are still depended on", () => {
+    const state = new WorkflowState();
+    state.setPlan(
+      createExecutionPlan({
+        tasks: [
+          createTask({ id: "analyze-1", type: "analyze", description: "Analyze" }),
+          createTask({ id: "design-1", type: "design", description: "Design", dependsOn: ["analyze-1"] }),
+          createTask({ id: "diagrams-activity", type: "diagrams", description: "Activity", dependsOn: ["design-1"] }),
+        ],
+      }),
+    );
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "design" }));
+
+    const errors = state.mutatePlan(
+      createPlanMutation({
+        addTasks: [
+          createTask({ id: "design-2", type: "design", description: "Repair design", dependsOn: ["analyze-1"] }),
+        ],
+        dropTaskIds: ["design-1"],
+        reasoning: "replace rejected design",
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(state.getPlanTaskIds()).toContain("design-1");
+    expect(state.getPlanTaskIds()).toContain("design-2");
+    expect(state.getTaskById("diagrams-activity")!.dependsOn).toContain("design-1");
+  });
+
   it("mutatePlan rejects cycle and completed task drop", () => {
     const state = new WorkflowState();
     state.setPlan(
@@ -273,6 +303,23 @@ describe("WorkflowState subdomain views", () => {
     expect(state.artifactsState.diagrams).toEqual({ classDiagram: "class A{}", sequenceDiagram: "A->B" });
   });
 
+  it("flattens nested diagram content into aggregate state", () => {
+    const state = new WorkflowState();
+
+    state.addArtifact(createArtifact({
+      taskId: "diagrams-activity",
+      type: "diagrams",
+      content: {
+        diagrams: {
+          activity_diagram: "flowchart TD\nA-->B",
+        },
+      },
+    }));
+
+    expect(state.diagrams.activity_diagram).toBe("flowchart TD\nA-->B");
+    expect(state.diagrams.diagrams).toBeUndefined();
+  });
+
   it("addArtifact clears majorPendingTaskIds and resets qualityStatus", () => {
     const state = new WorkflowState();
     state.majorPendingTaskIds.add("design-1");
@@ -347,6 +394,49 @@ describe("WorkflowState subdomain views", () => {
     expect(state.reviewState.finalReviewDone).toBe(true);
     expect(state.reviewState.finalReviewPassed).toBe(true);
     expect(state.qualityStatus).toBe("passed");
+  });
+
+  it("final review with major issues rejects quality but keeps repair routing", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        issues: [
+          createIssue({
+            severity: "major",
+            targetTaskId: "design-1",
+            targetTaskType: "design",
+            description: "设计缺少关键约束",
+          }),
+        ],
+        isFinalReview: true,
+      }),
+    );
+
+    expect(state.reviewState.finalReviewDone).toBe(true);
+    expect(state.reviewState.finalReviewPassed).toBe(false);
+    expect(state.qualityStatus).toBe("rejected");
+    expect(state.reviewResult.passed).toBe(false);
+    expect(state.reviewResult.acceptedNoBlockers).toBe(true);
+    expect(state.reviewStatusByTask["design-1"]).toBe("passed");
+    expect(state.getMajorPendingTaskIds()).toEqual(["design-1"]);
+  });
+
+  it("run summary reports rejected quality after failed final review", () => {
+    const state = new WorkflowState();
+    state.finalReviewDone = true;
+    state.finalReviewPassed = false;
+    state.qualityStatus = "unknown";
+    state.persistStatus = "partial_saved";
+
+    const summary = RunSummaryBuilder.build(state);
+
+    expect(summary.quality_status).toBe("rejected");
+    expect(summary.failure_categories).toContain("quality_rejected");
   });
 
   it("getUnevaluatedArtifactTaskIds tracks pending evaluations", () => {

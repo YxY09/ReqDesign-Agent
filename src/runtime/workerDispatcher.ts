@@ -142,15 +142,24 @@ export class WorkerDispatcher {
         sectionIndex: state.sectionIndex.length > 0 ? state.sectionIndex : undefined,
       },
     });
+    const planTaskIds = new Set(state.getPlanTaskIds());
+    const replanPayload = messageType === "replan" && state.plan
+      ? {
+          current_plan: state.plan,
+          completed_task_ids: state.getCompletedPlanTaskIds(),
+          failed_task_ids: state.getFailedTaskIds().filter((taskId) => planTaskIds.has(taskId)),
+          evaluator_issues: state.latestVerdict?.issues ?? [],
+          artifact_summary: state.artifactSummary(),
+          replan_reason: decision.reason,
+        }
+      : undefined;
     const message = createTaskMessage({
       type: messageType,
       taskId: "planner",
       sessionId: "",
       replanContext: decision.replanContext,
       cause: decision.reason,
-      payload: messageType === "replan" && state.plan
-        ? { current_plan: state.plan }
-        : undefined,
+      payload: replanPayload,
     });
     return this.submitWorker(
       state,
@@ -252,10 +261,14 @@ export class WorkerDispatcher {
       cause: decision.reason,
       payload: {},
     });
+    const context = this.buildTaskContext(state, task);
+    if (decision.action === "regenerate") {
+      this.attachPreviousArtifactContext(state, taskId, context, "task");
+    }
     return this.submitWorker(
       state,
       "generator",
-      this.buildTaskContext(state, task),
+      context,
       message,
       this.deps.defaultTimeoutSeconds,
       [],
@@ -300,6 +313,25 @@ export class WorkerDispatcher {
     });
 
     const context = this.buildTaskContext(state, task);
+    this.attachPreviousArtifactContext(state, taskId, context, "repair");
+
+    return this.submitWorker(
+      state,
+      "repair",
+      context,
+      message,
+      this.deps.defaultTimeoutSeconds,
+      [],
+      decision,
+    );
+  }
+
+  private attachPreviousArtifactContext(
+    state: WorkflowState,
+    taskId: string,
+    context: SessionContext,
+    scope: "repair" | "task",
+  ): void {
     const currentArtifact = state.artifactsState.artifacts[taskId];
     if (currentArtifact?.content !== undefined && currentArtifact.content !== null) {
       context.hints.previous_artifact_content = currentArtifact.content;
@@ -312,38 +344,28 @@ export class WorkerDispatcher {
       };
       context.provenance = provenanceFromSnapshots(
         state.artifactSnapshots([taskId]),
-        "repair",
+        scope,
         "raw",
       );
-    } else {
-      // Fallback for restored sessions without a current state artifact.
-      const prevSession = this.deps.sessions.latestSessionForTask(taskId);
-      if (prevSession) {
-        const descriptor = prevSession.exportDescriptor();
-        const lastArtifact = descriptor.intermediateState?.last_artifact;
-        if (
-          isRecord(lastArtifact) &&
-          lastArtifact.content !== undefined &&
-          lastArtifact.content !== null
-        ) {
-          context.hints.previous_artifact_content = lastArtifact.content;
-          context.hints.previous_artifact_type = lastArtifact.type;
-          if (lastArtifact.revision !== undefined) {
-            context.hints.previous_artifact_revision = Number(lastArtifact.revision);
-          }
-        }
-      }
+      return;
     }
 
-    return this.submitWorker(
-      state,
-      "repair",
-      context,
-      message,
-      this.deps.defaultTimeoutSeconds,
-      [],
-      decision,
-    );
+    // Fallback for restored sessions without a current state artifact.
+    const prevSession = this.deps.sessions.latestSessionForTask(taskId);
+    if (!prevSession) return;
+    const descriptor = prevSession.exportDescriptor();
+    const lastArtifact = descriptor.intermediateState?.last_artifact;
+    if (
+      isRecord(lastArtifact) &&
+      lastArtifact.content !== undefined &&
+      lastArtifact.content !== null
+    ) {
+      context.hints.previous_artifact_content = lastArtifact.content;
+      context.hints.previous_artifact_type = lastArtifact.type;
+      if (lastArtifact.revision !== undefined) {
+        context.hints.previous_artifact_revision = Number(lastArtifact.revision);
+      }
+    }
   }
 
   submitWorker(

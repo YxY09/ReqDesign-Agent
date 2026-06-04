@@ -13,6 +13,7 @@ import {
 import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { validateReview, type ReviewValidationResult } from "../shared/reviewValidator.js";
+import { RequirementIndex } from "../shared/requirementIndex.js";
 
 
 export class EvaluationTool extends BaseTool {
@@ -93,6 +94,7 @@ export class EvaluationTool extends BaseTool {
     }
     llmIssues = this._filterSnapshotIssues(llmIssues, snapshots);
     issues.push(...llmIssues);
+    EvaluationTool._mapSyntheticFinalIssuesToSources(issues, snapshots);
 
     // 分类范围
     for (const issue of issues) EvaluationTool._classifyIssueScope(issue);
@@ -235,6 +237,25 @@ export class EvaluationTool extends BaseTool {
     });
   }
 
+  private static _diagramContent(content: unknown): Record<string, string> | null {
+    if (!content || typeof content !== "object" || Array.isArray(content)) {
+      return null;
+    }
+    const record = content as Record<string, unknown>;
+    const nested = record.diagrams;
+    const source = nested && typeof nested === "object" && !Array.isArray(nested)
+      ? nested as Record<string, unknown>
+      : record;
+    const diagrams: Record<string, string> = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (!["class_diagram", "activity_diagram", "state_diagram"].includes(key)) {
+        continue;
+      }
+      diagrams[key] = typeof value === "string" ? value : String(value ?? "");
+    }
+    return diagrams;
+  }
+
   private _allowedSnapshotFields(snapshot: Record<string, unknown>): Set<string> {
     const taskType = String(snapshot.type ?? "");
     const content = snapshot.content;
@@ -249,8 +270,9 @@ export class EvaluationTool extends BaseTool {
     if (taskType === "tests") return new Set(["test_cases", "content"]);
     if (taskType === "diagrams") {
       const fields = new Set(["diagrams"]);
-      if (typeof content === "object" && content !== null) {
-        for (const key of Object.keys(content as Record<string, unknown>)) {
+      const diagrams = EvaluationTool._diagramContent(content);
+      if (diagrams) {
+        for (const key of Object.keys(diagrams)) {
           fields.add(key);
           fields.add(`diagrams.${key}`);
         }
@@ -368,10 +390,23 @@ export class EvaluationTool extends BaseTool {
             bestSource = source;
           }
         }
-        issue.targetTaskId = bestSource;
+        if (bestScore > 0) {
+          issue.targetTaskId = bestSource;
+        }
       } else {
         issue.targetTaskId = sources[0];
       }
+    }
+  }
+
+  private static _mapSyntheticFinalIssuesToSources(
+    issues: Issue[],
+    snapshots: Record<string, Record<string, unknown>>,
+  ): void {
+    for (const issue of issues) {
+      const snapshot = snapshots[issue.targetTaskId];
+      if (!snapshot) continue;
+      EvaluationTool._mapSyntheticFinalIssueToSource(issue, snapshot);
     }
   }
 
@@ -429,11 +464,11 @@ export class EvaluationTool extends BaseTool {
       }
 
       if (taskType === "diagrams") {
-        if (typeof content !== "object" || content === null || Array.isArray(content) || Object.keys(content as Record<string, unknown>).length === 0) {
+        const c = EvaluationTool._diagramContent(content);
+        if (!c || Object.keys(c).length === 0) {
           issues.push(createIssue({ severity: "blocker", targetTaskId: taskId, targetTaskType: "diagrams", targetField: "diagrams", description: "图表为空或格式错误", suggestion: "重新执行图表生成任务" }));
           continue;
         }
-        const c = content as Record<string, string>;
         for (const [dtype, raw] of Object.entries(c)) {
           if (!raw?.trim()) {
             issues.push(createIssue({ severity: "blocker", targetTaskId: taskId, targetTaskType: "diagrams", targetField: `diagrams.${dtype}`, description: `${dtype} 为空`, suggestion: `重新生成 ${dtype}` }));
@@ -594,9 +629,9 @@ export class EvaluationTool extends BaseTool {
     for (const [taskId, snapshot] of Object.entries(snapshots)) {
       const taskType = String(snapshot.type ?? "");
       if (taskType !== "diagrams") continue;
-      const content = snapshot.content;
-      if (!content || typeof content !== "object") continue;
-      const classDiagram = String((content as Record<string, unknown>).class_diagram ?? "");
+      const content = EvaluationTool._diagramContent(snapshot.content);
+      if (!content) continue;
+      const classDiagram = String(content.class_diagram ?? "");
       if (!classDiagram) continue;
 
       const classRe = /class\s+(\w+)\s*\{/g;
@@ -658,8 +693,9 @@ export class EvaluationTool extends BaseTool {
       const taskType = String(snapshot.type ?? "");
       if (taskType !== "diagrams") continue;
       const content = snapshot.content;
-      if (!content || typeof content !== "object") continue;
-      const activityDiagram = String((content as Record<string, unknown>).activity_diagram ?? "");
+      const diagrams = EvaluationTool._diagramContent(content);
+      if (!diagrams) continue;
+      const activityDiagram = String(diagrams.activity_diagram ?? "");
       if (!activityDiagram) continue;
 
       // Check which process names (or recognizable keywords) appear in the activity diagram
@@ -801,15 +837,11 @@ export class EvaluationTool extends BaseTool {
     text: string,
     requirementJson: Record<string, unknown>,
   ): Issue[] {
-    const defined = new Set(
-      ((requirementJson.exceptions ?? []) as Array<Record<string, unknown>>)
-        .flatMap((item) => [String(item.id ?? "").trim(), String(item.displayId ?? "").trim()])
-        .filter(Boolean),
-    );
-    if (defined.size === 0) return [];
-
-    const referenced = new Set(text.match(/\b[EX]\d{3}\b/g) ?? []);
-    const unknown = [...referenced].filter((id) => !defined.has(id)).sort();
+    const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
+    if (requirementIndex.exceptions.length === 0) return [];
+    const referenced = requirementIndex.extractIds(text)
+      .filter((id) => id.startsWith("X") || id.startsWith("EXC_"));
+    const unknown = requirementIndex.unknownReferences(referenced);
     if (unknown.length === 0) return [];
 
     return [createIssue({
@@ -818,7 +850,7 @@ export class EvaluationTool extends BaseTool {
       targetTaskType: taskType,
       targetField,
       description: `产物引用了未定义的异常 ID: ${unknown.join(", ")}`,
-      suggestion: `只引用 requirement_json.exceptions 中已定义的异常 ID: ${[...defined].sort().join(", ")}`,
+      suggestion: `只引用 requirement_json.exceptions 中已定义的异常 ID: ${requirementIndex.idsFor("exception", "both").sort().join(", ")}`,
     })];
   }
 
@@ -1098,10 +1130,13 @@ export class EvaluationTool extends BaseTool {
   }
 
   static _buildSummary(passed: boolean, issues: Issue[]): string {
-    if (passed) return "审查通过，无 blocker/major 问题。";
     const blockerCount = issues.filter((i) => i.severity === "blocker").length;
     const majorCount = issues.filter((i) => i.severity === "major").length;
     const minorCount = issues.filter((i) => i.severity === "minor").length;
+    if (passed && majorCount === 0) return "审查通过，无 blocker/major 问题。";
+    if (passed) {
+      return `审查未清洁通过。发现 ${issues.length} 个问题（blocker: ${blockerCount}, major: ${majorCount}, minor: ${minorCount}），无 blocker，可尝试自动修复 major。`;
+    }
     return `审查未通过。发现 ${issues.length} 个问题（blocker: ${blockerCount}, major: ${majorCount}, minor: ${minorCount}）。`;
   }
 

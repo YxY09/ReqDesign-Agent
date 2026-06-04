@@ -153,7 +153,16 @@ async function main(): Promise<void> {
     `  persist status: ${state.persistStatus}`,
   ];
   if (state.latestVerdict) {
-    summaryLines.push(`  verdict: ${state.latestVerdict.passed ? "passed" : "rejected"}`);
+    const verdictStatus = state.finalReviewDone
+      ? state.finalReviewPassed
+        ? "passed"
+        : state.latestVerdict.passed
+          ? "accepted_with_major_issues"
+          : "rejected"
+      : state.latestVerdict.passed
+        ? "accepted_no_blockers"
+        : "rejected";
+    summaryLines.push(`  verdict: ${verdictStatus}`);
     summaryLines.push(`  review rounds: ${String(state.verdicts.length)}`);
   }
   if (state.plan) {

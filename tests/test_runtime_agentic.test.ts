@@ -19,6 +19,7 @@ import {
   createTask,
   createExecutionPlan,
   createIssue,
+  createRuntimeAction,
 } from "../src/shared/types.js";
 
 // ---------------------------------------------------------------------------
@@ -418,6 +419,65 @@ describe("WorkflowState — artifacts", () => {
 
     expect(state.currentArtifactRevision("design-1")).toBe(1);
     expect(String(state.artifactsState.artifacts["design-1"].content)).not.toContain("F999");
+  });
+
+  it("keeps existing artifact when regenerate candidate fails self-check without improvement", async () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({
+      taskId: "design-1",
+      type: "design",
+      content: "stable design",
+      selfCheckPassed: true,
+      selfCheckIssues: [],
+    }));
+    state.markTaskStatus("design-1", "completed");
+    let saveCalls = 0;
+    const events: string[] = [];
+    const handler = new ResultHandler({
+      backend: {} as never,
+      mailbox: {} as never,
+      logger: {} as never,
+      analyzeMerger: {} as never,
+      outputManagerCtor: class {} as never,
+      getInflight: () => new Map(),
+      getActiveStreamContext: () => null,
+      setActiveStreamContext: () => {},
+      onEmitRuntimeEvent: (kind) => events.push(kind),
+      onSnapshotState: () => ({}),
+      onSaveArtifactIncrementally: () => { saveCalls += 1; },
+      onPersistValidatedCoordinatorDecision: () => {},
+    });
+    const candidate = createArtifact({
+      taskId: "design-1",
+      type: "design",
+      content: "worse regenerated design",
+      selfCheckPassed: false,
+      selfCheckIssues: ["missing traceability", "missing exception flow"],
+    });
+
+    await handler.applyGeneratorCompletion(
+      state,
+      "design-1",
+      createTaskNotification({
+        taskId: "design-1",
+        sessionId: "s2",
+        status: "completed",
+        result: candidate,
+      }),
+      "spawn",
+      createRuntimeAction({
+        action: "regenerate",
+        taskId: "design-1",
+        reason: "retry design",
+      }),
+    );
+
+    expect(state.currentArtifactRevision("design-1")).toBe(1);
+    expect(state.artifactsState.artifacts["design-1"].content).toBe("stable design");
+    expect(state.taskStatus("design-1")).toBe("failed");
+    expect(state.errors.at(-1)).toContain("regenerate candidate rejected");
+    expect(events).toContain("regenerate_rejected");
+    expect(saveCalls).toBe(0);
   });
 
   it("addVerdict does NOT auto-set finished", () => {

@@ -35,6 +35,18 @@ describe("SystemDesigner.validateDesign", () => {
     expect(warnings.some((w) => w.includes("F002"))).toBe(true);
   });
 
+  it("should warn on self-invented requirement IDs in design", () => {
+    const design = "## 模块划分\n\n帮助模块 F016。\n\n## 核心类\n\nHelpService。\n\n## 数据流\n\n支持 F013。";
+    const req = {
+      functions: [{ id: "FUN_HELP", displayId: "F001", name: "HelpService" }],
+      entities: [],
+      constraints: [],
+      exceptions: [],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) => w.includes("F013") && w.includes("F016"))).toBe(true);
+  });
+
   it("should warn on uncovered entities", () => {
     const design = "## 模块划分\n\n## 核心类\n\n## 数据流\n\nUser类。";
     const req = {

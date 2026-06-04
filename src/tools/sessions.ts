@@ -311,8 +311,15 @@ export class EvaluationSession extends WorkerSession {
       };
     });
 
+    const blockers = verdict.issues.filter((issue) => issue.severity === "blocker").length;
+    const majors = verdict.issues.filter((issue) => issue.severity === "major").length;
+    const summaryStatus = verdict.passed
+      ? majors > 0
+        ? "accepted with major issues"
+        : "passed"
+      : "rejected";
     return this._makeNotification(verdict.passed ? "completed" : "rejected", {
-      summary: `evaluation ${verdict.passed ? "passed" : "rejected"} (issues=${verdict.issues.length}, blockers=${verdict.issues.filter((issue) => issue.severity === "blocker").length})`,
+      summary: `evaluation ${summaryStatus} (issues=${verdict.issues.length}, blockers=${blockers}, majors=${majors})`,
       result: verdict,
       suggestions,
     });

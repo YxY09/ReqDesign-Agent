@@ -24,6 +24,7 @@
 - 带条件的操作（"如果...则执行..."）
 - 用户可以触发或系统自动执行的流程
 - 每个操作关联到它的执行者和作用对象
+- 判断这些行为/关系是否需要实体化：如果某个行为或关系有自己的编号、时间、状态、结果、报告、证据链、成绩、token、IP、金额、生命周期，或后续流程会引用"这一次操作/关系"，必须把它作为独立实体提取。示例：选课记录、案件注册、调查记录、起诉记录、支付订单、访问会话。
 
 ### 第三步：规则扫描
 从文档中识别所有业务规则、约束和异常：
@@ -98,7 +99,14 @@
     {
       "entityRef": "E_CASE",
       "name": "实体名称",
+      "entityKind": "core/association/process_record/event_record/line_item/log",
       "description": "实体描述",
+      "reifies": {
+        "source": "business_process/relationship/function",
+        "sourceName": "被实体化的流程或关系名",
+        "endpoints": ["关系两端或流程关联的实体名称"],
+        "evidence": ["has_identifier/has_timestamp/has_status/has_result/has_report_or_evidence/is_referenced_later"]
+      },
       "attributes": [
         {
           "name": "属性名",
@@ -190,7 +198,13 @@
 6. **实体(entities)**是指系统中需要存储和管理的核心业务对象。每个实体应包含名称、描述和关键属性列表。请务必从需求中识别并列出所有核心实体。
 7. **实体提取注意事项**：
    - 需求文档中提到的不同角色应记录在 `actors` 中。只有当角色拥有独立的业务属性（超越身份标识）时才在 `entities` 中创建独立实体。如果角色仅有 id 和 status 而无其他业务字段，不要为它创建独立实体——在 User 实体中用 role 字段表示即可
-   - **实体 vs 流程**：`business_processes` 中的流程（如下单流程、退款流程）不应出现在 `entities` 中。实体是有独立数据结构需要持久化的业务对象，不是业务活动的步骤序列。如果某个名称既是流程名也是数据对象，仅当它有独立的属性时才列入实体
+   - **实体 vs 流程**：`business_processes` 描述业务步骤，`entities` 描述系统需要保存和引用的数据对象。纯步骤序列不是实体；但某一次流程执行产生的记录/申请/会话/订单/调查/注册/审批，如果有独立属性或生命周期，必须同时列入 `entities`。
+   - **关系实体化（关键）**：如果一个关系本身有属性、有生命周期、或被其他对象引用，不要只把它写成 `A -> B` 的关系，必须提升为独立实体。例如：
+     - 学生选修课程：提取 `EnrollmentRecord`，属性包括 semester、score、status，关系指向 Student 和 Course。
+     - 用户提交案件：提取 `CaseRegistration`，属性包括 registrationNo、submittedAt、status，关系指向 User/Complaint/Case。
+     - 警察调查案件：提取 `CaseInvestigation`，属性包括 report、evidenceSummary、conclusion、status，关系指向 Officer/Case/Document。
+     - 用户访问系统：提取 `AccessSession`，属性包括 token、ipAddress、duration、status，关系指向 User。
+   - 对关系实体使用 `entityKind: "association"` 或 `entityKind: "process_record"`，并填写 `reifies` 说明它实体化了哪个流程/关系以及判断证据。
    - 需求中提到的资源类对象（如设备、会议室、商品）应作为独立实体，不要仅作为其他实体的属性
    - 记录类对象（如预约记录、选课记录、借阅记录）应作为独立实体
    - **明细行实体（关键）**：如果需求中出现“明细、商品明细、订单行、列表项、凭证明细、出入库记录、交易流水”等概念，且它表达父对象下的多条子记录或数量/金额/快照信息，必须作为独立实体。例如如果父实体包含多条子记录（每条记录有独立数量/金额/快照），必须将子记录提取为独立明细实体，建立 `Parent one-to-many LineItem` 的关系

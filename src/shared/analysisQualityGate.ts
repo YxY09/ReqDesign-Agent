@@ -33,6 +33,92 @@ function arrVal(analysis: Rec, key: string): Rec[] {
   return raw.filter((item): item is Rec => typeof item === "object" && item !== null && !Array.isArray(item));
 }
 
+function deriveReifiedEntityName(rawName: string): string {
+  const cleaned = rawName.replace(/流程|过程|记录/g, "").trim();
+  if (/^[A-Z][A-Za-z0-9]*$/.test(cleaned)) return cleaned;
+  if (/^[A-Z][A-Za-z0-9]*$/.test(rawName)) return rawName;
+  return "";
+}
+
+function looksLikeReifiableProcessName(name: string): boolean {
+  return /Registration|Register|Investigation|Investigate|Prosecution|Prosecute|Submission|Submit|Approval|Approve|Enrollment|Enroll|Selection|Reservation|Booking|Borrowing|Borrow|Return|Payment|Refund|Transfer|Visit|Access|Session|Login|Filing|Application|Assignment|Review|Inspection/i.test(name) ||
+    /注册|登记|立案|报案|调查|侦查|起诉|提交|审批|选课|选修|预约|借阅|归还|支付|退款|访问|会话|登录|申请|分配|审核|检查/.test(name);
+}
+
+function spacePascalCase(text: string): string {
+  return String(text ?? "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+}
+
+function collectReificationEvidence(text: string): string[] {
+  const normalized = spacePascalCase(text);
+  const evidence: string[] = [];
+  const checks: Array<[string, RegExp]> = [
+    ["has_identifier", /编号|号码|单号|流水|唯一标识|\bid\b|identifier|number|token/i],
+    ["has_timestamp", /时间|日期|学期|期限|时长|timestamp|date|semester|duration|\bip\b/i],
+    ["has_status", /状态|进度|通过|关闭|完成|status|state|passed|closed|resolved|complete/i],
+    ["has_result", /结果|成绩|分数|判决|刑期|result|outcome|score|grade|judgment|sentence/i],
+    ["has_report_or_evidence", /报告|证据|证据链|结论|材料|庭审|report|evidence|conclusion|charge|court/i],
+    ["is_referenced_later", /后续|引用|关联|前提|追踪|follow|referenced|subsequent|prerequisite|track/i],
+  ];
+  for (const [label, re] of checks) {
+    if (re.test(normalized)) evidence.push(label);
+  }
+  return evidence;
+}
+
+function hasEnoughReificationEvidence(name: string, evidence: string[]): boolean {
+  if (evidence.length >= 2) return true;
+  if (evidence.length === 0) return false;
+  return /Registration|Investigation|Prosecution|Submission|Approval|Enrollment|Reservation|Payment|Visit|Access|Session|Application/i.test(name) ||
+    /注册|登记|立案|调查|侦查|起诉|提交|审批|选课|选修|预约|支付|访问|会话|申请/.test(name);
+}
+
+function processText(process: Rec, sourceText: string): string {
+  const fields: string[] = [];
+  for (const key of ["name", "description", "id"]) {
+    const value = String(process[key] ?? "").trim();
+    if (value) fields.push(value);
+  }
+  for (const key of ["steps", "actors"]) {
+    const value = process[key];
+    if (Array.isArray(value)) fields.push(...value.map((item) => String(item)));
+  }
+  return `${fields.join(" ")}\n${sourceText}`;
+}
+
+function missingRelationshipEntities(analysis: Rec, sourceText: string): string[] {
+  const processes = arrVal(analysis, "business_processes");
+  const entities = arrVal(analysis, "entities");
+  if (processes.length === 0 || entities.length === 0) return [];
+
+  const entityNames = new Set(
+    entities.map((entity) => String(entity.name ?? "").trim().toLowerCase()).filter(Boolean),
+  );
+  const reifiedSourceNames = new Set(
+    entities.map((entity) => {
+      const reifies = typeof entity.reifies === "object" && entity.reifies !== null
+        ? entity.reifies as Rec
+        : {};
+      return String(reifies.sourceName ?? "").trim().toLowerCase();
+    }).filter(Boolean),
+  );
+
+  const missing: string[] = [];
+  for (const process of processes) {
+    const rawName = String(process.name ?? process.id ?? "").trim();
+    const entityName = deriveReifiedEntityName(rawName);
+    if (!entityName || !looksLikeReifiableProcessName(rawName)) continue;
+    const evidence = collectReificationEvidence(processText(process, sourceText));
+    if (!hasEnoughReificationEvidence(rawName, evidence)) continue;
+    if (entityNames.has(entityName.toLowerCase())) continue;
+    if (reifiedSourceNames.has(rawName.toLowerCase())) continue;
+    missing.push(`${rawName} -> ${entityName} (${evidence.join(",")})`);
+  }
+  return missing;
+}
+
 // ---------------------------------------------------------------------------
 // Main check function
 // ---------------------------------------------------------------------------
@@ -170,7 +256,20 @@ export function checkAnalysisQuality(
     });
   }
 
-  // 7. source_ref coverage (only when sourceText provided)
+  // 7. Relationship entity coverage
+  {
+    const missing = missingRelationshipEntities(analysis, sourceText ?? "");
+    const passed = missing.length === 0;
+    checks.push({
+      name: "relationship_entity_coverage",
+      passed,
+      detail: passed
+        ? "No missing reified relationship/process entities detected"
+        : `Missing reified entities: ${missing.slice(0, 5).join("; ")}`,
+    });
+  }
+
+  // 8. source_ref coverage (only when sourceText provided)
   {
     const constraints = arrVal(analysis, "constraints");
     if (!sourceText || sourceText.trim().length === 0) {
@@ -193,7 +292,7 @@ export function checkAnalysisQuality(
     }
   }
 
-  // 8. No unverified constraints
+  // 9. No unverified constraints
   {
     let unverifiedCount = 0;
     if (sourceText && sourceText.trim().length > 0) {

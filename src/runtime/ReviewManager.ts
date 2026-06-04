@@ -27,6 +27,7 @@ export class ReviewManager {
         majorTaskIds.add(issue.targetTaskId);
       }
     }
+    const cleanPassed = verdict.passed && majorTaskIds.size === 0;
 
     for (const [taskId, revision] of Object.entries(verdict.evaluatedRevisions)) {
       const current = this._state.evaluatedRevisionsByTask[taskId] ?? 0;
@@ -68,7 +69,8 @@ export class ReviewManager {
     }
 
     this._state.reviewResult = {
-      passed: verdict.passed,
+      passed: cleanPassed,
+      acceptedNoBlockers: verdict.passed,
       isFinalReview: verdict.isFinalReview,
       evaluatedTaskIds: [...verdict.evaluatedTaskIds],
       evaluatedRevisions: { ...verdict.evaluatedRevisions },
@@ -85,13 +87,13 @@ export class ReviewManager {
 
     if (verdict.isFinalReview) {
       this._state.finalReviewDone = true;
-      this._state.finalReviewPassed = verdict.passed;
+      this._state.finalReviewPassed = cleanPassed;
       this._state.finalReviewRevisions = { ...verdict.evaluatedRevisions };
-      this._state.qualityStatus = verdict.passed ? "passed" : "rejected";
+      this._state.qualityStatus = cleanPassed ? "passed" : "rejected";
     }
 
     // Track evaluator activity
-    if (verdict.passed) {
+    if (cleanPassed) {
       this._state.progress.recordScore(1.0);
       for (const taskId of Object.keys(
         this._state.progress.rejectionStreakByTask,

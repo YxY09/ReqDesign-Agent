@@ -1,205 +1,155 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "Police case management system with configuration, access control and audit capabilities",
+  "project_overview": "CCTNS是一个为警察部门设计的案件管理系统，提供案件注册、调查、起诉、搜索等功能，并包含导航、审计和访问控制模块。",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "System administrator with configuration privileges"
+      "description": "管理员，负责用户配置和权限管理"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "Primary user of the system for case management"
+      "description": "警察，负责案件调查和处理"
     },
     {
-      "actorRef": "A_EXTERNAL_AUDITOR",
-      "name": "ExternalAuditor",
-      "description": "External personnel who review audit trails"
+      "actorRef": "A_CITIZEN",
+      "name": "Citizen",
+      "description": "公民，可以提交案件和查看案件状态"
+    },
+    {
+      "actorRef": "A_HELP_DESK",
+      "name": "HelpDesk",
+      "description": "帮助台，负责处理用户提交的缺陷和增强请求"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "审计员，负责审查系统审计跟踪"
     }
   ],
   "functions": [
     {
-      "id": "FUN_CONFIGURE_SYSTEM",
-      "name": "ConfigureSystem",
-      "description": "Configure application settings and data elements",
+      "id": "FUN_CUSTOMIZE_NAVIGATION",
+      "name": "CustomizeNavigation",
+      "description": "自定义导航，允许用户配置导航菜单和界面布局",
       "sub_capabilities": [
-        "Create/update/delete configuration items",
-        "Maintain state-specific data elements"
+        "配置导航菜单内容",
+        "调整屏幕布局",
+        "修改界面颜色和字体",
+        "保存配置到用户配置文件"
       ],
       "acceptance_criteria": [
-        "Configuration changes persist after system restart",
-        "State-specific data elements are correctly applied"
+        "用户能够成功保存导航配置",
+        "配置在下次登录时仍然有效"
       ],
       "related_actors": [
+        "A_POLICE_OFFICER",
         "A_ADMIN"
       ],
-      "priority": "high",
-      "preconditions": "User must have admin privileges"
-    },
-    {
-      "id": "FUN_MANAGE_ACCESS",
-      "name": "ManageAccess",
-      "description": "Control case access permissions",
-      "sub_capabilities": [
-        "Limit access to specified users/groups",
-        "Configure security attributes",
-        "Handle unauthorized access attempts"
-      ],
-      "acceptance_criteria": [
-        "Access restrictions are enforced",
-        "Unauthorized attempts are logged"
-      ],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "high",
-      "preconditions": "User must have admin privileges"
+      "priority": "medium",
+      "preconditions": "用户已登录系统"
     }
   ],
   "entities": [
     {
-      "entityRef": "E_CONFIGURATION",
-      "name": "Configuration",
-      "description": "System configuration settings",
+      "entityRef": "E_NAVIGATION",
+      "name": "Navigation",
+      "description": "导航配置，包含用户自定义的导航菜单和界面布局",
       "attributes": [
         {
-          "name": "key",
-          "type": "String",
-          "description": "Configuration parameter name"
+          "name": "menuItems",
+          "type": "List",
+          "description": "导航菜单项列表"
         },
         {
-          "name": "value",
+          "name": "layout",
           "type": "String",
-          "description": "Configuration value"
+          "description": "界面布局配置"
         },
         {
-          "name": "scope",
+          "name": "colorScheme",
           "type": "String",
-          "description": "Global/state-specific scope"
+          "description": "颜色方案配置"
+        },
+        {
+          "name": "fontSettings",
+          "type": "String",
+          "description": "字体设置"
         }
       ],
-      "relationships": []
+      "relationships": [
+        {
+          "target": "E_USER_PROFILE",
+          "type": "many-to-one",
+          "description": "导航配置属于用户配置文件"
+        }
+      ]
     },
     {
       "entityRef": "E_USER_PROFILE",
       "name": "UserProfile",
-      "description": "User configuration and preferences",
+      "description": "用户配置文件，存储用户的个性化设置和偏好",
       "attributes": [
         {
-          "name": "uiSettings",
-          "type": "Object",
-          "description": "User interface customizations"
-        },
-        {
-          "name": "accessRights",
-          "type": "List",
-          "description": "Assigned permissions"
-        }
-      ],
-      "relationships": []
-    },
-    {
-      "entityRef": "E_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "Case access permissions",
-      "attributes": [
-        {
-          "name": "caseId",
+          "name": "userId",
           "type": "String",
-          "description": "Case identifier"
+          "description": "用户唯一标识"
         },
         {
-          "name": "allowedUsers",
-          "type": "List",
-          "description": "Authorized users"
+          "name": "preferences",
+          "type": "Object",
+          "description": "用户偏好设置"
         },
         {
-          "name": "allowedGroups",
-          "type": "List",
-          "description": "Authorized groups"
+          "name": "lastLogin",
+          "type": "DateTime",
+          "description": "最后登录时间"
         }
       ],
-      "relationships": []
+      "relationships": [
+        {
+          "target": "E_NAVIGATION",
+          "type": "one-to-many",
+          "description": "用户配置文件包含多个导航配置"
+        }
+      ]
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_010",
-      "description": "Allow limiting case access to specified users/groups",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
-    },
-    {
-      "constraintRef": "C_RULE_013",
-      "description": "Only admins can set up user profiles and groups",
-      "related_functions": [
-        "FUN_MANAGE_ACCESS"
-      ],
-      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
-    },
-    {
       "constraintRef": "C_RULE_021",
-      "description": "UI customizations must be saved in user profile",
+      "description": "界面必须尽可能可定制或用户可配置，配置必须保存在用户配置文件中",
       "related_functions": [
-        "FUN_CONFIGURE_SYSTEM"
+        "FUN_CUSTOMIZE_NAVIGATION"
       ],
       "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
     }
   ],
   "missingConstraintCandidates": [],
-  "exceptions": [
-    {
-      "id": "X001",
-      "description": "Unauthorized configuration attempt",
-      "trigger": "Non-admin user tries to modify system configuration",
-      "handling": "Log attempt and show error message"
-    },
-    {
-      "id": "X002",
-      "description": "Invalid configuration data",
-      "trigger": "Invalid configuration values provided",
-      "handling": "Reject changes and show validation errors"
-    }
-  ],
+  "exceptions": [],
   "non_functional_requirements": [
     {
-      "category": "security",
-      "description": "Role-based access control"
+      "category": "可用性",
+      "description": "系统用户界面必须适合有特殊需求的用户"
     },
     {
-      "category": "usability",
-      "description": "Customizable user interface"
-    },
-    {
-      "category": "audit",
-      "description": "Unalterable audit trail"
+      "category": "性能",
+      "description": "系统必须提供足够的响应时间"
     }
   ],
   "business_processes": [
     {
-      "name": "SystemConfiguration",
+      "name": "NavigationCustomization",
       "steps": [
-        "Access configuration module",
-        "Modify settings",
-        "Save changes",
-        "Verify configuration"
+        "用户登录系统",
+        "访问导航配置界面",
+        "修改导航菜单或界面布局",
+        "保存配置",
+        "系统更新用户配置文件"
       ],
       "actors": [
-        "A_ADMIN"
-      ]
-    },
-    {
-      "name": "AccessControlSetup",
-      "steps": [
-        "Select case",
-        "Specify access rules",
-        "Save permissions",
-        "Verify restrictions"
-      ],
-      "actors": [
+        "A_POLICE_OFFICER",
         "A_ADMIN"
       ]
     }

@@ -93,7 +93,7 @@ describe("validateReview", () => {
     expect(result.passed).toBe(false);
   });
 
-  it("detects when constraint is not referenced in design", () => {
+  it("does not fail review when constraint is not referenced in design", () => {
     const requirementJson = {
       entities: [],
       functions: [],
@@ -110,13 +110,11 @@ describe("validateReview", () => {
     const result = validateReview(requirementJson, designText, testCasesText);
 
     const designCheck = result.checks.find((c) => c.name === "约束设计覆盖");
-    expect(designCheck).toBeDefined();
-    expect(designCheck!.passed).toBe(false);
-    expect(designCheck!.detail).toContain("C002");
-    expect(result.passed).toBe(false);
+    expect(designCheck).toBeUndefined();
+    expect(result.passed).toBe(true);
   });
 
-  it("detects when constraint is not referenced in tests", () => {
+  it("does not fail review when constraint is not referenced in tests", () => {
     const requirementJson = {
       entities: [],
       functions: [],
@@ -132,10 +130,8 @@ describe("validateReview", () => {
     const result = validateReview(requirementJson, designText, testCasesText);
 
     const testCheck = result.checks.find((c) => c.name === "约束测试覆盖");
-    expect(testCheck).toBeDefined();
-    expect(testCheck!.passed).toBe(false);
-    expect(testCheck!.detail).toContain("C001");
-    expect(result.passed).toBe(false);
+    expect(testCheck).toBeUndefined();
+    expect(result.passed).toBe(true);
   });
 
   it("detects empty steps or expected results in test cases", () => {
@@ -163,7 +159,7 @@ describe("validateReview", () => {
     expect(result.passed).toBe(false);
   });
 
-  it("calulates coverage percentages correctly", () => {
+  it("does not include coverage as a deterministic review gate", () => {
     const requirementJson = {
       entities: [],
       functions: [
@@ -188,11 +184,8 @@ describe("validateReview", () => {
     const result = validateReview(requirementJson, "", testCasesText);
 
     const covCheck = result.checks.find((c) => c.name === "覆盖率");
-    expect(covCheck).toBeDefined();
-    // 2/4 functions + 1/2 constraints(test) + 0/2 constraints(design) + 1/2 exceptions
-    // Everything is partial, so passed should be false
-    expect(covCheck!.passed).toBe(false);
-    expect(result.passed).toBe(false);
+    expect(covCheck).toBeUndefined();
+    expect(result.passed).toBe(true);
   });
 
   it("handles empty inputs gracefully (all checks pass)", () => {
@@ -206,7 +199,7 @@ describe("validateReview", () => {
     expect(result.checks.every((c) => c.passed)).toBe(true);
   });
 
-  it("returns all 7 check items in the result", () => {
+  it("returns structural check items in the result", () => {
     const requirementJson = { entities: [], functions: [], constraints: [], exceptions: [] };
 
     const result = validateReview(requirementJson, "", "");
@@ -214,11 +207,11 @@ describe("validateReview", () => {
     const checkNames = result.checks.map((c) => c.name);
     expect(checkNames).toContain("ID 唯一性");
     expect(checkNames).toContain("引用完整性");
-    expect(checkNames).toContain("覆盖率");
     expect(checkNames).toContain("自编 ID 检测");
-    expect(checkNames).toContain("约束设计覆盖");
-    expect(checkNames).toContain("约束测试覆盖");
     expect(checkNames).toContain("空步骤/空预期检测");
-    expect(result.checks).toHaveLength(7);
+    expect(checkNames).not.toContain("覆盖率");
+    expect(checkNames).not.toContain("约束设计覆盖");
+    expect(checkNames).not.toContain("约束测试覆盖");
+    expect(result.checks).toHaveLength(4);
   });
 });

@@ -1,16 +1,11 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "CCTNS是一个警务案件管理系统，提供案件注册、调查、起诉、搜索等功能，并包含公民界面和系统配置模块。",
+  "project_overview": "CCTNS是一个警务信息系统，旨在改善公民与警察之间的信息交流，提高工作效率。",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
       "description": "管理员"
-    },
-    {
-      "actorRef": "A_POLICE_OFFICER",
-      "name": "PoliceOfficer",
-      "description": "警务人员"
     },
     {
       "actorRef": "A_CITIZEN",
@@ -21,69 +16,48 @@
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
       "description": "帮助台"
-    },
-    {
-      "actorRef": "A_AUDITOR",
-      "name": "Auditor",
-      "description": "审计员"
-    },
-    {
-      "actorRef": "A_RECORDS_STAFF",
-      "name": "RecordsStaff",
-      "description": "记录室工作人员"
     }
   ],
   "functions": [
     {
+      "id": "FUN_CUSTOMIZE_INTERFACE",
+      "name": "CustomizeInterface",
+      "description": "自定义界面",
+      "sub_capabilities": [
+        "调整表格中显示的列",
+        "移动界面元素",
+        "调整界面元素大小",
+        "修改界面外观"
+      ],
+      "acceptance_criteria": [
+        "用户能够保存界面配置",
+        "配置保存在用户配置文件中"
+      ],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "用户已登录系统"
+    },
+    {
       "id": "FUN_MANAGE_USER_PROFILE",
       "name": "ManageUserProfile",
       "description": "管理用户配置文件",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
+      "sub_capabilities": [
+        "设置用户界面偏好",
+        "保存用户配置"
+      ],
+      "acceptance_criteria": [
+        "用户能够修改个人配置",
+        "配置变更后立即生效"
+      ],
       "related_actors": [
-        "A_ADMIN"
+        "A_ADMIN",
+        "A_CITIZEN"
       ],
       "priority": "high",
-      "preconditions": "用户必须具有管理员权限"
-    },
-    {
-      "id": "FUN_CONFIGURE_ACCESS",
-      "name": "ConfigureAccess",
-      "description": "配置访问权限",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "high",
-      "preconditions": "用户必须具有管理员权限"
-    },
-    {
-      "id": "FUN_LOG_DEFECT",
-      "name": "LogDefect",
-      "description": "记录缺陷",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "medium",
-      "preconditions": "用户必须登录系统"
-    },
-    {
-      "id": "FUN_TRACK_DEFECT",
-      "name": "TrackDefect",
-      "description": "跟踪缺陷",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER",
-        "A_HELP_DESK"
-      ],
-      "priority": "medium",
-      "preconditions": "缺陷必须已记录"
+      "preconditions": "用户已登录系统"
     }
   ],
   "entities": [
@@ -93,123 +67,91 @@
       "description": "用户配置文件",
       "attributes": [
         {
-          "name": "userId",
-          "type": "String",
-          "description": "用户唯一标识"
-        },
-        {
-          "name": "role",
-          "type": "String",
-          "description": "用户角色"
-        },
-        {
-          "name": "preferences",
+          "name": "interfacePreferences",
           "type": "Object",
-          "description": "用户偏好设置"
+          "description": "用户界面偏好设置"
+        },
+        {
+          "name": "lastModified",
+          "type": "DateTime",
+          "description": "最后修改时间"
         }
       ],
       "relationships": []
     },
     {
-      "entityRef": "E_DEFECT",
-      "name": "Defect",
-      "description": "缺陷",
+      "entityRef": "E_COMPLAINT",
+      "name": "Complaint",
+      "description": "投诉",
       "attributes": [
         {
-          "name": "defectId",
+          "name": "id",
           "type": "String",
-          "description": "缺陷唯一标识"
+          "description": "投诉ID"
         },
         {
           "name": "description",
           "type": "String",
-          "description": "缺陷描述"
+          "description": "投诉描述"
         },
         {
           "name": "status",
           "type": "String",
-          "description": "缺陷状态"
-        },
-        {
-          "name": "createdAt",
-          "type": "DateTime",
-          "description": "创建时间"
+          "description": "投诉状态"
         }
       ],
-      "relationships": [
-        {
-          "target": "UserProfile",
-          "type": "many-to-one",
-          "description": "缺陷由用户创建"
-        }
-      ]
+      "relationships": []
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_002",
-      "description": "系统必须提供用户界面用于记录应用程序的缺陷或增强请求并跟踪",
+      "constraintRef": "C_RULE_019",
+      "description": "界面必须尽可能可定制或用户可配置",
       "related_functions": [
-        "FUN_LOG_DEFECT",
-        "FUN_TRACK_DEFECT"
+        "FUN_CUSTOMIZE_INTERFACE"
       ],
-      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
+      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
     },
     {
-      "constraintRef": "C_RULE_006",
-      "description": "系统必须仅允许管理员用户设置用户配置文件并将用户分配到组",
+      "constraintRef": "C_RULE_020",
+      "description": "系统用户界面必须适合有特殊需求的用户",
       "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
+        "FUN_CUSTOMIZE_INTERFACE"
       ],
-      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
+      "source_text": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines"
     },
     {
-      "constraintRef": "C_RULE_005",
-      "description": "系统必须允许用户将案件访问权限限制为特定用户或用户组",
+      "constraintRef": "C_RULE_021",
+      "description": "系统用户界面必须符合ISO 9241标准",
       "related_functions": [
-        "FUN_CONFIGURE_ACCESS"
+        "FUN_CUSTOMIZE_INTERFACE"
       ],
-      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
+      "source_text": "The user interfaces of the system should comply with Standard ISO 9241."
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [],
   "non_functional_requirements": [
     {
-      "category": "安全",
-      "description": "系统必须使用HTTPS作为通信协议"
-    },
-    {
-      "category": "性能",
-      "description": "系统必须能够在5-8秒内执行简单搜索"
-    },
-    {
       "category": "可用性",
-      "description": "系统必须支持多语言界面"
+      "description": "系统用户界面必须适合有特殊需求的用户"
+    },
+    {
+      "category": "标准合规",
+      "description": "用户界面应符合ISO 9241标准"
     }
   ],
   "business_processes": [
     {
-      "name": "缺陷管理流程",
+      "name": "界面定制流程",
       "steps": [
-        "记录缺陷",
-        "跟踪缺陷状态",
-        "解决缺陷"
+        "用户登录系统",
+        "访问界面设置",
+        "调整界面元素",
+        "保存配置"
       ],
       "actors": [
         "A_CITIZEN",
-        "A_POLICE_OFFICER",
-        "A_HELP_DESK"
-      ]
-    },
-    {
-      "name": "用户配置流程",
-      "steps": [
-        "管理员创建用户配置文件",
-        "分配用户到组",
-        "设置访问权限"
-      ],
-      "actors": [
         "A_ADMIN"
       ]
     }
