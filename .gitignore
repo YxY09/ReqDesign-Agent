@@ -12,6 +12,9 @@ dist/
 build/
 .eggs/
 outputs/
+output/
+.tmp-test-output/
+.pi/
 logs/
 benchmark/results/
 .vscode/
@@ -23,3 +26,4 @@ Paper/
 .claude/
 .worktrees/
 nul
+vitest.config.ts.timestamp-*

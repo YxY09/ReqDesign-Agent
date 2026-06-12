@@ -56,7 +56,7 @@ export class StrategyBrain {
     const { onChunk, done } = makeStreamPrinter("[Orchestrator]");
     try {
       const response = await this.llm.generateJson(prompt, system, onChunk);
-      return StrategyBrain._parseResponse(response);
+      return StrategyBrain._parseResponse(response, snapshot);
     } catch (exc) {
       console.warn(
         "[StrategyBrain] LLM strategy failed:",
@@ -92,6 +92,7 @@ export class StrategyBrain {
       repair_counts_by_task: snapshot.repairCountsByTask,
     };
 
+    const knownTaskIds = StrategyBrain._knownTaskIds(snapshot);
     const basePrompt = (
       "Read this workflow snapshot and choose one strategy.\n" +
       "Allowed strategies: start_planning, route_direct_diagrams, advance_ready_work, wait_for_running, " +
@@ -100,6 +101,9 @@ export class StrategyBrain {
       "save_outputs, finish, pause_for_user.\n" +
       "Initial routing: choose route_direct_diagrams only for simple diagram-focused requests; " +
       "choose start_planning for multi-module requirements, ambiguous requirements, or anything needing analysis/design/tests.\n" +
+      (knownTaskIds.length > 0
+        ? `Valid task ids (target_task_id / affected_task_ids MUST come from this list, or be empty): ${knownTaskIds.join(", ")}\n`
+        : "No tasks exist yet: leave target_task_id and affected_task_ids empty.\n") +
       "Return JSON with strategy, target_task_id, affected_task_ids, reason, confidence.\n" +
       "```json\n" +
       JSON.stringify(data, null, 2) +
@@ -129,8 +133,18 @@ export class StrategyBrain {
   // 响应解析
   // -------------------------------------------------------------------
 
+  /** snapshot 中已知的全部 task id（计划任务 ∪ 产物任务）。 */
+  private static _knownTaskIds(snapshot: OrchestratorSnapshot): string[] {
+    const ids = new Set<string>([
+      ...Object.keys(snapshot.planTaskTypesById),
+      ...snapshot.artifactTaskIds,
+    ]);
+    return [...ids].sort();
+  }
+
   private static _parseResponse(
     response: Record<string, unknown>,
+    snapshot: OrchestratorSnapshot,
   ): StrategyDecision {
     if (typeof response !== "object" || response === null) {
       throw new Error(
@@ -158,12 +172,21 @@ export class StrategyBrain {
       }
     }
 
+    // 校验 LLM 返回的 task id：幻觉 id 会让 guard/compiler 派发不存在的任务。
+    // 非法 id 直接清空，由 PolicyGuard 的兜底逻辑挑选安全目标。
+    const known = new Set(StrategyBrain._knownTaskIds(snapshot));
+    let targetTaskId = String(response["target_task_id"] ?? "").trim();
+    if (targetTaskId && known.size > 0 && !known.has(targetTaskId)) {
+      targetTaskId = "";
+    }
+    const affectedTaskIds = affected
+      .map((t) => String(t).trim())
+      .filter((t) => t.length > 0 && (known.size === 0 || known.has(t)));
+
     return createStrategyDecision({
       strategy: strategy as StrategyName,
-      targetTaskId: String(response["target_task_id"] ?? "").trim(),
-      affectedTaskIds: affected
-        .map((t) => String(t).trim())
-        .filter((t) => t.length > 0),
+      targetTaskId,
+      affectedTaskIds,
       reason: String(response["reason"] ?? "").trim(),
       confidence,
     });

@@ -1,0 +1,17 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-N-001",
+      "title": "正常登录",
+      "type": "正常",
+      "target": "F001 登录",
+      "preconditions": "用户已注册",
+      "steps": [
+        "输入账号",
+        "输入密码"
+      ],
+      "expected_result": "登录成功",
+      "priority": "P0"
+    }
+  ]
+}

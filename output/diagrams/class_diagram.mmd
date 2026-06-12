@@ -3,80 +3,105 @@ classDiagram
         -String caseId
         -String status
         -DateTime createdAt
-        -String title
-        -DateTime updatedAt
-        +register()
-        +investigate()
-        +prosecute()
+        +updateStatus()
+        +assignOfficer()
     }
     class Suspect {
         -String suspectId
         -String name
-        -String status
         +addToCase()
-        +updateStatus()
-    }
-    class Document {
-        -String documentId
-        -String type
-        -String title
-        +upload()
-        +download()
-        +linkToCase()
-    }
-    class AuditTrail {
-        -String action
-        -DateTime timestamp
-        -String actionType
-        -String userId
-        -String entityId
-        -String auditId
-        +logAction()
-        +exportTrail()
+        +removeFromCase()
     }
     class Property {
         -String propertyId
         -String description
-        -String status
-        +register()
-        +updateStatus()
+        +associateWithCase()
+    }
+    class CaseRegistration {
+        -String registrationId
+        -DateTime registrationDate
+        -String complaintDetails
+        +registerNewCase()
+    }
+    class CaseInvestigation {
+        -String investigationId
+        -DateTime startDate
+        -DateTime endDate
+        -String findings
+        +recordEvidence()
+        +completeInvestigation()
+    }
+    class AuditTrail {
+        -String auditId
+        -String action
+        -DateTime timestamp
+        -String userId
+        -String eventType
+        -String caseId
+        -String details
+        +logEvent()
+        +exportForCase()
+    }
+    class CaseProsecution {
+        -String prosecutionId
+        -String courtInteractionDetails
+        -DateTime date
+        +recordCourtInteraction()
     }
     class SearchResult {
-        -String resultId
-        -List items
-        -String query
-        -List results
-        +search()
+        -String searchId
+        -String criteria
+        -Integer resultCount
+        +executeSearch()
         +filterByAccess()
     }
     class UserProfile {
-        -String userId
-        -Object interfacePreferences
-        -String securityLevel
-        -List privileges
+        -Object uiSettings
+        -Object defaultValues
+        -String username
         -String role
-        +savePreferences()
-        +assignToGroup()
+        -Integer securityLevel
+        +updateUISettings()
+        +checkAccess()
     }
-    class Complaint {
-        -String complaintId
+    class Configuration {
+        -Object stateSpecificData
+        -Object businessRules
+        +updateConfiguration()
+    }
+    class DefectRequest {
+        -String title
         -String description
+        -String category
         -String status
-        +register()
-        +linkToCase()
+        -DateTime submittedAt
+        -String submittedBy
+        +submitRequest()
+        +updateStatus()
     }
-    Case "1" --> "*" Suspect : contains
-    Case "1" --> "*" Document : has
-    Case "1" --> "*" Property : includes
-    Case "1" --> "*" AuditTrail : generates
-    Case "1" --> "*" SearchResult : produces
-    Suspect "*" --> "1" Case : belongs_to
-    Document "*" --> "1" Case : associated_with
-    Document "1" --> "1" Property : references
-    AuditTrail "*" --> "1" Case : records
-    AuditTrail "*" --> "1" UserProfile : performed_by
-    Property "*" --> "1" Case : part_of
-    Complaint "1" --> "1" Case : linked_to
-    Complaint "*" --> "1" UserProfile : filed_by
-
-    UserProfile "*" --> "*" Case : accesses
+    class Alert {
+        -String type
+        -String content
+        -DateTime sentAt
+        -String status
+        -String recipientId
+        +sendAlert()
+        +trackStatus()
+    }
+    class AccessViolation {
+        -DateTime timestamp
+        -String attemptedAccess
+        -String outcome
+        +logViolation()
+    }
+    Case "1" --> "*" Suspect : involves
+    Case "1" --> "*" Property : involves
+    Case "1" --> "1" CaseRegistration : has
+    Case "1" --> "1" CaseInvestigation : has
+    Case "1" --> "*" CaseProsecution : has
+    Case "1" --> "*" AuditTrail : has
+    Case "*" -- "*" SearchResult : referenced_by
+    UserProfile "1" --> "*" AccessViolation : has
+    UserProfile "1" --> "*" Alert : receives
+    UserProfile "1" --> "*" DefectRequest : submits
+    AuditTrail "1" --> "1" UserProfile : performed_by

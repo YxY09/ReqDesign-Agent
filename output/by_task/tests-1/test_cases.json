@@ -2,2205 +2,1200 @@
   "test_cases": [
     {
       "id": "TC-N-001",
-      "title": "管理员设置案件访问权限给特定用户组",
+      "title": "配置系统参数正常流程",
       "type": "正常",
-      "target": "F001 AccessControl",
-      "preconditions": "管理员已登录系统，存在案件ID=CASE001和用户组ID=GROUP001",
+      "target": "F001 ConfigureSystem",
+      "preconditions": "管理员已登录系统",
       "steps": [
-        "管理员导航至访问控制设置页面",
-        "选择案件CASE001，设置访问权限仅限GROUP001成员",
-        "保存访问控制设置"
+        "管理员导航至系统配置页面",
+        "输入数据元素名称: 'CasePriority'，类型: 'Dropdown'，可选值: ['High','Medium','Low']",
+        "添加业务规则: 'High优先级案件必须在24小时内响应'",
+        "设置州特定数据: 'StateCode=CA, DefaultResponseTime=48'",
+        "点击保存配置"
       ],
-      "expected_result": "系统显示'权限设置成功'，案件CASE001的访问权限仅限于GROUP001成员",
+      "expected_result": "系统显示配置保存成功，新建案件表单中显示CasePriority下拉框，且High优先级案件触发24小时响应计时",
       "priority": "P0"
     },
     {
-      "id": "TC-N-002",
-      "title": "用户组成员访问授权案件",
+      "id": "TC-N-006",
+      "title": "创建用户并分配安全属性",
       "type": "正常",
-      "target": "F001 AccessControl",
-      "preconditions": "用户USER001属于GROUP001，案件CASE001已授权给GROUP001",
+      "target": "F006 ManageUser",
+      "preconditions": "超级用户已登录系统",
       "steps": [
-        "用户USER001登录系统",
-        "尝试访问案件CASE001详情页面",
-        "查看案件详细信息"
+        "超级用户导航至用户管理页面",
+        "创建新用户: username='officer1', fullName='John Doe'",
+        "分配用户到组: 'Investigators'和'Supervisors'",
+        "设置安全属性: accessLevel='Sensitive', passwordPolicy='Strong'",
+        "保存用户配置"
       ],
-      "expected_result": "成功显示案件CASE001的完整详情页面，无权限错误提示",
+      "expected_result": "用户officer1成功创建，在Investigators和Supervisors组中可见，登录时要求符合Strong密码策略",
       "priority": "P0"
-    },
-    {
-      "id": "TC-N-003",
-      "title": "系统记录未授权访问尝试",
-      "type": "正常",
-      "target": "F001 AccessControl",
-      "preconditions": "案件CASE001仅授权给GROUP001，用户USER002不属于GROUP001",
-      "steps": [
-        "用户USER002登录系统",
-        "尝试直接访问案件CASE001的URL",
-        "系统拒绝访问"
-      ],
-      "expected_result": "系统显示'访问被拒绝'错误页面，审计日志中记录一条X004异常事件，包含用户USER002和案件CASE001信息",
-      "priority": "P1"
     },
     {
       "id": "TC-E-001",
-      "title": "非管理员尝试设置案件权限",
+      "title": "普通用户尝试修改安全属性",
       "type": "异常",
-      "target": "X004 Unauthorized access attempt to case",
-      "preconditions": "普通用户USER003已登录系统，案件CASE002存在",
+      "target": "X005 Unauthorized access attempt",
+      "preconditions": "普通用户'officer2'已登录系统",
       "steps": [
-        "用户USER003尝试访问访问控制设置页面",
-        "选择案件CASE002并尝试修改权限设置",
-        "点击保存按钮"
+        "用户officer2尝试访问/user/update-security页面",
+        "输入参数: username='officer1', accessLevel='Admin'",
+        "点击提交修改"
       ],
-      "expected_result": "系统显示'权限不足'错误消息，案件权限未被修改，审计日志记录X004异常事件",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-002",
-      "title": "用户尝试访问被拒绝访问的案件",
-      "type": "异常",
-      "target": "X001 用户尝试访问被拒绝访问的案件 | CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF",
-      "preconditions": "案件CASE003仅授权给GROUP002，用户USER004不属于GROUP002",
-      "steps": [
-        "用户USER004登录系统",
-        "在搜索栏输入案件CASE003的ID",
-        "点击搜索按钮",
-        "尝试直接访问案件URL"
-      ],
-      "expected_result": "案件CASE003不出现在搜索结果中，直接访问显示'访问被拒绝'，审计日志记录X001异常事件并包含完整上下文",
+      "expected_result": "系统返回'403 Forbidden'错误，审计日志中记录X005异常，officer1的安全属性未被修改",
       "priority": "P1"
     },
     {
       "id": "TC-B-001",
-      "title": "设置空用户组权限边界测试",
+      "title": "验证案件搜索性能边界",
       "type": "边界",
-      "target": "C032 System must allow limiting case access to specified users/groups",
-      "preconditions": "管理员已登录系统，案件CASE004存在",
+      "target": "C002 CON_FUNC_82M2LE00",
+      "preconditions": "系统中存在50,000个测试案件",
       "steps": [
-        "管理员导航至案件CASE004的权限设置",
-        "不选择任何用户组，直接点击保存",
-        "系统提示选择至少一个用户组"
+        "用户执行简单搜索: criteria='status:open'",
+        "记录搜索响应时间",
+        "执行高级搜索: criteria=['status:open','priority:high','state:CA']",
+        "记录高级搜索响应时间"
       ],
-      "expected_result": "系统显示'必须选择至少一个用户组'验证错误，权限设置未被保存",
+      "expected_result": "简单搜索在8秒内返回结果列表，高级搜索在15秒内返回结果列表",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-002",
+      "title": "导出不存在的案件审计日志",
+      "type": "异常",
+      "target": "X001 EXC_INDUZN00",
+      "preconditions": "审计员已登录系统",
+      "steps": [
+        "审计员选择导出审计日志功能",
+        "输入不存在的案件ID: 'CASE-99999'",
+        "点击导出按钮"
+      ],
+      "expected_result": "系统显示错误消息'案件不存在(X001)'，审计日志中记录导出失败事件",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-N-014",
+      "title": "调整表格显示列并保存配置",
+      "type": "正常",
+      "target": "F002 CustomizeUI, C001",
+      "preconditions": "用户已登录系统，进入案件管理界面",
+      "steps": [
+        "点击界面右上角的'设置'按钮",
+        "在'表格列设置'选项卡中勾选'案件ID'、'登记日期'、'状态'列",
+        "取消勾选'调查官'列",
+        "点击'保存配置'按钮"
+      ],
+      "expected_result": "案件列表立即刷新，仅显示勾选的3列；重新登录后配置依然生效",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-002",
+      "title": "移动和调整案件详情面板大小",
+      "type": "正常",
+      "target": "F002 CustomizeUI, C001",
+      "preconditions": "用户已打开某个案件详情页面",
+      "steps": [
+        "拖动'证据记录'面板到页面右侧区域",
+        "调整'嫌疑人信息'面板高度至占据屏幕50%",
+        "点击'保存布局'按钮",
+        "退出后重新进入该案件"
+      ],
+      "expected_result": "证据记录面板固定在右侧，嫌疑人信息面板保持调整后高度",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-003",
+      "title": "修改界面主题色和字体大小",
+      "type": "正常",
+      "target": "F002 CustomizeUI, C001",
+      "preconditions": "用户进入个人设置页面",
+      "steps": [
+        "在'外观设置'中选择'深色主题'",
+        "将'主字体大小'调整为14pt",
+        "勾选'加粗表格标题'选项",
+        "切换至案件搜索界面验证效果"
+      ],
+      "expected_result": "整个系统应用深色主题，所有界面字体变大且表格标题加粗显示",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-021",
+      "title": "恢复默认界面配置",
+      "type": "边界",
+      "target": "F002 CustomizeUI, C001",
+      "preconditions": "用户已自定义过界面设置",
+      "steps": [
+        "进入'高级设置'页面",
+        "点击'重置所有UI配置'按钮",
+        "在确认对话框中选择'是'",
+        "刷新页面后检查各界面元素"
+      ],
+      "expected_result": "所有界面元素恢复系统默认位置、大小和外观设置",
       "priority": "P2"
     },
     {
       "id": "TC-B-002",
-      "title": "同时属于多个组的用户访问权限测试",
+      "title": "多设备间同步界面配置",
       "type": "边界",
-      "target": "C003 Allow users to belong to multiple groups",
-      "preconditions": "用户USER005同时属于GROUP003和GROUP004，案件CASE005授权给GROUP003",
+      "target": "F002 CustomizeUI, C001",
+      "preconditions": "用户在设备A上已完成界面定制",
       "steps": [
-        "用户USER005登录系统",
-        "尝试访问案件CASE005",
-        "查看案件详情"
+        "在设备B上使用同一账号登录系统",
+        "进入案件管理界面",
+        "等待10秒自动同步",
+        "检查表格列设置和面板布局"
       ],
-      "expected_result": "成功显示案件CASE005的完整详情，证明多组成员身份不影响权限检查",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-N-012",
-      "title": "调整表格中显示的列并保存配置",
-      "type": "正常",
-      "target": "F002 CustomizeInterface",
-      "preconditions": "用户已登录系统，拥有界面定制权限",
-      "steps": [
-        "进入'界面设置'页面",
-        "在'表格列设置'区域，取消勾选'案件编号'列",
-        "勾选'创建日期'列",
-        "点击'保存配置'按钮"
-      ],
-      "expected_result": "系统显示'配置已保存'提示；刷新页面后表格仅显示用户选择的列",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-013",
-      "title": "移动界面元素位置并验证持久化",
-      "type": "正常",
-      "target": "F002 CustomizeInterface | C012",
-      "preconditions": "用户已登录系统，拥有界面定制权限",
-      "steps": [
-        "进入'界面设置'页面",
-        "拖拽'案件搜索'面板到页面右侧区域",
-        "将'快速操作'工具栏移动到页面顶部",
-        "点击'保存配置'按钮",
-        "退出并重新登录系统"
-      ],
-      "expected_result": "重新登录后界面元素位置保持用户配置的布局",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-014",
-      "type": "正常",
-      "title": "调整界面元素大小和外观主题",
-      "target": "F002 CustomizeInterface | C012",
-      "preconditions": "用户已登录系统，首次使用深色模式",
-      "steps": [
-        "进入'外观设置'选项卡",
-        "选择'深色主题'",
-        "调整'字体大小'滑块至16px",
-        "将'面板边距'设置为紧凑模式",
-        "点击'应用并保存'"
-      ],
-      "expected_result": "界面立即切换为深色主题，所有文本显示为16px，面板间距缩小；配置在用户配置文件中持久化存储",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-012",
-      "type": "异常",
-      "title": "尝试保存无效的界面配置",
-      "target": "F002 CustomizeInterface | X006",
-      "preconditions": "用户已登录系统，选择未安装的语言包",
-      "steps": [
-        "进入'语言设置'选项卡",
-        "从下拉菜单选择'法语(未安装)'",
-        "点击'保存配置'按钮"
-      ],
-      "expected_result": "系统显示错误消息'所选语言资源不可用(X006)'，并回滚到上次有效配置",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-036",
-      "type": "边界",
-      "title": "测试最大可定制元素数量",
-      "target": "F002 CustomizeInterface | C012",
-      "preconditions": "管理员已设置最大可定制面板数为15",
-      "steps": [
-        "进入'界面设置'页面",
-        "连续添加14个自定义面板",
-        "尝试添加第15个面板",
-        "点击'保存配置'按钮"
-      ],
-      "expected_result": "成功保存14个面板配置；添加第15个面板时系统显示'已达到最大可定制元素数量'提示",
+      "expected_result": "设备B的界面配置与设备A完全一致",
       "priority": "P2"
     },
     {
       "id": "TC-N-015",
-      "title": "正常导出案件审计跟踪",
+      "title": "审计员成功导出指定案件的审计数据",
       "type": "正常",
-      "target": "F003 ExportAuditTrail",
-      "preconditions": "1. 系统中有案件ID为CASE-2023-001的审计数据 2. 当前用户具有导出权限 3. 审计功能已激活(C004)",
+      "target": "F003 ExportAudit",
+      "preconditions": "审计员已登录系统，案件ID为CASE-2023-001的案件存在且已完成调查",
       "steps": [
-        "1. 用户登录系统并导航至审计管理模块",
-        "2. 输入案件ID CASE-2023-001并选择导出时间范围2023-01-01至2023-12-31",
-        "3. 点击'导出审计跟踪'按钮",
-        "4. 选择CSV格式并指定保存路径为~/Downloads/audit_CASE-2023-001.csv"
+        "审计员在审计管理界面输入案件ID CASE-2023-001",
+        "系统验证审计员权限并显示案件基本信息",
+        "审计员点击'导出审计数据'按钮",
+        "系统生成包含案件所有审计事件的报告文件"
       ],
-      "expected_result": "1. 系统在5秒内生成包含完整审计数据的CSV文件 2. 文件包含案件CASE-2023-001的所有操作记录(创建、更新、状态变更等) 3. 系统存储的原始审计数据未被修改(C025) 4. 文件内容与数据库中的审计记录完全一致(C027)",
+      "expected_result": "系统生成PDF格式的审计报告文件，包含案件CASE-2023-001的所有审计事件记录，且原始审计跟踪数据未被修改",
       "priority": "P0"
     },
     {
       "id": "TC-N-004",
-      "title": "导出多案件审计跟踪",
+      "title": "审计员导出多个案件的审计数据",
       "type": "正常",
-      "target": "F003 ExportAuditTrail",
-      "preconditions": "1. 系统中有案件ID为CASE-2023-001至CASE-2023-005的审计数据 2. 当前用户具有导出权限",
+      "target": "F003 ExportAudit",
+      "preconditions": "审计员已登录系统，案件ID为CASE-2023-001和CASE-2023-002的案件存在",
       "steps": [
-        "1. 用户登录系统并导航至批量审计导出界面",
-        "2. 选择案件ID范围CASE-2023-001至CASE-2023-005",
-        "3. 设置时间范围为2023全年",
-        "4. 点击'批量导出'并选择JSON格式"
+        "审计员在审计管理界面选择多个案件(CASE-2023-001, CASE-2023-002)",
+        "系统验证审计员对每个案件的访问权限",
+        "审计员点击'批量导出'按钮",
+        "系统生成包含两个案件审计数据的合并报告"
       ],
-      "expected_result": "1. 系统在15秒内生成包含5个案件审计数据的JSON文件 2. 每个案件的审计记录完整包含时间戳、操作用户、操作类型等字段 3. 系统日志记录导出操作(C033) 4. 原始审计数据保持未修改状态(C025)",
+      "expected_result": "系统生成包含两个案件所有审计事件的单一报告文件，每个案件的审计数据清晰区分",
       "priority": "P1"
     },
     {
-      "id": "TC-B-037",
-      "title": "导出空案件审计跟踪",
-      "type": "边界",
-      "target": "F003 ExportAuditTrail | C027",
-      "preconditions": "1. 案件ID为CASE-2023-EMPTY存在但无审计记录 2. 当前用户具有导出权限",
-      "steps": [
-        "1. 用户输入案件ID CASE-2023-EMPTY",
-        "2. 选择时间范围2023-01-01至2023-12-31",
-        "3. 点击导出按钮",
-        "4. 选择PDF格式"
-      ],
-      "expected_result": "1. 系统在3秒内生成空审计报告PDF 2. 报告标题显示'案件CASE-2023-EMPTY审计跟踪(无记录)' 3. 系统存储状态未受影响 4. 操作被记录到审计日志中(C004)",
-      "priority": "P2"
-    },
-    {
       "id": "TC-E-013",
-      "title": "无权限用户尝试导出审计跟踪并验证警报发送",
+      "title": "尝试导出不存在的案件审计数据",
       "type": "异常",
-      "target": "F003 ExportAuditTrail | X004 | C026 | CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ",
-      "preconditions": "1. 案件ID为CASE-2023-001存在审计数据 2. 当前用户为普通调查员无导出权限 3. 管理员已设置警报接收",
+      "target": "F003 ExportAudit, X004 EXC_CASE_FOUND",
+      "preconditions": "审计员已登录系统",
       "steps": [
-        "1. 用户尝试直接访问/audit/cases/CASE-2023-001/export端点",
-        "2. 提交POST请求尝试导出数据",
-        "3. 修改界面元素绕过前端权限检查",
-        "4. 检查管理员收件箱"
+        "审计员在审计管理界面输入不存在的案件ID CASE-9999-999",
+        "点击'导出审计数据'按钮"
       ],
-      "expected_result": "1. 系统返回403错误并记录安全事件(C026) 2. 审计日志记录未授权尝试(X004) 3. 未生成任何导出文件 4. 管理员收到安全警报邮件 5. 用户收到'您无权执行此操作'的明确错误信息(C015)",
+      "expected_result": "系统显示错误消息'案件未找到'(X004)，且未生成任何报告文件",
       "priority": "P1"
     },
     {
       "id": "TC-E-014",
-      "title": "导出不存在的案件审计跟踪",
+      "title": "无权限用户尝试导出案件审计数据",
       "type": "异常",
-      "target": "F003 ExportAuditTrail | X003",
-      "preconditions": "1. 案件ID为CASE-INVALID不存在 2. 当前用户具有导出权限",
+      "target": "F003 ExportAudit, X002 EXC_N4FYX900",
+      "preconditions": "普通调查员已登录系统，案件ID为CASE-2023-001的案件存在",
       "steps": [
-        "1. 用户输入不存在的案件ID CASE-INVALID",
-        "2. 点击导出按钮",
-        "3. 尝试选择所有可能的导出格式"
+        "调查员尝试访问审计管理界面",
+        "输入案件ID CASE-2023-001",
+        "点击'导出审计数据'按钮"
       ],
-      "expected_result": "1. 系统在2秒内返回'案件不存在'错误(X003) 2. 错误信息包含建议检查案件ID的有效格式 3. 界面保持可用状态 4. 操作被记录为失败尝试(C004)",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-N-016",
-      "title": "管理员生成系统活动报告",
-      "type": "正常",
-      "target": "F004 GenerateReport",
-      "preconditions": "用户具有管理员权限，系统中有至少3个案件记录",
-      "steps": [
-        "以admin_user身份登录系统",
-        "导航至报告生成页面",
-        "选择报告类型为'系统活动报告'",
-        "设置时间范围为最近30天",
-        "点击'生成报告'按钮"
-      ],
-      "expected_result": "系统在10秒内生成PDF格式报告，包含：1)报告标题为'系统活动报告-2023-11-15' 2)显示案件创建/更新统计图表 3)列出所有审计事件时间线",
+      "expected_result": "系统显示'权限不足'错误(X002)，记录一次访问违规到审计日志(C018)",
       "priority": "P0"
     },
     {
-      "id": "TC-N-005",
-      "title": "审计员生成案件特定审计报告",
-      "type": "正常",
-      "target": "F004 GenerateReport",
-      "preconditions": "用户具有审计员角色，案件CASE-2023-1001存在且已完成调查",
+      "id": "TC-B-022",
+      "title": "导出包含最大数量审计事件的案件数据",
+      "type": "边界",
+      "target": "F003 ExportAudit, C002 CON_FUNC_82M2LE00",
+      "preconditions": "审计员已登录系统，案件ID为CASE-2023-100包含1000条审计事件记录",
       "steps": [
-        "以auditor1身份登录系统",
-        "搜索并打开案件CASE-2023-1001",
-        "点击'导出审计轨迹'按钮",
-        "选择输出格式为CSV",
-        "指定时间范围为案件全生命周期"
+        "审计员选择案件CASE-2023-100",
+        "点击'导出审计数据'按钮",
+        "系统开始生成报告"
       ],
-      "expected_result": "下载的CSV文件包含：1)文件名格式为'AuditTrail_CASE-2023-1001_20231115.csv' 2)至少包含5条操作记录 3)每行包含timestamp/user_id/action_type字段",
+      "expected_result": "系统在8秒内完成报告生成(C002)，报告包含全部1000条审计事件",
       "priority": "P1"
     },
     {
-      "id": "TC-N-006",
-      "title": "生成多语言界面配置报告",
+      "id": "TC-N-016",
+      "title": "案件调查正常流程测试",
       "type": "正常",
-      "target": "F004 GenerateReport",
-      "preconditions": "系统启用了英语和法语语言包",
+      "target": "F004 InvestigateCase",
+      "preconditions": "案件已注册且分配给当前警官",
       "steps": [
-        "以admin_user身份登录系统",
-        "导航至系统配置>报告中心",
-        "选择报告类型为'界面配置报告'",
-        "勾选'包含多语言设置'选项",
-        "点击生成按钮"
+        "警官输入案件ID 'CASE-2023-0456'",
+        "记录证据：上传指纹照片 'fingerprint_0456.jpg' 并添加描述 '在嫌疑人住所发现的指纹'",
+        "更新案件状态为 '证据收集完成'",
+        "生成调查报告：填写调查结论 '嫌疑人指纹与现场匹配'"
       ],
-      "expected_result": "生成的报告显示：1)当前激活语言包版本(英语v2.1/法语v1.8) 2)各界面元素的翻译覆盖率 3)缺失翻译的关键字段列表",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-N-017",
-      "title": "案件调查正常流程",
-      "type": "正常",
-      "target": "F005 InvestigateCase",
-      "preconditions": "案件已注册且状态为'待调查'，警员有访问权限",
-      "steps": [
-        "警员PO123登录系统",
-        "搜索案件CASE-2023-001并打开详情页",
-        "更新案件描述为'嫌疑人持刀抢劫便利店'",
-        "上传证据文件'便利店监控.mp4'",
-        "添加嫌疑人张三(身份证号310101199001011234)",
-        "提交调查结果"
-      ],
-      "expected_result": "案件状态变更为'调查完成'，详情页显示更新后的描述，证据列表包含'便利店监控.mp4'，嫌疑人列表显示张三信息",
+      "expected_result": "案件状态更新为'证据收集完成'，调查报告包含所有证据记录和调查结论",
       "priority": "P0"
     },
     {
       "id": "TC-N-007",
-      "title": "案件起诉正常流程",
+      "title": "案件起诉正常流程测试",
       "type": "正常",
       "target": "F007 ProsecuteCase",
-      "preconditions": "案件状态为'调查完成'，起诉材料已准备齐全",
+      "preconditions": "案件调查已完成且准备起诉",
       "steps": [
-        "检察官DA456登录系统",
-        "打开案件CASE-2023-001的起诉页面",
-        "填写起诉罪名'抢劫罪'，法条依据'刑法第263条'",
-        "上传起诉书'起诉书-CASE-2023-001.pdf'",
-        "提交至法院系统"
+        "选择案件ID 'CASE-2023-0456'",
+        "记录法院互动：填写法院名称 '高等法院'，案件编号 'HC-2023-789'",
+        "上传起诉文件 'indictment_0456.pdf'",
+        "关联法官信息 'Justice Smith'"
       ],
-      "expected_result": "案件状态变更为'已起诉'，操作日志记录起诉时间和负责人，法院系统收到案件数据包",
+      "expected_result": "案件记录中显示法院互动详情，包括法院名称、案件编号和关联文件",
       "priority": "P0"
     },
     {
-      "id": "TC-E-005",
-      "title": "尝试修改已起诉案件",
+      "id": "TC-E-004",
+      "title": "调查无权限案件测试",
       "type": "异常",
-      "target": "X008 EXC_MODIFY_DURING_PROSECUTION_PHASE",
-      "preconditions": "案件CASE-2023-001状态为'已起诉'",
+      "target": "X002 EXC_N4FYX900",
+      "preconditions": "案件存在但不属于当前警官管辖范围",
       "steps": [
-        "调查员PO123登录系统",
-        "尝试编辑案件CASE-2023-001的描述字段",
-        "添加新证据'证人证言.txt'",
-        "点击保存按钮"
+        "警官尝试访问案件ID 'CASE-2023-0789'",
+        "系统提示输入调查理由",
+        "输入理由 '跨辖区协查'"
       ],
-      "expected_result": "系统弹出错误提示'案件已进入起诉阶段不可修改(X008)'，所有修改未保存，审计日志记录该次尝试操作",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-005",
-      "title": "超大证据文件上传",
-      "type": "边界",
-      "target": "C007 CON_FUNC_CASE_DATA_RECOVERABLE_SYSTEM_AUUC",
-      "preconditions": "案件CASE-2023-002处于调查阶段",
-      "steps": [
-        "警员PO124登录系统",
-        "上传2.5GB的视频文件'犯罪现场全景录像.mov'",
-        "系统提示'文件超过2GB限制'后",
-        "压缩并分卷上传为'犯罪现场全景录像.part1.rar'(1.8GB)和'犯罪现场全景录像.part2.rar'(0.7GB)"
-      ],
-      "expected_result": "分卷文件成功上传并在证据列表显示为单个条目，系统自动合并验证文件完整性，数据库事务日志显示完整写入记录",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-E-007",
-      "title": "无权限用户尝试起诉案件",
-      "type": "异常",
-      "target": "X004 EXC_UNAUTHORIZED_ACCESS_ATTEMPT",
-      "preconditions": "巡警PO125无起诉权限，案件CASE-2023-003状态为'调查完成'",
-      "steps": [
-        "巡警PO125登录系统",
-        "尝试访问案件CASE-2023-003的起诉页面",
-        "在地址栏手动输入/prosecute/CASE-2023-003"
-      ],
-      "expected_result": "系统返回403错误页面并记录安全事件(X004)，审计日志包含'用户PO125尝试越权访问起诉功能'",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-N-018",
-      "title": "管理员成功设置用户界面偏好并保存配置",
-      "type": "正常",
-      "target": "F006 ManageUserProfile",
-      "preconditions": "1. 管理员用户已登录 2. 目标用户存在",
-      "steps": [
-        "1. 管理员导航至用户管理界面",
-        "2. 选择用户ID 'U1001'",
-        "3. 设置界面语言为'English'，主题为'Dark'，表格显示列数为'10'",
-        "4. 点击'保存配置'按钮"
-      ],
-      "expected_result": "1. 系统显示'配置保存成功'消息 2. 用户下次登录时界面显示为英语、深色主题 3. 用户配置表中preferences字段更新为{\"language\":\"English\",\"theme\":\"Dark\",\"tableColumns\":10}",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-019",
-      "title": "用户分配到多个组并验证安全属性",
-      "type": "正常",
-      "target": "F006 ManageUserProfile, C003 Allow users to belong to multiple groups",
-      "preconditions": "1. 管理员用户已登录 2. 存在组'Investigators'和'Supervisors'",
-      "steps": [
-        "1. 管理员导航至用户组分配界面",
-        "2. 选择用户ID 'U1002'",
-        "3. 勾选'Investigators'和'Supervisors'组复选框",
-        "4. 设置安全级别为'Level3'",
-        "5. 点击'保存分配'按钮"
-      ],
-      "expected_result": "1. 系统显示'分配成功'消息 2. 用户组成员关系表显示U1002同时属于Investigators和Supervisors组 3. 用户安全属性表security_level字段更新为'Level3'",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-E-015",
-      "title": "非管理员尝试修改用户配置被拒绝",
-      "type": "异常",
-      "target": "F006 ManageUserProfile, C002 Only admin can set up user profiles, X004 Unauthorized access attempt",
-      "preconditions": "1. 普通用户'U2001'(非管理员)已登录 2. 目标用户'U1001'存在",
-      "steps": [
-        "1. 用户U2001直接访问URL '/users/U1001/profile'",
-        "2. 尝试修改界面语言为'French'",
-        "3. 点击'保存'按钮"
-      ],
-      "expected_result": "1. 系统返回403错误页面 2. 审计日志记录一条未授权访问尝试(X004) 3. 用户U1001的配置未被修改",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-016",
-      "title": "分配用户到不存在的组",
-      "type": "异常",
-      "target": "F006 ManageUserProfile, C031 Only super-user can change security attributes",
-      "preconditions": "1. 超级管理员用户已登录 2. 组'Patrol'不存在",
-      "steps": [
-        "1. 超级管理员导航至用户组分配界面",
-        "2. 选择用户ID 'U1003'",
-        "3. 输入组名'Patrol'并点击'添加'",
-        "4. 点击'保存分配'按钮"
-      ],
-      "expected_result": "1. 系统显示'组不存在'错误消息 2. 用户组成员关系未改变 3. 审计日志记录操作失败事件",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-038",
-      "title": "批量导入用户配置验证性能",
-      "type": "边界",
-      "target": "F006 ManageUserProfile, C024 Search functionality must maintain performance",
-      "preconditions": "1. 管理员用户已登录 2. 准备包含1000条用户配置的CSV文件",
-      "steps": [
-        "1. 管理员导航至批量导入界面",
-        "2. 上传'user_profiles_1000.csv'文件",
-        "3. 点击'开始导入'按钮",
-        "4. 记录操作完成时间"
-      ],
-      "expected_result": "1. 系统在30秒内完成导入 2. 所有用户配置正确更新 3. 系统资源监控显示CPU使用率<80%",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-039",
-      "title": "离线模式下修改用户配置后同步",
-      "type": "边界",
-      "target": "F006 ManageUserProfile, C008 Cases must be accessible offline",
-      "preconditions": "1. 管理员设备处于离线模式 2. 用户U1004的配置已缓存本地",
-      "steps": [
-        "1. 离线状态下打开用户管理界面",
-        "2. 修改用户U1004的时区设置为'GMT+8'",
-        "3. 点击'保存'按钮",
-        "4. 恢复网络连接",
-        "5. 等待自动同步完成"
-      ],
-      "expected_result": "1. 离线操作成功提示 2. 网络恢复后5分钟内完成同步 3. 服务器端用户配置更新为'GMT+8' 4. 无同步冲突提示",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-N-008",
-      "title": "公民成功注册案件并生成案件编号",
-      "type": "正常",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统",
-      "steps": [
-        "公民导航至案件注册页面",
-        "输入案件详情：案件类型为'盗窃'，发生时间为'2023-05-15 14:30'，地点为'Main Street 123'，详细描述为'笔记本电脑被盗'",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示案件注册成功，生成格式为'CASE-2023-0001'的案件编号，案件详情准确存储在系统中",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-009",
-      "title": "注册包含多个物证的案件",
-      "type": "正常",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统",
-      "steps": [
-        "公民导航至案件注册页面",
-        "输入案件详情：案件类型为'入室盗窃'，发生时间为'2023-05-16 09:00'，地点为'Oak Avenue 45'",
-        "添加3个物证：1. 被破坏的门锁照片 2. 指纹样本 3. 监控录像片段",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示案件注册成功，生成案件编号，所有物证与案件正确关联存储",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-N-010",
-      "title": "注册包含嫌疑人的案件",
-      "type": "正常",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统且知道嫌疑人信息",
-      "steps": [
-        "公民导航至案件注册页面",
-        "输入案件详情：案件类型为'诈骗'，金额为'5000美元'，发生时间为'2023-05-10'",
-        "添加嫌疑人信息：姓名为'John Smith'，联系电话为'555-1234'，描述为'冒充银行工作人员'",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示案件注册成功，生成案件编号，嫌疑人信息与案件正确关联存储",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-008",
-      "title": "尝试注册不完整案件",
-      "type": "异常",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统",
-      "steps": [
-        "公民导航至案件注册页面",
-        "仅输入案件类型为'抢劫'，其他必填字段留空",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示错误消息'请填写所有必填字段：发生时间、地点和案件描述'，未生成案件编号",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-009",
-      "title": "尝试注册未来时间发生的案件",
-      "type": "异常",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统",
-      "steps": [
-        "公民导航至案件注册页面",
-        "输入案件详情：案件类型为'破坏公物'，发生时间为'2024-01-01'，地点为'City Park'，描述为'破坏公园长椅'",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示错误消息'发生时间不能是未来日期'，未生成案件编号",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-008",
-      "title": "注册极长案件描述",
-      "type": "边界",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统",
-      "steps": [
-        "公民导航至案件注册页面",
-        "输入案件详情：案件类型为'网络诈骗'，发生时间为'2023-05-01'，地点为'online'",
-        "输入2000字符的案件描述（达到系统上限）",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示案件注册成功，生成案件编号，完整保存2000字符的描述",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-009",
-      "title": "注册最小信息量的有效案件",
-      "type": "边界",
-      "target": "F008 RegisterCase",
-      "preconditions": "公民已登录系统",
-      "steps": [
-        "公民导航至案件注册页面",
-        "输入最小必填信息：案件类型为'骚扰'，发生时间为'2023-05-17'，地点为'Workplace'，10字符的最小描述",
-        "点击提交按钮"
-      ],
-      "expected_result": "系统显示案件注册成功，生成案件编号，保存最小有效案件信息",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-N-020",
-      "title": "基本搜索功能验证",
-      "type": "正常",
-      "target": "F009 SearchCase",
-      "preconditions": "用户已登录系统，拥有案件查看权限",
-      "steps": [
-        "在搜索框输入案件编号 'CASE-2023-001'",
-        "点击搜索按钮",
-        "等待系统响应"
-      ],
-      "expected_result": "5秒内返回包含案件编号 'CASE-2023-001'的搜索结果，且结果中不包含用户无权访问的记录",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-021",
-      "title": "高级搜索功能验证",
-      "type": "正常",
-      "target": "F009 SearchCase",
-      "preconditions": "用户已登录系统，拥有案件查看权限",
-      "steps": [
-        "点击高级搜索按钮",
-        "设置搜索条件：案件状态为'调查中'，创建日期范围为'2023-01-01至2023-12-31'",
-        "点击执行搜索按钮",
-        "等待系统响应"
-      ],
-      "expected_result": "10秒内返回符合条件的所有案件列表，且结果中不包含用户无权访问的记录",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-022",
-      "title": "QuickSearch功能验证",
-      "type": "正常",
-      "target": "F009 SearchCase",
-      "preconditions": "用户已登录系统，拥有案件查看权限",
-      "steps": [
-        "在快速搜索框输入关键词'抢劫'",
-        "点击搜索按钮",
-        "等待系统响应"
-      ],
-      "expected_result": "5秒内返回所有案件标题或描述中包含'抢劫'关键词的案件，且结果中不包含用户无权访问的记录",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-017",
-      "title": "搜索无权限案件验证",
-      "type": "异常",
-      "target": "F009 SearchCase, X001 EXC_Q7LRJX00",
-      "preconditions": "用户已登录系统，案件'CASE-2023-002'不在用户权限范围内",
-      "steps": [
-        "在搜索框输入案件编号 'CASE-2023-002'",
-        "点击搜索按钮",
-        "等待系统响应"
-      ],
-      "expected_result": "5秒内返回空结果或提示'无权限访问'，系统记录访问违规到审计日志",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-018",
-      "title": "搜索不存在的案件验证",
-      "type": "异常",
-      "target": "F009 SearchCase, X003 EXC_CASE_FOUND",
-      "preconditions": "用户已登录系统，拥有案件查看权限",
-      "steps": [
-        "在搜索框输入不存在的案件编号 'CASE-9999-999'",
-        "点击搜索按钮",
-        "等待系统响应"
-      ],
-      "expected_result": "5秒内返回'案件不存在'提示信息，并提供重新搜索选项",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-040",
-      "title": "大数据量搜索性能验证",
-      "type": "边界",
-      "target": "F009 SearchCase, C024 CON_PERF_SEARCH_FUNCTIONALITY_MAINTAIN_PERFORMANCE_SOBX",
-      "preconditions": "系统中有超过100万条案件记录，用户已登录系统",
-      "steps": [
-        "在搜索框输入通用关键词'案件'",
-        "点击搜索按钮",
-        "记录系统响应时间"
-      ],
-      "expected_result": "8秒内返回搜索结果，且结果数量不超过系统配置的最大显示限制(如1000条)",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-041",
-      "title": "复杂条件高级搜索验证",
-      "type": "边界",
-      "target": "F009 SearchCase, C024 CON_PERF_SEARCH_FUNCTIONALITY_MAINTAIN_PERFORMANCE_SOBX",
-      "preconditions": "用户已登录系统，拥有案件查看权限",
-      "steps": [
-        "点击高级搜索按钮",
-        "设置5个以上搜索条件(案件状态、日期范围、案件类型、地区、涉案金额等)",
-        "点击执行搜索按钮",
-        "记录系统响应时间"
-      ],
-      "expected_result": "15秒内返回符合所有条件的案件列表，且结果中不包含用户无权访问的记录",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-N-023",
-      "title": "正常记录缺陷并更新状态",
-      "type": "正常",
-      "target": "F010 TrackDefect",
-      "preconditions": "用户已登录系统并具有缺陷跟踪权限",
-      "steps": [
-        "导航至缺陷跟踪界面",
-        "输入缺陷标题：'案件搜索页面加载缓慢'",
-        "选择缺陷类型：'性能问题'",
-        "输入详细描述：'当案件数量超过1000条时，搜索页面加载时间超过15秒'",
-        "设置优先级为'高'",
-        "点击'提交缺陷'按钮"
-      ],
-      "expected_result": "系统显示'缺陷已成功记录'确认消息，新缺陷出现在缺陷列表中，状态显示为'新建'",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-011",
-      "title": "更新缺陷状态流程",
-      "type": "正常",
-      "target": "F010 TrackDefect",
-      "preconditions": "缺陷ID DEF-100已存在且状态为'新建'",
-      "steps": [
-        "搜索并打开缺陷DEF-100",
-        "点击'状态更新'按钮",
-        "选择新状态：'处理中'",
-        "输入处理说明：'已分配给开发团队进行优化'",
-        "点击'保存更新'按钮"
-      ],
-      "expected_result": "缺陷详情页显示状态已更新为'处理中'，审计日志中记录状态变更时间和操作人",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-010",
-      "title": "尝试提交不完整缺陷信息",
-      "type": "异常",
-      "target": "F010 TrackDefect",
-      "preconditions": "用户已登录系统并具有缺陷跟踪权限",
-      "steps": [
-        "导航至缺陷跟踪界面",
-        "不填写任何信息",
-        "直接点击'提交缺陷'按钮"
-      ],
-      "expected_result": "系统显示错误消息'标题和类型为必填字段'，缺陷未被创建，表单中必填字段高亮显示",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-011",
-      "title": "无权限用户尝试更新缺陷状态",
-      "type": "异常",
-      "target": "X004 Unauthorized access attempt to case",
-      "preconditions": "缺陷ID DEF-101已存在，当前用户仅有查看权限",
-      "steps": [
-        "搜索并打开缺陷DEF-101",
-        "尝试点击'状态更新'按钮",
-        "在开发者工具中手动发送状态更新API请求"
-      ],
-      "expected_result": "界面显示'您无权执行此操作'提示，API返回403状态码，审计日志记录未授权访问尝试",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-010",
-      "title": "提交超长缺陷描述",
-      "type": "边界",
-      "target": "C015 Produce meaningful error messages",
-      "preconditions": "用户已登录系统并具有缺陷跟踪权限",
-      "steps": [
-        "导航至缺陷跟踪界面",
-        "输入标题：'界面布局问题'",
-        "选择类型：'UI问题'",
-        "粘贴超过10000字符的描述文本",
-        "点击'提交缺陷'按钮"
-      ],
-      "expected_result": "系统显示'描述不得超过5000字符'的错误提示，并高亮超出部分，缺陷未被创建",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-042",
-      "title": "案件起诉阶段与法院接口数据完整性验证",
-      "type": "边界",
-      "target": "C001",
-      "preconditions": "案件已进入起诉阶段(F007)，警务人员已登录系统",
-      "steps": [
-        "警务人员通过接口向法院提交案件编号CASE-2023-001",
-        "系统自动关联法院返回的听证日期2023-12-15",
-        "尝试修改已提交的法院听证日期字段"
-      ],
-      "expected_result": "系统阻止日期修改并记录审计日志(AuditTrail)，显示错误消息'起诉阶段数据不可更改'",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-043",
-      "title": "非管理员尝试配置用户组权限",
-      "type": "边界",
-      "target": "C002",
-      "preconditions": "普通用户user1(非admin)已登录，存在用户组Homicide_Unit",
-      "steps": [
-        "user1访问/user-groups/Homicide_Unit/members接口",
-        "尝试添加用户user2到Homicide_Unit组",
-        "提交包含{userId: 'user2', accessLevel: 'FULL'}的请求"
-      ],
-      "expected_result": "系统返回403错误并记录违规访问审计日志(X001)，显示'仅管理员可执行此操作'",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-003",
-      "title": "用户同时属于10个用户组的权限验证",
-      "type": "边界",
-      "target": "C003",
-      "preconditions": "管理员admin已登录，存在用户user3和10个不同案件组",
-      "steps": [
-        "admin连续执行10次POST /users/user3/groups",
-        "每次请求包含不同groupID从Group1到Group10",
-        "查询GET /users/user3/groups"
-      ],
-      "expected_result": "响应返回包含全部10个组的列表，每个组权限叠加生效，可访问各组的案件",
+      "expected_result": "系统拒绝访问并记录审计日志，显示异常ID X002",
       "priority": "P1"
     },
     {
       "id": "TC-B-004",
-      "title": "审计功能关闭状态下关键操作追踪",
+      "title": "案件状态边界测试",
       "type": "边界",
-      "target": "C004",
-      "preconditions": "系统审计功能被临时禁用，案件CASE-2023-002处于调查中",
+      "target": "F004 InvestigateCase",
+      "preconditions": "案件处于'初步调查'状态",
       "steps": [
-        "调查员更新案件状态为'等待起诉'",
-        "添加新证据文档murder_weapon.pdf",
-        "重新激活审计功能",
-        "查询GET /audit/cases/CASE-2023-002"
+        "尝试将案件状态从'初步调查'直接更新为'已结案'",
+        "跳过'证据收集'和'调查报告'阶段"
       ],
-      "expected_result": "审计日志包含禁用期间的全部操作记录，包括状态变更和文档添加，时间戳连续",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-044",
-      "title": "验证案件详情页面避免水平滚动",
-      "type": "边界",
-      "target": "C005",
-      "preconditions": "用户已登录并具有案件查看权限",
-      "steps": [
-        "打开包含长文本字段（如案件描述）的案件详情页面",
-        "检查页面布局是否自动换行",
-        "尝试在不同分辨率（1920x1080, 1366x768, 1024x768）下查看"
-      ],
-      "expected_result": "所有分辨率下均无需水平滚动即可查看完整内容，长文本自动换行显示",
+      "expected_result": "系统拒绝状态跳转，要求先完成中间状态",
       "priority": "P1"
     },
     {
-      "id": "TC-B-006",
-      "title": "验证启动画面可跳过",
-      "type": "边界",
-      "target": "C006",
-      "preconditions": "系统配置了启动画面",
+      "id": "TC-E-007",
+      "title": "起诉不存在的案件测试",
+      "type": "异常",
+      "target": "X004 EXC_CASE_FOUND",
+      "preconditions": "案件数据库中没有目标案件",
       "steps": [
-        "启动应用程序",
-        "观察启动画面是否显示应用加载状态",
-        "寻找并点击'跳过'按钮"
+        "尝试起诉案件ID 'CASE-9999-9999'",
+        "系统提示确认案件存在性"
       ],
-      "expected_result": "启动画面3秒内显示'跳过'选项，点击后立即进入主界面",
-      "priority": "P2"
+      "expected_result": "系统返回错误消息'案件不存在'，显示异常ID X004",
+      "priority": "P1"
     },
     {
       "id": "TC-B-007",
-      "title": "验证系统崩溃后案件数据恢复",
+      "title": "法院互动记录边界测试",
       "type": "边界",
-      "target": "C007",
-      "preconditions": "系统中有未保存的案例编辑操作",
+      "target": "C014 CON_FUNC_Z6XNK300",
+      "preconditions": "案件准备起诉且用户有编辑权限",
       "steps": [
-        "编辑案件-0456的描述字段为'紧急抢劫案'",
-        "强制终止应用程序进程",
-        "重新启动系统并登录"
+        "尝试添加超过1000字符的法院互动详情",
+        "输入包含特殊字符的法院名称 'High Court @#$'",
+        "上传50MB的起诉文件"
       ],
-      "expected_result": "案件-0456显示最后编辑的'紧急抢劫案'描述，编辑记录完整恢复",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-045",
-      "title": "验证离线模式下关键功能可用性",
-      "type": "边界",
-      "target": "C008",
-      "preconditions": "用户已缓存案件-0456数据，设备断开网络连接",
-      "steps": [
-        "在离线状态下打开应用程序",
-        "尝试查看案件-0456详情",
-        "添加新的调查笔记'嫌疑人可能使用蓝色轿车'",
-        "重新连接网络"
-      ],
-      "expected_result": "离线时可查看完整案件详情，新增笔记成功保存并在联网后自动同步",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-046",
-      "title": "验证多案件同时显示布局",
-      "type": "边界",
-      "target": "C010",
-      "preconditions": "用户有权限访问案件-0456和-0489",
-      "steps": [
-        "在案件列表选择-0456和-0489",
-        "点击'比较视图'按钮",
-        "调整窗口大小到1024x768"
-      ],
-      "expected_result": "两个案件并排显示完整信息，关键字段可见无需滚动，窗口缩小时自动切换为标签页模式",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-047",
-      "title": "验证案件搜索性能边界",
-      "type": "边界",
-      "target": "C024",
-      "preconditions": "系统包含50,000+案件记录",
-      "steps": [
-        "输入简单搜索条件'案件类型=抢劫'",
-        "记录响应时间",
-        "输入复杂条件'案件类型=抢劫 AND 日期=2023-01-01至2023-06-30 AND 地区=中央区'",
-        "记录响应时间"
-      ],
-      "expected_result": "简单搜索5秒内返回结果，复杂搜索12秒内返回，结果数量显示正确",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-011",
-      "title": "验证审计日志不可修改特性",
-      "type": "边界",
-      "target": "C025",
-      "preconditions": "管理员用户已登录，存在案件-0456的审计记录",
-      "steps": [
-        "尝试通过API直接修改案件-0456的审计记录时间戳",
-        "使用数据库工具尝试更新审计表记录",
-        "尝试导出后修改再导入审计日志"
-      ],
-      "expected_result": "所有修改尝试均失败，系统返回'审计记录不可修改'错误(X007)，原始记录保持不变",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-012",
-      "title": "验证多语言界面切换边界",
-      "type": "边界",
-      "target": "C023",
-      "preconditions": "系统安装英语和印地语语言包",
-      "steps": [
-        "在用户设置中将界面语言从英语切换为印地语",
-        "刷新页面并检查所有菜单项",
-        "在案件详情页检查字段标签",
-        "切换回英语重复验证"
-      ],
-      "expected_result": "所有界面元素即时切换语言，案件表单字段标签完整翻译，特殊字符显示正确",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-048",
-      "title": "验证导航自描述性设计符合ISO 9241-110标准",
-      "type": "边界",
-      "target": "C009",
-      "preconditions": "用户已登录系统并拥有案件查看权限",
-      "steps": [
-        "从案件列表页点击进入案件ID为CASE-2023-001的详情页",
-        "检查页面面包屑导航显示：首页 > 案件管理 > 案件详情 (CASE-2023-001)",
-        "在详情页点击'相关嫌疑人'选项卡",
-        "检查页面标题更新为'案件详情 - 相关嫌疑人'，面包屑导航保持不变"
-      ],
-      "expected_result": "1.面包屑导航清晰显示当前位置和路径 2.页面标题准确反映当前视图 3.所有导航元素都有明确的标签说明 4.符合ISO 9241-110第7.2条关于导航自描述性的要求",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-049",
-      "title": "验证系统同时显示多个案件和嫌疑人信息的能力",
-      "type": "边界",
-      "target": "C010",
-      "preconditions": "用户已登录并拥有多个案件的访问权限",
-      "steps": [
-        "在案件列表页选择5个案件(CASE-2023-001至005)的复选框",
-        "点击'批量查看'按钮",
-        "在嫌疑人搜索栏输入'张*'进行筛选",
-        "调整分屏视图为左侧案件列表、右侧嫌疑人详情"
-      ],
-      "expected_result": "1.同时显示5个案件的概要信息 2.右侧面板显示所有匹配'张*'的嫌疑人(至少3个) 3.分屏布局保持稳定不重叠 4.各视图可独立滚动操作",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-050",
-      "title": "验证案件起诉页面的UI一致性",
-      "type": "边界",
-      "target": "C011",
-      "preconditions": "用户具有起诉权限且案件处于可起诉状态",
-      "steps": [
-        "进入案件ID为CASE-2023-002的起诉页面",
-        "记录所有按钮样式、颜色和位置",
-        "导航到案件ID为CASE-2023-003的起诉页面",
-        "对比两个页面的UI元素"
-      ],
-      "expected_result": "1.两个页面的主要操作按钮(提交/取消/保存)样式完全一致 2.表单字段标签使用相同的字体和颜色 3.错误提示方式相同(红色边框+图标) 4.页面布局结构一致",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-051",
-      "title": "验证界面自定义配置的保存与恢复",
-      "type": "边界",
-      "target": "C012",
-      "preconditions": "用户首次登录，使用默认界面配置",
-      "steps": [
-        "在案件列表页隐藏'创建日期'列并调整'案件状态'列宽度为150px",
-        "将主题颜色改为深色模式",
-        "注销后重新登录",
-        "访问案件列表页检查配置"
-      ],
-      "expected_result": "1.'创建日期'列保持隐藏状态 2.'案件状态'列宽度恢复为150px 3.深色主题自动应用 4.所有修改在用户配置文件中可查",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-013",
-      "title": "验证多语言界面切换时的UI一致性",
-      "type": "边界",
-      "target": "C011 C023",
-      "preconditions": "系统已安装中文和英文语言包",
-      "steps": [
-        "在用户设置中将界面语言从中文切换为英文",
-        "刷新后进入案件注册页面",
-        "记录所有表单标签和按钮文本",
-        "切换回中文界面再次检查"
-      ],
-      "expected_result": "1.英文模式下所有界面元素完整翻译无缺失 2.中英文布局完全一致 3.表单验证提示方式相同 4.语言切换后配置保存成功",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-014",
-      "title": "验证离线模式下关键功能的导航一致性",
-      "type": "边界",
-      "target": "C008 C009",
-      "preconditions": "已缓存案件CASE-2023-004的离线数据，网络断开",
-      "steps": [
-        "在离线状态下打开案件CASE-2023-004",
-        "尝试添加新证据(应触发X005)",
-        "检查面包屑导航和页面标题",
-        "切换至嫌疑人视图"
-      ],
-      "expected_result": "1.显示明确的离线状态标识 2.面包屑导航保持在线时相同结构 3.页面标题准确反映当前视图 4.触发X005异常时导航元素不变",
+      "expected_result": "系统拒绝超长输入(限制500字符)，过滤特殊字符，限制文件大小为10MB",
       "priority": "P2"
     },
     {
-      "id": "TC-B-052",
-      "title": "验证案件详情页面导航步骤最小化",
-      "type": "边界",
-      "target": "C013",
-      "preconditions": "用户已登录系统并具有案件查看权限",
+      "id": "TC-N-017",
+      "title": "管理员成功设置案件访问权限给特定用户组",
+      "type": "正常",
+      "target": "F005 ManageAccess",
+      "preconditions": "1. 用户admin001已登录且具有管理员权限 2. 案件CASE-2023-001存在 3. 用户组Homicide_Team存在",
       "steps": [
-        "从系统首页点击'案件列表'",
-        "在案件列表中选择任意案件",
-        "记录从首页到案件详情页的点击次数",
-        "验证是否可以通过1次点击从案件列表返回首页"
+        "管理员admin001导航至案件CASE-2023-001的访问控制设置页面",
+        "选择'限制访问'选项并勾选用户组Homicide_Team",
+        "点击'保存权限设置'按钮"
       ],
-      "expected_result": "从首页到案件详情页的导航步骤不超过3步；案件详情页有直接返回首页的链接",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-053",
-      "title": "验证案件列表垂直滚动最小化",
-      "type": "边界",
-      "target": "C014",
-      "preconditions": "系统中有50个以上案件记录",
-      "steps": [
-        "打开案件列表页面",
-        "记录页面初始可见区域显示的案件数量",
-        "验证关键信息(案件编号/标题/状态)是否在首屏完整显示",
-        "检查页面底部是否有'返回顶部'链接"
-      ],
-      "expected_result": "首屏至少显示15条完整案件记录；关键信息无需滚动即可查看；页面底部有返回顶部链接",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-015",
-      "title": "验证无权限访问案件时的错误信息",
-      "type": "边界",
-      "target": "C015",
-      "preconditions": "存在两个用户A(普通权限)和B(高级权限)，案件X仅对B可见",
-      "steps": [
-        "使用用户A登录系统",
-        "尝试直接访问案件X的URL(/cases/X)",
-        "记录系统返回的错误信息内容",
-        "检查错误页面是否有帮助链接"
-      ],
-      "expected_result": "错误信息明确说明'您无权访问此案件'；包含联系管理员的建议；有指向权限说明文档的链接",
+      "expected_result": "1. 系统显示'权限设置成功'消息 2. 只有Homicide_Team组成员可以访问该案件 3. 审计日志记录权限变更事件",
       "priority": "P0"
     },
     {
-      "id": "TC-B-016",
-      "title": "验证缺陷报告界面的可访问性",
-      "type": "边界",
-      "target": "C016",
-      "preconditions": "用户已登录系统",
+      "id": "TC-N-018",
+      "title": "用户成功加入多个组并获取组合权限",
+      "type": "正常",
+      "target": "F005 ManageAccess, C013",
+      "preconditions": "1. 用户admin001已登录且具有管理员权限 2. 用户officer123存在 3. 用户组Traffic_Team和Drug_Unit存在",
       "steps": [
-        "从系统主菜单点击'帮助'",
-        "验证是否有'报告问题'入口",
-        "点击'报告问题'进入缺陷记录界面",
-        "尝试不填写任何内容直接提交"
+        "管理员admin001导航至用户管理界面",
+        "选择用户officer123并进入'组成员关系'标签页",
+        "勾选Traffic_Team和Drug_Unit两个用户组",
+        "点击'保存组成员关系'按钮"
       ],
-      "expected_result": "从主菜单到缺陷报告界面的导航步骤不超过2步；提交空表单时显示具体的字段验证错误",
+      "expected_result": "1. 系统显示'组成员关系更新成功'消息 2. officer123现在可以访问Traffic_Team和Drug_Unit两个组的案件 3. 用户配置文件中正确显示两个组成员关系",
       "priority": "P1"
     },
     {
-      "id": "TC-B-017",
-      "title": "验证多语言切换的导航效率",
-      "type": "边界",
-      "target": "C013",
-      "preconditions": "系统已安装英语和法语语言包",
+      "id": "TC-E-015",
+      "title": "非管理员尝试修改用户组成员关系被拒绝",
+      "type": "异常",
+      "target": "F005 ManageAccess, C003, X006",
+      "preconditions": "1. 普通用户officer123已登录 2. 用户组Traffic_Team存在",
       "steps": [
-        "登录系统并进入个人资料页",
-        "记录从个人资料页到语言设置界面的步骤",
-        "将语言从英语切换为法语",
-        "验证界面是否立即刷新为法语"
+        "用户officer123尝试访问用户管理界面",
+        "选择任意用户并尝试修改组成员关系",
+        "勾选Traffic_Team用户组并点击保存"
       ],
-      "expected_result": "语言切换可在个人资料页直接完成(无需进入子页面)；切换后3秒内完成界面语言更新",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-018",
-      "title": "验证案件详情页的信息布局",
-      "type": "边界",
-      "target": "C014",
-      "preconditions": "打开一个包含20个文档和5个嫌疑人的复杂案件",
-      "steps": [
-        "进入案件详情页面",
-        "记录首屏显示的核心信息(案件状态/摘要)",
-        "滚动查看文档和嫌疑人列表的位置",
-        "验证是否有文档分类快速跳转链接"
-      ],
-      "expected_result": "案件核心信息在首屏完整显示；文档和嫌疑人列表有分类锚点链接；重要操作按钮(如'添加证据')固定在页面顶部",
+      "expected_result": "1. 系统显示'权限不足'错误消息 2. 组成员关系未被修改 3. 审计日志记录未授权访问尝试(X006)",
       "priority": "P1"
     },
     {
-      "id": "TC-B-019",
-      "title": "验证离线模式错误信息的实用性",
-      "type": "边界",
-      "target": "C015",
-      "preconditions": "用户尝试访问未缓存的案件数据时网络断开",
+      "id": "TC-N-019",
+      "title": "超级用户修改安全属性成功",
+      "type": "正常",
+      "target": "F005 ManageAccess, C005",
+      "preconditions": "1. 超级用户superadmin已登录 2. 用户officer123存在",
       "steps": [
-        "在离线状态下尝试访问案件123",
-        "记录系统显示的错误信息",
-        "检查错误信息是否提示哪些案件已缓存",
-        "验证是否有'重试连接'按钮"
+        "超级用户superadmin导航至用户officer123的安全设置页面",
+        "将安全级别从'标准'修改为'高级'",
+        "设置新的访问权限集",
+        "点击'保存安全设置'按钮"
       ],
-      "expected_result": "错误信息明确说明'请求的案件未缓存，需要网络连接'；列出3个最近访问的可用缓存案件；提供重试和离线帮助链接",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-020",
-      "title": "验证缺陷跟踪状态更新的可见性",
-      "type": "边界",
-      "target": "C016",
-      "preconditions": "用户已提交一个缺陷报告(DEF-1001)",
-      "steps": [
-        "进入缺陷跟踪界面",
-        "搜索DEF-1001",
-        "查看缺陷详情页的状态历史记录",
-        "点击'接收状态更新通知'选项"
-      ],
-      "expected_result": "缺陷状态变更历史清晰显示日期和处理人；可以选择邮件/SMS通知方式；状态更新后24小时内收到通知",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-054",
-      "title": "验证不同角色用户对案件管理功能的访问权限",
-      "type": "边界",
-      "target": "C017 F001",
-      "preconditions": "系统中有三个用户：admin(管理员)、investigator(调查员)、citizen(普通公民)",
-      "steps": [
-        "以admin身份登录，尝试访问案件管理功能",
-        "以investigator身份登录，尝试访问案件管理功能",
-        "以citizen身份登录，尝试访问案件管理功能"
-      ],
-      "expected_result": "admin可以完全访问所有案件管理功能；investigator只能访问调查相关功能；citizen只能访问案件注册功能",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-055",
-      "title": "验证系统为图形证据提供文本替代描述",
-      "type": "边界",
-      "target": "C018 F005",
-      "preconditions": "系统中存在包含图形证据的案件",
-      "steps": [
-        "上传一张包含文字内容的图片作为案件证据",
-        "上传一段视频作为案件证据",
-        "查看证据列表中的替代文本描述"
-      ],
-      "expected_result": "所有非文本媒体对象都有准确的文本描述，包括图片中的文字内容和视频的关键帧描述",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-056",
-      "title": "验证用户选择接收通知后系统发送案件状态变更提醒",
-      "type": "边界",
-      "target": "C019 F008",
-      "preconditions": "用户已在个人设置中启用案件状态变更通知",
-      "steps": [
-        "用户注册一个新案件",
-        "管理员更改案件状态为'调查中'",
-        "调查员提交调查报告"
-      ],
-      "expected_result": "每次案件状态变更时，用户都收到包含案件ID和状态详情的电子邮件通知",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-057",
-      "title": "验证系统导航中用户位置指示的准确性",
-      "type": "边界",
-      "target": "C020 F009",
-      "preconditions": "系统中有多层级的案件分类结构",
-      "steps": [
-        "从首页导航到'暴力犯罪'分类",
-        "进入'抢劫案件'子分类",
-        "查看特定案件详情页"
-      ],
-      "expected_result": "每个页面顶部显示完整的面包屑导航路径，如'首页 > 案件分类 > 暴力犯罪 > 抢劫案件 > 案件#12345'",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-021",
-      "title": "验证系统界面与屏幕阅读器兼容性",
-      "type": "边界",
-      "target": "C021",
-      "preconditions": "系统已安装NVDA屏幕阅读器，用户为视障人士",
-      "steps": [
-        "使用NVDA屏幕阅读器启动系统",
-        "导航至案件注册界面(F008)",
-        "尝试填写案件详情表单",
-        "提交案件注册"
-      ],
-      "expected_result": "1. 屏幕阅读器能正确识别所有界面元素 2. 表单字段可正常填写 3. 提交按钮可操作 4. 错误提示可被阅读器捕获",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-022",
-      "title": "验证案件起诉阶段上下文帮助的完整性",
-      "type": "边界",
-      "target": "C022",
-      "preconditions": "用户已登录并拥有案件起诉权限(F007)，案件处于可起诉状态",
-      "steps": [
-        "进入案件起诉界面",
-        "点击每个输入字段旁的帮助图标",
-        "在关键操作步骤触发帮助热键(F1)",
-        "尝试使用非标准起诉流程"
-      ],
-      "expected_result": "1. 每个字段有详细的帮助说明 2. 流程帮助覆盖所有分支场景 3. 非常规操作能触发相关帮助提示 4. 帮助内容与当前上下文严格匹配",
+      "expected_result": "1. 系统显示'安全设置更新成功'消息 2. officer123的安全属性和权限已更新 3. 审计日志记录安全属性变更",
       "priority": "P0"
     },
     {
       "id": "TC-B-023",
-      "title": "验证阿拉伯语界面下的案件搜索功能",
+      "title": "管理员尝试将案件访问限制给不存在的用户组",
       "type": "边界",
-      "target": "C023",
-      "preconditions": "系统已安装阿拉伯语语言包，界面语言设置为阿拉伯语",
+      "target": "F005 ManageAccess, C014",
+      "preconditions": "1. 用户admin001已登录且具有管理员权限 2. 案件CASE-2023-002存在",
       "steps": [
-        "在RTL布局的搜索界面输入阿拉伯语关键词(F009)",
-        "执行高级搜索包含阿拉伯语字段值",
-        "查看搜索结果列表",
-        "点击进入案件详情页"
+        "管理员admin001导航至案件CASE-2023-002的访问控制设置页面",
+        "在用户组输入框中输入不存在的组名'Nonexistent_Group'",
+        "点击'保存权限设置'按钮"
       ],
-      "expected_result": "1. 界面元素正确右对齐 2. 阿拉伯语输入/显示无乱码 3. 搜索条件保持RTL格式 4. 详情页文本方向一致",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-024",
-      "title": "验证百万级数据量下的复杂搜索性能",
-      "type": "边界",
-      "target": "C024",
-      "preconditions": "测试环境包含1,200,000个案件记录，用户有全部案件访问权限",
-      "steps": [
-        "构造包含5个条件的复杂查询(日期范围+案件类型+3个关键词)",
-        "同时启动10个并行搜索会话",
-        "记录从请求到完整渲染结果的耗时",
-        "验证结果完整性"
-      ],
-      "expected_result": "1. 所有搜索在15秒内完成 2. 结果数量与预期一致 3. 无超时错误(X007) 4. 系统资源使用在安全阈值内",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-025",
-      "title": "验证高对比度模式下的界面可用性",
-      "type": "边界",
-      "target": "C021",
-      "preconditions": "系统启用高对比度主题，用户为色觉障碍者",
-      "steps": [
-        "浏览案件调查流程的所有关键页面(F005)",
-        "操作所有交互元素(按钮、链接、表单)",
-        "查看各类状态提示(成功/警告/错误)",
-        "验证图形元素的替代文本(C018)"
-      ],
-      "expected_result": "1. 所有元素对比度≥4.5:1 2. 状态提示可通过形状区分 3. 焦点指示清晰可见 4. 图标均有等效文本描述",
+      "expected_result": "1. 系统显示'指定的用户组不存在'错误消息 2. 案件访问权限未被修改 3. 界面提供现有有效用户组列表供选择",
       "priority": "P2"
     },
     {
-      "id": "TC-B-026",
-      "title": "验证离线模式下的上下文帮助可用性",
-      "type": "边界",
-      "target": "C022",
-      "preconditions": "设备切换至离线状态，关键案件数据已缓存(C008)",
+      "id": "TC-N-008",
+      "title": "公民成功登记案件",
+      "type": "正常",
+      "target": "F008 RegisterCase",
+      "preconditions": "公民已登录系统",
       "steps": [
-        "在离线状态下打开缓存的案件详情",
-        "触发各操作步骤的帮助信息",
-        "尝试查看未缓存案件的帮助",
-        "重新联网后验证帮助内容同步"
+        "选择'登记新案件'功能",
+        "输入案件详情：案件类型为'盗窃'，发生时间为'2023-05-15 14:30'，地点为'Main Street 123'，描述为'笔记本电脑被盗'",
+        "提交案件登记"
       ],
-      "expected_result": "1. 已缓存功能的帮助即时可用 2. 未缓存内容显示离线提示 3. 重新连接后帮助自动更新 4. 无X005异常发生",
+      "expected_result": "系统显示案件登记成功，生成案件编号如'CASE-2023-001'，案件详情准确存储",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-010",
+      "title": "警官成功发送案件状态变更警报",
+      "type": "正常",
+      "target": "F010 SendAlert",
+      "preconditions": "警官已登录系统并配置接收方式为'短信+邮件'，案件状态即将变更",
+      "steps": [
+        "警官将案件状态从'调查中'更新为'已起诉'",
+        "系统检测到状态变更事件",
+        "系统根据用户配置发送警报"
+      ],
+      "expected_result": "系统记录警报发送状态为'成功'，用户同时收到短信和邮件通知，内容包含案件编号和新状态",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-E-008",
+      "title": "案件登记时必填字段缺失",
+      "type": "异常",
+      "target": "F008 RegisterCase",
+      "preconditions": "公民已登录系统",
+      "steps": [
+        "选择'登记新案件'功能",
+        "仅填写案件类型为'盗窃'，其他必填字段留空",
+        "尝试提交案件登记"
+      ],
+      "expected_result": "系统拒绝提交，高亮显示缺失字段并提示'案件发生时间、地点和描述为必填项'",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-010",
+      "title": "警报发送失败处理",
+      "type": "异常",
+      "target": "F010 SendAlert X001",
+      "preconditions": "系统配置了无效的邮件服务器地址，案件状态即将变更",
+      "steps": [
+        "触发案件状态变更事件",
+        "系统尝试发送邮件警报失败",
+        "系统尝试备用发送方式"
+      ],
+      "expected_result": "系统记录警报状态为'部分失败'，错误日志记录邮件发送失败原因，短信警报仍成功发送",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-008",
+      "title": "案件登记超长描述处理",
+      "type": "边界",
+      "target": "F008 RegisterCase C007",
+      "preconditions": "公民已登录系统",
+      "steps": [
+        "选择'登记新案件'功能",
+        "输入案件描述（5000字符的文本）",
+        "提交案件登记"
+      ],
+      "expected_result": "系统成功存储完整描述文本，案件详情页面可完整显示全部内容",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-B-010",
+      "title": "警报接收方式配置边界测试",
+      "type": "边界",
+      "target": "F010 SendAlert C004",
+      "preconditions": "用户未配置任何警报接收方式",
+      "steps": [
+        "用户尝试更新警报配置",
+        "不选择任何接收方式（邮件/短信）",
+        "保存配置"
+      ],
+      "expected_result": "系统拒绝保存并提示'必须至少选择一种警报接收方式'，原有配置保持不变",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-N-020",
+      "title": "简单搜索案件 - 按案件ID",
+      "type": "正常",
+      "target": "F009 SearchCase",
+      "preconditions": "系统中有案件ID为'CASE-2023-001'的案件，当前用户有访问权限",
+      "steps": [
+        "在搜索框输入案件ID 'CASE-2023-001'",
+        "选择'案件ID'作为搜索条件",
+        "点击'搜索'按钮"
+      ],
+      "expected_result": "3秒内返回1条结果，显示案件ID为'CASE-2023-001'的案件详情",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-021",
+      "title": "高级搜索案件 - 按犯罪类型和作案手法",
+      "type": "正常",
+      "target": "F009 SearchCase, C002, C008",
+      "preconditions": "系统中有5起'盗窃'类型且作案手法为'撬锁'的案件，当前用户有访问权限",
+      "steps": [
+        "点击'高级搜索'按钮",
+        "在犯罪类型下拉框选择'盗窃'",
+        "在作案手法输入框输入'撬锁'",
+        "点击'搜索'按钮"
+      ],
+      "expected_result": "10秒内返回5条结果，所有结果犯罪类型均为'盗窃'且作案手法包含'撬锁'",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-022",
+      "title": "搜索案件 - 按嫌疑人姓名",
+      "type": "正常",
+      "target": "F009 SearchCase, C006",
+      "preconditions": "系统中有2起案件涉及嫌疑人'张三'，其中1起当前用户无访问权限",
+      "steps": [
+        "在搜索框输入'张三'",
+        "选择'嫌疑人姓名'作为搜索条件",
+        "点击'搜索'按钮"
+      ],
+      "expected_result": "5秒内返回1条结果，显示涉及'张三'且用户有权限访问的案件",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-023",
+      "title": "搜索案件 - 按涉案财产",
+      "type": "正常",
+      "target": "F009 SearchCase",
+      "preconditions": "系统中有3起案件涉及'笔记本电脑'，当前用户有全部访问权限",
+      "steps": [
+        "在搜索框输入'笔记本电脑'",
+        "选择'涉案财产'作为搜索条件",
+        "点击'搜索'按钮"
+      ],
+      "expected_result": "5秒内返回3条结果，所有结果的涉案财产均包含'笔记本电脑'",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-005",
+      "title": "自定义搜索结果视图",
+      "type": "正常",
+      "target": "F009 SearchCase, C001",
+      "preconditions": "用户已登录，系统中有10起盗窃案件",
+      "steps": [
+        "执行简单搜索获取所有盗窃案件",
+        "点击'自定义视图'按钮",
+        "勾选'案件ID'、'登记日期'、'案件状态'列",
+        "取消勾选'嫌疑人'列",
+        "点击'保存视图'按钮"
+      ],
+      "expected_result": "结果列表仅显示案件ID、登记日期和案件状态三列，且下次登录时保持此视图设置",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-E-016",
+      "title": "搜索不存在的案件",
+      "type": "异常",
+      "target": "F009 SearchCase, X004, X007",
+      "preconditions": "系统中不存在案件ID为'CASE-9999-999'的案件",
+      "steps": [
+        "在搜索框输入'CASE-9999-999'",
+        "选择'案件ID'作为搜索条件",
+        "点击'搜索'按钮"
+      ],
+      "expected_result": "5秒内显示提示信息'未找到匹配的案件'，审计日志记录此次搜索(X007)",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-017",
+      "title": "尝试搜索无权限案件",
+      "type": "异常",
+      "target": "F009 SearchCase, X002, X003, X006, C018",
+      "preconditions": "系统中有案件ID为'CASE-RESTRICTED-001'的案件，当前用户无访问权限",
+      "steps": [
+        "在搜索框输入'CASE-RESTRICTED-001'",
+        "选择'案件ID'作为搜索条件",
+        "点击'搜索'按钮"
+      ],
+      "expected_result": "显示'您无权访问该案件'提示，审计日志记录此次未授权访问尝试(X002)",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-024",
+      "title": "边界测试 - 搜索超时",
+      "type": "边界",
+      "target": "F009 SearchCase, C002, C008",
+      "preconditions": "系统中有50,000起案件",
+      "steps": [
+        "在搜索框输入'盗窃'",
+        "选择'犯罪类型'作为搜索条件",
+        "点击'搜索'按钮",
+        "启动计时器"
+      ],
+      "expected_result": "15秒内返回结果列表，审计日志记录搜索耗时",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-N-011",
+      "title": "公民提交缺陷报告并跟踪状态",
+      "type": "正常",
+      "target": "F011 TrackDefect",
+      "preconditions": "公民用户已登录系统",
+      "steps": [
+        "导航至缺陷报告页面",
+        "填写缺陷标题为'案件搜索页面加载缓慢'",
+        "选择缺陷类别为'性能问题'",
+        "输入详细描述为'案件搜索页面在超过1000条记录时加载时间超过15秒'",
+        "点击提交按钮"
+      ],
+      "expected_result": "系统显示提交成功消息，生成缺陷ID DEF-2023-001，状态显示为'新建'",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-012",
+      "title": "帮助台查看缺陷报告并更新状态",
+      "type": "正常",
+      "target": "F011 TrackDefect",
+      "preconditions": "帮助台用户已登录系统，存在ID为DEF-2023-001的缺陷报告",
+      "steps": [
+        "导航至缺陷管理控制台",
+        "搜索缺陷ID DEF-2023-001",
+        "查看缺陷详情页面显示完整提交信息",
+        "将状态更新为'处理中'",
+        "添加处理备注'已分配给开发团队评估'",
+        "点击保存按钮"
+      ],
+      "expected_result": "系统显示更新成功消息，缺陷状态变更为'处理中'，审计日志记录状态变更",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-N-013",
+      "title": "帮助台生成缺陷分类报告",
+      "type": "正常",
+      "target": "F011 TrackDefect",
+      "preconditions": "系统中存在至少5个不同状态的缺陷报告",
+      "steps": [
+        "导航至报告生成页面",
+        "选择报告类型为'缺陷分类统计'",
+        "设置时间范围为最近30天",
+        "点击生成报告按钮"
+      ],
+      "expected_result": "系统显示包含按类别、状态分组的缺陷数量统计表，以及时效分析图表",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-011",
+      "title": "提交缺陷时缺少必填字段",
+      "type": "异常",
+      "target": "F011 TrackDefect",
+      "preconditions": "公民用户已登录系统",
+      "steps": [
+        "导航至缺陷报告页面",
+        "不填写标题字段",
+        "选择缺陷类别为'功能问题'",
+        "点击提交按钮"
+      ],
+      "expected_result": "系统显示'标题为必填字段'错误提示，阻止提交并高亮缺失字段",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-012",
+      "title": "无权限用户尝试访问缺陷报告",
+      "type": "异常",
+      "target": "X006 EXC_DF5BUD00",
+      "preconditions": "普通公民用户已登录系统，存在ID为DEF-2023-002的缺陷报告",
+      "steps": [
+        "尝试直接访问URL /defects/DEF-2023-002",
+        "查看系统响应"
+      ],
+      "expected_result": "系统显示'您无权访问此缺陷报告'错误消息，审计日志记录未授权访问尝试",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-011",
+      "title": "提交超长缺陷描述",
+      "type": "边界",
+      "target": "C010 CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_UTPV",
+      "preconditions": "公民用户已登录系统",
+      "steps": [
+        "导航至缺陷报告页面",
+        "填写标题为'界面显示问题'",
+        "输入5000字符的超长描述文本",
+        "点击提交按钮"
+      ],
+      "expected_result": "系统自动截断描述为4000字符并成功提交，显示警告消息'描述文本已截断'",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-B-012",
+      "title": "批量导出缺陷报告性能测试",
+      "type": "边界",
+      "target": "C002 CON_FUNC_82M2LE00",
+      "preconditions": "系统中存在10000个缺陷报告记录",
+      "steps": [
+        "帮助台用户登录系统",
+        "导航至报告导出页面",
+        "选择导出全部缺陷报告",
+        "记录从点击导出到生成下载链接的时间"
+      ],
+      "expected_result": "系统在15秒内完成报告生成并提供下载链接，文件包含全部10000条记录的摘要信息",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-B-025",
+      "title": "验证用户界面配置保存功能",
+      "type": "边界",
+      "target": "C001",
+      "preconditions": "用户已登录系统",
+      "steps": [
+        "1. 进入用户界面配置页面",
+        "2. 修改表格显示列：添加'案件编号'和'创建日期'列",
+        "3. 调整列顺序：将'状态'列移动到第一位置",
+        "4. 保存配置"
+      ],
+      "expected_result": "配置成功保存到用户配置文件中，下次登录时显示相同的列设置和顺序",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-026",
+      "title": "验证简单搜索性能边界",
+      "type": "边界",
+      "target": "C002",
+      "preconditions": "系统中有超过100,000个案件记录",
+      "steps": [
+        "1. 在搜索框中输入'抢劫'作为关键词",
+        "2. 点击搜索按钮并启动计时器",
+        "3. 等待结果返回"
+      ],
+      "expected_result": "搜索结果在5-8秒内返回，显示匹配'抢劫'关键词的案件列表",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-003",
+      "title": "验证非管理员用户尝试设置用户配置",
+      "type": "边界",
+      "target": "C003",
+      "preconditions": "普通用户(非管理员)已登录系统",
+      "steps": [
+        "1. 尝试访问用户管理页面",
+        "2. 尝试创建新用户配置文件",
+        "3. 尝试将用户分配到'调查组'"
+      ],
+      "expected_result": "系统拒绝操作并显示'权限不足'错误消息(X002)，审计日志中记录此未授权尝试(C018)",
       "priority": "P1"
     },
     {
       "id": "TC-B-027",
-      "title": "验证中日韩混合输入场景",
+      "title": "验证警报发送功能边界",
       "type": "边界",
-      "target": "C023",
-      "preconditions": "系统语言设置为中文，输入法支持CJK混合输入",
+      "target": "C004",
+      "preconditions": "用户已配置接收电子邮件警报，案件状态为'待调查'",
       "steps": [
-        "在案件描述字段输入中日韩混合文本",
-        "使用日语片假名搜索案件(F009)",
-        "保存包含韩语的嫌疑人信息",
-        "导出含多语言数据的报告(F004)"
+        "1. 管理员将案件状态从'待调查'更改为'调查中'",
+        "2. 系统处理状态变更",
+        "3. 检查用户收件箱"
       ],
-      "expected_result": "1. 输入/显示无乱码 2. 搜索准确匹配字符集 3. 数据存储完整 4. 导出文件编码正确",
-      "priority": "P2"
+      "expected_result": "用户在5分钟内收到包含案件编号和状态变更详情的电子邮件警报",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-005",
+      "title": "验证高级搜索性能边界",
+      "type": "边界",
+      "target": "C002",
+      "preconditions": "系统中有超过100,000个案件记录",
+      "steps": [
+        "1. 在高级搜索界面设置以下条件：案件类型='盗窃'，日期范围=过去30天，状态='已结案'",
+        "2. 点击搜索按钮并启动计时器",
+        "3. 等待结果返回"
+      ],
+      "expected_result": "搜索结果在10-15秒内返回，显示符合所有条件的案件列表",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-006",
+      "title": "验证管理员设置用户配置功能",
+      "type": "边界",
+      "target": "C003",
+      "preconditions": "管理员用户已登录系统",
+      "steps": [
+        "1. 访问用户管理页面",
+        "2. 创建新用户配置文件：用户名='investigator2'，角色='调查员'",
+        "3. 将用户分配到'调查组'和'案件审核组'",
+        "4. 保存配置"
+      ],
+      "expected_result": "用户配置成功创建并分配组，新用户可登录系统并拥有分配的权限",
+      "priority": "P1"
     },
     {
       "id": "TC-B-028",
-      "title": "验证极端搜索条件组合的性能",
+      "title": "验证界面配置恢复功能",
       "type": "边界",
-      "target": "C024",
-      "preconditions": "数据库包含500,000个案件，其中10%标记为敏感案件",
+      "target": "C001",
+      "preconditions": "用户已保存自定义界面配置，包括表格列设置和布局",
       "steps": [
-        "构造包含7个条件的查询(日期+地理围栏+敏感标记+4个关键词)",
-        "以普通用户权限执行搜索",
-        "使用管理员账号重复相同搜索",
-        "监控系统资源消耗"
+        "1. 用户从不同设备登录系统",
+        "2. 访问案件列表页面",
+        "3. 检查表格列设置和布局"
       ],
-      "expected_result": "1. 两次搜索均在15秒内完成 2. 普通用户结果过滤敏感案件(C029) 3. 管理员结果包含全部匹配项 4. CPU峰值≤80%",
+      "expected_result": "界面显示与之前保存的配置完全一致，包括相同的列设置和布局",
       "priority": "P1"
-    },
-    {
-      "id": "TC-B-058",
-      "title": "验证审计日志不可修改性",
-      "type": "边界",
-      "target": "C025",
-      "preconditions": "系统已记录审计日志条目",
-      "steps": [
-        "以管理员身份登录系统",
-        "尝试通过API直接修改现有审计日志记录的action字段",
-        "尝试通过数据库客户端直接删除审计日志记录"
-      ],
-      "expected_result": "所有修改和删除操作均失败，系统返回'禁止修改审计日志'错误",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-059",
-      "title": "验证访问违规记录功能",
-      "type": "边界",
-      "target": "C026",
-      "preconditions": "存在案件CASE-001且当前用户无访问权限",
-      "steps": [
-        "以普通用户身份登录系统",
-        "尝试访问/cases/CASE-001端点",
-        "检查审计日志接口/audit/violations"
-      ],
-      "expected_result": "访问被拒绝(403)，审计日志中记录包含用户ID、时间戳和'尝试访问未授权案件CASE-001'的违规条目",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-060",
-      "title": "验证审计日志导出功能",
-      "type": "边界",
-      "target": "C027",
-      "preconditions": "案件CASE-002存在至少5条审计记录",
-      "steps": [
-        "以审计员身份登录系统",
-        "调用POST /audit/exports {caseId: 'CASE-002', format: 'CSV'}",
-        "检查原始审计日志数量",
-        "下载导出的CSV文件"
-      ],
-      "expected_result": "成功返回导出任务ID，原始审计日志数量保持不变，下载的CSV包含案件CASE-002的所有审计记录且格式正确",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-061",
-      "title": "验证案件生命周期内审计保留",
-      "type": "边界",
-      "target": "C028",
-      "preconditions": "案件CASE-003已创建但未结案",
-      "steps": [
-        "查询/audit/cases/CASE-003获取初始审计记录数",
-        "执行案件关闭操作",
-        "等待30天后再次查询同一案件的审计日志"
-      ],
-      "expected_result": "案件关闭后30天仍能检索到完整的审计日志，日志条目数与关闭前一致",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-019",
-      "title": "验证未授权访问案件处理",
-      "type": "异常",
-      "target": "X001",
-      "preconditions": "案件CASE-004存在且当前用户不在授权访问组中",
-      "steps": [
-        "以普通用户身份登录系统",
-        "直接访问/cases/CASE-004端点",
-        "检查/audit/violations接口"
-      ],
-      "expected_result": "返回403错误，审计日志中记录'用户[ID]尝试访问未授权案件CASE-004'的违规条目",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-E-020",
-      "title": "验证起诉阶段案件修改限制",
-      "type": "异常",
-      "target": "X008",
-      "preconditions": "案件CASE-005状态为'PROSECUTION'",
-      "steps": [
-        "以案件负责人身份登录系统",
-        "调用PUT /cases/CASE-005尝试修改案件描述",
-        "检查案件历史记录"
-      ],
-      "expected_result": "返回409冲突状态码及'案件处于起诉阶段不可修改'错误消息，案件描述未改变，审计日志记录修改尝试",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-N-024",
-      "title": "验证审计日志导出权限控制",
-      "type": "正常",
-      "target": "F003",
-      "preconditions": "存在案件CASE-006的审计日志",
-      "steps": [
-        "以无审计权限的普通用户身份登录",
-        "调用POST /audit/exports {caseId: 'CASE-006'}",
-        "切换审计员角色重复相同操作"
-      ],
-      "expected_result": "普通用户返回403错误，审计员成功创建导出任务并收到任务ID",
-      "priority": "P0"
     },
     {
       "id": "TC-B-029",
-      "title": "验证搜索结果的权限过滤",
+      "title": "验证警报发送方式选择功能",
       "type": "边界",
-      "target": "C029",
-      "preconditions": "系统存在案件CASE-007(用户有权访问)和CASE-008(无权限)",
+      "target": "C004",
+      "preconditions": "用户已配置接收SMS警报但不接收电子邮件警报",
       "steps": [
-        "执行GET /search?q=caseNumber:CASE-007,CASE-008",
-        "检查返回结果集"
+        "1. 管理员关闭用户负责的案件",
+        "2. 系统处理案件状态变更",
+        "3. 检查用户手机短信"
       ],
-      "expected_result": "结果中仅包含CASE-007的案件信息，不显示CASE-008的任何数据",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-062",
-      "title": "验证搜索不返回未授权案件记录",
-      "type": "边界",
-      "target": "C029",
-      "preconditions": "系统中有案件A(用户有权限)和案件B(用户无权限)",
-      "steps": [
-        "以普通用户身份登录系统",
-        "执行高级搜索：案件类型=刑事案件，时间范围=最近30天",
-        "检查返回的搜索结果列表"
-      ],
-      "expected_result": "搜索结果仅包含案件A，不包含案件B",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-030",
-      "title": "验证系统提供替代导航路径",
-      "type": "边界",
-      "target": "C030",
-      "preconditions": "用户已登录并具有案件查看权限",
-      "steps": [
-        "访问案件详情页面",
-        "检查页面上的导航选项",
-        "尝试通过案件ID直接访问和通过案件列表访问同一案件"
-      ],
-      "expected_result": "系统提供至少两种不同的导航路径到达同一案件详情页面",
+      "expected_result": "用户收到SMS警报但未收到电子邮件，短信内容包含案件编号和'已结案'状态",
       "priority": "P1"
     },
     {
-      "id": "TC-B-031",
-      "title": "验证非超级用户无法修改安全属性",
+      "id": "TC-B-030",
+      "title": "超级用户修改安全属性",
       "type": "边界",
-      "target": "C031",
-      "preconditions": "存在普通管理员用户和超级用户",
+      "target": "C005",
+      "preconditions": "系统存在超级用户admin和普通用户user1",
       "steps": [
-        "以普通管理员身份登录",
-        "尝试修改用户组'调查组'的访问权限",
-        "尝试重置用户'user123'的密码"
+        "超级用户admin登录系统",
+        "访问用户管理界面",
+        "修改用户user1的安全属性（如将访问权限从'read'改为'read-write'）",
+        "普通用户user1登录系统",
+        "尝试修改用户user2的安全属性"
       ],
-      "expected_result": "所有安全属性修改操作被拒绝，系统返回权限不足错误(X004)",
+      "expected_result": "超级用户admin成功修改user1的安全属性；普通用户user1修改安全属性的操作被拒绝并记录审计日志",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-031",
+      "title": "搜索结果显示权限验证",
+      "type": "边界",
+      "target": "C006",
+      "preconditions": "系统中有案件case1（用户user1有权限）和case2（用户user1无权限）",
+      "steps": [
+        "用户user1登录系统",
+        "执行搜索包含case1和case2的条件",
+        "查看搜索结果列表"
+      ],
+      "expected_result": "搜索结果只显示case1，不显示case2",
       "priority": "P0"
     },
     {
       "id": "TC-B-032",
-      "title": "验证案件访问限制功能",
+      "title": "数据输入默认值验证",
       "type": "边界",
-      "target": "C032",
-      "preconditions": "超级用户已登录，存在案件'2023-MUR-456'",
+      "target": "C007",
+      "preconditions": "用户user1已设置'案件类型'默认值为'theft'",
       "steps": [
-        "导航至案件'2023-MUR-456'的访问控制设置",
-        "将访问权限限制为仅'调查组A'成员",
-        "以非'调查组A'成员用户尝试访问该案件"
+        "用户user1登录系统",
+        "进入案件登记界面",
+        "不填写案件类型字段",
+        "提交案件"
       ],
-      "expected_result": "非授权用户访问被拒绝，系统记录访问尝试到审计日志(C026)",
+      "expected_result": "新案件自动填充案件类型为'theft'",
       "priority": "P1"
     },
     {
       "id": "TC-B-033",
-      "title": "验证审计日志不可修改性",
+      "title": "搜索性能验证",
       "type": "边界",
-      "target": "C033",
-      "preconditions": "系统已记录审计日志，用户具有管理员权限",
+      "target": "C008",
+      "preconditions": "系统中存在10,000个测试案件",
       "steps": [
-        "管理员尝试通过数据库直接修改审计日志表中某条记录的action字段",
-        "管理员尝试通过API调用删除指定案件的审计日志",
-        "管理员尝试通过系统界面编辑已记录的审计日志内容"
+        "用户user1登录系统",
+        "执行简单搜索（单条件）",
+        "记录响应时间",
+        "执行高级搜索（多条件组合）",
+        "记录响应时间"
       ],
-      "expected_result": "所有修改/删除操作均失败，系统返回'禁止修改审计日志'错误，原始日志内容保持不变",
+      "expected_result": "简单搜索在8秒内返回结果列表；高级搜索在15秒内返回结果列表",
       "priority": "P0"
+    },
+    {
+      "id": "TC-B-009",
+      "title": "审计日志不可篡改验证",
+      "type": "边界",
+      "target": "C016",
+      "preconditions": "系统已记录审计日志entry1",
+      "steps": [
+        "超级用户admin登录系统",
+        "尝试修改审计日志entry1的内容",
+        "尝试删除审计日志entry1"
+      ],
+      "expected_result": "修改和删除操作均被拒绝，系统返回'审计日志不可修改'错误",
+      "priority": "P1"
     },
     {
       "id": "TC-B-034",
-      "title": "验证界面符合ISO 9241标准",
+      "title": "案件访问限制验证",
       "type": "边界",
-      "target": "C034",
-      "preconditions": "系统已部署标准界面配置",
+      "target": "C014",
+      "preconditions": "案件case1限制访问为用户组group1（用户user1属于group1，user2不属于）",
       "steps": [
-        "检查所有界面元素是否具有足够的对比度（至少4.5:1）",
-        "验证所有功能操作可通过键盘快捷键完成",
-        "测量关键操作（如案件搜索）的响应时间是否符合人体工程学标准（<1秒）"
+        "用户user1登录系统",
+        "访问案件case1",
+        "用户user2登录系统",
+        "尝试访问案件case1"
       ],
-      "expected_result": "所有检查项符合ISO 9241-110/210标准，响应时间测量结果记录在测试报告中",
-      "priority": "P1"
+      "expected_result": "user1成功访问case1；user2访问被拒绝并记录审计日志",
+      "priority": "P0"
     },
     {
       "id": "TC-B-035",
-      "title": "验证ICT无障碍功能",
+      "title": "验证所有UI操作都有上下文敏感帮助",
       "type": "边界",
-      "target": "C035",
-      "preconditions": "系统启用无障碍模式",
+      "target": "C009",
+      "preconditions": "用户已登录系统",
       "steps": [
-        "使用屏幕阅读器导航案件注册界面",
-        "验证所有非文本内容（如图标）是否有文本替代描述",
-        "检查键盘焦点是否始终可见且逻辑顺序正确"
+        "1. 导航到案件登记界面(F008)",
+        "2. 点击每个可操作UI元素(按钮、输入框、下拉菜单)",
+        "3. 按下F1键或点击帮助图标",
+        "4. 重复上述步骤在所有主要功能界面(F001-F011)"
       ],
-      "expected_result": "屏幕阅读器能正确朗读所有界面元素，非文本内容均有alt文本，焦点顺序符合操作流程",
+      "expected_result": "每个UI操作都能显示对应的详细帮助文档，且内容与当前上下文相关",
       "priority": "P1"
     },
     {
-      "id": "TC-E-021",
-      "title": "尝试访问权限外案件",
-      "type": "异常",
-      "target": "X001",
-      "preconditions": "存在两个案件：Case001（用户有权限）和Case002（用户无权限）",
+      "id": "TC-B-036",
+      "title": "验证缺陷跟踪接口的边界条件处理",
+      "type": "边界",
+      "target": "C010",
+      "preconditions": "用户已登录系统并具有报告缺陷权限",
       "steps": [
-        "用户A（调查员角色）登录系统",
-        "直接输入Case002的URL尝试访问",
-        "通过搜索功能尝试查看Case002详情"
+        "1. 导航到缺陷报告界面(F011)",
+        "2. 提交空缺陷报告(标题和描述均为空)",
+        "3. 提交超长缺陷报告(标题500字符，描述10000字符)",
+        "4. 尝试提交包含特殊字符的缺陷报告"
       ],
-      "expected_result": "所有尝试均被拒绝，系统返回'403 Forbidden'，审计日志记录未授权访问尝试（检查F001相关日志）",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-N-025",
-      "title": "导出案件审计日志",
-      "type": "正常",
-      "target": "F003",
-      "preconditions": "案件Case123已存在且包含操作记录",
-      "steps": [
-        "管理员用户登录系统",
-        "导航至Case123的审计日志页面",
-        "点击'导出'按钮选择PDF格式",
-        "指定时间范围为最近30天"
-      ],
-      "expected_result": "系统生成包含所有指定日志的PDF文件，文件内容与数据库记录完全一致，且导出操作本身被记录到审计日志",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-N-026",
-      "title": "界面自定义保存",
-      "type": "正常",
-      "target": "F002",
-      "preconditions": "用户首次登录，使用默认界面配置",
-      "steps": [
-        "用户登录后进入'我的偏好设置'",
-        "将案件列表的默认列改为只显示'案件ID'、'状态'、'创建日期'",
-        "调整主界面颜色方案为高对比度模式",
-        "保存设置后退出重新登录"
-      ],
-      "expected_result": "重新登录后界面保持自定义配置，案件列表只显示指定列，颜色方案符合设置，配置存储在用户配置文件中",
+      "expected_result": "系统正确处理边界输入：空报告被拒绝并提示，超长内容被自动截断或拒绝，特殊字符被安全处理",
       "priority": "P2"
     },
     {
-      "id": "TC-N-027",
-      "title": "案件状态完整流转",
-      "type": "正常",
-      "target": "F005 F007 F008",
-      "preconditions": "系统中有测试用案件数据",
+      "id": "TC-B-037",
+      "title": "验证角色权限控制的边界情况",
+      "type": "边界",
+      "target": "C011",
+      "preconditions": "系统存在管理员、调查员、普通用户三种角色",
       "steps": [
-        "公民用户通过门户提交新案件投诉（包含标题'噪音扰民'和详细描述）",
-        "调查员接收案件并添加嫌疑人信息（姓名：张三，身份证号：1234567890）",
-        "调查完成，检察官将案件状态改为'准备起诉'",
-        "法院接口返回起诉结果后更新案件状态为'已判决'"
+        "1. 使用普通用户账号尝试访问案件调查功能(F004)",
+        "2. 使用调查员账号尝试修改系统配置(F001)",
+        "3. 使用管理员账号尝试导出所有案件审计日志(F003)",
+        "4. 使用超级用户账号修改其他用户的安全属性(F005)"
       ],
-      "expected_result": "案件状态按注册→调查中→准备起诉→已判决顺序流转，每个状态变更都记录审计日志，最终状态不可再修改",
+      "expected_result": "各角色只能访问授权功能：普通用户无法访问F004，调查员无法访问F001，管理员可以访问F003，只有超级用户可以修改安全属性",
       "priority": "P0"
     },
     {
-      "id": "TC-E-022",
-      "title": "用户尝试访问无权限的案件",
-      "type": "异常",
-      "target": "X002 | EXC_UDDJFZ00 | 用户无权访问案件",
-      "preconditions": "1. 系统中有案件ID为CASE-2023-001的案件 2. 当前用户user1不属于该案件的授权用户组",
+      "id": "TC-B-038",
+      "title": "验证UI一致性在极端情况下的表现",
+      "type": "边界",
+      "target": "C012",
+      "preconditions": "用户已登录系统并自定义了部分UI设置(F002)",
       "steps": [
-        "使用用户user1登录系统",
-        "在案件搜索栏输入案件ID CASE-2023-001",
-        "点击查看案件详情"
+        "1. 在1024x768分辨率下访问所有主要功能界面",
+        "2. 在4K分辨率下访问相同界面",
+        "3. 调整浏览器缩放至50%和150%",
+        "4. 使用不同浏览器(Chrome/Firefox/Edge)访问系统"
       ],
-      "expected_result": "1. 系统返回403错误 2. 审计日志中记录一条类型为ACCESS_DENIED的记录 3. 界面显示'您无权访问此案件'的明确错误提示",
+      "expected_result": "所有界面保持一致的布局、颜色方案和交互模式，自定义设置在所有情况下都正确应用，无元素重叠或功能缺失",
       "priority": "P1"
+    },
+    {
+      "id": "TC-B-013",
+      "title": "验证案件搜索的性能边界",
+      "type": "边界",
+      "target": "C002 C008",
+      "preconditions": "系统包含10,000个测试案件",
+      "steps": [
+        "1. 执行简单搜索(单条件)并记录响应时间",
+        "2. 执行高级搜索(5个条件组合)并记录响应时间",
+        "3. 搜索不存在的案件(X004)",
+        "4. 搜索用户无权限访问的案件(X002)"
+      ],
+      "expected_result": "简单搜索在5秒内返回结果，高级搜索在15秒内返回，不存在的案件显示明确提示，无权限案件不出现在结果中但记录审计日志(C018)",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-014",
+      "title": "验证审计日志的不可变性",
+      "type": "边界",
+      "target": "C016",
+      "preconditions": "系统存在审计日志记录",
+      "steps": [
+        "1. 尝试通过API直接修改审计日志内容",
+        "2. 尝试删除单条审计记录",
+        "3. 尝试清空整个审计日志表",
+        "4. 尝试通过数据库工具直接修改审计数据"
+      ],
+      "expected_result": "所有修改尝试都被系统拒绝并记录安全事件，审计日志保持原始状态不变",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-039",
+      "title": "验证用户可同时属于多个组",
+      "type": "边界",
+      "target": "C013",
+      "preconditions": "系统中有至少两个用户组GroupA和GroupB",
+      "steps": [
+        "管理员登录系统",
+        "创建新用户User1",
+        "将User1同时分配到GroupA和GroupB",
+        "保存用户配置"
+      ],
+      "expected_result": "用户User1成功显示为GroupA和GroupB的成员",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-040",
+      "title": "验证案件访问限制功能",
+      "type": "边界",
+      "target": "C014",
+      "preconditions": "系统中有案件Case1和用户User1、User2",
+      "steps": [
+        "管理员登录系统",
+        "编辑Case1的访问权限，限制仅User1可访问",
+        "User1尝试访问Case1",
+        "User2尝试访问Case1"
+      ],
+      "expected_result": "User1成功访问Case1，User2收到权限不足提示(X002)",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-015",
+      "title": "验证指定案件审计导出功能",
+      "type": "边界",
+      "target": "C015",
+      "preconditions": "系统中有案件Case1且包含审计记录",
+      "steps": [
+        "审计员登录系统",
+        "选择导出Case1的审计记录",
+        "选择导出格式为CSV",
+        "确认导出操作"
+      ],
+      "expected_result": "系统生成包含Case1所有审计记录的CSV文件，原始审计记录未被修改",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-016",
+      "title": "验证审计记录的不可篡改性",
+      "type": "边界",
+      "target": "C016",
+      "preconditions": "系统中有管理员用户Admin1和审计记录Audit1",
+      "steps": [
+        "Admin1登录系统",
+        "尝试删除Audit1记录",
+        "尝试修改Audit1的内容",
+        "尝试导出Audit1到外部存储"
+      ],
+      "expected_result": "所有删除和修改操作失败，导出操作成功且导出内容与原始记录完全一致",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-017",
+      "title": "验证系统自动记录审计跟踪事件",
+      "type": "边界",
+      "target": "C017",
+      "preconditions": "系统已启用审计跟踪功能",
+      "steps": [
+        "管理员用户(admin1)登录系统",
+        "创建新案件(Case-2023-1001)",
+        "修改案件状态为'调查中'",
+        "尝试导出案件(Case-2023-1001)的审计日志"
+      ],
+      "expected_result": "审计日志中包含案件创建和状态变更事件，时间戳和操作用户信息准确",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-018",
+      "title": "验证系统记录未授权访问尝试",
+      "type": "边界",
+      "target": "C018",
+      "preconditions": "存在受限案件(Case-2023-1002)，用户(user1)无访问权限",
+      "steps": [
+        "用户(user1)登录系统",
+        "尝试直接访问案件(Case-2023-1002)详情页面",
+        "系统拒绝访问并返回权限错误",
+        "管理员查看审计日志"
+      ],
+      "expected_result": "审计日志中记录user1的未授权访问尝试，包含时间戳和案件ID",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-018",
+      "title": "审计跟踪导出失败处理",
+      "type": "异常",
+      "target": "X001",
+      "preconditions": "系统存在500条审计记录，包含案件(Case-2023-1003)相关事件",
+      "steps": [
+        "审计员用户(auditor1)登录系统",
+        "选择导出案件(Case-2023-1003)的审计日志",
+        "模拟网络中断导致导出失败",
+        "查看系统响应"
+      ],
+      "expected_result": "系统捕获异常并显示'导出失败，请重试'错误消息，未生成部分文件",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-E-019",
+      "title": "用户尝试访问权限不足案件",
+      "type": "异常",
+      "target": "X002",
+      "preconditions": "案件(Case-2023-1004)仅对调查组可见，用户(user2)不属于该组",
+      "steps": [
+        "用户(user2)登录系统",
+        "通过URL直接访问案件(Case-2023-1004)详情页面",
+        "查看系统响应",
+        "管理员检查审计日志"
+      ],
+      "expected_result": "系统返回'访问被拒绝'错误页面，审计日志记录此次未授权访问尝试",
+      "priority": "P0"
+    },
+    {
+      "id": "TC-B-019",
+      "title": "验证审计跟踪自动记录用户管理操作",
+      "type": "边界",
+      "target": "C017",
+      "preconditions": "系统已启用审计跟踪功能，存在管理员用户(admin2)",
+      "steps": [
+        "管理员用户(admin2)登录系统",
+        "创建新用户(user3)并分配至'调查员'组",
+        "修改用户(user3)的安全级别为'高级'",
+        "导出用户管理审计日志"
+      ],
+      "expected_result": "审计日志中包含用户创建和权限变更的完整记录，操作类型和参数准确",
+      "priority": "P1"
+    },
+    {
+      "id": "TC-B-020",
+      "title": "验证多次未授权访问的记录完整性",
+      "type": "边界",
+      "target": "C018",
+      "preconditions": "案件(Case-2023-1005)限制访问，用户(user4)无权限",
+      "steps": [
+        "用户(user4)登录系统",
+        "尝试5次访问案件(Case-2023-1005)详情",
+        "每次使用不同方法(直接URL、搜索后点击、API调用等)",
+        "管理员查看详细审计日志"
+      ],
+      "expected_result": "审计日志中包含5条独立记录，每条记录访问方法、时间戳和用户信息",
+      "priority": "P2"
     },
     {
       "id": "TC-E-003",
-      "title": "用户搜索不存在的案件",
+      "title": "用户尝试查看无权限的案件",
       "type": "异常",
-      "target": "X003 | EXC_CASE_FOUND | Case not found",
-      "preconditions": "1. 系统中不存在案件ID为CASE-9999-999的案件 2. 当前用户user1已登录",
+      "target": "X003",
+      "preconditions": "系统中存在案件ID为CASE-2023-001的案件，当前用户user1没有该案件的访问权限",
       "steps": [
-        "使用用户user1登录系统",
-        "在案件搜索栏输入案件ID CASE-9999-999",
-        "点击搜索按钮"
+        "用户user1登录系统",
+        "在案件搜索界面输入案件ID CASE-2023-001",
+        "点击查看案件详情按钮"
       ],
-      "expected_result": "1. 系统返回404错误 2. 界面显示'未找到匹配案件'的提示信息 3. 搜索结果区域显示为空",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-E-004",
-      "title": "用户尝试无权限访问案件",
-      "type": "异常",
-      "target": "X004 | EXC_UNAUTHORIZED_ACCESS_ATTEMPT | Unauthorized access attempt to case",
-      "preconditions": "1. 案件ID为CASE-2023-002存在 2. 用户user2无访问权限 3. 用户user2已登录",
-      "steps": [
-        "用户user2直接访问URL /cases/CASE-2023-002",
-        "尝试查看案件详情",
-        "尝试下载案件附件"
-      ],
-      "expected_result": "1. 所有操作返回403错误 2. 审计日志记录3条ACCESS_DENIED记录 3. 界面显示权限不足提示",
+      "expected_result": "系统返回'无访问权限'错误提示，并在审计日志中记录一条AccessViolation记录",
       "priority": "P1"
     },
     {
-      "id": "TC-E-023",
-      "title": "离线模式下访问未缓存的案件数据",
+      "id": "TC-E-020",
+      "title": "用户搜索不存在的案件",
       "type": "异常",
-      "target": "X005 | EXC_ACCESS_OFFLINE_MODE_NOT | Attempt to access case in offline mode when not cached locally",
-      "preconditions": "1. 案件ID为CASE-2023-003存在 2. 该案件数据未预缓存 3. 设备网络连接已断开",
+      "target": "X004",
+      "preconditions": "系统中不存在案件ID为CASE-2023-999的案件",
       "steps": [
-        "在离线状态下启动应用",
-        "尝试搜索案件CASE-2023-003",
-        "点击查看案件详情"
+        "用户user1登录系统",
+        "在案件搜索界面输入案件ID CASE-2023-999",
+        "点击搜索按钮"
       ],
-      "expected_result": "1. 搜索返回'网络不可用'错误 2. 查看详情操作显示'该案件数据不可离线访问'提示 3. 提供'重试连接'按钮",
+      "expected_result": "系统返回'案件不存在'提示信息，搜索结果列表为空",
+      "priority": "P2"
+    },
+    {
+      "id": "TC-E-005",
+      "title": "用户尝试访问无权限的案件详情",
+      "type": "异常",
+      "target": "X005",
+      "preconditions": "系统中存在案件ID为CASE-2023-002的案件，当前用户user2没有该案件的访问权限",
+      "steps": [
+        "用户user2登录系统",
+        "直接访问URL /cases/CASE-2023-002",
+        "尝试加载案件详情页面"
+      ],
+      "expected_result": "系统返回403禁止访问错误页面，并在审计日志中记录完整的访问尝试信息",
       "priority": "P1"
     },
     {
       "id": "TC-E-006",
-      "title": "测试多语言界面资源不可用异常",
+      "title": "普通用户尝试访问受限案件",
       "type": "异常",
-      "target": "X006 | EXC_MULTILINGUAL_INTERFACE_RESOURCE_NOT | Multilingual interface resource not available | Selected language pack not installed or corrupted",
-      "preconditions": "1. 系统已安装英语语言包 2. 用户已登录 3. 法语语言包未安装或已损坏",
+      "target": "X006",
+      "preconditions": "系统中存在案件ID为CASE-2023-003的机密案件，仅限管理员访问",
       "steps": [
-        "1. 用户导航至界面设置页面(F002)",
-        "2. 在语言选择下拉菜单中选择'法语'",
-        "3. 点击'应用'按钮保存设置"
+        "普通用户user3登录系统",
+        "在案件搜索界面输入案件ID CASE-2023-003",
+        "点击查看详情按钮"
       ],
-      "expected_result": "1. 系统显示错误提示'法语语言包不可用(X006)' 2. 界面语言保持原设置不变 3. 审计日志记录该异常事件(C004)",
+      "expected_result": "系统显示'未经授权的访问尝试'警告信息，案件详情未显示",
       "priority": "P1"
     },
     {
-      "id": "TC-E-024",
-      "title": "测试复杂搜索查询超时异常",
+      "id": "TC-E-021",
+      "title": "用户访问已被删除的案件",
       "type": "异常",
-      "target": "X007 | EXC_SEARCH_TIMEOUT_DUE_OVERLOAD | Search timeout due to system overload | Complex search query exceeds maximum allowed time",
-      "preconditions": "1. 系统中有超过100万条案件记录 2. 用户有F009权限 3. 系统当前负载较高",
+      "target": "X007",
+      "preconditions": "案件ID为CASE-2023-004的案件已被系统管理员删除",
       "steps": [
-        "1. 用户导航至高级搜索页面(F009)",
-        "2. 输入包含10个条件的复杂查询(案件类型+日期范围+5个关键词+3个嫌疑人属性)",
-        "3. 点击'搜索'按钮并启动计时器"
+        "用户user4登录系统",
+        "在浏览器地址栏直接输入/cases/CASE-2023-004",
+        "尝试访问该URL"
       ],
-      "expected_result": "1. 15秒后系统终止查询并显示'查询超时(X007)'提示 2. 建议用户简化查询条件(C015) 3. 审计日志记录该超时事件(C033)",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-025",
-      "title": "测试案件起诉阶段修改数据异常",
-      "type": "异常",
-      "target": "X008 | EXC_MODIFY_DURING_PROSECUTION_PHASE | Attempt to modify case during prosecution phase | User tries to edit case data after prosecution has begun",
-      "preconditions": "1. 案件CAS-2023-001已进入起诉阶段(F007) 2. 用户有该案件编辑权限 3. 案件未被锁定",
-      "steps": [
-        "1. 用户打开案件CAS-2023-001详情页面(F005)",
-        "2. 尝试修改案件描述字段",
-        "3. 点击'保存'按钮"
-      ],
-      "expected_result": "1. 系统阻止修改并显示'案件处于起诉阶段，禁止编辑(X008)' 2. 案件数据保持不变(C001) 3. 审计日志记录该修改尝试(C026)",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-E-026",
-      "title": "测试离线数据同步冲突异常",
-      "type": "异常",
-      "target": "X009 | EXC_OFFLINE_DATA_SYNCHRONIZATION_CONFLICT | Offline data synchronization conflict | Conflicting changes detected during offline-to-online synchronization",
-      "preconditions": "1. 用户A离线修改案件CAS-2023-002的嫌疑人信息 2. 用户B在线修改同一案件的相同字段 3. 用户A重新连接网络",
-      "steps": [
-        "1. 用户A设备恢复网络连接",
-        "2. 系统自动尝试同步离线修改",
-        "3. 检测到用户B已修改相同字段"
-      ],
-      "expected_result": "1. 系统显示'数据同步冲突(X009)'对话框 2. 提供冲突解决选项(保留A/B版本或手动合并) 3. 审计日志记录冲突详情(C033) 4. 案件保持锁定状态直到冲突解决(C001)",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-B-071",
-      "title": "测试系统维护案件数据完整性",
-      "type": "边界",
-      "target": "CON_DATA_SYSTEM_MAINTAIN_CASE_DATA_AWQ7",
-      "preconditions": "系统中有案件ID为CASE-2023-001的完整数据",
-      "steps": [
-        "1. 管理员执行数据库维护操作",
-        "2. 系统自动验证案件CASE-2023-001的数据完整性",
-        "3. 尝试删除案件关联的审计记录"
-      ],
-      "expected_result": "系统阻止审计记录删除操作，保持案件数据完整关联，验证CON_DATA_SYSTEM_MAINTAIN_CASE_DATA_AWQ7约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-072",
-      "title": "测试管理员设置用户配置文件权限",
-      "type": "边界",
-      "target": "CON_FUNC_ADMIN_SET_USER_PROFILES_L1DC",
-      "preconditions": "管理员已登录系统，用户USER006存在",
-      "steps": [
-        "1. 管理员导航至用户USER006的配置页面",
-        "2. 尝试修改安全级别为'Level4'",
-        "3. 设置界面语言为'法语'"
-      ],
-      "expected_result": "管理员成功保存配置变更，验证CON_FUNC_ADMIN_SET_USER_PROFILES_L1DC约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-073",
-      "title": "测试用户多组成员身份边界",
-      "type": "边界",
-      "target": "CON_FUNC_ALLOW_USERS_BELONG_MULTIPLE_BN8A",
-      "preconditions": "用户USER007已属于5个组(系统最大限制)",
-      "steps": [
-        "1. 管理员尝试将USER007添加到第6个组",
-        "2. 系统显示已达到最大组数限制"
-      ],
-      "expected_result": "系统阻止添加操作并显示适当错误消息，验证CON_FUNC_ALLOW_USERS_BELONG_MULTIPLE_BN8A约束",
+      "expected_result": "系统返回'案件不存在或已被删除'错误页面，HTTP状态码为404",
       "priority": "P2"
-    },
-    {
-      "id": "TC-B-074",
-      "title": "测试自动事件跟踪功能",
-      "type": "边界",
-      "target": "CON_FUNC_AUTOMATICALLY_TRACK_EVENTS_WITHOUT_5PBF",
-      "preconditions": "系统审计功能已启用",
-      "steps": [
-        "1. 用户USER008登录系统",
-        "2. 执行案件搜索操作",
-        "3. 查看案件详情",
-        "4. 不进行任何显式审计操作"
-      ],
-      "expected_result": "审计日志中自动记录所有用户操作，验证CON_FUNC_AUTOMATICALLY_TRACK_EVENTS_WITHOUT_5PBF约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-075",
-      "title": "测试界面水平滚动限制",
-      "type": "边界",
-      "target": "CON_FUNC_AVOID_HORIZONTAL_SCROLLING_SPGU",
-      "preconditions": "用户已登录系统，使用窄屏设备(宽度<768px)",
-      "steps": [
-        "1. 打开案件列表页面",
-        "2. 检查界面布局",
-        "3. 尝试水平滚动"
-      ],
-      "expected_result": "界面自适应屏幕宽度，无需水平滚动即可查看所有内容，验证CON_FUNC_AVOID_HORIZONTAL_SCROLLING_SPGU约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-076",
-      "title": "测试启动画面显示条件",
-      "type": "边界",
-      "target": "CON_FUNC_AVOID_SPLASH_SCREENS_UNLESS_OMQB",
-      "preconditions": "用户首次启动移动应用",
-      "steps": [
-        "1. 启动应用程序",
-        "2. 检查是否显示启动画面",
-        "3. 后续启动应用程序"
-      ],
-      "expected_result": "仅在首次启动时显示启动画面，后续启动直接进入主界面，验证CON_FUNC_AVOID_SPLASH_SCREENS_UNLESS_OMQB约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-077",
-      "title": "测试关键案件离线访问",
-      "type": "边界",
-      "target": "CON_FUNC_CASES_ACCESSIBLE_OFFLINE_CRITICAL_HY7N",
-      "preconditions": "用户已标记案件CASE-2023-001为关键案件",
-      "steps": [
-        "1. 设备断开网络连接",
-        "2. 尝试访问案件CASE-2023-001",
-        "3. 查看案件详情和证据"
-      ],
-      "expected_result": "成功访问缓存的案件数据，验证CON_FUNC_CASES_ACCESSIBLE_OFFLINE_CRITICAL_HY7N约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-078",
-      "title": "测试导航自描述性",
-      "type": "边界",
-      "target": "CON_FUNC_DESIGN_NAVIGATION_SELF_DESCRIPTIVE_DQ2K",
-      "preconditions": "新用户首次登录系统",
-      "steps": [
-        "1. 查看主导航菜单",
-        "2. 浏览所有导航元素",
-        "3. 尝试理解每个图标的含义"
-      ],
-      "expected_result": "所有导航元素都有清晰的标签或工具提示，无需额外说明即可理解，验证CON_FUNC_DESIGN_NAVIGATION_SELF_DESCRIPTIVE_DQ2K约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-079",
-      "title": "测试多实体同时显示",
-      "type": "边界",
-      "target": "CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y",
-      "preconditions": "系统中有5个相关案件",
-      "steps": [
-        "1. 用户选择查看相关案件",
-        "2. 系统显示案件比较视图",
-        "3. 检查所有案件信息布局"
-      ],
-      "expected_result": "所有案件信息清晰可辨，无重叠或混淆，验证CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-080",
-      "title": "测试界面一致性规则",
-      "type": "边界",
-      "target": "CON_FUNC_EMPLOY_CONSISTENT_RULES_Q01P",
-      "preconditions": "用户浏览系统多个功能模块",
-      "steps": [
-        "1. 检查各模块的按钮样式",
-        "2. 比较表单验证规则",
-        "3. 观察错误提示格式"
-      ],
-      "expected_result": "所有界面元素遵循统一的设计规则和交互模式，验证CON_FUNC_EMPLOY_CONSISTENT_RULES_Q01P约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-081",
-      "title": "测试界面可定制性",
-      "type": "边界",
-      "target": "CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_KPKV",
-      "preconditions": "用户已登录系统并具有定制权限",
-      "steps": [
-        "1. 进入界面设置",
-        "2. 修改主题颜色为深蓝色",
-        "3. 调整字体大小为14pt",
-        "4. 保存配置"
-      ],
-      "expected_result": "界面立即应用所有定制更改，验证CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_KPKV约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-082",
-      "title": "测试最小化导航步骤",
-      "type": "边界",
-      "target": "CON_FUNC_MINIMIZE_NAVIGATION_STEPS_B41U",
-      "preconditions": "用户需要从主界面访问案件CASE-2023-001",
-      "steps": [
-        "1. 记录从主界面到案件详情的点击次数",
-        "2. 检查是否有快捷访问方式"
-      ],
-      "expected_result": "最多3次点击即可到达目标页面，或提供直接搜索/快捷访问，验证CON_FUNC_MINIMIZE_NAVIGATION_STEPS_B41U约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-083",
-      "title": "测试最小化垂直滚动",
-      "type": "边界",
-      "target": "CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_B1VM",
-      "preconditions": "用户查看包含50个字段的案件表单",
-      "steps": [
-        "1. 打开案件详情页面",
-        "2. 检查表单布局和组织方式",
-        "3. 评估是否需要过多滚动"
-      ],
-      "expected_result": "表单使用选项卡或分页组织，单屏内容完整可见，验证CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_B1VM约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-084",
-      "title": "测试有意义错误消息",
-      "type": "边界",
-      "target": "CON_FUNC_PRODUCE_MEANINGFUL_ERROR_MESSAGES_KKES",
-      "preconditions": "用户尝试执行无权限操作",
-      "steps": [
-        "1. 普通用户尝试访问管理员功能",
-        "2. 查看系统返回的错误消息"
-      ],
-      "expected_result": "错误消息明确说明权限不足及解决方法，验证CON_FUNC_PRODUCE_MEANINGFUL_ERROR_MESSAGES_KKES约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-085",
-      "title": "测试界面缺陷日志记录",
-      "type": "边界",
-      "target": "CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC",
-      "preconditions": "用户发现界面显示异常",
-      "steps": [
-        "1. 通过系统反馈工具报告问题",
-        "2. 检查日志记录",
-        "3. 查看问题跟踪状态"
-      ],
-      "expected_result": "系统完整记录缺陷详情并生成跟踪编号，验证CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-086",
-      "title": "测试基于角色的控制",
-      "type": "边界",
-      "target": "CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_NUUL",
-      "preconditions": "用户具有审计员角色",
-      "steps": [
-        "1. 登录系统",
-        "2. 尝试访问案件调查功能",
-        "3. 尝试访问审计报告功能"
-      ],
-      "expected_result": "只能访问角色允许的功能，验证CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_NUUL约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-087",
-      "title": "测试非文本内容替代文本",
-      "type": "边界",
-      "target": "CON_FUNC_PROVIDE_TEXT_ALTERNATIVES_NON_5K9F",
-      "preconditions": "系统中有包含图标的界面元素",
-      "steps": [
-        "1. 检查所有图标的alt文本",
-        "2. 验证图表的数据表格替代"
-      ],
-      "expected_result": "所有非文本内容都有适当的文本替代，验证CON_FUNC_PROVIDE_TEXT_ALTERNATIVES_NON_5K9F约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-088",
-      "title": "测试用户操作警报",
-      "type": "边界",
-      "target": "CON_FUNC_SEND_ALERTS_USERS_ACTIONS_XNJM",
-      "preconditions": "管理员修改了关键系统配置",
-      "steps": [
-        "1. 执行配置变更",
-        "2. 检查相关用户收件箱",
-        "3. 查看系统通知中心"
-      ],
-      "expected_result": "相关用户收到配置变更警报，验证CON_FUNC_SEND_ALERTS_USERS_ACTIONS_XNJM约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-089",
-      "title": "测试用户位置显示",
-      "type": "边界",
-      "target": "CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_SVNZ",
-      "preconditions": "用户深入多层菜单",
-      "steps": [
-        "1. 导航至深层页面",
-        "2. 检查面包屑导航",
-        "3. 验证当前页面标识"
-      ],
-      "expected_result": "清晰显示当前位置和导航路径，验证CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_SVNZ约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-090",
-      "title": "测试特殊需求支持",
-      "type": "边界",
-      "target": "CON_FUNC_SUITABLE_USERS_SPECIAL_NEEDS_4ESE",
-      "preconditions": "用户启用屏幕阅读器",
-      "steps": [
-        "1. 检查界面可访问性",
-        "2. 验证键盘导航支持",
-        "3. 评估高对比度模式"
-      ],
-      "expected_result": "所有功能可通过辅助技术访问，验证CON_FUNC_SUITABLE_USERS_SPECIAL_NEEDS_4ESE约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-091",
-      "title": "测试详细上下文提供",
-      "type": "边界",
-      "target": "CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66",
-      "preconditions": "用户遇到错误情况",
-      "steps": [
-        "1. 触发验证错误",
-        "2. 查看错误消息",
-        "3. 检查帮助链接"
-      ],
-      "expected_result": "错误消息包含详细上下文和解决建议，验证CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-092",
-      "title": "测试多语言界面支持",
-      "type": "边界",
-      "target": "CON_FUNC_USER_INTERFACE_SUPPORT_MULTILINGUAL_QKE9",
-      "preconditions": "系统已安装法语语言包",
-      "steps": [
-        "1. 切换界面语言为法语",
-        "2. 浏览主要功能",
-        "3. 检查翻译完整性"
-      ],
-      "expected_result": "所有界面元素正确显示法语翻译，验证CON_FUNC_USER_INTERFACE_SUPPORT_MULTILINGUAL_QKE9约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-093",
-      "title": "测试审计数据不可修改",
-      "type": "边界",
-      "target": "CON_SEC_AUDIT_TRAIL_DATA_CANNOT_MJB5",
-      "preconditions": "系统中有已记录的审计条目",
-      "steps": [
-        "1. 管理员尝试直接修改审计记录",
-        "2. 通过API尝试更新审计数据",
-        "3. 检查数据库权限"
-      ],
-      "expected_result": "所有修改尝试被拒绝，审计数据保持原样，验证CON_SEC_AUDIT_TRAIL_DATA_CANNOT_MJB5约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-094",
-      "title": "测试访问控制捕获存储",
-      "type": "边界",
-      "target": "CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ",
-      "preconditions": "用户尝试访问受限资源",
-      "steps": [
-        "1. 记录当前审计日志状态",
-        "2. 执行未授权访问尝试",
-        "3. 检查审计日志更新"
-      ],
-      "expected_result": "审计日志中准确记录访问尝试详情，验证CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-095",
-      "title": "测试审计跟踪导出功能",
-      "type": "边界",
-      "target": "CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG",
-      "preconditions": "系统中有多个案件的审计数据",
-      "steps": [
-        "1. 指定导出案件范围",
-        "2. 设置时间过滤器",
-        "3. 执行导出操作"
-      ],
-      "expected_result": "导出的审计数据严格匹配指定范围，验证CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-063",
-      "title": "测试案件审计跟踪维护",
-      "type": "边界",
-      "target": "CON_SEC_MAINTAIN_AUDIT_TRAIL_CASE_P2OY",
-      "preconditions": "案件CASE-2023-002存在并有关联操作",
-      "steps": [
-        "1. 执行案件相关操作",
-        "2. 检查审计日志关联性",
-        "3. 验证数据完整性"
-      ],
-      "expected_result": "所有案件操作正确关联到案件审计跟踪，验证CON_SEC_MAINTAIN_AUDIT_TRAIL_CASE_P2OY约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-064",
-      "title": "测试未授权记录排除",
-      "type": "边界",
-      "target": "CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF",
-      "preconditions": "用户无权限访问案件CASE-2023-003",
-      "steps": [
-        "1. 执行全局搜索",
-        "2. 检查结果过滤",
-        "3. 尝试直接访问"
-      ],
-      "expected_result": "未授权案件不出现在任何结果中，验证CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-065",
-      "title": "测试替代访问路径",
-      "type": "边界",
-      "target": "CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_2HSD",
-      "preconditions": "主功能路径不可用",
-      "steps": [
-        "1. 模拟主功能故障",
-        "2. 检查系统提供的替代方案",
-        "3. 验证功能完整性"
-      ],
-      "expected_result": "系统提供等效的替代访问路径，验证CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_2HSD约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-066",
-      "title": "测试超级用户安全变更",
-      "type": "边界",
-      "target": "CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH",
-      "preconditions": "超级用户已登录系统",
-      "steps": [
-        "1. 修改系统安全级别",
-        "2. 调整密码策略",
-        "3. 更新访问控制规则"
-      ],
-      "expected_result": "所有安全变更成功应用并记录特殊审计事件，验证CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-067",
-      "title": "测试案件访问限制",
-      "type": "边界",
-      "target": "CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_URAC",
-      "preconditions": "案件CASE-2023-004存在",
-      "steps": [
-        "1. 设置案件仅限特定组访问",
-        "2. 尝试从不同权限用户访问",
-        "3. 检查访问结果"
-      ],
-      "expected_result": "案件访问严格限制于指定用户/组，验证CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_URAC约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-068",
-      "title": "测试不可更改审计维护",
-      "type": "边界",
-      "target": "CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_Q4V6",
-      "preconditions": "系统中有已记录的审计条目",
-      "steps": [
-        "1. 尝试直接修改数据库记录",
-        "2. 通过API尝试更新",
-        "3. 检查审计哈希值"
-      ],
-      "expected_result": "所有修改尝试被阻止，审计条目保持不可更改，验证CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_Q4V6约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-B-069",
-      "title": "测试ISO标准合规性",
-      "type": "边界",
-      "target": "CON_USAB_COMPLY_ISO_XE8L",
-      "preconditions": "系统已部署",
-      "steps": [
-        "1. 检查界面元素间距",
-        "2. 验证颜色对比度",
-        "3. 评估交互响应时间"
-      ],
-      "expected_result": "所有方面符合ISO相关标准，验证CON_USAB_COMPLY_ISO_XE8L约束",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-B-070",
-      "title": "测试ICT可访问性标准",
-      "type": "边界",
-      "target": "CON_USAB_ICT_ACCESSIBILITY_STANDARD_F8FC",
-      "preconditions": "用户使用辅助技术",
-      "steps": [
-        "1. 启用屏幕阅读器浏览",
-        "2. 检查键盘导航支持",
-        "3. 验证文本缩放功能"
-      ],
-      "expected_result": "系统完全符合ICT可访问性标准，验证CON_USAB_ICT_ACCESSIBILITY_STANDARD_F8FC约束",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-N-028",
-      "title": "用户提交帮助请求并获取响应",
-      "type": "正常",
-      "target": "Help Module",
-      "preconditions": "用户已登录系统，帮助功能已启用",
-      "steps": [
-        "导航至帮助中心",
-        "选择'案件管理'分类",
-        "输入问题描述'如何创建新案件？'",
-        "点击'提交请求'按钮"
-      ],
-      "expected_result": "系统显示'请求已提交'确认消息，并在24小时内发送响应到用户邮箱",
-      "priority": "P1"
-    },
-    {
-      "id": "TC-E-027",
-      "title": "提交空帮助请求",
-      "type": "异常",
-      "target": "Help Module",
-      "preconditions": "用户已登录系统",
-      "steps": [
-        "导航至帮助中心",
-        "不输入任何问题描述",
-        "点击'提交请求'按钮"
-      ],
-      "expected_result": "系统显示'问题描述不能为空'错误提示，请求未被提交",
-      "priority": "P2"
-    },
-    {
-      "id": "TC-N-029",
-      "title": "管理员处理缺陷报告",
-      "type": "正常",
-      "target": "Defect Tracking",
-      "preconditions": "管理员已登录系统，存在未处理的缺陷报告DEF-001",
-      "steps": [
-        "导航至缺陷跟踪系统",
-        "打开缺陷DEF-001详情",
-        "设置状态为'处理中'",
-        "分配处理人员为DEV-001",
-        "添加备注'预计下版本修复'",
-        "点击'保存更新'"
-      ],
-      "expected_result": "缺陷状态更新为'处理中'，分配人员显示为DEV-001，备注已保存",
-      "priority": "P0"
-    },
-    {
-      "id": "TC-E-028",
-      "title": "非管理员尝试修改缺陷状态",
-      "type": "异常",
-      "target": "Defect Tracking",
-      "preconditions": "普通用户已登录系统，缺陷DEF-002存在",
-      "steps": [
-        "尝试访问缺陷DEF-002编辑页面",
-        "修改状态为'已解决'",
-        "点击保存按钮"
-      ],
-      "expected_result": "系统显示'权限不足'错误消息，缺陷状态未被修改",
-      "priority": "P1"
     }
   ]
 }

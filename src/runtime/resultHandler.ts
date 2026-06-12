@@ -133,7 +133,11 @@ export class ResultHandler {
     const notifications = this.deps.backend.poll();
     for (const notif of notifications) {
       this.deps.mailbox.sendNotification(notif);
-      state.recordNotification(asPlainNotification(notif));
+      // 心跳频率高（每 worker 4 条/秒），不记入状态历史，避免长任务把
+      // state.notifications 与导出的 trace 撑爆。
+      if (notif.event !== "heartbeat") {
+        state.recordNotification(asPlainNotification(notif));
+      }
       if (TERMINAL_EVENTS.has(notif.event)) {
         await this.applyTerminalNotification(state, notif);
       }

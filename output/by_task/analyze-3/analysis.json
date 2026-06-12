@@ -1,37 +1,31 @@
 {
   "project_name": "CCTNS",
-  "project_overview": "CCTNS是一个警务信息系统，旨在改善公民与警察之间的信息交流，提高工作效率。",
+  "project_overview": "CCTNS是一个连接公民与警察单位的信息交换系统，旨在提高工作效率并减少文书工作。",
   "actors": [
-    {
-      "actorRef": "A_ADMIN",
-      "name": "Admin",
-      "description": "管理员"
-    },
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "公民"
+      "description": "公民用户，可以使用系统获取信息或向警方提交请求"
     },
     {
-      "actorRef": "A_HELP_DESK",
-      "name": "HelpDesk",
-      "description": "帮助台"
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "管理员，负责系统配置和用户管理"
     }
   ],
   "functions": [
     {
-      "id": "FUN_CUSTOMIZE_INTERFACE",
-      "name": "CustomizeInterface",
-      "description": "自定义界面",
+      "id": "FUN_CUSTOMIZE_UI",
+      "name": "CustomizeUI",
+      "description": "自定义用户界面",
       "sub_capabilities": [
-        "调整表格中显示的列",
-        "移动界面元素",
-        "调整界面元素大小",
-        "修改界面外观"
+        "调整表格显示列",
+        "移动和调整界面元素大小",
+        "修改外观"
       ],
       "acceptance_criteria": [
-        "用户能够保存界面配置",
-        "配置保存在用户配置文件中"
+        "用户配置应保存在用户配置文件中",
+        "界面应允许最大程度的自定义"
       ],
       "related_actors": [
         "A_CITIZEN",
@@ -41,63 +35,60 @@
       "preconditions": "用户已登录系统"
     },
     {
-      "id": "FUN_MANAGE_USER_PROFILE",
-      "name": "ManageUserProfile",
-      "description": "管理用户配置文件",
+      "id": "FUN_CONFIGURE_SYSTEM",
+      "name": "ConfigureSystem",
+      "description": "配置系统参数",
       "sub_capabilities": [
-        "设置用户界面偏好",
-        "保存用户配置"
+        "创建和更新数据元素",
+        "维护业务规则",
+        "管理州特定数据"
       ],
       "acceptance_criteria": [
-        "用户能够修改个人配置",
-        "配置变更后立即生效"
+        "配置应反映在系统行为中",
+        "管理员应能轻松更新配置"
       ],
       "related_actors": [
-        "A_ADMIN",
-        "A_CITIZEN"
+        "A_ADMIN"
       ],
       "priority": "high",
-      "preconditions": "用户已登录系统"
+      "preconditions": "管理员权限"
     }
   ],
   "entities": [
     {
       "entityRef": "E_USER_PROFILE",
       "name": "UserProfile",
-      "description": "用户配置文件",
+      "entityKind": "core",
+      "description": "用户配置文件，存储用户个性化设置",
       "attributes": [
         {
-          "name": "interfacePreferences",
+          "name": "uiSettings",
           "type": "Object",
-          "description": "用户界面偏好设置"
+          "description": "用户界面配置设置"
         },
         {
-          "name": "lastModified",
-          "type": "DateTime",
-          "description": "最后修改时间"
+          "name": "defaultValues",
+          "type": "Object",
+          "description": "数据输入的持久默认值"
         }
       ],
       "relationships": []
     },
     {
-      "entityRef": "E_COMPLAINT",
-      "name": "Complaint",
-      "description": "投诉",
+      "entityRef": "E_CONFIGURATION",
+      "name": "Configuration",
+      "entityKind": "core",
+      "description": "系统配置参数",
       "attributes": [
         {
-          "name": "id",
-          "type": "String",
-          "description": "投诉ID"
+          "name": "stateSpecificData",
+          "type": "Object",
+          "description": "州特定数据配置"
         },
         {
-          "name": "description",
-          "type": "String",
-          "description": "投诉描述"
-        },
-        {
-          "name": "status",
-          "type": "String",
-          "description": "投诉状态"
+          "name": "businessRules",
+          "type": "Object",
+          "description": "业务规则配置"
         }
       ],
       "relationships": []
@@ -105,28 +96,28 @@
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_019",
+      "constraintRef": "C_RULE_022",
       "description": "界面必须尽可能可定制或用户可配置",
       "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
+        "FUN_CUSTOMIZE_UI"
       ],
       "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile."
     },
     {
-      "constraintRef": "C_RULE_020",
-      "description": "系统用户界面必须适合有特殊需求的用户",
+      "constraintRef": "C_RULE_024",
+      "description": "系统必须允许数据输入有持久默认值",
       "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
+        "FUN_CUSTOMIZE_UI"
       ],
-      "source_text": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines"
+      "source_text": "The System must allow persistent defaults for data entry where desirable. These defaults should include: user-definable values; values same as previous item; values derived from context, e.g. date, file reference, user identifier;"
     },
     {
-      "constraintRef": "C_RULE_021",
-      "description": "系统用户界面必须符合ISO 9241标准",
+      "constraintRef": "C_RULE_020",
+      "description": "系统必须采用单一的用户界面规则集",
       "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
+        "FUN_CUSTOMIZE_UI"
       ],
-      "source_text": "The user interfaces of the system should comply with Standard ISO 9241."
+      "source_text": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application."
     }
   ],
   "missingConstraintCandidates": [],
@@ -134,24 +125,36 @@
   "non_functional_requirements": [
     {
       "category": "可用性",
-      "description": "系统用户界面必须适合有特殊需求的用户"
+      "description": "用户界面应符合ISO 9241标准"
     },
     {
-      "category": "标准合规",
-      "description": "用户界面应符合ISO 9241标准"
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索"
     }
   ],
   "business_processes": [
     {
-      "name": "界面定制流程",
+      "name": "界面自定义流程",
       "steps": [
-        "用户登录系统",
-        "访问界面设置",
+        "登录系统",
+        "访问设置页面",
         "调整界面元素",
         "保存配置"
       ],
       "actors": [
         "A_CITIZEN",
+        "A_ADMIN"
+      ]
+    },
+    {
+      "name": "系统配置流程",
+      "steps": [
+        "管理员登录",
+        "访问配置模块",
+        "更新配置参数",
+        "保存更改"
+      ],
+      "actors": [
         "A_ADMIN"
       ]
     }

@@ -174,7 +174,6 @@ ReqDesign-Agent/
 │   ├── streaming.ts           # LLM 输出流式打印
 │   ├── progress.ts            # 进度追踪与停滞检测
 │   ├── constitution.ts        # 项目宪法加载
-│   ├── retryManager.ts        # 重试管理（指数退避 + 熔断器）
 │   ├── promptLoader.ts        # 共享 Prompt 加载器
 │   ├── promptBuilder.ts       # Prompt 构建器
 │   ├── outputManager.ts       # 输出管理（路径穿越防护）

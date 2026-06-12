@@ -1,103 +1,123 @@
 {
   "project_name": "PoliceCaseManagementSystem",
-  "project_overview": "警务案件管理系统，用于案件注册、调查、起诉、搜索及审计跟踪管理",
+  "project_overview": "警务案件管理系统，用于案件登记、调查、起诉全流程管理，包含审计跟踪和帮助模块",
   "actors": [
     {
       "actorRef": "A_ADMIN",
       "name": "Admin",
-      "description": "系统管理员，负责用户管理和权限配置"
+      "description": "管理员"
     },
     {
       "actorRef": "A_POLICE_OFFICER",
       "name": "PoliceOfficer",
-      "description": "警务人员，负责案件调查和处理"
+      "description": "警务人员"
     },
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "公民用户，可以提交投诉和查询案件"
+      "description": "公民"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "帮助台人员，负责处理系统缺陷和增强请求"
-    },
-    {
-      "actorRef": "A_AUDITOR",
-      "name": "Auditor",
-      "description": "审计员，负责审计系统操作记录"
+      "description": "帮助台"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
-      "description": "记录室工作人员，负责案件记录管理"
+      "description": "记录人员"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "审计员"
     }
   ],
   "functions": [
     {
-      "id": "FUN_EXPORT_AUDIT_TRAIL",
-      "name": "ExportAuditTrail",
-      "description": "导出指定案件的审计跟踪",
-      "sub_capabilities": [],
-      "acceptance_criteria": [
-        "审计跟踪数据应完整导出",
-        "导出操作不应影响系统存储的审计跟踪"
-      ],
-      "related_actors": [
-        "A_AUDITOR",
-        "A_ADMIN"
-      ],
-      "priority": "high",
-      "preconditions": "用户具有审计权限"
-    },
-    {
-      "id": "FUN_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "访问控制管理",
+      "id": "FUN_TRACK_DEFECT",
+      "name": "TrackDefect",
+      "description": "跟踪缺陷或增强请求",
       "sub_capabilities": [
-        "限制案件访问权限",
-        "设置用户组权限",
-        "记录访问违规行为"
+        "记录缺陷或增强请求",
+        "跟踪缺陷状态",
+        "查看缺陷报告"
       ],
       "acceptance_criteria": [
-        "应能限制案件访问到特定用户或用户组",
-        "应记录所有访问控制违规行为"
+        "用户可以提交缺陷或增强请求",
+        "帮助台用户可以查看分类、状态和时效的报告"
       ],
       "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "high",
-      "preconditions": "用户具有管理员权限"
-    },
-    {
-      "id": "FUN_MANAGE_USER_PROFILE",
-      "name": "ManageUserProfile",
-      "description": "管理用户配置文件",
-      "sub_capabilities": [
-        "设置用户配置文件",
-        "分配用户到组"
-      ],
-      "acceptance_criteria": [
-        "应能设置用户安全属性",
-        "应能将用户分配到多个组"
-      ],
-      "related_actors": [
-        "A_ADMIN"
+        "A_CITIZEN",
+        "A_HELP_DESK"
       ],
       "priority": "medium",
-      "preconditions": "用户具有管理员权限"
+      "preconditions": "用户已登录系统"
+    },
+    {
+      "id": "FUN_EXPORT_AUDIT",
+      "name": "ExportAudit",
+      "description": "导出审计跟踪",
+      "sub_capabilities": [
+        "选择指定案件",
+        "导出审计数据",
+        "生成审计报告"
+      ],
+      "acceptance_criteria": [
+        "审计员可以导出指定案件的审计跟踪",
+        "导出的审计数据不影响系统存储的原始审计跟踪"
+      ],
+      "related_actors": [
+        "A_AUDITOR"
+      ],
+      "priority": "high",
+      "preconditions": "审计员已登录并具有相应权限"
+    },
+    {
+      "id": "FUN_SEND_ALERT",
+      "name": "SendAlert",
+      "description": "发送警报通知",
+      "sub_capabilities": [
+        "配置警报接收方式",
+        "触发警报发送",
+        "记录警报发送状态"
+      ],
+      "acceptance_criteria": [
+        "用户可以选择接收警报的方式（如电子邮件、短信）",
+        "当相关操作发生时系统自动发送警报"
+      ],
+      "related_actors": [
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
+      ],
+      "priority": "medium",
+      "preconditions": "用户已配置警报接收偏好"
     }
   ],
   "entities": [
     {
       "entityRef": "E_AUDIT_TRAIL",
       "name": "AuditTrail",
+      "entityKind": "log",
       "description": "审计跟踪记录",
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "系统操作审计",
+        "endpoints": [
+          "Case",
+          "User"
+        ],
+        "evidence": [
+          "has_timestamp",
+          "has_status",
+          "is_referenced_later"
+        ]
+      },
       "attributes": [
         {
-          "name": "actionType",
+          "name": "eventType",
           "type": "String",
-          "description": "操作类型(创建/读取/更新/删除)"
+          "description": "事件类型（创建/读取/更新/删除）"
         },
         {
           "name": "userId",
@@ -107,17 +127,17 @@
         {
           "name": "timestamp",
           "type": "DateTime",
-          "description": "操作时间戳"
+          "description": "事件时间戳"
         },
         {
-          "name": "entityId",
+          "name": "caseId",
           "type": "String",
-          "description": "被操作的实体ID"
+          "description": "关联的案件ID"
         },
         {
-          "name": "entityType",
+          "name": "details",
           "type": "String",
-          "description": "被操作的实体类型"
+          "description": "操作详情"
         }
       ],
       "relationships": [
@@ -125,66 +145,162 @@
           "target": "Case",
           "type": "many-to-one",
           "description": "审计记录关联的案件"
+        },
+        {
+          "target": "User",
+          "type": "many-to-one",
+          "description": "执行操作的用户"
         }
       ]
     },
     {
-      "entityRef": "E_USER_PROFILE",
-      "name": "UserProfile",
-      "description": "用户配置文件",
+      "entityRef": "E_DEFECT_REQUEST",
+      "name": "DefectRequest",
+      "entityKind": "process_record",
+      "description": "缺陷或增强请求",
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "缺陷跟踪",
+        "endpoints": [
+          "User"
+        ],
+        "evidence": [
+          "has_timestamp",
+          "has_status",
+          "has_report_or_evidence"
+        ]
+      },
       "attributes": [
         {
-          "name": "userId",
+          "name": "title",
           "type": "String",
-          "description": "用户唯一标识"
+          "description": "请求标题"
         },
         {
-          "name": "securityLevel",
+          "name": "description",
           "type": "String",
-          "description": "安全级别"
+          "description": "详细描述"
         },
         {
-          "name": "privileges",
-          "type": "List",
-          "description": "权限列表"
+          "name": "category",
+          "type": "String",
+          "description": "分类（缺陷/增强）"
         },
         {
-          "name": "uiConfig",
-          "type": "Object",
-          "description": "用户界面配置"
+          "name": "status",
+          "type": "String",
+          "description": "当前状态"
+        },
+        {
+          "name": "submittedAt",
+          "type": "DateTime",
+          "description": "提交时间"
+        },
+        {
+          "name": "submittedBy",
+          "type": "String",
+          "description": "提交用户ID"
         }
       ],
       "relationships": [
         {
-          "target": "Group",
-          "type": "many-to-many",
-          "description": "用户所属的组"
+          "target": "User",
+          "type": "many-to-one",
+          "description": "提交请求的用户"
+        }
+      ]
+    },
+    {
+      "entityRef": "E_ALERT",
+      "name": "Alert",
+      "entityKind": "event_record",
+      "description": "警报通知",
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "警报发送",
+        "endpoints": [
+          "User"
+        ],
+        "evidence": [
+          "has_timestamp",
+          "has_status",
+          "has_result"
+        ]
+      },
+      "attributes": [
+        {
+          "name": "type",
+          "type": "String",
+          "description": "警报类型（邮件/SMS）"
+        },
+        {
+          "name": "content",
+          "type": "String",
+          "description": "警报内容"
+        },
+        {
+          "name": "sentAt",
+          "type": "DateTime",
+          "description": "发送时间"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "发送状态"
+        },
+        {
+          "name": "recipientId",
+          "type": "String",
+          "description": "接收用户ID"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "User",
+          "type": "many-to-one",
+          "description": "接收警报的用户"
         }
       ]
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_004",
-      "description": "系统必须维护不可更改的审计跟踪",
+      "constraintRef": "C_RULE_001",
+      "description": "系统必须为所有用户界面上的所有可能操作和场景提供详细的上下文相关帮助材料",
       "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
+        "FUN_TRACK_DEFECT"
+      ],
+      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
+    },
+    {
+      "constraintRef": "C_RULE_002",
+      "description": "系统必须提供界面让用户记录应用程序的缺陷或增强请求并跟踪",
+      "related_functions": [
+        "FUN_TRACK_DEFECT"
+      ],
+      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter."
+    },
+    {
+      "constraintRef": "C_RULE_003",
+      "description": "系统必须能够发送警报（如电子邮件、短信）给选择接收的用户",
+      "related_functions": [
+        "FUN_SEND_ALERT"
+      ],
+      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert."
+    },
+    {
+      "constraintRef": "C_RULE_004",
+      "description": "系统必须保持不可更改的审计跟踪，自动捕获和存储关键实体的操作信息",
+      "related_functions": [
+        "FUN_EXPORT_AUDIT"
       ],
       "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
     },
     {
       "constraintRef": "C_RULE_005",
-      "description": "审计跟踪数据不能被任何用户以任何方式修改或删除",
+      "description": "系统必须跟踪事件而不需要人工干预，并将信息存储在审计跟踪中",
       "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
-      ],
-      "source_text": "The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user"
-    },
-    {
-      "constraintRef": "C_RULE_006",
-      "description": "系统必须自动跟踪事件并存储在审计跟踪中",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
+        "FUN_EXPORT_AUDIT"
       ],
       "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them."
     },
@@ -192,81 +308,82 @@
       "constraintRef": "C_RULE_008",
       "description": "系统必须能够导出指定案件的审计跟踪",
       "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
+        "FUN_EXPORT_AUDIT"
       ],
       "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity."
-    },
-    {
-      "constraintRef": "C_RULE_009",
-      "description": "系统必须捕获并存储访问控制机制的违规行为",
-      "related_functions": [
-        "FUN_ACCESS_CONTROL"
-      ],
-      "source_text": "The System must be able to capture and store violations (i.e. A user's attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms."
-    },
-    {
-      "constraintRef": "C_RULE_010",
-      "description": "系统必须允许用户将案件访问限制为特定用户或用户组",
-      "related_functions": [
-        "FUN_ACCESS_CONTROL"
-      ],
-      "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
-    },
-    {
-      "constraintRef": "C_RULE_013",
-      "description": "系统必须只允许管理员用户设置用户配置文件并将用户分配到组",
-      "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
-      ],
-      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
     }
   ],
   "missingConstraintCandidates": [],
   "exceptions": [
     {
       "id": "X001",
-      "description": "用户尝试访问被拒绝访问的案件",
-      "trigger": "用户尝试访问权限外的案件",
-      "handling": "记录违规行为到审计跟踪"
+      "description": "用户尝试访问无权查看的案件",
+      "trigger": "用户请求访问权限不足的案件",
+      "handling": "记录到审计跟踪，并向用户显示适当错误消息"
+    },
+    {
+      "id": "X002",
+      "description": "审计跟踪导出失败",
+      "trigger": "系统无法生成审计报告",
+      "handling": "记录错误并通知管理员"
     }
   ],
   "non_functional_requirements": [
     {
-      "category": "安全",
-      "description": "系统应提供基于角色的功能控制"
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索"
+    },
+    {
+      "category": "性能",
+      "description": "系统必须能够在10-15秒内执行高级搜索"
     },
     {
       "category": "可用性",
-      "description": "系统用户界面必须适合有特殊需求的用户"
+      "description": "用户界面必须适合有特殊需求的用户"
     },
     {
-      "category": "合规",
-      "description": "系统用户界面必须符合ISO 9241标准"
+      "category": "安全",
+      "description": "审计跟踪数据必须不可更改"
     }
   ],
   "business_processes": [
     {
-      "name": "审计跟踪导出流程",
+      "name": "缺陷跟踪流程",
       "steps": [
-        "选择案件",
-        "请求导出审计跟踪",
+        "用户提交缺陷或增强请求",
+        "系统记录请求",
+        "帮助台处理请求",
+        "系统更新请求状态",
+        "系统通知用户处理结果"
+      ],
+      "actors": [
+        "A_CITIZEN",
+        "A_HELP_DESK"
+      ]
+    },
+    {
+      "name": "审计导出流程",
+      "steps": [
+        "审计员选择案件",
         "系统生成审计报告",
-        "下载审计报告"
+        "系统导出报告",
+        "审计员下载报告"
       ],
       "actors": [
         "A_AUDITOR"
       ]
     },
     {
-      "name": "用户权限管理流程",
+      "name": "警报发送流程",
       "steps": [
-        "管理员登录",
-        "选择用户",
-        "设置权限",
-        "保存配置"
+        "用户配置警报接收方式",
+        "系统事件触发警报",
+        "系统发送警报",
+        "系统记录发送状态"
       ],
       "actors": [
-        "A_ADMIN"
+        "A_CITIZEN",
+        "A_POLICE_OFFICER"
       ]
     }
   ],

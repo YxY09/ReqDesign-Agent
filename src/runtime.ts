@@ -89,8 +89,8 @@ export class MultiAgentRuntime {
   private readonly backend: SessionBackend;
   private readonly budget: BudgetManager;
   private readonly outputManagerClass = OutputManager;
-  private readonly defaultTimeoutSeconds = 900;
-  private readonly pollIntervalMs = 20;
+  private readonly defaultTimeoutSeconds: number;
+  private readonly pollIntervalMs: number;
   private eventSink: WorkflowEventSink | null = null;
   private activeStreamContext: {
     workerType: WorkerKind;
@@ -143,6 +143,8 @@ export class MultiAgentRuntime {
       orchestrationRaw as Record<string, unknown>,
     );
     this.budget = new BudgetManager(orchestrationConfig);
+    this.defaultTimeoutSeconds = this.budget.workerTimeoutSeconds;
+    this.pollIntervalMs = this.budget.pollIntervalMs;
 
     this.coordinator = new AgentOrchestrator(this.llm, this.budget);
 
@@ -156,8 +158,9 @@ export class MultiAgentRuntime {
     );
     this.backend = new SessionBackend({
       factory: this.factory,
-      heartbeatInterval: 0.25,
-      maxConcurrency: parseInt(process.env.MAX_CONCURRENCY ?? "", 10) || 5,
+      heartbeatInterval: this.budget.heartbeatIntervalSeconds,
+      maxConcurrency:
+        parseInt(process.env.MAX_CONCURRENCY ?? "", 10) || this.budget.maxConcurrency,
       onNotification: (session, notification) => {
         this.emitBackendNotification(
           session.workerType as "planner" | "generator" | "evaluator" | "repair",
@@ -216,8 +219,14 @@ export class MultiAgentRuntime {
   }
 
   cancel(reason = "cancelled by user"): void {
+    // 取消所有在途会话，而不仅是最近 spawn 的那个（并发可达 maxConcurrency）。
     const sessionId = this.activeStreamContext?.sessionId;
-    if (sessionId) {
+    const cancelled = new Set<string>();
+    for (const inflightSessionId of this.inflight.keys()) {
+      this.backend.cancel(inflightSessionId, reason);
+      cancelled.add(inflightSessionId);
+    }
+    if (sessionId && !cancelled.has(sessionId)) {
       this.backend.cancel(sessionId, reason);
     }
     this.emitRuntimeEvent("run_cancel_requested", reason, {

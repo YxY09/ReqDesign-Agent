@@ -1,6 +1,6 @@
 {
   "project_name": "PoliceCaseManagementSystem",
-  "project_overview": "A system for managing police cases with features for registration, investigation, prosecution, and auditing.",
+  "project_overview": "A system for managing police cases with features for registration, investigation, prosecution, and access control.",
   "actors": [
     {
       "actorRef": "A_ADMIN",
@@ -15,863 +15,193 @@
     {
       "actorRef": "A_CITIZEN",
       "name": "Citizen",
-      "description": "Public user who can file complaints"
+      "description": "Public user who can submit cases"
     },
     {
       "actorRef": "A_HELP_DESK",
       "name": "HelpDesk",
-      "description": "Support staff handling user issues"
-    },
-    {
-      "actorRef": "A_AUDITOR",
-      "name": "Auditor",
-      "description": "External auditor reviewing system activity"
+      "description": "Support staff for system issues"
     },
     {
       "actorRef": "A_RECORDS_STAFF",
       "name": "RecordsStaff",
       "description": "Staff managing case records"
+    },
+    {
+      "actorRef": "A_AUDITOR",
+      "name": "Auditor",
+      "description": "External auditor for system activities"
     }
   ],
   "functions": [
     {
-      "id": "FUN_REGISTER_CASE",
-      "name": "RegisterCase",
-      "description": "Register a new police case",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_POLICE_OFFICER",
-        "A_CITIZEN"
-      ],
-      "priority": "high",
-      "preconditions": "User must be authenticated"
-    },
-    {
-      "id": "FUN_INVESTIGATE_CASE",
-      "name": "InvestigateCase",
-      "description": "Conduct investigation on a case",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "high",
-      "preconditions": "Case must exist"
-    },
-    {
-      "id": "FUN_PROSECUTE_CASE",
-      "name": "ProsecuteCase",
-      "description": "Handle prosecution for a case",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_POLICE_OFFICER"
-      ],
-      "priority": "high",
-      "preconditions": "Investigation must be completed"
-    },
-    {
-      "id": "FUN_SEARCH_CASE",
-      "name": "SearchCase",
-      "description": "Search for cases",
+      "id": "FUN_MANAGE_ACCESS",
+      "name": "ManageAccess",
+      "description": "管理访问控制",
       "sub_capabilities": [
-        "QuickSearch",
-        "AdvancedSearch"
+        "限制案件访问权限",
+        "设置基于角色的功能控制",
+        "管理用户组成员关系"
       ],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_POLICE_OFFICER",
-        "A_ADMIN"
+      "acceptance_criteria": [
+        "能够将案件访问限制为指定用户或用户组",
+        "支持用户成为多个组的成员",
+        "只有管理员可以设置用户配置文件和分配用户到组"
       ],
-      "priority": "medium",
-      "preconditions": "User must have appropriate access rights"
-    },
-    {
-      "id": "FUN_TRACK_DEFECT",
-      "name": "TrackDefect",
-      "description": "Track system defects or enhancement requests",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_HELP_DESK",
-        "A_CITIZEN"
-      ],
-      "priority": "medium",
-      "preconditions": "Defect must be logged"
-    },
-    {
-      "id": "FUN_EXPORT_AUDIT_TRAIL",
-      "name": "ExportAuditTrail",
-      "description": "Export audit trails for specified cases",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_AUDITOR",
-        "A_ADMIN"
-      ],
-      "priority": "medium",
-      "preconditions": "Case must exist"
-    },
-    {
-      "id": "FUN_MANAGE_USER_PROFILE",
-      "name": "ManageUserProfile",
-      "description": "Manage user profiles and group assignments",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "high",
-      "preconditions": "User must have admin privileges"
-    },
-    {
-      "id": "FUN_CUSTOMIZE_INTERFACE",
-      "name": "CustomizeInterface",
-      "description": "Customize user interface settings",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_POLICE_OFFICER",
-        "A_ADMIN"
-      ],
-      "priority": "low",
-      "preconditions": "User must be authenticated"
-    },
-    {
-      "id": "FUN_ACCESS_CONTROL",
-      "name": "AccessControl",
-      "description": "Manage access control for cases",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
-      "related_actors": [
-        "A_ADMIN"
-      ],
-      "priority": "high",
-      "preconditions": "User must have admin privileges"
-    },
-    {
-      "id": "FUN_GENERATE_REPORT",
-      "name": "GenerateReport",
-      "description": "Generate reports on system activity",
-      "sub_capabilities": [],
-      "acceptance_criteria": [],
       "related_actors": [
         "A_ADMIN",
-        "A_AUDITOR"
+        "A_POLICE_OFFICER"
       ],
-      "priority": "medium",
-      "preconditions": "User must have appropriate access rights",
-      "displayId": "F004"
+      "priority": "high",
+      "preconditions": "用户必须具有管理员权限"
+    },
+    {
+      "id": "FUN_MANAGE_USER",
+      "name": "ManageUser",
+      "description": "管理用户配置",
+      "sub_capabilities": [
+        "创建用户配置文件",
+        "分配用户到组",
+        "修改安全属性"
+      ],
+      "acceptance_criteria": [
+        "只有超级用户可以更改组或用户的安全属性",
+        "用户配置文件可以正确保存"
+      ],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "用户必须具有超级用户权限"
     }
   ],
   "entities": [
     {
-      "entityRef": "E_CASE",
-      "name": "Case",
-      "description": "Police case record",
-      "attributes": [
-        {
-          "name": "caseId",
-          "type": "String",
-          "description": "Unique identifier for the case"
-        },
-        {
-          "name": "title",
-          "type": "String",
-          "description": "Title of the case"
-        },
-        {
-          "name": "status",
-          "type": "String",
-          "description": "Current status of the case"
-        },
-        {
-          "name": "createdAt",
-          "type": "DateTime",
-          "description": "Date and time when the case was created"
-        },
-        {
-          "name": "updatedAt",
-          "type": "DateTime",
-          "description": "Date and time when the case was last updated"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_SUSPECT",
-          "type": "one-to-many",
-          "description": "Case can have multiple suspects"
-        },
-        {
-          "target": "E_PROPERTY",
-          "type": "one-to-many",
-          "description": "Case can have multiple properties"
-        },
-        {
-          "target": "E_AUDIT_TRAIL",
-          "type": "one-to-many",
-          "description": "Case can have multiple audit entries"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_SUSPECT",
-      "name": "Suspect",
-      "description": "Person suspected in a case",
-      "attributes": [
-        {
-          "name": "suspectId",
-          "type": "String",
-          "description": "Unique identifier for the suspect"
-        },
-        {
-          "name": "name",
-          "type": "String",
-          "description": "Name of the suspect"
-        },
-        {
-          "name": "status",
-          "type": "String",
-          "description": "Current status of the suspect"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_CASE",
-          "type": "many-to-one",
-          "description": "Suspect belongs to a case"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_PROPERTY",
-      "name": "Property",
-      "description": "Property related to a case",
-      "attributes": [
-        {
-          "name": "propertyId",
-          "type": "String",
-          "description": "Unique identifier for the property"
-        },
-        {
-          "name": "description",
-          "type": "String",
-          "description": "Description of the property"
-        },
-        {
-          "name": "status",
-          "type": "String",
-          "description": "Current status of the property"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_CASE",
-          "type": "many-to-one",
-          "description": "Property belongs to a case"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_AUDIT_TRAIL",
-      "name": "AuditTrail",
-      "description": "Record of system activities",
-      "attributes": [
-        {
-          "name": "auditId",
-          "type": "String",
-          "description": "Unique identifier for the audit entry"
-        },
-        {
-          "name": "action",
-          "type": "String",
-          "description": "Action performed"
-        },
-        {
-          "name": "timestamp",
-          "type": "DateTime",
-          "description": "Date and time of the action"
-        },
-        {
-          "name": "userId",
-          "type": "String",
-          "description": "User who performed the action"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_CASE",
-          "type": "many-to-one",
-          "description": "Audit entry belongs to a case"
-        }
-      ]
-    },
-    {
       "entityRef": "E_USER_PROFILE",
       "name": "UserProfile",
-      "description": "User configuration and settings",
+      "entityKind": "core",
+      "description": "用户配置文件",
       "attributes": [
         {
-          "name": "userId",
+          "name": "username",
           "type": "String",
-          "description": "Unique identifier for the user"
+          "description": "用户登录名"
         },
         {
           "name": "role",
           "type": "String",
-          "description": "User role"
+          "description": "用户角色"
         },
         {
-          "name": "uiSettings",
-          "type": "Object",
-          "description": "User interface preferences"
+          "name": "securityLevel",
+          "type": "Integer",
+          "description": "安全级别"
         }
       ],
       "relationships": []
     },
     {
-      "entityRef": "E_COMPLAINT",
-      "name": "Complaint",
-      "description": "Complaint filed by a citizen",
+      "entityRef": "E_ACCESS_VIOLATION",
+      "name": "AccessViolation",
+      "entityKind": "event_record",
+      "description": "访问违规记录",
       "attributes": [
         {
-          "name": "complaintId",
-          "type": "String",
-          "description": "Unique identifier for the complaint"
+          "name": "timestamp",
+          "type": "DateTime",
+          "description": "违规发生时间"
         },
         {
-          "name": "description",
+          "name": "attemptedAccess",
           "type": "String",
-          "description": "Description of the complaint"
+          "description": "尝试访问的资源"
         },
         {
-          "name": "status",
+          "name": "outcome",
           "type": "String",
-          "description": "Current status of the complaint"
+          "description": "访问结果"
         }
       ],
       "relationships": [
         {
-          "target": "E_CASE",
-          "type": "one-to-one",
-          "description": "Complaint may be associated with a case"
-        }
-      ]
-    },
-    {
-      "entityRef": "E_DOCUMENT",
-      "name": "Document",
-      "description": "Document related to a case",
-      "attributes": [
-        {
-          "name": "documentId",
-          "type": "String",
-          "description": "Unique identifier for the document"
-        },
-        {
-          "name": "title",
-          "type": "String",
-          "description": "Title of the document"
-        },
-        {
-          "name": "type",
-          "type": "String",
-          "description": "Type of document"
-        }
-      ],
-      "relationships": [
-        {
-          "target": "E_CASE",
+          "target": "UserProfile",
           "type": "many-to-one",
-          "description": "Document belongs to a case"
+          "description": "违规用户"
         }
       ]
-    },
-    {
-      "entityRef": "E_SEARCH_RESULT",
-      "name": "SearchResult",
-      "description": "Result of a search query",
-      "attributes": [
-        {
-          "name": "query",
-          "type": "String",
-          "description": "Search query"
-        },
-        {
-          "name": "results",
-          "type": "List",
-          "description": "List of matching cases"
-        }
-      ],
-      "relationships": []
     }
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_001",
-      "description": "Provide context-sensitive help for all UI actions",
+      "constraintRef": "C_RULE_011",
+      "description": "系统必须允许用户将案件访问限制为指定用户或用户组",
       "related_functions": [
-        "FUN_REGISTER_CASE",
-        "FUN_INVESTIGATE_CASE",
-        "FUN_PROSECUTE_CASE",
-        "FUN_SEARCH_CASE"
-      ],
-      "source_text": "The solution should provide detailed context-sensitive help material for all the possible actions and scenarios on all user interfaces in the application."
-    },
-    {
-      "constraintRef": "C_RULE_002",
-      "description": "Provide interface for logging defects",
-      "related_functions": [
-        "FUN_TRACK_DEFECT"
-      ],
-      "source_text": "The solution should provide an interface for the user to log any defects or enhancement requests on the application and track thereafter.",
-      "id": "CON_PROVIDE_INTERFACE_LOGGING_DEFECTS",
-      "displayId": "C021"
-    },
-    {
-      "constraintRef": "C_RULE_003",
-      "description": "Send alerts to users when actions are taken",
-      "related_functions": [
-        "FUN_REGISTER_CASE",
-        "FUN_INVESTIGATE_CASE",
-        "FUN_PROSECUTE_CASE"
-      ],
-      "source_text": "The solution should send alerts (e.g., email, SMS) to the user if the user chooses to whenever any action has been taken on the alert.",
-      "id": "CON_SEND_ALERTS_USERS_ACTIONS",
-      "displayId": "C024"
-    },
-    {
-      "constraintRef": "C_RULE_004",
-      "description": "Maintain unalterable audit trail",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
-      ],
-      "source_text": "The System must keep an unalterable audit trail capable of automatically capturing and storing information about:The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user; it may be subject to re-department and copying to removable media if required, so long as its contents remain unchanged."
-    },
-    {
-      "constraintRef": "C_RULE_005",
-      "description": "Audit trail data cannot be modified or deleted",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
-      ],
-      "source_text": "The word 'unalterable' is to mean that the audit trail data cannot be modified in any way or deleted by any user",
-      "unverified": true,
-      "id": "CON_AUDIT_TRAIL_DATA_CANNOT",
-      "displayId": "C002"
-    },
-    {
-      "constraintRef": "C_RULE_006",
-      "description": "Automatically track events without manual intervention",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
-      ],
-      "source_text": "Once the audit trail functionality has been activated, the System must track events without manual intervention, and store in the audit trail information about them.",
-      "id": "CON_AUTOMATICALLY_TRACK_EVENTS_WITHOUT",
-      "displayId": "C003"
-    },
-    {
-      "constraintRef": "C_RULE_007",
-      "description": "Maintain audit trail for case lifetime",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
-      ],
-      "source_text": "The System must maintain the audit trail for as long as required, which will be at least for the life of the case to which it refers.",
-      "id": "CON_MAINTAIN_AUDIT_TRAIL_CASE",
-      "displayId": "C012"
-    },
-    {
-      "constraintRef": "C_RULE_008",
-      "description": "Export audit trails for specified cases",
-      "related_functions": [
-        "FUN_EXPORT_AUDIT_TRAIL"
-      ],
-      "source_text": "The System must be able to export audit trails for specified cases (without affecting the audit trail stored by the System). This functionality can be used by external auditors who wish to examine or analyse system activity.",
-      "id": "CON_EXPORT_AUDIT_TRAILS_SPECIFIED",
-      "displayId": "C010"
-    },
-    {
-      "constraintRef": "C_RULE_009",
-      "description": "Capture and store access control violations",
-      "related_functions": [
-        "FUN_ACCESS_CONTROL"
-      ],
-      "source_text": "The System must be able to capture and store violations (i.e. A user's attempts to access a case to which he is denied access), and (where violations can validly be attempted) attempted violations, of access control mechanisms.",
-      "id": "CON_CAPTURE_STORE_ACCESS_CONTROL",
-      "displayId": "C006"
-    },
-    {
-      "constraintRef": "C_RULE_010",
-      "description": "Limit case access to specified users or groups",
-      "related_functions": [
-        "FUN_ACCESS_CONTROL"
+        "FUN_MANAGE_ACCESS"
       ],
       "source_text": "The System must allow the user to limit access to cases to specified users or user groups."
     },
     {
-      "constraintRef": "C_RULE_011",
-      "description": "Provide role-based control for functionality",
-      "related_functions": [
-        "FUN_ACCESS_CONTROL"
-      ],
-      "source_text": "The system should provide for role-based control for the functionality within the system",
-      "id": "CON_PROVIDE_ROLE_BASED_CONTROL",
-      "displayId": "C022"
-    },
-    {
       "constraintRef": "C_RULE_012",
-      "description": "Allow users to belong to multiple groups",
+      "description": "系统应提供基于角色的功能控制",
       "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
+        "FUN_MANAGE_ACCESS"
       ],
-      "source_text": "The System must allow a user to be a member of more than one group.",
-      "id": "CON_ALLOW_USERS_BELONG_MULTIPLE",
-      "displayId": "C001"
+      "source_text": "The system should provide for role-based control for the functionality within the system"
     },
     {
       "constraintRef": "C_RULE_013",
-      "description": "Only admin can set up user profiles and groups",
+      "description": "系统必须允许用户成为多个组的成员",
       "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
+        "FUN_MANAGE_ACCESS"
       ],
-      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups.",
-      "id": "CON_ADMIN_SET_USER_PROFILES",
-      "displayId": "C018"
+      "source_text": "The System must allow a user to be a member of more than one group."
     },
     {
       "constraintRef": "C_RULE_014",
-      "description": "Only super-user can change security attributes",
+      "description": "系统必须只允许管理员用户设置用户配置文件并将用户分配到组",
       "related_functions": [
-        "FUN_MANAGE_USER_PROFILE"
+        "FUN_MANAGE_USER"
       ],
-      "source_text": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user.",
-      "id": "CON_SUPER_USER_CHANGE_SECURITY",
-      "displayId": "C019"
-    },
-    {
-      "constraintRef": "C_RULE_015",
-      "description": "Never include unauthorized records in search results",
-      "related_functions": [
-        "FUN_SEARCH_CASE"
-      ],
-      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access.",
-      "id": "CON_NEVER_INCLUDE_UNAUTHORIZED_RECORDS",
-      "displayId": "C016"
+      "source_text": "The System must allow only admin-users to set up user profiles and allocate users to groups."
     },
     {
       "constraintRef": "C_RULE_016",
-      "description": "Produce meaningful error messages",
+      "description": "系统必须只允许超级用户更改组或用户的安全属性",
       "related_functions": [
-        "FUN_REGISTER_CASE",
-        "FUN_INVESTIGATE_CASE",
-        "FUN_PROSECUTE_CASE",
-        "FUN_SEARCH_CASE"
+        "FUN_MANAGE_USER"
       ],
-      "source_text": "All error messages produced by the System must be meaningful, so that they can be appropriately acted upon by the users who are likely to see them. Ideally, each error message will be accompanied by explanatory text and an indication of the action(s) which the user can take in response to the error.",
-      "id": "CON_PRODUCE_MEANINGFUL_ERROR_MESSAGES",
-      "displayId": "C020"
+      "source_text": "The System must allow changes to security attributes for groups or users (such as access rights, security level, privileges, password allocation and management) to be made only by super-user."
     },
     {
       "constraintRef": "C_RULE_017",
-      "description": "Employ consistent UI rules",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "The System must employ a single set of user interface rules, or a small number of sets to provide a familiar and common look and feel for the application.",
-      "id": "CON_EMPLOY_CONSISTENT_RULES",
-      "displayId": "C009"
+      "description": "系统在搜索结果列表中不得包含用户无权访问的任何记录",
+      "related_functions": [],
+      "source_text": "If a user performs a quick or advanced search, the System must never include in the search result list any record which the user does not have the right to access."
     },
     {
       "constraintRef": "C_RULE_018",
-      "description": "Display multiple entities simultaneously",
-      "related_functions": [
-        "FUN_SEARCH_CASE"
-      ],
-      "source_text": "The System must be able to display several entities (cases, suspects) simultaneously.",
-      "id": "CON_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY",
-      "displayId": "C008"
-    },
-    {
-      "constraintRef": "C_RULE_019",
-      "description": "Make interfaces customizable",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "The interfaces must be made customizable or user-configurable to the extent possible. (e.g., the displayed columns in the table, move, resize, modify the appearance). Such configurations must be saved in the user profile.",
-      "id": "CON_MAKE_INTERFACES_CUSTOMIZABLE",
-      "displayId": "C013"
-    },
-    {
-      "constraintRef": "C_RULE_020",
-      "description": "UI must be suitable for users with special needs",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "The System user interface must be suitable for users with special needs; that is, compatible with specialist software that may be used and with appropriate interface guidelines",
-      "id": "CON_SUITABLE_USERS_SPECIAL_NEEDS",
-      "displayId": "C029"
-    },
-    {
-      "constraintRef": "C_RULE_021",
-      "description": "UI must comply with ISO 9241",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "The user interfaces of the system should comply with Standard ISO 9241.",
-      "id": "CON_COMPLY_ISO",
-      "displayId": "C030"
-    },
-    {
-      "constraintRef": "C_RULE_022",
-      "description": "ICT accessibility standard",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "ICT accessibility: ISO 9241-20 shall be the standard for guidance on ICT accessibility. Application user interfaces to meet its requirements and recommendations.",
-      "id": "CON_ICT_ACCESSIBILITY_STANDARD",
-      "displayId": "C011"
-    },
-    {
-      "constraintRef": "C_RULE_023",
-      "description": "Provide text alternatives for non-text media",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "All non-text media objects, such as graphical images or video, should be provided with alternative equivalent textual descriptions and/or with equivalent text-based functionality.",
-      "id": "CON_PROVIDE_TEXT_ALTERNATIVES_NON",
-      "displayId": "C023"
-    },
-    {
-      "constraintRef": "C_RULE_024",
-      "description": "Design navigation to be self-descriptive",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Making navigation self-descriptive: Navigation should be designed to help users understand where they are, where they have been and where they can go next. General guidance on achieving self-descriptiveness is given in ISO 9241-110.",
-      "id": "CON_DESIGN_NAVIGATION_SELF_DESCRIPTIVE",
-      "displayId": "C007"
-    },
-    {
-      "constraintRef": "C_RULE_025",
-      "description": "Show users their location in navigation",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Showing users where they are: Each presentation segment (page or window) should provide the user with a clear and sufficient indication of where he or she is in the navigation structure and of the current segment position with respect to the overall structure.",
-      "id": "CON_SHOW_USERS_LOCATION_NAVIGATION",
-      "displayId": "C025"
-    },
-    {
-      "constraintRef": "C_RULE_026",
-      "description": "Offer alternative access paths",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Offering alternative access paths: Alternative access paths for navigating to a specific unit of content should be offered to support different navigation strategies.",
-      "id": "CON_OFFER_ALTERNATIVE_ACCESS_PATHS",
-      "displayId": "C017"
-    },
-    {
-      "constraintRef": "C_RULE_027",
-      "description": "Minimize navigation steps",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Minimizing navigation effort: The number of navigation steps needed to reach a certain piece of content should be minimized as long as different mental models, navigation strategies and tasks of the user are taken into account.",
-      "id": "CON_MINIMIZE_NAVIGATION_STEPS",
-      "displayId": "C014"
-    },
-    {
-      "constraintRef": "C_RULE_028",
-      "description": "Avoid splash screens unless useful",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Splash screens should be avoided unless they provide useful content or feedback about the application state to the user. If a splash screen is used, a navigation option to skip it should be offered.",
-      "id": "CON_AVOID_SPLASH_SCREENS_UNLESS",
-      "displayId": "C005"
-    },
-    {
-      "constraintRef": "C_RULE_029",
-      "description": "Minimize vertical scrolling",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Vertical scrolling should be minimized. This may be done by placing important information at the top and providing links to information that is further down the page. Horizontal scrolling should be avoided wherever possible.",
-      "id": "CON_MINIMIZE_VERTICAL_SCROLLING",
-      "displayId": "C015"
-    },
-    {
-      "constraintRef": "C_RULE_030",
-      "description": "Avoid horizontal scrolling",
-      "related_functions": [
-        "FUN_CUSTOMIZE_INTERFACE"
-      ],
-      "source_text": "Horizontal scrolling should be avoided wherever possible.",
-      "id": "CON_AVOID_HORIZONTAL_SCROLLING",
-      "displayId": "C004"
+      "description": "系统必须将未经授权的案件访问尝试记录在审计跟踪中",
+      "related_functions": [],
+      "source_text": "If the System allows users to make unauthorised attempts to access cases, it must log these in the audit trail."
     }
   ],
   "missingConstraintCandidates": [],
-  "exceptions": [
-    {
-      "id": "EXC_UNAUTHORIZED_ACCESS_ATTEMPT",
-      "description": "Unauthorized access attempt",
-      "trigger": "User tries to access a case without permission",
-      "handling": "Log violation in audit trail and show error message",
-      "displayId": "X004"
-    },
-    {
-      "id": "EXC_CASE_FOUND",
-      "description": "Case not found",
-      "trigger": "User searches for non-existent case",
-      "handling": "Show error message and suggest alternative actions",
-      "displayId": "X003"
-    }
-  ],
+  "exceptions": [],
   "non_functional_requirements": [
     {
-      "category": "Performance",
-      "description": "Simple search within 5-8 seconds, advanced search within 10-15 seconds"
+      "category": "安全",
+      "description": "系统必须保持不可更改的审计跟踪"
     },
     {
-      "category": "Performance",
-      "description": "Retrieve frequently accessed cases within 5-8 seconds"
+      "category": "可用性",
+      "description": "用户界面必须适合有特殊需求的用户"
     },
     {
-      "category": "Performance",
-      "description": "Retrieve infrequently accessed cases within 20 seconds"
-    },
-    {
-      "category": "Security",
-      "description": "Support SSL encrypted connections"
-    },
-    {
-      "category": "Security",
-      "description": "Support secure virtual private network connections"
-    },
-    {
-      "category": "Security",
-      "description": "Use HTTPS as the communication protocol"
-    },
-    {
-      "category": "Security",
-      "description": "Support selective encryption of stored data"
-    },
-    {
-      "category": "Security",
-      "description": "Ensure secure transmission of data over the network"
-    },
-    {
-      "category": "Usability",
-      "description": "UI must comply with ISO 9241 standards"
-    },
-    {
-      "category": "Usability",
-      "description": "Provide context-sensitive help for all UI actions"
-    },
-    {
-      "category": "Availability",
-      "description": "System must be available during specified hours"
-    },
-    {
-      "category": "Availability",
-      "description": "Planned downtime must not exceed specified limits"
-    },
-    {
-      "category": "Availability",
-      "description": "Unplanned downtime must not exceed specified limits"
-    },
-    {
-      "category": "Scalability",
-      "description": "System must scale for small and large police stations"
-    },
-    {
-      "category": "Architecture",
-      "description": "Service Oriented Architecture (SOA) with modular design"
-    },
-    {
-      "category": "Architecture",
-      "description": "Developed on Open Standards"
-    },
-    {
-      "category": "Architecture",
-      "description": "Common User Access and Authentication Service for Single-Sign on"
-    },
-    {
-      "category": "Architecture",
-      "description": "Centralized deployment and maintenance"
-    },
-    {
-      "category": "Architecture",
-      "description": "3-tier datacenter architecture"
-    },
-    {
-      "category": "Architecture",
-      "description": "N-tier architecture with separated presentation, business, and data-access logic"
-    },
-    {
-      "category": "Accessibility",
-      "description": "UI must be suitable for users with special needs"
-    },
-    {
-      "category": "Accessibility",
-      "description": "Provide text alternatives for non-text media"
+      "category": "性能",
+      "description": "系统必须能够在5-8秒内执行简单搜索"
     }
   ],
-  "business_processes": [
-    {
-      "name": "CaseRegistration",
-      "steps": [
-        "FileComplaint",
-        "CreateCaseRecord",
-        "AssignCase",
-        "NotifyParties"
-      ],
-      "actors": [
-        "A_CITIZEN",
-        "A_POLICE_OFFICER"
-      ]
-    },
-    {
-      "name": "CaseInvestigation",
-      "steps": [
-        "ReviewCase",
-        "GatherEvidence",
-        "InterviewWitnesses",
-        "IdentifySuspects"
-      ],
-      "actors": [
-        "A_POLICE_OFFICER"
-      ]
-    },
-    {
-      "name": "CaseProsecution",
-      "steps": [
-        "PrepareCharges",
-        "FileWithCourt",
-        "TrackCourtDates",
-        "UpdateCaseStatus"
-      ],
-      "actors": [
-        "A_POLICE_OFFICER"
-      ]
-    },
-    {
-      "name": "DefectTracking",
-      "steps": [
-        "LogDefect",
-        "AssignPriority",
-        "Investigate",
-        "Resolve",
-        "NotifyUser"
-      ],
-      "actors": [
-        "A_CITIZEN",
-        "A_HELP_DESK"
-      ]
-    }
-  ],
+  "business_processes": [],
   "proposeNewEntities": [],
   "proposeNewFunctions": [],
   "proposeNewConstraints": [],

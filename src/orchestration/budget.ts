@@ -18,6 +18,12 @@ export interface OrchestrationConfigRaw {
   max_concurrent_evaluators?: number;
   min_runtime_remaining_for_new_work_seconds?: number;
   skip_evaluation?: boolean;
+  worker_timeout_seconds?: number;
+  poll_interval_ms?: number;
+  heartbeat_interval_seconds?: number;
+  max_concurrency?: number;
+  convergence_accept_max_issues_decreasing?: number;
+  convergence_accept_max_issues_flat?: number;
 }
 
 export class OrchestrationConfig {
@@ -36,6 +42,18 @@ export class OrchestrationConfig {
   maxConcurrentEvaluators = 2;
   minRuntimeRemainingForNewWorkSeconds = 120;
   skipEvaluation = false;
+  /** 单个 worker 会话的执行超时（秒）。 */
+  workerTimeoutSeconds = 900;
+  /** 主循环空转时的轮询间隔（毫秒）。 */
+  pollIntervalMs = 20;
+  /** 会话心跳间隔（秒）。 */
+  heartbeatIntervalSeconds = 0.25;
+  /** worker 最大并发数（环境变量 MAX_CONCURRENCY 优先）。 */
+  maxConcurrency = 5;
+  /** 收敛卡死但问题数下降时，强制接受的问题数上限。 */
+  convergenceAcceptMaxIssuesDecreasing = 8;
+  /** 收敛卡死且趋势非上升时，强制接受的问题数上限。 */
+  convergenceAcceptMaxIssuesFlat = 10;
 
   static fromRaw(raw: OrchestrationConfigRaw): OrchestrationConfig {
     const cfg = new OrchestrationConfig();
@@ -54,6 +72,12 @@ export class OrchestrationConfig {
     if (raw.max_concurrent_evaluators !== undefined) cfg.maxConcurrentEvaluators = raw.max_concurrent_evaluators;
     if (raw.min_runtime_remaining_for_new_work_seconds !== undefined) cfg.minRuntimeRemainingForNewWorkSeconds = raw.min_runtime_remaining_for_new_work_seconds;
     if (raw.skip_evaluation !== undefined) cfg.skipEvaluation = raw.skip_evaluation;
+    if (raw.worker_timeout_seconds !== undefined) cfg.workerTimeoutSeconds = raw.worker_timeout_seconds;
+    if (raw.poll_interval_ms !== undefined) cfg.pollIntervalMs = raw.poll_interval_ms;
+    if (raw.heartbeat_interval_seconds !== undefined) cfg.heartbeatIntervalSeconds = raw.heartbeat_interval_seconds;
+    if (raw.max_concurrency !== undefined) cfg.maxConcurrency = raw.max_concurrency;
+    if (raw.convergence_accept_max_issues_decreasing !== undefined) cfg.convergenceAcceptMaxIssuesDecreasing = raw.convergence_accept_max_issues_decreasing;
+    if (raw.convergence_accept_max_issues_flat !== undefined) cfg.convergenceAcceptMaxIssuesFlat = raw.convergence_accept_max_issues_flat;
     return cfg;
   }
 }
@@ -83,6 +107,12 @@ export class BudgetManager {
   maxFinalMajorRepairPerTask: number;
   minRuntimeRemainingForNewWorkSeconds: number;
   skipEvaluation: boolean;
+  workerTimeoutSeconds: number;
+  pollIntervalMs: number;
+  heartbeatIntervalSeconds: number;
+  maxConcurrency: number;
+  convergenceAcceptMaxIssuesDecreasing: number;
+  convergenceAcceptMaxIssuesFlat: number;
 
   constructor(config?: OrchestrationConfig) {
     const c = config ?? new OrchestrationConfig();
@@ -101,6 +131,12 @@ export class BudgetManager {
     this.minRuntimeRemainingForNewWorkSeconds =
       c.minRuntimeRemainingForNewWorkSeconds;
     this.skipEvaluation = c.skipEvaluation;
+    this.workerTimeoutSeconds = c.workerTimeoutSeconds;
+    this.pollIntervalMs = c.pollIntervalMs;
+    this.heartbeatIntervalSeconds = c.heartbeatIntervalSeconds;
+    this.maxConcurrency = c.maxConcurrency;
+    this.convergenceAcceptMaxIssuesDecreasing = c.convergenceAcceptMaxIssuesDecreasing;
+    this.convergenceAcceptMaxIssuesFlat = c.convergenceAcceptMaxIssuesFlat;
   }
 
   runtimeDeadline(startTime: number): number {

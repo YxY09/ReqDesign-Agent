@@ -7,7 +7,7 @@ llm:
   base_url: "https://api.modelarts-maas.com/openai/v1"
   temperature: 0.3
   max_tokens: 32768
-  timeout: 600
+  timeout: 1800
 
 retry:
   max_retries: 3
@@ -22,6 +22,17 @@ logging:
 # Orchestration configuration
 orchestration:
   skip_evaluation: false
+  # 单个 worker 会话超时（秒）
+  worker_timeout_seconds: 900
+  # 主循环空转轮询间隔（毫秒）
+  poll_interval_ms: 20
+  # 会话心跳间隔（秒）
+  heartbeat_interval_seconds: 0.25
+  # worker 最大并发（环境变量 MAX_CONCURRENCY 优先）
+  max_concurrency: 5
+  # 收敛卡死时强制接受的问题数上限（趋势下降 / 趋势持平）
+  convergence_accept_max_issues_decreasing: 8
+  convergence_accept_max_issues_flat: 10
 
 # Benchmark configuration
 benchmark:

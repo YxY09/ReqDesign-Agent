@@ -17,7 +17,28 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROMPT_DIR = path.resolve(__dirname, "..", "prompts");
+
+/**
+ * 提示词目录解析顺序（取第一个存在的）：
+ * 1. 环境变量 REQDESIGN_PROMPT_DIR
+ * 2. <cwd>/prompts — 项目根的源提示词，避免编译产物（dist/prompts）漂移
+ * 3. <本文件>/../prompts — 编译/源码相对位置兜底
+ */
+function resolvePromptDir(): string {
+  const candidates = [
+    process.env.REQDESIGN_PROMPT_DIR,
+    path.resolve(process.cwd(), "prompts"),
+    path.resolve(__dirname, "..", "prompts"),
+  ].filter((p): p is string => Boolean(p));
+  for (const candidate of candidates) {
+    try {
+      if (fs.statSync(candidate).isDirectory()) return candidate;
+    } catch { /* try next */ }
+  }
+  return candidates[candidates.length - 1];
+}
+
+const PROMPT_DIR = resolvePromptDir();
 
 // ---------------------------------------------------------------------------
 // 模块级缓存

@@ -4,129 +4,126 @@
 CCTNS
 
 ## 项目概述
-CCTNS V1.0 is a system designed to improve crime investigation and criminal detection by providing value to police personnel and citizens through automation and efficient information exchange.
+CCTNS V1.0 is a system designed to improve crime investigation and criminal detection processes for police personnel.
 
 ## 角色
 
 | 角色名称 | 描述 |
 |----------|------|
-| Admin | Administrator with full system access and configuration privileges |
-| PoliceOfficer | Police personnel responsible for investigating cases |
-| Citizen | General public user who can register complaints |
-| HelpDesk | Support staff handling defects and enhancement requests |
-| Auditor | External auditor who can examine audit trails |
-| RecordsStaff | Records room staff managing case documentation |
+| Admin | Administrator with full system access |
+| PoliceOfficer | Police personnel responsible for case investigation |
+| Citizen | Public user who can register complaints |
+| HelpDesk | Support staff handling user issues |
+| RecordsStaff | Staff managing case records |
+| Auditor | External auditor reviewing system activities |
 
 ## 功能需求
 
 | 编号 | 名称 | 描述 | 相关角色 | 优先级 |
 |------|------|------|----------|--------|
-| FUN_ACCESS_CONTROL | AccessControl | Manage access control for cases | A_ADMIN | high |
-| FUN_CUSTOMIZE_INTERFACE | CustomizeInterface | Customize user interface settings | A_CITIZEN, A_ADMIN | medium |
-| FUN_EXPORT_AUDIT_TRAIL | ExportAuditTrail | Exports audit trails for specified cases | A_AUDITOR | medium |
-| FUN_GENERATE_REPORT | GenerateReport | Generate reports on system activity | A_ADMIN, A_AUDITOR | medium |
+| FUN_CONFIGURE_SYSTEM | ConfigureSystem | 配置系统参数 | A_ADMIN | high |
+| FUN_CUSTOMIZE_UI | CustomizeUI | 自定义用户界面 | A_CITIZEN, A_ADMIN | medium |
+| FUN_EXPORT_AUDIT | ExportAudit | Exports audit trails for specified cases | A_AUDITOR, A_ADMIN | low |
 | FUN_INVESTIGATE_CASE | InvestigateCase | Facilitates the investigation process after complaint registration | A_POLICE_OFFICER | high |
-| FUN_MANAGE_USER_PROFILE | ManageUserProfile | Manage user profiles and group assignments | A_ADMIN, A_CITIZEN | high |
-| FUN_PROSECUTE_CASE | ProsecuteCase | Handle prosecution for a case | A_POLICE_OFFICER | high |
+| FUN_MANAGE_ACCESS | ManageAccess | 管理访问控制 | A_ADMIN, A_POLICE_OFFICER | high |
+| FUN_MANAGE_USER | ManageUser | 管理用户配置 | A_ADMIN | high |
+| FUN_PROSECUTE_CASE | ProsecuteCase | 起诉案件，记录与法院的互动 | A_POLICE_OFFICER | high |
 | FUN_REGISTER_CASE | RegisterCase | Allows citizens to register complaints with police | A_CITIZEN, A_POLICE_OFFICER | high |
-| FUN_SEARCH_CASE | SearchCase | Search for cases | A_POLICE_OFFICER, A_ADMIN | high |
-| FUN_TRACK_DEFECT | TrackDefect | Allows users to log and track defects or enhancement requests | A_HELP_DESK | medium |
+| FUN_SEARCH_CASE | SearchCase | Allows searching for cases | A_POLICE_OFFICER, A_ADMIN | medium |
+| FUN_SEND_ALERT | SendAlert | 发送警报通知 | A_CITIZEN, A_POLICE_OFFICER | medium |
+| FUN_TRACK_DEFECT | TrackDefect | Allows users to log and track defects or enhancement requests | A_CITIZEN, A_HELP_DESK | medium |
 
 ## 核心实体
 
 ### Case
-Police case record containing investigation details
-属性: caseId: String - Unique identifier for the case, status: String - Current status of the case, createdAt: DateTime - Date and time when the case was created, title: String - Title of the case, updatedAt: DateTime - Date and time when the case was last updated
+Police case record
+属性: caseId: String - Unique identifier for the case, status: String - Current status of the case, createdAt: DateTime - Date and time when case was created
 
 ### Suspect
 Person suspected of involvement in a case
-属性: suspectId: String - Unique identifier for the suspect, name: String - Full name of the suspect, status: String - Current status of the suspect
-
-### Document
-Document or file associated with a case
-属性: documentId: String - Unique identifier for the document, type: String - Type of document (e.g., evidence, report), title: String - Title of the document
-
-### AuditTrail
-Record of actions taken on critical entities
-属性: action: String - Type of action performed, timestamp: DateTime - Date and time of the action, actionType: String - 操作类型(创建/读取/更新/删除), userId: String - User who performed the action, entityId: String - 被操作的实体ID, entityType: String - 被操作的实体类型, auditId: String - Unique identifier for the audit entry
+属性: suspectId: String - Unique identifier for the suspect, name: String - Name of the suspect
 
 ### Property
-Property related to a case
-属性: propertyId: String - Unique identifier for the property, description: String - Description of the property, status: String - Current status of the property
+Property involved in a case
+属性: propertyId: String - Unique identifier for the property, description: String - Description of the property
+
+### CaseRegistration
+Record of a case registration
+属性: registrationId: String - Unique identifier for the registration, registrationDate: DateTime - Date and time of registration, complaintDetails: String - Details of the complaint
+
+### CaseInvestigation
+Record of a case investigation
+属性: investigationId: String - Unique identifier for the investigation, startDate: DateTime - Date and time investigation started, endDate: DateTime - Date and time investigation completed, findings: String - Investigation findings
+
+### AuditTrail
+Record of system activities
+属性: auditId: String - Unique identifier for the audit record, action: String - Action performed, timestamp: DateTime - Date and time of action, userId: String - User who performed action, eventType: String - 事件类型（创建/读取/更新/删除）, caseId: String - 关联的案件ID, details: String - 操作详情
+
+### CaseProsecution
+案件起诉记录
+属性: prosecutionId: String - 起诉记录唯一标识, courtInteractionDetails: String - 法院互动详情, date: DateTime - 互动日期
 
 ### SearchResult
-Result of a search query
-属性: resultId: String - 结果唯一标识, items: List - 搜索结果项列表, query: String - Search query, results: List - List of matching cases
+搜索结果
+属性: searchId: String - 搜索唯一标识, criteria: String - 搜索条件, resultCount: Integer - 结果数量
 
 ### UserProfile
-User configuration and settings
-属性: interfacePreferences: Object - 用户界面偏好设置, lastModified: DateTime - 最后修改时间, userId: String - Unique identifier for the user, securityLevel: String - 安全级别, privileges: List - 权限列表, uiConfig: Object - 用户界面配置, role: String - User role, uiSettings: Object - User interface preferences
+用户配置文件，存储用户个性化设置
+属性: uiSettings: Object - 用户界面配置设置, defaultValues: Object - 数据输入的持久默认值, username: String - 用户登录名, role: String - 用户角色, securityLevel: Integer - 安全级别
 
-### Complaint
-Complaint filed by a citizen
-属性: id: String - 投诉ID, description: String - Description of the complaint, status: String - Current status of the complaint, complaintId: String - Unique identifier for the complaint
+### Configuration
+系统配置参数
+属性: stateSpecificData: Object - 州特定数据配置, businessRules: Object - 业务规则配置
+
+### DefectRequest
+缺陷或增强请求
+属性: title: String - 请求标题, description: String - 详细描述, category: String - 分类（缺陷/增强）, status: String - 当前状态, submittedAt: DateTime - 提交时间, submittedBy: String - 提交用户ID
+
+### Alert
+警报通知
+属性: type: String - 警报类型（邮件/SMS）, content: String - 警报内容, sentAt: DateTime - 发送时间, status: String - 发送状态, recipientId: String - 接收用户ID
+
+### AccessViolation
+访问违规记录
+属性: timestamp: DateTime - 违规发生时间, attemptedAccess: String - 尝试访问的资源, outcome: String - 访问结果
 
 ## 业务约束
 
-- **CON_DATA_SYSTEM_MAINTAIN_CASE_DATA_AWQ7**: System must maintain case data integrity during prosecution process
-- **CON_FUNC_ADMIN_SET_USER_PROFILES_L1DC**: Only admin can set up user profiles and groups
-- **CON_FUNC_ALLOW_USERS_BELONG_MULTIPLE_BN8A**: Allow users to belong to multiple groups
-- **CON_FUNC_AUTOMATICALLY_TRACK_EVENTS_WITHOUT_5PBF**: Automatically track events without manual intervention
-- **CON_FUNC_AVOID_HORIZONTAL_SCROLLING_SPGU**: Avoid horizontal scrolling
-- **CON_FUNC_AVOID_SPLASH_SCREENS_UNLESS_OMQB**: Avoid splash screens unless useful
-- **CON_FUNC_CASE_DATA_RECOVERABLE_SYSTEM_AUUC**: All case data must be recoverable after system failure
-- **CON_FUNC_CASES_ACCESSIBLE_OFFLINE_CRITICAL_HY7N**: Cases must be accessible offline with critical functionality
-- **CON_FUNC_DESIGN_NAVIGATION_SELF_DESCRIPTIVE_DQ2K**: Design navigation to be self-descriptive
-- **CON_FUNC_DISPLAY_MULTIPLE_ENTITIES_SIMULTANEOUSLY_211Y**: Display multiple entities simultaneously
-- **CON_FUNC_EMPLOY_CONSISTENT_RULES_Q01P**: Employ consistent UI rules
-- **CON_FUNC_MAKE_INTERFACES_CUSTOMIZABLE_KPKV**: Make interfaces customizable
-- **CON_FUNC_MINIMIZE_NAVIGATION_STEPS_B41U**: Minimize navigation steps
-- **CON_FUNC_MINIMIZE_VERTICAL_SCROLLING_B1VM**: Minimize vertical scrolling
-- **CON_FUNC_PRODUCE_MEANINGFUL_ERROR_MESSAGES_KKES**: Produce meaningful error messages
-- **CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_AMXC**: Provide interface for logging defects
-- **CON_FUNC_PROVIDE_ROLE_BASED_CONTROL_NUUL**: Provide role-based control for functionality
-- **CON_FUNC_PROVIDE_TEXT_ALTERNATIVES_NON_5K9F**: Provide text alternatives for non-text media
-- **CON_FUNC_SEND_ALERTS_USERS_ACTIONS_XNJM**: Send alerts to users when actions are taken
-- **CON_FUNC_SHOW_USERS_LOCATION_NAVIGATION_SVNZ**: Show users their location in navigation
-- **CON_FUNC_SUITABLE_USERS_SPECIAL_NEEDS_4ESE**: UI must be suitable for users with special needs
-- **CON_FUNC_SYSTEM_PROVIDE_DETAILED_CONTEXT_PB66**: System must provide detailed context-sensitive help material
-- **CON_FUNC_USER_INTERFACE_SUPPORT_MULTILINGUAL_QKE9**: User interface must support multilingual capabilities
-- **CON_PERF_SEARCH_FUNCTIONALITY_MAINTAIN_PERFORMANCE_SOBX**: Search functionality must maintain performance regardless of data volume
-- **CON_SEC_AUDIT_TRAIL_DATA_CANNOT_MJB5**: Audit trail data cannot be modified or deleted
-- **CON_SEC_CAPTURE_STORE_ACCESS_CONTROL_DQCQ**: Capture and store access control violations
+- **CON_FUNC_2RR8SR00**: 界面必须尽可能可定制或用户可配置
+- **CON_FUNC_82M2LE00**: 系统必须能够在5-8秒内执行简单搜索
+- **CON_FUNC_CCV71Y00**: 系统必须只允许管理员用户设置用户配置文件并将用户分配到组
+- **CON_FUNC_INEY5700**: 系统必须能够发送警报（如电子邮件、短信）给选择接收的用户
+- **CON_FUNC_LVE7BQ00**: 系统必须只允许超级用户更改组或用户的安全属性
+- **CON_FUNC_NEVER_SHOW_INACCESSIBLE_RECORDS_FZPR**: Never show inaccessible records in search results
+- **CON_FUNC_NNI3W000**: 系统必须允许数据输入有持久默认值
+- **CON_FUNC_PERFORM_SIMPLE_SEARCH_WITHIN_TEE9**: Perform simple search within 5-8 seconds
+- **CON_FUNC_PROVIDE_CONTEXT_SENSITIVE_HELP_5S58**: Provide context-sensitive help for all UI actions
+- **CON_FUNC_PROVIDE_INTERFACE_LOGGING_DEFECTS_UTPV**: Provide interface for logging defects/enhancements
+- **CON_FUNC_WBH12K00**: 系统应提供基于角色的功能控制
+- **CON_FUNC_WWHGA800**: 系统必须采用单一的用户界面规则集
+- **CON_FUNC_YQEFFJ00**: 系统必须允许用户成为多个组的成员
+- **CON_FUNC_Z6XNK300**: 系统必须允许用户将案件访问限制为指定用户或用户组
 - **CON_SEC_EXPORT_AUDIT_TRAILS_SPECIFIED_7DBG**: Export audit trails for specified cases
-- **CON_SEC_MAINTAIN_AUDIT_TRAIL_CASE_P2OY**: Maintain audit trail for case lifetime
-- **CON_SEC_NEVER_INCLUDE_UNAUTHORIZED_RECORDS_7RBF**: Never include unauthorized records in search results
-- **CON_SEC_OFFER_ALTERNATIVE_ACCESS_PATHS_2HSD**: Offer alternative access paths
-- **CON_SEC_SUPER_USER_CHANGE_SECURITY_J9UH**: Only super-user can change security attributes
-- **CON_SEC_SYSTEM_ALLOW_LIMITING_CASE_URAC**: System must allow limiting case access to specified users/groups
-- **CON_SEC_SYSTEM_MAINTAIN_UNALTERABLE_AUDIT_Q4V6**: System must maintain unalterable audit trail
-- **CON_USAB_COMPLY_ISO_XE8L**: UI must comply with ISO 9241
-- **CON_USAB_ICT_ACCESSIBILITY_STANDARD_F8FC**: ICT accessibility standard
+- **CON_SEC_MAINTAIN_UNALTERABLE_AUDIT_TRAIL_BXDD**: Maintain unalterable audit trail
+- **CON_SEC_PBZNZM00**: 系统必须跟踪事件而不需要人工干预，并将信息存储在审计跟踪中
+- **CON_SEC_UHM14D00**: 系统必须将未经授权的案件访问尝试记录在审计跟踪中
 
 ## 异常流程
 
-- **EXC_Q7LRJX00**: 用户尝试访问被拒绝访问的案件 (触发: 用户尝试访问权限外的案件, 处理: 记录违规行为到审计跟踪)
-- **EXC_UDDJFZ00**: 用户无权访问案件 (触发: 用户尝试访问无权限的案件, 处理: 记录审计跟踪并显示错误消息)
-- **EXC_CASE_FOUND**: Case not found (触发: User searches for non-existent case, 处理: Show error message and suggest alternative actions)
-- **EXC_UNAUTHORIZED_ACCESS_ATTEMPT**: Unauthorized access attempt to case (触发: User attempts to access case without permission, 处理: Log violation in audit trail and show error message)
-- **EXC_ACCESS_OFFLINE_MODE_NOT**: Attempt to access case in offline mode when not cached locally (触发: User tries to access case data without network connection when data not pre-cached, 处理: System should display clear error message indicating offline data not available and prompt to reconnect)
-- **EXC_MULTILINGUAL_INTERFACE_RESOURCE_NOT**: Multilingual interface resource not available (触发: Selected language pack not installed or corrupted, 处理: Fall back to default language and notify administrator)
-- **EXC_SEARCH_TIMEOUT_DUE_OVERLOAD**: Search timeout due to system overload (触发: Complex search query exceeds maximum allowed time, 处理: Cancel search and suggest simplified query parameters)
-- **EXC_MODIFY_DURING_PROSECUTION_PHASE**: Attempt to modify case during prosecution phase (触发: User tries to edit case data after prosecution has begun, 处理: Block modifications and log attempt in audit trail)
-- **EXC_OFFLINE_DATA_SYNCHRONIZATION_CONFLICT**: Offline data synchronization conflict (触发: Conflicting changes detected during offline-to-online synchronization, 处理: Flag conflict for administrator resolution and preserve both versions)
+- **EXC_INDUZN00**: 审计跟踪导出失败 (触发: 导出审计跟踪时发生错误, 处理: 记录错误日志，显示错误消息并提示用户重试)
+- **EXC_N4FYX900**: 用户尝试访问无权查看的案件 (触发: 用户请求访问权限不足的案件, 处理: 记录到审计跟踪，并向用户显示适当错误消息)
+- **EXC_IUOTOB00**: 用户尝试访问无权限的案件 (触发: 用户尝试查看或搜索无权限的案件, 处理: 记录在审计跟踪中，并向用户显示适当错误消息)
+- **EXC_CASE_FOUND**: Case not found (触发: User searches for non-existent case, 处理: Show appropriate error message)
+- **EXC_UNAUTHORIZED_ACCESS_ATTEMPT**: Unauthorized access attempt (触发: User attempts to access case without permission, 处理: Log attempt in audit trail and show appropriate error message)
+- **EXC_DF5BUD00**: 未经授权的访问尝试 (触发: 用户尝试访问无权限的案件, 处理: 记录在审计跟踪中，并根据配置显示不同的响应)
+- **EXC_820FV600**: 案件未找到 (触发: 用户搜索或访问不存在的案件, 处理: 显示错误消息，提示案件不存在)
 
 ## 非功能需求
 
-- **performance**: System must provide adequate response times under standard and peak conditions
-- **security**: System must maintain unalterable audit trails
-- **usability**: User interfaces must comply with ISO 9241 standards
-- **可用性**: 系统用户界面必须适合有特殊需求的用户
-- **标准合规**: 用户界面应符合ISO 9241标准
-- **合规**: 系统用户界面必须符合ISO 9241标准
-- **Scalability**: System must scale for small and large police stations
-- **Architecture**: Service Oriented Architecture (SOA) with modular design
-- **Accessibility**: UI must be suitable for users with special needs
+- **performance**: System must perform simple search within 5-8 seconds
+- **security**: System must maintain unalterable audit trail
+- **usability**: User interfaces should comply with Standard ISO 9241
+- **可用性**: 用户界面应符合ISO 9241标准
 
 ## 业务流程
 
@@ -134,79 +131,77 @@ Complaint filed by a citizen
 
 参与角色: A_CITIZEN, A_POLICE_OFFICER
 
-1. Register complaint
-2. Assign case number
-3. Notify police officer
+1. Citizen submits complaint
+2. System generates case reference
+3. Case is assigned to investigating officer
 
 ### CaseInvestigation
 
 参与角色: A_POLICE_OFFICER
 
-1. Review case details
-2. Gather evidence
-3. Identify suspects
-4. Update case status
+1. Officer reviews case details
+2. Officer records evidence
+3. Officer updates case status
+4. System logs investigation activities
 
-### 起诉流程
+### 案件起诉流程
 
 参与角色: A_POLICE_OFFICER
 
-1. 案件调查
-2. 准备起诉材料
-3. 提交法院
-4. 记录法院反馈
+1. 选择案件
+2. 记录法院互动
+3. 保存起诉记录
 
-### 搜索流程
+### 案件搜索流程
 
-参与角色: A_POLICE_OFFICER, A_ADMIN
+参与角色: A_POLICE_OFFICER
 
 1. 输入搜索条件
 2. 执行搜索
 3. 查看结果
-4. 选择案件查看详情
 
-### 界面定制流程
+### 界面自定义流程
 
 参与角色: A_CITIZEN, A_ADMIN
 
-1. 用户登录系统
-2. 访问界面设置
+1. 登录系统
+2. 访问设置页面
 3. 调整界面元素
 4. 保存配置
 
-### 审计跟踪导出流程
-
-参与角色: A_AUDITOR
-
-1. 选择案件
-2. 请求导出审计跟踪
-3. 系统生成审计报告
-4. 下载审计报告
-
-### 用户权限管理流程
+### 系统配置流程
 
 参与角色: A_ADMIN
 
 1. 管理员登录
-2. 选择用户
-3. 设置权限
-4. 保存配置
+2. 访问配置模块
+3. 更新配置参数
+4. 保存更改
 
-### CaseProsecution
-
-参与角色: A_POLICE_OFFICER
-
-1. PrepareCharges
-2. FileWithCourt
-3. TrackCourtDates
-4. UpdateCaseStatus
-
-### DefectTracking
+### 缺陷跟踪流程
 
 参与角色: A_CITIZEN, A_HELP_DESK
 
-1. LogDefect
-2. AssignPriority
-3. Investigate
-4. Resolve
-5. NotifyUser
+1. 用户提交缺陷或增强请求
+2. 系统记录请求
+3. 帮助台处理请求
+4. 系统更新请求状态
+5. 系统通知用户处理结果
+
+### 审计导出流程
+
+参与角色: A_AUDITOR
+
+1. 审计员选择案件
+2. 系统生成审计报告
+3. 系统导出报告
+4. 审计员下载报告
+
+### 警报发送流程
+
+参与角色: A_CITIZEN, A_POLICE_OFFICER
+
+1. 用户配置警报接收方式
+2. 系统事件触发警报
+3. 系统发送警报
+4. 系统记录发送状态

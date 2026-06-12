@@ -193,283 +193,61 @@ export class WorkflowState {
     this._artifactManager = new ArtifactManager(this, () => this.majorPendingTaskIds.clear());
     this._reviewManager = new ReviewManager(this);
     this.stores = new WorkflowStores(this);
-    this._artifactsStateView = this._createArtifactsStateView();
-    this._executionStateView = this._createExecutionStateView();
-    this._reviewStateView = this._createReviewStateView();
-  }
-
-  private _linkStateViewProperty<TValue>(
-    target: object,
-    key: string,
-    getter: () => TValue,
-    setter: (value: TValue) => void,
-  ): void {
-    Object.defineProperty(target, key, {
-      get: getter,
-      set: setter,
-      enumerable: true,
-      configurable: false,
-    });
-  }
-
-  private _createArtifactsStateView(): ArtifactsState {
-    const view: ArtifactsState = {
-      artifacts: this.artifacts,
-      requirementJson: this.requirementJson,
-      requirementDraftJson: this.requirementDraftJson,
-      requirementJsonContentKind: this.requirementJsonContentKind,
-      designText: this.designText,
-      diagrams: this.diagrams,
-      testCases: this.testCases,
-      artifactRevisionsByTask: this.artifactRevisionsByTask,
-    };
-    this._linkStateViewProperty(
-      view,
+    this._artifactsStateView = this._linkedView<ArtifactsState>([
       "artifacts",
-      () => this.artifacts,
-      (value) => {
-        this.artifacts = value as Record<string, Artifact>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "requirementDraftJson",
-      () => this.requirementDraftJson,
-      (value) => {
-        this.requirementDraftJson = value as Record<string, unknown>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "requirementJsonContentKind",
-      () => this.requirementJsonContentKind,
-      (value) => {
-        this.requirementJsonContentKind = value as "empty" | "draft" | "canonical" | "stale";
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "requirementJson",
-      () => this.requirementJson,
-      (value) => {
-        this.requirementJson = value as Record<string, unknown>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
+      "requirementDraftJson",
+      "requirementJsonContentKind",
       "designText",
-      () => this.designText,
-      (value) => {
-        this.designText = value as string;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "diagrams",
-      () => this.diagrams,
-      (value) => {
-        this.diagrams = value as Record<string, unknown>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "testCases",
-      () => this.testCases,
-      (value) => {
-        this.testCases = value as string;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "artifactRevisionsByTask",
-      () => this.artifactRevisionsByTask,
-      (value) => {
-        this.artifactRevisionsByTask = value as Record<string, number>;
-      },
-    );
-    return view;
-  }
-
-  private _createExecutionStateView(): ExecutionState {
-    const view: ExecutionState = {
-      goal: this.goal,
-      inputPath: this.inputPath,
-      outputDir: this.outputDir,
-      taskStatuses: this.taskStatuses,
-      taskSessions: this.taskSessions,
-      notifications: this.notifications,
-      errors: this.errors,
-      runStatus: this.runStatus,
-      startTime: this.startTime,
-      endTime: this.endTime,
-      decisionCount: this.decisionCount,
-    };
-    this._linkStateViewProperty(
-      view,
+    ]);
+    this._executionStateView = this._linkedView<ExecutionState>([
       "goal",
-      () => this.goal,
-      (value) => {
-        this.goal = value as string;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "inputPath",
-      () => this.inputPath,
-      (value) => {
-        this.inputPath = value as string;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "outputDir",
-      () => this.outputDir,
-      (value) => {
-        this.outputDir = value as string;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "taskStatuses",
-      () => this.taskStatuses,
-      (value) => {
-        this.taskStatuses = value as Record<string, string>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "taskSessions",
-      () => this.taskSessions,
-      (value) => {
-        this.taskSessions = value as Record<string, string>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "notifications",
-      () => this.notifications,
-      (value) => {
-        this.notifications = value as Record<string, unknown>[];
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "errors",
-      () => this.errors,
-      (value) => {
-        this.errors = value as string[];
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "runStatus",
-      () => this.runStatus,
-      (value) => {
-        this.runStatus = value as RunStatus;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "startTime",
-      () => this.startTime,
-      (value) => {
-        this.startTime = value as number;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "endTime",
-      () => this.endTime,
-      (value) => {
-        this.endTime = value as number;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
       "decisionCount",
-      () => this.decisionCount,
-      (value) => {
-        this.decisionCount = value as number;
-      },
-    );
-    return view;
+    ]);
+    this._reviewStateView = this._linkedView<ReviewState>([
+      "verdicts",
+      "evaluatedRevisionsByTask",
+      "acceptedRevisionsByTask",
+      "reviewStatusByTask",
+      "majorPendingTaskIds",
+      "finalReviewDone",
+      "finalReviewPassed",
+      "finalReviewRevisions",
+    ]);
   }
 
-  private _createReviewStateView(): ReviewState {
-    const view: ReviewState = {
-      verdicts: this.verdicts,
-      evaluatedRevisionsByTask: this.evaluatedRevisionsByTask,
-      acceptedRevisionsByTask: this.acceptedRevisionsByTask,
-      reviewStatusByTask: this.reviewStatusByTask,
-      majorPendingTaskIds: this.majorPendingTaskIds,
-      finalReviewDone: this.finalReviewDone,
-      finalReviewPassed: this.finalReviewPassed,
-      finalReviewRevisions: this.finalReviewRevisions,
-    };
-    this._linkStateViewProperty(
-      view,
-      "verdicts",
-      () => this.verdicts,
-      (value) => {
-        this.verdicts = value as Verdict[];
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "evaluatedRevisionsByTask",
-      () => this.evaluatedRevisionsByTask,
-      (value) => {
-        this.evaluatedRevisionsByTask = value as Record<string, number>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "acceptedRevisionsByTask",
-      () => this.acceptedRevisionsByTask,
-      (value) => {
-        this.acceptedRevisionsByTask = value as Record<string, number>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "reviewStatusByTask",
-      () => this.reviewStatusByTask,
-      (value) => {
-        this.reviewStatusByTask = value as Record<string, string>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "majorPendingTaskIds",
-      () => this.majorPendingTaskIds,
-      (value) => {
-        this.majorPendingTaskIds = value as Set<string>;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "finalReviewDone",
-      () => this.finalReviewDone,
-      (value) => {
-        this.finalReviewDone = value as boolean;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "finalReviewPassed",
-      () => this.finalReviewPassed,
-      (value) => {
-        this.finalReviewPassed = value as boolean;
-      },
-    );
-    this._linkStateViewProperty(
-      view,
-      "finalReviewRevisions",
-      () => this.finalReviewRevisions,
-      (value) => {
-        this.finalReviewRevisions = value as Record<string, number>;
-      },
-    );
+  /**
+   * 构建一个与本实例字段双向绑定的视图对象：
+   * 视图的每个属性读写都直接代理到 WorkflowState 的同名字段，
+   * 保证旧版消费者通过视图修改时不会产生状态分叉。
+   */
+  private _linkedView<TView extends object>(
+    keys: ReadonlyArray<keyof TView & keyof this & string>,
+  ): TView {
+    const view = {} as TView;
+    const self = this as Record<string, unknown>;
+    for (const key of keys) {
+      Object.defineProperty(view, key, {
+        get: () => self[key],
+        set: (value: unknown) => {
+          self[key] = value;
+        },
+        enumerable: true,
+        configurable: false,
+      });
+    }
     return view;
   }
 

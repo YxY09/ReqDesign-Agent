@@ -396,8 +396,19 @@ export class WorkerDispatcher {
     this.deps.backend
       .submitSession(session, message, timeoutSeconds)
       .catch((error) => {
-        this.deps.logger.error(
-          `Failed to submit ${workerType} session: ${error instanceof Error ? error.message : String(error)}`,
+        const msg = error instanceof Error ? error.message : String(error);
+        this.deps.logger.error(`Failed to submit ${workerType} session: ${msg}`);
+        // 提交失败（如排队超时）时回滚登记状态，否则任务会永远停留在
+        // running，orchestrator 只能 wait_for_running 直到 idle 暂停。
+        this.deps.getInflight().delete(sessionId);
+        if (this.deps.getActiveStreamContext()?.sessionId === sessionId) {
+          this.deps.setActiveStreamContext(null);
+        }
+        _state.markTaskStatus(context.taskId, "failed", sessionId, {
+          error: `submission failed: ${msg}`,
+        });
+        _state.stores.execution.addError(
+          `${workerType} submission failed for ${context.taskId}: ${msg}`,
         );
       });
 

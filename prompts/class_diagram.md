@@ -35,6 +35,9 @@
 16. 聚合根与明细实体必须画正确：如果存在 `OrderItem`、`CartItem`、`InvoiceLine` 等明细类，必须表达父对象 `1 --> * 明细类`，明细类再 `* --> 1` 关联资源对象；不要用 `Order --> Product` 替代明细行
 17. 关系实体必须画正确：如果需求实体带有 `entityKind: "process_record"` 或 `entityKind: "association"`，它是独立类，应通过关系连接两端实体；不要把它改成父实体的方法或普通箭头标签。
 18. **输出前自检**：逐一核对 `requirement_json.entities[].name` 列表，确认每个实体在类图中都有对应类且名字完全一致。如果发现改名（如 WarehouseAdmin 变成了 WarehouseKeeper），立即改回原始名
+19. **禁止使用 HTML 标签（如 `<br/>`）**，注释或长文本一律拆行或省略
+20. 每个 `class Xxx {` 必须有对应的闭合 `}`；输出前清点 `class` 与 `}` 数量是否一致
+21. 关系标签含中文括号、逗号、引号等特殊字符时，改用简短英文或加双引号包裹
 
 示例格式：
 ```mermaid

@@ -1,0 +1,44 @@
+{
+  "project_name": "简单计算器",
+  "project_overview": "一个简单的计算器系统",
+  "actors": [
+    {
+      "name": "普通用户",
+      "description": "使用计算器"
+    }
+  ],
+  "functions": [
+    {
+      "id": "F001",
+      "name": "加法运算",
+      "description": "求和",
+      "related_actors": [
+        "普通用户"
+      ],
+      "priority": "高"
+    },
+    {
+      "id": "F002",
+      "name": "减法运算",
+      "description": "求差",
+      "related_actors": [
+        "普通用户"
+      ],
+      "priority": "高"
+    }
+  ],
+  "entities": [
+    {
+      "name": "计算器",
+      "description": "计算工具",
+      "attributes": [
+        "操作数",
+        "运算符"
+      ]
+    }
+  ],
+  "constraints": [],
+  "exceptions": [],
+  "non_functional_requirements": [],
+  "business_processes": []
+}

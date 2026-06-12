@@ -12,7 +12,7 @@ import {
   parseTerminalInput,
   type InputKey,
   type TerminalInputEvent,
-} from "./terminalInput.js";
+} from "../utils/terminalInput.js";
 import {
   computeWheelStep,
   detectXtermJsWheelHost,

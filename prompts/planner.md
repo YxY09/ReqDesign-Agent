@@ -144,7 +144,7 @@ analyze-3(库存/物流域)  ─┘              →  diagrams-activity
 |------|------|------|----------|
 | `analyze` | 需求分析:提取角色、功能、实体、约束、异常流程、非功能需求 | requirement_json | **可多个,按业务域拆分** |
 | `design` | 系统设计:模块划分、核心类、接口、数据流 | design_text | **始终一个,基于统一 requirement_json 和 requirement_text** |
-| `diagrams` | 图表生成:Mermaid 类图、活动图、状态机图 | diagrams | **始终一个** |
+| `diagrams` | 图表生成:Mermaid 类图、活动图、状态机图 | diagrams | **简单需求 1 个任务(产出全部三类图);中等及以上拆为 class/activity/state 三个并行任务** |
 | `tests` | 测试用例:正常/异常/边界场景 | test_cases | **始终一个** |
 
 ## 依赖规则
@@ -166,8 +166,9 @@ context_hints 帮助 GenerationTool 理解任务侧重点:
 - `suggested_entities`: 从原文中识别出的关键实体名列表(PascalCase)。planner 在通读原文时发现的每个核心业务对象都应该列在这里,帮助 analyze 任务做"核对清单"式提取。不要怕列多--宁可多列让 analyze 任务去验证,也不能漏列导致 analyze 任务没看到。
 - `suggested_functions`: 从原文章节标题/需求编号中识别出的功能名列表(PascalCase)。同理,原文每个独立功能模块都应该列在这里。
 - **跨模块共享实体**:跨模块共享的实体(如 User、Product)在每个相关 analyze 任务的 `suggested_entities` 中都要列入,确保各模块分析时不会遗漏对共享实体的属性提取。
-- `diagram_types`: 对 diagrams 任务，指定需要的图表类型（如["class", "activity", "state"]）
-- `assignedSections`: analyze 任务的章节分配（如 `["s1-1", "s2-1"]`），表示该任务只分析这些章节的内容。约束/异常提取任务不设此字段（拿全文）。
+- `diagram_kind`: 对拆分后的 diagrams 任务，指定图表类型（`class_diagram` | `activity_diagram` | `state_diagram`）
+
+注意：`assignedSections`（analyze 任务的章节分配，如 `["s1-1", "s2-1"]`）写在**任务对象顶层**（与 id、type 平级，参考输出格式示例），不要放进 context_hints。
 
 **不要写的 context_hints**:
 - 不要复述 task.description 已有的内容

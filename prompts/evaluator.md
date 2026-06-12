@@ -50,13 +50,18 @@
 - 只报告实质性问题，优先 blocker 和 major
 - 不要输出修复策略
 - 不要输出修复任务
+- 最多报告 10 个问题，按影响排序（blocker 在前）。同一根因的多个表象合并为一个 issue
 - 每个 issue 必须精确包含：
   - `severity`: `blocker` | `major` | `minor`
-  - `target_task_id`
+  - `target_task_id`：必须是本次提供的任务 ID 之一，禁止编造
   - `target_task_type`: `analyze` | `design` | `diagrams` | `tests`
   - `target_field`
-  - `description`
-  - `suggestion`
+  - `description`：指出具体位置和具体内容，不要写"质量不高"这类无法执行的描述
+  - `suggestion`：可直接执行的修复动作
+  - `scope`: `local` | `upstream` | `systemic`，判定标准：
+    - `local`：只改本产物即可修复（如类图缺一个属性、测试步骤不具体）
+    - `upstream`：根因在上游产物（如设计缺陷源于需求分析漏了实体，必须先改 analyze）
+    - `systemic`：跨多个产物的同一结构性问题（如命名体系整体不一致），单点修补无效
 
 ## 范围规则
 
@@ -86,7 +91,8 @@
       "target_task_type": "design",
       "target_field": "design_text",
       "description": "设计未覆盖交易取消流程的补偿逻辑",
-      "suggestion": "补充交易取消后的补偿与回滚处理"
+      "suggestion": "补充交易取消后的补偿与回滚处理",
+      "scope": "local"
     }
   ]
 }

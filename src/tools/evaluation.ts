@@ -1004,14 +1004,24 @@ export class EvaluationTool extends BaseTool {
 
     return raw
       .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null && !Array.isArray(r))
-      .map((r) => createIssue({
-        severity: String(r.severity ?? "major") as Issue["severity"],
-        targetTaskId: String(r.target_task_id ?? ""),
-        targetTaskType: String(r.target_task_type ?? ""),
-        targetField: String(r.target_field ?? ""),
-        description: String(r.description ?? ""),
-        suggestion: String(r.suggestion ?? ""),
-      }));
+      .map((r) => {
+        // scope 用于 policy 判定 final-major 问题能否安全地本地修复
+        // （upstream/systemic 会被排除出本地修复目标）。非法值归一为 ""。
+        const rawScope = String(r.scope ?? "").trim().toLowerCase();
+        const scope: Issue["scope"] =
+          rawScope === "local" || rawScope === "upstream" || rawScope === "systemic"
+            ? rawScope
+            : "";
+        return createIssue({
+          severity: String(r.severity ?? "major") as Issue["severity"],
+          targetTaskId: String(r.target_task_id ?? ""),
+          targetTaskType: String(r.target_task_type ?? ""),
+          targetField: String(r.target_field ?? ""),
+          description: String(r.description ?? ""),
+          suggestion: String(r.suggestion ?? ""),
+          scope,
+        });
+      });
   }
 
   static _truncateTextForReview(text: string, maxChars: number): string {

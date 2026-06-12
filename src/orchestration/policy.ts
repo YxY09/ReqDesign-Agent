@@ -324,7 +324,10 @@ export class DeterministicPolicy {
     //    但如果问题呈下降趋势且低于阈值，则接受。
     if (snapshot.convergenceStalled && snapshot.convergenceRoundCount >= 3) {
       const trend = snapshot.convergenceTrend ?? "flat";
-      if (trend === "decreasing" && snapshot.latestIssues.length <= 8) {
+      if (
+        trend === "decreasing" &&
+        snapshot.latestIssues.length <= this.budget.convergenceAcceptMaxIssuesDecreasing
+      ) {
         // 问题正在下降且可控 —— 强制接受以避免无限循环
         return createStrategyDecision({
           strategy: "finish",
@@ -333,7 +336,10 @@ export class DeterministicPolicy {
       }
       // 如果问题数量持平或下降且数量少也接受 —— 评估器过于严格，
       // 不要在无法解决的表面问题上浪费 token。
-      if (trend !== "increasing" && snapshot.latestIssues.length <= 10) {
+      if (
+        trend !== "increasing" &&
+        snapshot.latestIssues.length <= this.budget.convergenceAcceptMaxIssuesFlat
+      ) {
         return createStrategyDecision({
           strategy: "finish",
           reason: `convergence accepted: ${snapshot.latestIssues.length} issues, trend ${trend}, low enough`,
