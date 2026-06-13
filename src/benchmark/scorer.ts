@@ -47,6 +47,10 @@ export interface BenchmarkCaseResult {
   passed?: boolean;
   scores?: Partial<Scores>;
   coverage_detail?: CategoryCoverage[];
+  /** The system's own final-review gate (independent of our score). */
+  review_passed?: boolean;
+  /** Count of unresolved blocker/major issues from the system's review. */
+  review_blockers?: number;
   error?: string;
 }
 
@@ -317,6 +321,15 @@ export function computeOverall(s: Omit<Scores, "overall">): number {
 
 export function isPassing(overall: number): boolean {
   return overall >= PASS_THRESHOLD;
+}
+
+/**
+ * A case only counts as passed if its overall clears the bar AND the system's
+ * own final review left no unresolved blocker/major issues. A high score must
+ * not paper over a verdict the pipeline itself rejected.
+ */
+export function casePassed(overall: number, openMajorIssues: number): boolean {
+  return isPassing(overall) && openMajorIssues <= 0;
 }
 
 /** Combine an already-computed coverage score with deterministic scoring over

@@ -14,6 +14,7 @@ import {
   computeOverall,
   combineScores,
   computeRunSummary,
+  casePassed,
   type JudgeClient,
   type GoldLabel,
 } from "../src/benchmark/scorer.js";
@@ -177,5 +178,13 @@ describe("computeRunSummary", () => {
     const avg = summary.avg_scores as Record<string, number>;
     expect(avg.overall).toBe(73); // (91+55)/2
     expect(avg.coverage).toBe(70); // (90+50)/2
+  });
+});
+
+describe("casePassed (review gate)", () => {
+  it("passes only when overall clears the bar and no open major issues", () => {
+    expect(casePassed(90, 0)).toBe(true);
+    expect(casePassed(90, 3)).toBe(false);
+    expect(casePassed(50, 0)).toBe(false);
   });
 });

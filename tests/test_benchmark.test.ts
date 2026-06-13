@@ -102,6 +102,27 @@ describe("BenchmarkRunner", () => {
     expect(md).toContain("否");
     expect(md).toContain("50");
   });
+
+  it("generateMdReport notes cases gated by the review", () => {
+    const runner = new BenchmarkRunner(new AgentConfig(), "", "", "");
+    const md = runner.generateMdReport({
+      run_time: "2025-01-01 00:00:00",
+      total_cases: 1,
+      results: [
+        {
+          case_name: "hospital",
+          status: "success",
+          passed: false,
+          review_blockers: 6,
+          scores: { coverage: 90, diagram_syntax: 100, diagram_structure: 100, consistency: 66, overall: 90 },
+        },
+      ],
+      summary: { passed: 0, failed: 1, error: 0, avg_scores: { overall: 90 } },
+    });
+    expect(md).toContain("被系统自评否决");
+    expect(md).toContain("hospital");
+    expect(md).toContain("6 个未决 major");
+  });
 });
 
 // ===========================================================================

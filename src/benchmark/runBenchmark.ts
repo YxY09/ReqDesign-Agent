@@ -6,9 +6,9 @@ import { LLMClient } from "../llmClient.js";
 import { MultiAgentRuntime } from "../runtime.js";
 import { createWorkflowEvent, type WorkflowEvent, type WorkflowEventSink } from "../workflowEvents.js";
 import {
+  casePassed,
   combineScores,
   computeRunSummary,
-  isPassing,
   judgeCoverage,
   type BenchmarkCaseResult,
   type GoldLabel,
@@ -104,7 +104,10 @@ export class BenchmarkRunner {
       // Coverage = LLM judge; everything else = deterministic.
       const coverage = await judgeCoverage(this.coverageJudge(), gold, result);
       const scores = combineScores({ coverage: coverage.score, result, diagrams });
-      const passed = isPassing(scores.overall);
+      // Respect the pipeline's own final-review gate: a case it rejected
+      // (unresolved blocker/major issues) must not be reported as passed.
+      const openMajor = state.getMajorPendingTaskIds().length;
+      const passed = casePassed(scores.overall, openMajor);
 
       this.emitEvent("benchmark_case_completed", `case ${testCase.name} completed`, {
         caseName: testCase.name,
@@ -118,6 +121,8 @@ export class BenchmarkRunner {
         passed,
         scores,
         coverage_detail: coverage.detail,
+        review_passed: Boolean(state.finalReviewPassed),
+        review_blockers: openMajor,
       };
     } catch (error: unknown) {
       return this.errorResult(testCase, msg(error), options);
@@ -213,6 +218,13 @@ export class BenchmarkRunner {
       } else {
         lines.push(`| ${r.case_name} | ${r.status} | - | - | - | - | - | - |`);
       }
+    }
+    const gated = results.filter(
+      (r) => r.status === "success" && !r.passed && (r.review_blockers ?? 0) > 0,
+    );
+    if (gated.length > 0) {
+      lines.push("", "> 注：以下案例综合分达标，但被系统自评否决（仍有未决 major/blocker），故记为未通过：");
+      for (const r of gated) lines.push(`> - ${r.case_name}: ${r.review_blockers} 个未决 major`);
     }
     lines.push("");
     return lines.join("\n");
