@@ -645,3 +645,34 @@ describe("EvaluationTool — exception ID displayId matching regression", () => 
     expect(undefinedIdIssues).toHaveLength(0);
   });
 });
+
+describe("EvaluationTool._requirementForReview", () => {
+  it("returns the text unchanged when within budget", () => {
+    const text = "短需求文本";
+    expect(EvaluationTool._requirementForReview(text, 1000)).toBe(text);
+  });
+
+  it("keeps both head and tail when truncating, with a marker between", () => {
+    const head = "HEAD_MARKER_" + "a".repeat(500);
+    const tail = "b".repeat(500) + "_TAIL_MARKER";
+    const text = head + "c".repeat(5000) + tail;
+    const out = EvaluationTool._requirementForReview(text, 1000);
+
+    // tail-aware truncation must preserve the document end (where
+    // constraints / NFRs / acceptance criteria typically live).
+    expect(out).toContain("HEAD_MARKER_");
+    expect(out).toContain("_TAIL_MARKER");
+    expect(out).toContain("__review_truncated__");
+    expect(out.length).toBeLessThan(text.length);
+    expect(out.length).toBeLessThan(1000 + 200);
+  });
+
+  it("allocates ~70% of the budget to the head", () => {
+    const text = "x".repeat(10000);
+    const out = EvaluationTool._requirementForReview(text, 1000);
+    const headPart = out.split("__review_truncated__")[0];
+    expect(headPart.length).toBeGreaterThanOrEqual(700);
+    expect(headPart.length).toBeLessThan(760);
+  });
+});
+
