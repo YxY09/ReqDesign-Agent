@@ -27,3 +27,4 @@ Paper/
 .worktrees/
 nul
 vitest.config.ts.timestamp-*
+tests/__test_tmp_*/
