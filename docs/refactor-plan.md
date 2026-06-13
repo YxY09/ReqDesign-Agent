@@ -44,17 +44,24 @@ P0-3 Tools 接口再统一、P1-1 orchestration/runtime 模块再合并。runtim
 | 项 | 状态 | 说明 |
 |----|------|------|
 | P0-4 Memory TTL / GC | ✅ 已完成 | `store.ts pruneOldFiles()`：deprecated / 超龄(MAX_MEMORY_AGE_DAYS) / 超量(MAX_MEMORY_FILES) 三规则，构造时触发；test_memory_policy 覆盖 |
-| P1-2 State mutation 保护 | ⬜ **下一步（test-first）** | `WorkflowState` 的 `artifactsState` / `executionState` / `reviewState` getter 直接 `return this._xxxStateView`（`state.ts:254-264`），疑似把内部可变引用暴露给调用方 |
+| P1-2 State mutation 保护 | ✅ 已审计（test-first，2026-06-13） | 结论：无需 clone/freeze，见下方审计结论 |
 
-### 下一步：State mutation 保护（窄范围、测试先行）
-1. 先写**泄漏探针测试**：取 `WorkflowState` 各 view getter 的返回值，尝试 mutate（push/改字段），断言内部状态不被外部改动影响。
-2. 仅在**测试证实泄漏**后，对真正泄漏的出口加最小防御（`Object.freeze` 或浅/深拷贝），不做无证据的预防式加固。
-3. 改动范围限定在 `state.ts` 及其 view 构造，避免外溢到 runtime 各 manager。
+### State mutation 保护 —— 审计结论（test-first，已完成）
+区分两个边界，结论是**不加** defensive clone/freeze：
+
+1. **subdomain view getter**（`artifactsState`/`executionState`/`reviewState`，`state.ts:254-264`）是**有意为之的双向 live 代理**
+   （`_linkedView`，注释明确「保证旧版消费者通过视图修改时不会产生状态分叉」），已由 `test_state_subdomains` 锁定。冻结/拷贝会**破坏既定契约**。
+2. **OrchestratorSnapshot**（交给 policy/决策层的投影，`snapshot.ts`）才是该只读的边界。审计 `StateReader.fromState` 与所有 `getXxxTaskIds()`：
+   每个集合都**新建**（`Object.entries().filter().map().sort()`、`[...set].filter().sort()`、`.slice()`、map 出新字面量），
+   **不别名**任何内部可变集合 → 决策层无法经快照回写状态。
+
+落地：新增 `tests/test_state_mutation_safety.test.ts`（3 用例）固化该不变量——对快照集合 push/改字段后，
+重建快照与 `WorkflowState` 内部（Set、progress set、Issue 对象）均不受影响。**未改任何生产代码**，仅补回归测试。
 
 ---
 
 ## 剩余风险优先级（高 → 低）
 
-1. **State mutation 保护** —— 有真实安全收益、范围可控、test-first 可验证 → 进行中。
+1. ~~State mutation 保护~~ —— ✅ 已审计：快照边界本就非别名，仅补回归测试；视图别名为有意契约，不动。
 2. **validators 去重** —— 收益中 / 风险中，需先补差异用例 → 暂缓。
 3. **Tools / orchestration 架构再合并** —— 收益低 / 风险高、面大 → 暂缓。
