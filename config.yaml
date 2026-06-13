@@ -7,7 +7,7 @@ llm:
   base_url: "https://api.modelarts-maas.com/openai/v1"
   temperature: 0.3
   max_tokens: 32768
-  timeout: 1800
+  timeout: 600  # 单次 LLM HTTP 请求上限（秒）；超时后 retry 自动重试
 
 retry:
   max_retries: 3
@@ -30,6 +30,8 @@ orchestration:
   heartbeat_interval_seconds: 0.25
   # worker 最大并发（环境变量 MAX_CONCURRENCY 优先）
   max_concurrency: 5
+  # 单次 run() 的整体 wall-clock 上限（秒）；ecommerce analyze-3 曾耗时 27 min
+  max_runtime_seconds: 3600
   # 收敛卡死时强制接受的问题数上限（趋势下降 / 趋势持平）
   convergence_accept_max_issues_decreasing: 8
   convergence_accept_max_issues_flat: 10

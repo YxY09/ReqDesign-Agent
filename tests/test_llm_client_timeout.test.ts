@@ -28,27 +28,51 @@ describe("LLMClient timeout", () => {
     expect(receivedSignal).toBeInstanceOf(AbortSignal);
   });
 
-  it("流式调用不传 AbortSignal", async () => {
+  it("流式调用超时后 AbortController 中止挂起的 stream", async () => {
     const config = new AgentConfig();
+    config.llm.timeout = 0.05; // 50ms 超时
     const llm = new LLMClient(config);
 
-    let receivedSignal: AbortSignal | undefined;
-    // Mock 流式调用
-    (llm as any)._chatStreamOpenai = vi
-      .fn()
-      .mockImplementation(
-        async (_msgs: any, _temp: any, _chunkHandler: any) => {
-          return { text: "streamed", usage: undefined };
+    // 替换 OpenAI client 的 create 方法，返回一个永远不 yield 的 async iterator
+    // 并捕获传入的 signal
+    let capturedSignal: AbortSignal | undefined;
+    const fakeStream = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            // 挂起，直到 signal 中止
+            return new Promise<IteratorResult<any, any>>((_, reject) => {
+              if (capturedSignal?.aborted) {
+                reject(new DOMException("Aborted", "AbortError"));
+                return;
+              }
+              capturedSignal?.addEventListener("abort", () =>
+                reject(new DOMException("Aborted", "AbortError")),
+              );
+            });
+          },
+        };
+      },
+    };
+    (llm as any)._client = {
+      chat: {
+        completions: {
+          create: async (_params: any, opts: any) => {
+            capturedSignal = opts?.signal;
+            return fakeStream;
+          },
         },
-      );
-
+      },
+    };
     // 传入 onChunk 触发 streaming 路径
-    await llm.chat(
-      [{ role: "user", content: "hello" }],
-      undefined,
-      () => {},
-    );
-    // 流式调用不检查 signal，不会 crash 即通过
+    const start = Date.now();
+    await expect(
+      llm.chat([{ role: "user", content: "hello" }], undefined, () => {}),
+    ).rejects.toThrow();
+    // 应当在 ~50ms 内超时（宽松上限 2s）
+    expect(Date.now() - start).toBeLessThan(2000);
+    // 信号确实被 AbortController 中止了
+    expect(capturedSignal?.aborted).toBe(true);
   });
 
   it("retryOnTimeout=false + _chatOpenai 抛 AbortError → 不重试直接 throw", async () => {

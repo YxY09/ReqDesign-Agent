@@ -561,41 +561,52 @@ export class LLMClient {
     onChunk?: OnChunk,
   ): Promise<StreamResult> {
     const client = this._client as OpenAI;
+    const abortController = new AbortController();
+    const timeoutMs = (this.timeout ?? 120) * 1000;
+    const timeoutHandle = setTimeout(() => {
+      abortController.abort();
+      this._logger.warn(`[LLMClient] Streaming request timed out after ${this.timeout}s`);
+    }, timeoutMs);
 
-    const stream = await client.chat.completions.create(
-      {
-        model: this.model,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        temperature: temperature ?? this.temperature,
-        max_tokens: this.maxTokens,
-        stream: true,
-        stream_options: { include_usage: true },
-      },
-      {
-        maxRetries: this.config.retry.maxRetries,
-      },
-    );
+    try {
+      const stream = await client.chat.completions.create(
+        {
+          model: this.model,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          temperature: temperature ?? this.temperature,
+          max_tokens: this.maxTokens,
+          stream: true,
+          stream_options: { include_usage: true },
+        },
+        {
+          maxRetries: this.config.retry.maxRetries,
+          signal: abortController.signal,
+        },
+      );
 
-    let full = "";
-    let usage: LlmTokenUsage | undefined;
-    for await (const chunk of stream) {
-      const rawUsage = (chunk as { usage?: OpenAI.Completions.CompletionUsage | null }).usage;
-      if (rawUsage) {
-        usage = {
-          promptTokens: rawUsage.prompt_tokens,
-          completionTokens: rawUsage.completion_tokens,
-          totalTokens: rawUsage.total_tokens,
-        };
+      let full = "";
+      let usage: LlmTokenUsage | undefined;
+      for await (const chunk of stream) {
+        const rawUsage = (chunk as { usage?: OpenAI.Completions.CompletionUsage | null }).usage;
+        if (rawUsage) {
+          usage = {
+            promptTokens: rawUsage.prompt_tokens,
+            completionTokens: rawUsage.completion_tokens,
+            totalTokens: rawUsage.total_tokens,
+          };
+        }
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) {
+          full += delta;
+          onChunk?.(delta);
+        }
       }
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        full += delta;
-        onChunk?.(delta);
-      }
+
+      this._logger.debug(`[LLMClient] Stream completed, ${full.length} chars`);
+      return { text: full, usage };
+    } finally {
+      clearTimeout(timeoutHandle);
     }
-
-    this._logger.debug(`[LLMClient] Stream completed, ${full.length} chars`);
-    return { text: full, usage };
   }
 
   // -----------------------------------------------------------------------
