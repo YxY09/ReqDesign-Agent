@@ -162,9 +162,25 @@ function itemId(item: unknown): string {
   return "";
 }
 
-function collectIds(items: unknown): string[] {
+/**
+ * 收集未在设计文本中体现的条目 displayId。
+ * 按条目逐个配对 displayId / canonicalId（同一对象），
+ * 设计文本命中任一形式即视为已覆盖。
+ */
+function collectUncoveredIds(designText: string, items: unknown): string[] {
   if (!Array.isArray(items)) return [];
-  return items.map(itemId).filter(Boolean);
+  const uncovered: string[] = [];
+  for (const item of items) {
+    const displayId = itemId(item);
+    if (!displayId) continue;
+    const canonicalId = typeof item === "object" && item !== null
+      ? String((item as Record<string, unknown>).id ?? "").trim()
+      : "";
+    const found = containsToken(designText, displayId)
+      || (canonicalId !== "" && canonicalId !== displayId && containsToken(designText, canonicalId));
+    if (!found) uncovered.push(displayId);
+  }
+  return uncovered;
 }
 
 // isSimpleRequirement / isMediumRequirement removed — overdesign self-check
@@ -338,32 +354,12 @@ export class SystemDesigner extends BaseGenerator<string> {
 
     // NOTE: Medium overdesign check also moved to evaluation phase for the same reason.
 
-    const constraintIds = collectIds(requirementJson["constraints"]);
-    if (constraintIds.length > 0) {
-      for (let i = 0; i < constraintIds.length; i++) {
-        const displayId = constraintIds[i];
-        const constraints = requirementJson["constraints"];
-        const item = Array.isArray(constraints) ? constraints[i] : null;
-        const canonicalId = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
-        const found = containsToken(designText, displayId) || (canonicalId && canonicalId !== displayId && containsToken(designText, canonicalId));
-        if (!found) {
-          warnings.push(`约束 ${displayId} 未在设计中体现`);
-        }
-      }
+    for (const displayId of collectUncoveredIds(designText, requirementJson["constraints"])) {
+      warnings.push(`约束 ${displayId} 未在设计中体现`);
     }
 
-    const exceptionIds = collectIds(requirementJson["exceptions"]);
-    if (exceptionIds.length > 0) {
-      for (let i = 0; i < exceptionIds.length; i++) {
-        const displayId = exceptionIds[i];
-        const exceptions = requirementJson["exceptions"];
-        const item = Array.isArray(exceptions) ? exceptions[i] : null;
-        const canonicalId = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
-        const found = containsToken(designText, displayId) || (canonicalId && canonicalId !== displayId && containsToken(designText, canonicalId));
-        if (!found) {
-          warnings.push(`异常 ${displayId} 未在设计中体现`);
-        }
-      }
+    for (const displayId of collectUncoveredIds(designText, requirementJson["exceptions"])) {
+      warnings.push(`异常 ${displayId} 未在设计中体现`);
     }
 
     const entities = requirementJson["entities"];
