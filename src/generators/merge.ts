@@ -981,48 +981,43 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
   // --- NFR: dedup by category ---
   private static _mergeByCategory(items: Record<string, unknown>[]): Record<string, unknown>[] {
-    const seen = new Map<string, Record<string, unknown>>();
-    for (const item of items) {
+    return AnalyzeMerger._dedupByKey(items, (item) => {
       const cat = String(item.category ?? "").trim();
-      if (!cat) continue;
-      const normalized = AnalyzeMerger._NFR_CATEGORY_ZH_EN[cat] ?? cat;
-      const key = normalized.toLowerCase();
-      if (!seen.has(key)) seen.set(key, item);
-    }
-    return [...seen.values()];
+      if (!cat) return "";
+      return (AnalyzeMerger._NFR_CATEGORY_ZH_EN[cat] ?? cat).toLowerCase();
+    });
   }
 
   // --- Business processes: dedup by name ---
   private static _mergeByName(items: Record<string, unknown>[]): Record<string, unknown>[] {
-    const seen = new Map<string, Record<string, unknown>>();
-    for (const item of items) {
-      const name = String(item.name ?? "").trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      if (!seen.has(key)) seen.set(key, item);
-    }
-    return [...seen.values()];
+    return AnalyzeMerger._dedupByKey(items, (item) =>
+      String(item.name ?? "").trim().toLowerCase(),
+    );
   }
 
   // --- Dedup by canonicalName for proposed entities/functions ---
   private static _dedupByName(items: Record<string, unknown>[]): Record<string, unknown>[] {
-    const seen = new Map<string, Record<string, unknown>>();
-    for (const item of items) {
-      const name = String(item.name ?? item.canonicalName ?? "").trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      if (!seen.has(key)) seen.set(key, item);
-    }
-    return [...seen.values()];
+    return AnalyzeMerger._dedupByKey(items, (item) =>
+      String(item.name ?? item.canonicalName ?? "").trim().toLowerCase(),
+    );
   }
 
   // --- Dedup by description for missing constraint candidates ---
   private static _dedupByDescription(items: Record<string, unknown>[]): Record<string, unknown>[] {
+    return AnalyzeMerger._dedupByKey(items, (item) =>
+      String(item.description ?? "").trim().toLowerCase(),
+    );
+  }
+
+  /** 首次出现优先：按 keyFn 归一化键去重，键为空则跳过该条目。 */
+  private static _dedupByKey(
+    items: Record<string, unknown>[],
+    keyFn: (item: Record<string, unknown>) => string,
+  ): Record<string, unknown>[] {
     const seen = new Map<string, Record<string, unknown>>();
     for (const item of items) {
-      const desc = String(item.description ?? "").trim();
-      if (!desc) continue;
-      const key = desc.toLowerCase();
+      const key = keyFn(item);
+      if (!key) continue;
       if (!seen.has(key)) seen.set(key, item);
     }
     return [...seen.values()];
