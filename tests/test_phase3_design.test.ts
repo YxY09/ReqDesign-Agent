@@ -149,7 +149,8 @@ describe("SystemDesigner.validateDesign", () => {
       exceptions: [{ id: "X001", description: "支付失败" }],
     };
     const warnings = SystemDesigner.validateDesign(design, req);
-    expect(warnings.some((w) => w.includes("异常 X001 未在设计中体现"))).toBe(true);
+    // New merged format: "以下 N 个异常未在设计中体现: X001, ..."
+    expect(warnings.some((w) => w.includes("X001") && w.includes("未在设计中体现"))).toBe(true);
     // "未定义异常 ID" 扫描已移除，不再检查设计中的 E 前缀 ID 是否在需求中定义
   });
 });

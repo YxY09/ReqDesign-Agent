@@ -359,12 +359,17 @@ export class SystemDesigner extends BaseGenerator<string> {
 
     // NOTE: Medium overdesign check also moved to evaluation phase for the same reason.
 
-    for (const displayId of collectUncoveredIds(designText, requirementJson["constraints"])) {
-      warnings.push(`约束 ${displayId} 未在设计中体现`);
+    // Merge per-constraint warnings into one issue to avoid overwhelming the
+    // convergence threshold (previously: one issue per uncovered constraint).
+    const uncoveredConstraints = collectUncoveredIds(designText, requirementJson["constraints"]);
+    if (uncoveredConstraints.length > 0) {
+      warnings.push(`以下 ${uncoveredConstraints.length} 个约束未在设计中体现: ${uncoveredConstraints.join(", ")}`);
     }
 
-    for (const displayId of collectUncoveredIds(designText, requirementJson["exceptions"])) {
-      warnings.push(`异常 ${displayId} 未在设计中体现`);
+    // Merge per-exception warnings into one issue for the same reason.
+    const uncoveredExceptions = collectUncoveredIds(designText, requirementJson["exceptions"]);
+    if (uncoveredExceptions.length > 0) {
+      warnings.push(`以下 ${uncoveredExceptions.length} 个异常未在设计中体现: ${uncoveredExceptions.join(", ")}`);
     }
 
     const entities = requirementJson["entities"];
