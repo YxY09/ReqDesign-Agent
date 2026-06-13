@@ -1,32 +1,43 @@
 /**
  * Benchmark DATASET checks — no LLM required.
  *
- * The benchmark runner itself drives a real LLM (covered elsewhere). These
- * tests pin the *dataset*: that every gold label is well-formed, that the gold
- * is actually wired to the scorer (a perfect analysis scores 100), and that the
- * external PROMISE adapter maps real rows into the gold schema correctly.
+ * The benchmark runner drives a real LLM (covered elsewhere). These tests pin
+ * the *dataset*: that every gold label is well-formed, that the gold is wired
+ * to the coverage judge (a judge that covers everything scores 100; one that
+ * covers nothing scores 0), and that the external PROMISE adapter maps real
+ * rows into the gold schema correctly.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { scoreRequirementCoverage } from "../src/benchmark/scorer.js";
+import { judgeCoverage, type JudgeClient, type GoldLabel } from "../src/benchmark/scorer.js";
 import {
   parsePromiseCsv,
   promiseRowsToCases,
 } from "../benchmark/adapters/promise_to_cases.mjs";
 
 const GOLD_DIR = "benchmark/gold_labels";
-const EXPECTED_KEYS = [
-  "expected_actors",
-  "expected_functions",
-  "expected_entities",
-  "expected_constraints",
-  "expected_exceptions",
-  "expected_processes",
-];
+const GOLD_TO_LABEL: Record<string, string> = {
+  expected_actors: "actors",
+  expected_functions: "functions",
+  expected_entities: "entities",
+  expected_constraints: "constraints",
+  expected_exceptions: "exceptions",
+  expected_processes: "processes",
+};
+const EXPECTED_KEYS = Object.keys(GOLD_TO_LABEL);
 
-function loadGold(name: string): Record<string, unknown> {
+function loadGold(name: string): GoldLabel {
   return JSON.parse(readFileSync(join(GOLD_DIR, name), "utf8"));
+}
+
+/** A judge that reports every gold item as covered (no LLM). */
+function allCoveredJudge(gold: GoldLabel): JudgeClient {
+  const verdict: Record<string, unknown> = {};
+  for (const [goldKey, label] of Object.entries(GOLD_TO_LABEL)) {
+    verdict[label] = { covered: (gold as Record<string, string[]>)[goldKey] ?? [], missing: [] };
+  }
+  return { generateJson: async () => verdict };
 }
 
 describe("benchmark gold labels are well-formed", () => {
@@ -38,7 +49,7 @@ describe("benchmark gold labels are well-formed", () => {
 
   for (const file of goldFiles) {
     it(`${file} parses and has the six expected_* string arrays`, () => {
-      const gold = loadGold(file);
+      const gold = loadGold(file) as Record<string, unknown>;
       for (const key of EXPECTED_KEYS) {
         expect(Array.isArray(gold[key]), `${file} missing array ${key}`).toBe(true);
         for (const item of gold[key] as unknown[]) {
@@ -49,28 +60,22 @@ describe("benchmark gold labels are well-formed", () => {
   }
 });
 
-describe("gold is wired to the scorer", () => {
-  it("a perfect analysis scores 100 against the ecommerce gold", () => {
+describe("gold is wired to the coverage judge", () => {
+  it("a fully-covering judge scores 100 against the ecommerce gold", async () => {
     const gold = loadGold("ecommerce_order_system.json");
-    const perfect = {
-      actors: gold.expected_actors,
-      functions: (gold.expected_functions as string[]).map((name) => ({ name })),
-      entities: (gold.expected_entities as string[]).map((name) => ({ name })),
-      constraints: (gold.expected_constraints as string[]).map((description) => ({ description })),
-      exceptions: (gold.expected_exceptions as string[]).map((description) => ({ description })),
-    };
-    expect(scoreRequirementCoverage(perfect, gold)).toBe(100);
+    const { score } = await judgeCoverage(allCoveredJudge(gold), gold, {});
+    expect(score).toBe(100);
   });
 
-  it("an empty analysis scores 0", () => {
+  it("a non-covering judge scores 0", async () => {
     const gold = loadGold("hospital_mgmt.json");
-    expect(scoreRequirementCoverage({}, gold)).toBe(0);
+    const judge: JudgeClient = { generateJson: async () => ({}) };
+    const { score } = await judgeCoverage(judge, gold, {});
+    expect(score).toBe(0);
   });
 });
 
 describe("PROMISE adapter maps real rows into the gold schema", () => {
-  // A small slice in the real PROMISE CSV shape (PROJECT,REQUIREMENT,LABEL),
-  // including a quoted field containing a comma and a header row to skip.
   const csv = [
     "PROJECT,REQUIREMENT,LABEL",
     "1,The system shall let the user search events,F",

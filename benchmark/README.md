@@ -15,7 +15,7 @@ benchmark/
 ```
 
 `runBenchmark.ts` 会读取 `cases/` 下每个 `<name>.md`，在 `gold_labels/` 找同名
-`<name>.json`，跑完整流水线后用 6 个维度打分。
+`<name>.json`，跑完整流水线后用混合方式打分（覆盖度走 LLM，图语法/图结构/一致性走确定性）。
 
 ## 金标准（gold）字段
 
@@ -23,15 +23,21 @@ benchmark/
 
 | 字段 | 含义 | 喂给的评分项 |
 |------|------|--------------|
-| `expected_actors` | 期望识别的角色 | requirement_coverage |
-| `expected_functions` | 期望覆盖的功能 | requirement_coverage |
-| `expected_entities` | 期望识别的实体 | requirement_coverage / entity_accuracy |
-| `expected_constraints` | 期望覆盖的业务约束 | requirement_coverage |
-| `expected_exceptions` | 期望覆盖的异常 | requirement_coverage |
-| `expected_processes` | 期望体现的业务流程 | process_completeness / state_diagram |
+| `expected_actors` | 期望识别的角色 | coverage (LLM) |
+| `expected_functions` | 期望覆盖的功能 | coverage (LLM) |
+| `expected_entities` | 期望识别的实体 | coverage (LLM) + 一致性(确定性) |
+| `expected_constraints` | 期望覆盖的业务约束 | coverage (LLM) |
+| `expected_exceptions` | 期望覆盖的异常 | coverage (LLM) |
+| `expected_processes` | 期望体现的业务流程 | coverage (LLM) |
 
-评分维度与权重（见 `computeOverallScore`）：需求覆盖 0.35、图语法 0.2、
-实体准确 0.2、流程完整 0.1、一致性 0.1、状态图 0.05；综合分 ≥ 80 记为通过。
+评分采用**混合**设计（见 `src/benchmark/scorer.ts`）：
+
+- **覆盖度 coverage（LLM-judge，权重 0.5）**：把 gold 期望项与系统输出交给 LLM 逐项判定是否被语义覆盖（释义/同义/翻译都算），语言无关、对措辞鲁棒。
+- **图语法 diagram_syntax（确定性，0.2）**：Mermaid 校验通过比例。
+- **图结构 diagram_structure（确定性，0.15）**：活动图有起止/分支/流转、状态图有初态/迁移/状态数。
+- **一致性 consistency（确定性，0.15）**：分析出的实体是否出现在类图/行为图中（归一化匹配，语言无关）。
+
+综合分 = 加权和，≥ 80 记为通过。**只有 coverage 走 LLM，其余三项纯离线确定性。**
 
 ## 数据来源
 
@@ -42,8 +48,8 @@ benchmark/
 | `ecommerce_order_system` | `examples/ecommerce_order_system.md` | B2C 电商订单 |
 | `hospital_mgmt` | `examples/hospital_mgmt.md` | 三甲医院门诊 |
 
-这两个用例**手工标注**，覆盖全部 6 个 gold 字段，语言与 `scorer.ts` 的中文匹配
-逻辑一致，是当前**最有意义的测量基准**。可按同样格式继续补 `examples/` 里的其余文档。
+这两个用例**手工标注**，覆盖全部 6 个 gold 字段，是当前**最完整的测量基准**。
+可按同样格式继续补 `examples/` 里的其余文档。
 
 ### 2) 外部公开数据集 —— PROMISE NFR
 
@@ -58,12 +64,13 @@ benchmark/
 
 **重要限制**：PROMISE 只有“需求句 + F/NFR 标签”，没有角色/实体/异常/流程，
 因此派生 gold 只能填 `expected_functions`（F 行）和 `expected_constraints`（NFR 行），
-其余 4 项为空、对应维度不被考核；且它是英/西文，而 `scorer.ts` 的约束匹配是中文调优。
-**PROMISE 只适合作为“功能/NFR 覆盖”的粗略探针，不能代表整条流水线的得分。**
+其余 4 项为空、不计入覆盖度。（语言不再是问题——coverage 由 LLM 评判，语言无关。）
+**PROMISE 适合作为“功能/NFR 覆盖”的探针；要全维度评测请用原生参考集或自建 gold。**
 
 ## 运行
 
-> 前提：`config.yaml` 配好可用的 LLM provider + API key（基准会真实调用 LLM）。
+> 前提：`config.yaml` 配好可用的 LLM provider + API key。基准会真实调用 LLM **两处**：
+> 跑流水线生成产物，以及给 coverage 维度打分（judge 复用同一个 `LLMClient`）。
 
 ```bash
 npm run build

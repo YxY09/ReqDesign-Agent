@@ -1,357 +1,370 @@
+/**
+ * Benchmark scoring — hybrid design.
+ *
+ *   • Deterministic, language-agnostic scoring for things that are objectively
+ *     checkable from the artifacts: diagram syntax, diagram structure, and
+ *     cross-artifact consistency.
+ *   • LLM-as-judge for semantic coverage (did the analysis cover the expected
+ *     actors / functions / entities / constraints / exceptions / processes?),
+ *     which is robust to paraphrase, synonyms and translation.
+ *
+ * The judge is injected as a `JudgeClient`, so scoring is fully unit-testable
+ * offline with a mock and needs no network unless you actually run a case.
+ */
 import { MermaidValidator } from "../generators/mermaid.js";
 
-const RE_CONSTRAINT_SPLIT = /[，,、;；（）()\s的时了后]/;
-const RE_NUMBER_QUANT = /\d+\s*[分天时月秒门]/g;
-const RE_FUNC_SPLIT = /[与和及、]/;
-const RE_STATE_QUOTED = /state\s+"([^"]+)"/g;
-const RE_STATE_UNQUOTED = /state\s+(?!"|\[)(\S+)/g;
-const RE_ARROW_LEFT = /(\S+)\s*-->/g;
-const RE_ARROW_RIGHT = /-->\s*(\S+)/g;
-const RE_CORE_NOUNS = /[\u4e00-\u9fff]{2,4}/g;
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-function readNames(items: unknown, preferredKey = "name"): string[] {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => {
-    if (typeof item === "string") return item;
-    if (typeof item === "object" && item !== null) {
-      const record = item as Record<string, unknown>;
-      return String(record[preferredKey] ?? record.description ?? "");
-    }
-    return String(item);
-  }).filter(Boolean);
+export interface GoldLabel {
+  expected_actors?: string[];
+  expected_functions?: string[];
+  expected_entities?: string[];
+  expected_constraints?: string[];
+  expected_exceptions?: string[];
+  expected_processes?: string[];
 }
 
-export function fuzzyMatchEntity(
-  entityName: string,
-  target: string,
-  entityNameMap: Record<string, string[]> = {},
-): boolean {
-  const entity = String(entityName ?? "");
-  const text = String(target ?? "");
-  if (!entity || !text) return false;
-  if (text.includes(entity)) return true;
-
-  // Build EN_TO_CN from entityNameMap
-  const enToCn: Record<string, string[]> = {};
-  for (const [cn, enNames] of Object.entries(entityNameMap)) {
-    for (const en of enNames) {
-      enToCn[en.toLowerCase()] ??= [];
-      enToCn[en.toLowerCase()].push(cn);
-    }
-  }
-
-  for (const en of entityNameMap[entity] ?? []) {
-    if (text.includes(en)) return true;
-  }
-  return (enToCn[entity.toLowerCase()] ?? []).some((cn) => text.includes(cn));
-}
-
-export function editDistance(s1: string, s2: string, threshold = -1): number {
-  if (s1.length < s2.length) return editDistance(s2, s1, threshold);
-  if (s2.length === 0) return s1.length;
-  let previous = [...Array(s2.length + 1).keys()];
-  for (let i = 0; i < s1.length; i++) {
-    const current = [i + 1];
-    for (let j = 0; j < s2.length; j++) {
-      const insertions = previous[j + 1] + 1;
-      const deletions = current[j] + 1;
-      const substitutions = previous[j] + (s1[i] === s2[j] ? 0 : 1);
-      current.push(Math.min(insertions, deletions, substitutions));
-    }
-    if (threshold >= 0 && Math.min(...current) > threshold) {
-      return threshold + 1;
-    }
-    previous = current;
-  }
-  return previous[previous.length - 1];
-}
-
-export function fuzzyMatchFunction(
-  funcName: string,
-  resultFunctions: string[],
-  resultText: string,
-  functionSynonyms: Record<string, string[]> = {},
-): boolean {
-  const name = String(funcName ?? "");
-  if (!name) return false;
-  if (resultText.includes(name)) return true;
-
-  const keywords = name.split(RE_FUNC_SPLIT).filter((kw) => kw.length > 1);
-  if (keywords.length >= 2 && keywords.every((kw) => resultText.includes(kw))) {
-    return true;
-  }
-
-  for (const synonym of functionSynonyms[name] ?? []) {
-    if (resultText.includes(synonym)) return true;
-    if (resultFunctions.some((item) => synonym.includes(item) || item.includes(synonym))) {
-      return true;
-    }
-  }
-
-  for (const resultName of resultFunctions) {
-    if ((functionSynonyms[resultName] ?? []).includes(name)) {
-      return true;
-    }
-  }
-
-  if (name.length >= 6) {
-    const threshold = Math.max(1, Math.floor(name.length / 4));
-    for (const resultName of resultFunctions) {
-      if (Math.abs(name.length - resultName.length) <= 2) {
-        if (editDistance(name, resultName, threshold) <= threshold) {
-          return true;
-        }
-      }
-    }
-  }
-
-  return false;
-}
-
-export function matchConstraintOrException(expected: string, targetText: string): boolean {
-  const source = String(expected ?? "");
-  const target = String(targetText ?? "");
-  if (!source || !target) return false;
-  if (target.includes(source)) return true;
-
-  let keywords = source.split(RE_CONSTRAINT_SPLIT).filter((kw) => kw.length >= 2);
-  if (keywords.length === 0) {
-    keywords = Array.from({ length: Math.max(0, source.length - 1) }, (_, index) => source.slice(index, index + 2));
-  }
-  if (keywords.length === 0) return false;
-  if (keywords.every((kw) => target.includes(kw))) return true;
-
-  const matched = keywords.filter((kw) => target.includes(kw)).length;
-  if (keywords.length >= 2 && matched / keywords.length >= 0.7) return true;
-
-  const numberMatches = source.match(RE_NUMBER_QUANT) ?? [];
-  if (numberMatches.length > 0 && numberMatches.some((item) => target.includes(item))) {
-    return true;
-  }
-
-  const coreNouns = (source.match(RE_CORE_NOUNS) ?? []).filter((item) => !["系统", "时应", "提示", "后不"].includes(item));
-  if (coreNouns.length >= 2) {
-    const nounMatched = coreNouns.filter((item) => target.includes(item)).length;
-    if (nounMatched / coreNouns.length >= 0.5) return true;
-  }
-
-  return false;
-}
-
-export function scoreRequirementCoverage(
-  result: Record<string, unknown>,
-  gold: Record<string, unknown>,
-  entityNameMap: Record<string, string[]> = {},
-  functionSynonyms: Record<string, string[]> = {},
-): number {
-  if (!result || !gold) return 0;
-  let total = 0;
-  let covered = 0;
-
-  const expectedActors = readNames(gold.expected_actors);
-  const resultActors = readNames(result.actors);
-  for (const actor of expectedActors) {
-    total += 1;
-    if (resultActors.some((item) => fuzzyMatchEntity(actor, item, entityNameMap))) covered += 1;
-  }
-
-  const expectedFunctions = readNames(gold.expected_functions);
-  const resultFunctions = readNames(result.functions);
-  const resultText = resultFunctions.join(" ");
-  for (const func of expectedFunctions) {
-    total += 1;
-    if (fuzzyMatchFunction(func, resultFunctions, resultText, functionSynonyms)) covered += 1;
-  }
-
-  const expectedEntities = readNames(gold.expected_entities);
-  const resultEntities = readNames(result.entities);
-  for (const entity of expectedEntities) {
-    total += 1;
-    if (resultEntities.some((item) => fuzzyMatchEntity(entity, item, entityNameMap))) covered += 1;
-  }
-
-  const expectedConstraints = readNames(gold.expected_constraints);
-  const resultConstraints = readNames(result.constraints, "description");
-  const constraintText = resultConstraints.join(" ");
-  for (const constraint of expectedConstraints) {
-    total += 1;
-    if (matchConstraintOrException(constraint, constraintText)) covered += 1;
-  }
-
-  const expectedExceptions = readNames(gold.expected_exceptions);
-  const resultExceptions = readNames(result.exceptions, "description");
-  const exceptionText = resultExceptions.join(" ");
-  for (const item of expectedExceptions) {
-    total += 1;
-    if (matchConstraintOrException(item, exceptionText)) covered += 1;
-  }
-
-  if (total === 0) return 0;
-  return Math.round((covered / total) * 1000) / 10;
-}
-
-export function scoreDiagramSyntax(diagrams: Record<string, unknown>): number {
-  if (!diagrams || Object.keys(diagrams).length === 0) return 0;
-  const validator = new MermaidValidator();
-  let passed = 0;
-  for (const [name, content] of Object.entries(diagrams)) {
-    if (typeof content !== "string" || !content.trim()) continue;
-    const result = validator.validate(content, name);
-    if (result.valid) passed += 1;
-  }
-  return Math.round((passed / Object.keys(diagrams).length) * 1000) / 10;
-}
-
-export function scoreEntityAccuracy(
-  result: Record<string, unknown>,
-  gold: Record<string, unknown>,
-  entityNameMap: Record<string, string[]> = {},
-): number {
-  if (!result || !gold) return 0;
-  const expectedEntities = readNames(gold.expected_entities);
-  const resultEntities = readNames(result.entities);
-  if (expectedEntities.length === 0) return 100;
-  const correct = expectedEntities.filter((entity) => resultEntities.some((item) => fuzzyMatchEntity(entity, item, entityNameMap))).length;
-  return Math.round((correct / expectedEntities.length) * 1000) / 10;
-}
-
-export function scoreProcessCompleteness(
-  diagrams: Record<string, unknown>,
-  gold: Record<string, unknown>,
-): number {
-  const activity = String(diagrams?.activity_diagram ?? "");
-  if (!activity) return 0;
-
-  let score = 0;
-  const startKeywords = ["[开始]", "([开始])", "[*]", "([开始", "开始"];
-  const endKeywords = ["[结束]", "([结束])", "[*]", "([结束", "结束"];
-  if (startKeywords.some((kw) => activity.includes(kw))) score += 25;
-  if (endKeywords.some((kw) => activity.includes(kw))) score += 25;
-  if (/\w+\s*\{[^}]+\}/.test(activity)) score += 25;
-
-  const expectedProcesses = readNames(gold?.expected_processes);
-  if (expectedProcesses.length === 0) {
-    score += 25;
-  } else {
-    const covered = expectedProcesses.filter((proc) => {
-      const keywords = proc.split("流程").filter(Boolean);
-      if (keywords.length === 0) return activity.includes(proc);
-      return keywords.some((kw) => activity.includes(kw));
-    }).length;
-    score += (covered / expectedProcesses.length) * 25;
-  }
-
-  return Math.round(score * 10) / 10;
-}
-
-export function scoreStateDiagram(
-  diagrams: Record<string, unknown>,
-  gold: Record<string, unknown>,
-): number {
-  const state = String(diagrams?.state_diagram ?? "");
-  if (!state) return 0;
-  let score = 0;
-  if (state.includes("[*]")) score += 30;
-  else if (["开始", "Start", "start"].some((kw) => state.includes(kw))) score += 30;
-  if (state.includes("-->")) score += 20;
-
-  const quotedStates = [...state.matchAll(RE_STATE_QUOTED)].map((match) => match[1]);
-  const unquotedStates = [...state.matchAll(RE_STATE_UNQUOTED)].map((match) => match[1]);
-  const arrowStates = [
-    ...[...state.matchAll(RE_ARROW_LEFT)].map((match) => match[1]),
-    ...[...state.matchAll(RE_ARROW_RIGHT)].map((match) => match[1]),
-  ];
-  const allStates = new Set([...quotedStates, ...unquotedStates, ...arrowStates].filter((item) => item !== "*" && item.length > 1));
-  if (allStates.size >= 3) score += 25;
-  else if (allStates.size >= 2) score += 15;
-
-  const expectedProcesses = readNames(gold?.expected_processes);
-  if (expectedProcesses.length === 0) {
-    score += 25;
-  } else {
-    const covered = expectedProcesses.filter((proc) => {
-      const keywords = proc.split("流程").filter(Boolean);
-      return (keywords.length > 0 ? keywords : [proc]).some((kw) => state.includes(kw));
-    }).length;
-    score += (covered / expectedProcesses.length) * 25;
-  }
-
-  return Math.round(Math.min(100, score) * 10) / 10;
-}
-
-export function scoreConsistency(
-  result: Record<string, unknown>,
-  diagrams: Record<string, unknown>,
-  entityNameMap: Record<string, string[]> = {},
-): number {
-  if (!result) return 0;
-  let score = 100;
-  const entities = readNames(result.entities);
-  const classDiagram = String(diagrams?.class_diagram ?? "");
-  for (const entity of entities) {
-    if (entity && !fuzzyMatchEntity(entity, classDiagram, entityNameMap)) score -= 10;
-  }
-
-  const activity = String(diagrams?.activity_diagram ?? "");
-  const state = String(diagrams?.state_diagram ?? "");
-  const coreClasses = entities.filter(Boolean).slice(0, 3);
-  for (const item of coreClasses) {
-    if (activity && !fuzzyMatchEntity(item, activity, entityNameMap)) score -= 5;
-    if (state && !fuzzyMatchEntity(item, state, entityNameMap)) score -= 3;
-  }
-
-  return Math.round(Math.max(0, score) * 10) / 10;
-}
-
-export function computeOverallScore(params: {
-  requirementCoverage: number;
-  diagramSyntax: number;
-  entityAccuracy: number;
-  processCompleteness: number;
+export interface Scores {
+  coverage: number;
+  diagram_syntax: number;
+  diagram_structure: number;
   consistency: number;
-  stateDiagram?: number;
-}): number {
-  const overall = params.requirementCoverage * 0.35
-    + params.diagramSyntax * 0.2
-    + params.entityAccuracy * 0.2
-    + params.processCompleteness * 0.1
-    + (params.stateDiagram ?? 0) * 0.05
-    + params.consistency * 0.1;
-  return Math.round(overall * 10) / 10;
+  overall: number;
+}
+
+export interface CategoryCoverage {
+  category: string;
+  expected: number;
+  covered: number;
+  missing: string[];
 }
 
 export interface BenchmarkCaseResult {
   case_name: string;
   status: string;
   passed?: boolean;
-  scores?: Record<string, number>;
+  scores?: Partial<Scores>;
+  coverage_detail?: CategoryCoverage[];
   error?: string;
 }
 
+/** Minimal LLM surface the coverage judge needs (LLMClient satisfies it). */
+export interface JudgeClient {
+  generateJson(prompt: string, system?: string): Promise<Record<string, unknown>>;
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+const PASS_THRESHOLD = 80;
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+/** Pull display names from a heterogeneous list (strings or {name|description}). */
+export function readNames(items: unknown, preferred = "name"): string[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const rec = item as Record<string, unknown>;
+        return String(rec[preferred] ?? rec.name ?? rec.description ?? "");
+      }
+      return String(item ?? "");
+    })
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Language-agnostic normalisation: lowercase, drop punctuation/space, keep
+ *  alphanumerics and CJK. Used only for deterministic checks. */
+function normalize(text: string): string {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function normalizedIncludes(haystack: string, needle: string): boolean {
+  const n = normalize(needle);
+  return n.length > 0 && normalize(haystack).includes(n);
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic: diagram syntax
+// ---------------------------------------------------------------------------
+
+/** Percentage of present diagrams whose Mermaid source validates. */
+export function scoreDiagramSyntax(diagrams: Record<string, unknown>): number {
+  const entries = Object.entries(diagrams ?? {}).filter(
+    ([, v]) => typeof v === "string" && v.trim(),
+  );
+  if (entries.length === 0) return 0;
+  const validator = new MermaidValidator();
+  let passed = 0;
+  for (const [name, content] of entries) {
+    if (validator.validate(content as string, name).valid) passed += 1;
+  }
+  return round1((passed / entries.length) * 100);
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic: diagram structure
+// ---------------------------------------------------------------------------
+
+/** Structural soundness of activity + state diagrams (start/end/branch/states),
+ *  language-agnostic. Average of whichever diagrams are present. */
+export function scoreDiagramStructure(diagrams: Record<string, unknown>): number {
+  const parts: number[] = [];
+  const activity = String(diagrams?.activity_diagram ?? "");
+  const state = String(diagrams?.state_diagram ?? "");
+
+  if (activity.trim()) parts.push(scoreActivityStructure(activity));
+  if (state.trim()) parts.push(scoreStateStructure(state));
+
+  if (parts.length === 0) return 0;
+  return round1(parts.reduce((a, b) => a + b, 0) / parts.length);
+}
+
+function scoreActivityStructure(activity: string): number {
+  let score = 0;
+  const hasStart = /\[\*\]|\(\[|开始|start|begin/i.test(activity);
+  const hasEnd = /\[\*\]|\]\)|结束|end|finish|stop/i.test(activity);
+  const hasFlow = activity.includes("-->") || activity.includes("->");
+  const hasBranch = /\{[^}]+\}|\|[^|]+\||decision/i.test(activity); // diamond/guard
+  if (hasStart) score += 30;
+  if (hasEnd) score += 30;
+  if (hasFlow) score += 20;
+  if (hasBranch) score += 20;
+  return Math.min(100, score);
+}
+
+function scoreStateStructure(state: string): number {
+  let score = 0;
+  const hasInitial = state.includes("[*]") || /\binitial\b|开始|start/i.test(state);
+  const hasTransition = state.includes("-->");
+  const stateNames = new Set(
+    [...state.matchAll(/(\S+)\s*-->\s*(\S+)/g)]
+      .flatMap((m) => [m[1], m[2]])
+      .filter((s) => s && s !== "[*]" && s.length > 1),
+  );
+  if (hasInitial) score += 35;
+  if (hasTransition) score += 25;
+  if (stateNames.size >= 3) score += 40;
+  else if (stateNames.size >= 2) score += 25;
+  return Math.min(100, score);
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic: cross-artifact consistency
+// ---------------------------------------------------------------------------
+
+/** Do the entities identified in the analysis also appear in the class diagram
+ *  (and core ones in the behavioural diagrams)? Pure structural check. */
+export function scoreConsistency(
+  result: Record<string, unknown>,
+  diagrams: Record<string, unknown>,
+): number {
+  const entities = readNames(result?.entities);
+  if (entities.length === 0) return 100;
+
+  const classDiagram = String(diagrams?.class_diagram ?? "");
+  const activity = String(diagrams?.activity_diagram ?? "");
+  const state = String(diagrams?.state_diagram ?? "");
+
+  let score = 100;
+  for (const entity of entities) {
+    if (!normalizedIncludes(classDiagram, entity)) score -= 10;
+  }
+  for (const core of entities.slice(0, 3)) {
+    if (activity && !normalizedIncludes(activity, core)) score -= 5;
+    if (state && !normalizedIncludes(state, core)) score -= 3;
+  }
+  return round1(Math.max(0, score));
+}
+
+// ---------------------------------------------------------------------------
+// LLM-judge: semantic coverage
+// ---------------------------------------------------------------------------
+
+interface CoverageCategory {
+  goldKey: keyof GoldLabel;
+  label: string;
+  resultField: string;
+  preferred: string;
+}
+
+const COVERAGE_CATEGORIES: CoverageCategory[] = [
+  { goldKey: "expected_actors", label: "actors", resultField: "actors", preferred: "name" },
+  { goldKey: "expected_functions", label: "functions", resultField: "functions", preferred: "name" },
+  { goldKey: "expected_entities", label: "entities", resultField: "entities", preferred: "name" },
+  { goldKey: "expected_constraints", label: "constraints", resultField: "constraints", preferred: "description" },
+  { goldKey: "expected_exceptions", label: "exceptions", resultField: "exceptions", preferred: "description" },
+  { goldKey: "expected_processes", label: "processes", resultField: "business_processes", preferred: "name" },
+];
+
+const JUDGE_SYSTEM =
+  "You are a strict, fair evaluator for software requirements analysis. " +
+  "For each EXPECTED item you decide whether the SYSTEM OUTPUT covers it. " +
+  "An item is covered if the output expresses the same thing — paraphrase, " +
+  "synonym, abbreviation, or a different language all count as covered. " +
+  "Respond with JSON only, no prose.";
+
+export function buildCoveragePrompt(
+  gold: GoldLabel,
+  result: Record<string, unknown>,
+): { prompt: string; activeCategories: CoverageCategory[] } {
+  const active = COVERAGE_CATEGORIES.filter(
+    (c) => (gold[c.goldKey] ?? []).length > 0,
+  );
+
+  const outputLines = active.map((c) => {
+    const names = readNames(result?.[c.resultField], c.preferred);
+    return `${c.label}: ${names.length ? names.join("; ") : "(none)"}`;
+  });
+
+  const expectedLines = active.map((c) => {
+    const items = (gold[c.goldKey] ?? []).map((e, i) => `  ${i + 1}. ${e}`).join("\n");
+    return `${c.label}:\n${items}`;
+  });
+
+  const prompt = [
+    "Mark each EXPECTED item as covered or missing by the SYSTEM OUTPUT.",
+    "",
+    "# SYSTEM OUTPUT",
+    ...outputLines,
+    "",
+    "# EXPECTED (ground truth)",
+    ...expectedLines,
+    "",
+    "Return JSON exactly in this shape, listing the expected items verbatim:",
+    '{ "<category>": { "covered": ["<expected item>", ...], "missing": ["<expected item>", ...] }, ... }',
+    "Only include the categories shown above.",
+  ].join("\n");
+
+  return { prompt, activeCategories: active };
+}
+
+/** Run the LLM coverage judge. Returns an aggregate 0-100 plus per-category
+ *  detail. Categories with no expected items are skipped (not penalised). */
+export async function judgeCoverage(
+  llm: JudgeClient,
+  gold: GoldLabel,
+  result: Record<string, unknown>,
+): Promise<{ score: number; detail: CategoryCoverage[] }> {
+  const { prompt, activeCategories } = buildCoveragePrompt(gold, result);
+  if (activeCategories.length === 0) return { score: 0, detail: [] };
+
+  let verdict: Record<string, unknown> = {};
+  try {
+    verdict = (await llm.generateJson(prompt, JUDGE_SYSTEM)) ?? {};
+  } catch {
+    verdict = {};
+  }
+
+  const detail: CategoryCoverage[] = [];
+  for (const c of activeCategories) {
+    const expected = gold[c.goldKey] ?? [];
+    const node = verdict[c.label];
+    const coveredRaw = readJudgeList(node, "covered");
+    // Trust the gold list, not the model's free text: an expected item counts
+    // as covered only if the judge echoed it back under "covered".
+    const covered = expected.filter((e) =>
+      coveredRaw.some((cv) => normalize(cv) === normalize(e)),
+    );
+    const missing = expected.filter((e) => !covered.includes(e));
+    detail.push({ category: c.label, expected: expected.length, covered: covered.length, missing });
+  }
+
+  const perCategoryPct = detail
+    .filter((d) => d.expected > 0)
+    .map((d) => (d.covered / d.expected) * 100);
+  const score = perCategoryPct.length
+    ? round1(perCategoryPct.reduce((a, b) => a + b, 0) / perCategoryPct.length)
+    : 0;
+
+  return { score, detail };
+}
+
+function readJudgeList(node: unknown, key: string): string[] {
+  if (!node || typeof node !== "object") return [];
+  const v = (node as Record<string, unknown>)[key];
+  if (!Array.isArray(v)) return [];
+  return v.map((x) => String(x ?? "").trim()).filter(Boolean);
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate
+// ---------------------------------------------------------------------------
+
+const WEIGHTS = {
+  coverage: 0.5,
+  diagram_syntax: 0.2,
+  diagram_structure: 0.15,
+  consistency: 0.15,
+} as const;
+
+export function computeOverall(s: Omit<Scores, "overall">): number {
+  const overall =
+    s.coverage * WEIGHTS.coverage +
+    s.diagram_syntax * WEIGHTS.diagram_syntax +
+    s.diagram_structure * WEIGHTS.diagram_structure +
+    s.consistency * WEIGHTS.consistency;
+  return round1(overall);
+}
+
+export function isPassing(overall: number): boolean {
+  return overall >= PASS_THRESHOLD;
+}
+
+/** Combine an already-computed coverage score with deterministic scoring over
+ *  the produced artifacts into a full Scores object. */
+export function combineScores(params: {
+  coverage: number;
+  result: Record<string, unknown>;
+  diagrams: Record<string, unknown>;
+}): Scores {
+  const diagram_syntax = scoreDiagramSyntax(params.diagrams);
+  const diagram_structure = scoreDiagramStructure(params.diagrams);
+  const consistency = scoreConsistency(params.result, params.diagrams);
+  const overall = computeOverall({
+    coverage: params.coverage,
+    diagram_syntax,
+    diagram_structure,
+    consistency,
+  });
+  return { coverage: params.coverage, diagram_syntax, diagram_structure, consistency, overall };
+}
+
+// ---------------------------------------------------------------------------
+// Run summary
+// ---------------------------------------------------------------------------
+
+const SUMMARY_METRICS: Array<keyof Scores> = [
+  "coverage",
+  "diagram_syntax",
+  "diagram_structure",
+  "consistency",
+  "overall",
+];
+
 export function computeRunSummary(results: BenchmarkCaseResult[]): Record<string, unknown> {
-  const success = results.filter((item) => item.status === "success");
+  const success = results.filter((r) => r.status === "success");
   if (success.length === 0) {
     return { passed: 0, failed: 0, error: results.length, avg_scores: {} };
   }
-
-  const passed = success.filter((item) => item.passed).length;
-  const failed = success.length - passed;
-  const error = results.length - success.length;
-  const metrics = [
-    "requirement_coverage",
-    "diagram_syntax",
-    "entity_accuracy",
-    "process_completeness",
-    "state_diagram",
-    "consistency",
-    "overall",
-  ];
+  const passed = success.filter((r) => r.passed).length;
   const avgScores: Record<string, number> = {};
-  for (const metric of metrics) {
-    const values = success.map((item) => item.scores?.[metric] ?? 0);
-    avgScores[metric] = values.length > 0
-      ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10
-      : 0;
+  for (const metric of SUMMARY_METRICS) {
+    const vals = success.map((r) => r.scores?.[metric] ?? 0);
+    avgScores[metric] = round1(vals.reduce((a, b) => a + b, 0) / vals.length);
   }
-  return { passed, failed, error, avg_scores: avgScores };
+  return {
+    passed,
+    failed: success.length - passed,
+    error: results.length - success.length,
+    avg_scores: avgScores,
+  };
 }
