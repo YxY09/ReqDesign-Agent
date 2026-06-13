@@ -212,10 +212,20 @@ export class DeterministicPolicy {
           });
         }
         if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
+          // Only wait if a replan would become possible once the running tasks settle.
+          // If the replan budget is also exhausted, waiting forever is a livelock —
+          // pause immediately instead.
+          if (this.budget.canReplanWhenIdle(snapshot)) {
+            return createStrategyDecision({
+              strategy: "wait_for_running",
+              targetTaskId: target,
+              reason: `${target} failed after regeneration budget was exhausted, waiting for running tasks before replanning`,
+            });
+          }
           return createStrategyDecision({
-            strategy: "wait_for_running",
+            strategy: "pause_for_user",
             targetTaskId: target,
-            reason: `${target} failed after regeneration budget was exhausted, but workflow work is still running`,
+            reason: `${target} failed and both regeneration and replan budgets are exhausted`,
           });
         }
         return createStrategyDecision({

@@ -33,10 +33,10 @@
 {requirement_text}
 
 ## 规则
-1. 每个 sourceText 必须是原文的精确引用
+1. 每个 sourceText 必须是原文的**精确引用**；无法对应到原文片段的约束不要提取
 2. sectionId 必须填写该约束所出自的章节编号（如文档有 s1-1、s2-3 等章节划分）。精确定位到最小一级章节。如果文档没有明确的章节编号体系，可省略 sectionId
 3. relatedFunctionCandidates 填写该约束涉及的功能名或 ID
-3. 如果约束涉及已知的实体或功能，用它们的规范名称
-4. 复合约束必须拆成多个原子约束
-5. 不要遗漏隐含约束（如合规性要求、安全隐含规则）
-6. type 必须是以下之一：security, performance, usability, data, availability, functional
+4. 如果约束涉及已知的实体或功能，用它们的规范名称
+5. 复合约束必须拆成多个原子约束
+6. 只提取文档**明确表达**的约束；不要引入行业规范、常识假设或"通常需要"的隐含规则——只有文档原文含有"必须/不得/不能/只能/应当/禁止/要求/限制"等明示词语的句子才构成约束
+7. type 必须是以下之一：security, performance, usability, data, availability, functional

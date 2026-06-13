@@ -65,6 +65,8 @@ const LoggingConfigSchema = z.object({
 const BenchmarkConfigSchema = z.object({
   entityNameMap: z.record(z.string(), z.array(z.string())).default({}),
   functionSynonyms: z.record(z.string(), z.array(z.string())).default({}),
+  /** Per-case wall-clock timeout in seconds (0 = unlimited). Default: 3600. */
+  caseTimeoutSeconds: z.number().nonnegative().default(3600),
 });
 
 const AgentConfigSchema = z.object({
@@ -211,7 +213,7 @@ function defaultLoggingConfig(): LoggingConfig {
 }
 
 function defaultBenchmarkConfig(): BenchmarkConfig {
-  return { entityNameMap: {}, functionSynonyms: {} };
+  return { entityNameMap: {}, functionSynonyms: {}, caseTimeoutSeconds: 3600 };
 }
 
 // ---------------------------------------------------------------------------

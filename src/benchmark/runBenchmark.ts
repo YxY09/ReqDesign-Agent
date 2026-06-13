@@ -25,13 +25,35 @@ export interface BenchmarkRunOptions {
   onEvent?: WorkflowEventSink;
 }
 
+/** Minimal runtime surface needed by BenchmarkRunner. */
+export interface RuntimeLike {
+  run(
+    goal: string,
+    inputPath: string,
+    outputDir: string,
+    options?: { onEvent?: WorkflowEventSink },
+  ): Promise<{
+    requirementJson: unknown;
+    diagrams: unknown;
+    getMajorPendingTaskIds(): string[];
+    finalReviewPassed: boolean;
+  }>;
+  cancel(reason?: string): void;
+}
+
+/** Factory that produces a RuntimeLike; injectable for testing. */
+export type RuntimeFactory = (config: AgentConfig) => RuntimeLike;
+
 export class BenchmarkRunner {
   private readonly logger = setupLogger("reqdesign.benchmark");
   private judge: JudgeClient | undefined;
+  private readonly runtimeFactory: RuntimeFactory;
 
   /**
    * @param judge optional coverage judge; defaults to an LLMClient built from
    *   `config` (constructed lazily so report/discovery helpers need no LLM).
+   * @param runtimeFactory optional factory for creating runtime instances;
+   *   defaults to `(c) => new MultiAgentRuntime(c)`. Inject a mock for tests.
    */
   constructor(
     private readonly config: AgentConfig,
@@ -39,8 +61,10 @@ export class BenchmarkRunner {
     private readonly goldDir: string,
     private readonly outputDir: string,
     judge?: JudgeClient,
+    runtimeFactory?: RuntimeFactory,
   ) {
     this.judge = judge;
+    this.runtimeFactory = runtimeFactory ?? ((c) => new MultiAgentRuntime(c));
   }
 
   private coverageJudge(): JudgeClient {
@@ -87,8 +111,10 @@ export class BenchmarkRunner {
 
     try {
       const caseOutputDir = join(this.outputDir, testCase.name);
-      const runtime = new MultiAgentRuntime(this.config);
-      const state = await runtime.run("design", testCase.casePath, caseOutputDir, {
+      const runtime = this.runtimeFactory(this.config);
+      const timeoutSeconds = this.config.benchmark.caseTimeoutSeconds;
+
+      const runPromise = runtime.run("design", testCase.casePath, caseOutputDir, {
         onEvent: options?.onEvent
           ? (event) => options.onEvent?.({
             ...event,
@@ -97,6 +123,28 @@ export class BenchmarkRunner {
           })
           : undefined,
       });
+
+      let rawState: Awaited<ReturnType<RuntimeLike["run"]>>;
+      if (timeoutSeconds > 0) {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`benchmark case timeout after ${timeoutSeconds}s`)),
+            timeoutSeconds * 1000,
+          ),
+        );
+        try {
+          rawState = await Promise.race([runPromise, timeoutPromise]);
+        } catch (err: unknown) {
+          if (err instanceof Error && err.message.startsWith("benchmark case timeout")) {
+            runtime.cancel("benchmark case timeout");
+            return this.errorResult(testCase, err.message, options);
+          }
+          throw err;
+        }
+      } else {
+        rawState = await runPromise;
+      }
+      const state = rawState;
 
       const result = state.requirementJson as Record<string, unknown>;
       const diagrams = (state.diagrams ?? {}) as Record<string, unknown>;

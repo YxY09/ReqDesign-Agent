@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { BenchmarkRunner } from "../src/benchmark/runBenchmark.js";
+import { BenchmarkRunner, type RuntimeFactory } from "../src/benchmark/runBenchmark.js";
 import {
   EvaluationManager,
   computeRunSummary as govComputeRunSummary,
@@ -123,6 +123,78 @@ describe("BenchmarkRunner", () => {
     expect(md).toContain("hospital");
     expect(md).toContain("6 个未决 major");
   });
+
+  it("runCase returns error and calls cancel on per-case timeout", async () => {
+    const casesDir = join(tmpDir, "cases");
+    const goldDir = join(tmpDir, "gold");
+    const outDir = join(tmpDir, "out");
+    mkdirSync(casesDir);
+    mkdirSync(goldDir);
+    writeFileSync(join(casesDir, "tc.md"), "# TC", "utf8");
+    writeFileSync(
+      join(goldDir, "tc.json"),
+      JSON.stringify({ actors: [], functions: [], entities: [] }),
+      "utf8",
+    );
+
+    let cancelCalled = false;
+    const mockFactory: RuntimeFactory = () => ({
+      run: () => new Promise(() => {}), // never resolves
+      cancel: () => { cancelCalled = true; },
+    });
+
+    const config = new AgentConfig({
+      benchmark: { entityNameMap: {}, functionSynonyms: {}, caseTimeoutSeconds: 0.05 },
+    });
+
+    const runner = new BenchmarkRunner(config, casesDir, goldDir, outDir, undefined, mockFactory);
+    const [testCase] = runner.findCases();
+    const result = await runner.runCase(testCase);
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain("timeout");
+    expect(cancelCalled).toBe(true);
+  }, 5000);
+
+  it("runCase respects caseTimeoutSeconds=0 (unlimited — no timeout race)", async () => {
+    const casesDir = join(tmpDir, "cases");
+    const goldDir = join(tmpDir, "gold");
+    const outDir = join(tmpDir, "out");
+    mkdirSync(casesDir);
+    mkdirSync(goldDir);
+    writeFileSync(join(casesDir, "instant.md"), "# Instant", "utf8");
+    writeFileSync(
+      join(goldDir, "instant.json"),
+      JSON.stringify({ actors: [], functions: [], entities: [] }),
+      "utf8",
+    );
+
+    const mockState = {
+      requirementJson: {},
+      diagrams: {},
+      getMajorPendingTaskIds: () => [],
+      finalReviewPassed: true,
+    };
+    const mockFactory: RuntimeFactory = () => ({
+      run: () => Promise.resolve(mockState),
+      cancel: () => {},
+    });
+
+    // Using a stub judge so no LLM is called
+    const stubJudge = {
+      generateJson: async () => ({ score: 100, detail: {} }),
+    } as never;
+
+    const config = new AgentConfig({
+      benchmark: { entityNameMap: {}, functionSynonyms: {}, caseTimeoutSeconds: 0 },
+    });
+
+    const runner = new BenchmarkRunner(config, casesDir, goldDir, outDir, stubJudge, mockFactory);
+    const [testCase] = runner.findCases();
+    const result = await runner.runCase(testCase);
+
+    expect(result.status).toBe("success");
+  }, 5000);
 });
 
 // ===========================================================================

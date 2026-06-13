@@ -278,6 +278,36 @@ describe("DeterministicPolicy", () => {
     expect(result!.strategy).toBe("wait_for_running");
   });
 
+  // Livelock regression: terminal-failed + replan budget exhausted + other tasks running
+  // must NOT loop on wait_for_running forever.
+  it("pauses (not livelock) when failed task has exhausted both regeneration and replan budgets while other tasks are running", () => {
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      planReady: true,
+      failedTasks: ["design-1"],
+      runningTasks: ["tests-3"],           // some other task still inflight
+      regenerateCountsByTask: { "design-1": 1 }, // maxRegeneratePerTask=1, exhausted
+      planRevisionCount: 2,                // maxReplanCount=2, also exhausted
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    expect(result!.strategy).toBe("pause_for_user");
+  });
+
+  it("still waits when failed task exhausted regeneration but replan budget remains", () => {
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      planReady: true,
+      failedTasks: ["design-1"],
+      runningTasks: ["tests-1"],
+      regenerateCountsByTask: { "design-1": 1 }, // regenerate exhausted
+      planRevisionCount: 0,                // replan budget NOT exhausted
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    expect(result!.strategy).toBe("wait_for_running"); // waiting CAN lead to replan
+  });
+
   it("repairs rejected artifact when budget allows", () => {
     const policy = new DeterministicPolicy();
     const snapshot = makeSnapshot({

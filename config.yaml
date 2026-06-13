@@ -35,6 +35,7 @@ orchestration:
   convergence_accept_max_issues_flat: 10
 
 # Benchmark configuration
+# case_timeout_seconds: per-case wall-clock limit (0 = unlimited, default 3600)
 benchmark:
   entity_name_map:
     用户: ["User", "Account", "Member"]

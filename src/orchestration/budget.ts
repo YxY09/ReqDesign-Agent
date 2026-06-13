@@ -226,4 +226,18 @@ export class BudgetManager {
       snapshot.planRevisionCount < this.maxReplanCount
     );
   }
+
+  /**
+   * True if a replan would be permitted once all currently-running tasks have
+   * settled (i.e., same as canReplan but ignoring the "no running tasks" gate).
+   * Used to decide whether waiting for running tasks can ever unblock a replan.
+   */
+  canReplanWhenIdle(snapshot: OrchestratorSnapshot): boolean {
+    return (
+      snapshot.planReady &&
+      !snapshot.isDirectMode &&
+      snapshot.plannerFailures < this.maxPlannerFailures &&
+      snapshot.planRevisionCount < this.maxReplanCount
+    );
+  }
 }
