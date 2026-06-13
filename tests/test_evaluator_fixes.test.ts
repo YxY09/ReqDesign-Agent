@@ -646,6 +646,91 @@ describe("EvaluationTool — exception ID displayId matching regression", () => 
   });
 });
 
+// -----------------------------------------------------------------------
+// Regression: multiple uncovered constraints collapse into one issue
+// -----------------------------------------------------------------------
+
+describe("EvaluationTool — constraint coverage merging", () => {
+  it("emits one merged issue when multiple constraints are uncovered, not one per constraint", async () => {
+    const evaluator = new EvaluationTool(noopLlm());
+
+    const reqJson = {
+      functions: [{ id: "F001", name: "PlaceOrder" }],
+      constraints: [
+        { id: "CON_FUNC_ABC", description: "最大下单数量限制" },
+        { id: "CON_FUNC_DEF", description: "支付超时限制" },
+        { id: "CON_FUNC_GHI", description: "库存不足限制" },
+      ],
+    };
+
+    const verdict = await evaluator.evaluate(
+      "requirement",
+      reqJson,
+      "",
+      {},
+      "",
+      { "tests-1": { type: "tests", revision: 1 } },
+      {
+        "tests-1": {
+          task_id: "tests-1",
+          type: "tests",
+          revision: 1,
+          // None of the 3 constraint IDs appear in this test content
+          content: "## TC-N-001: 正常下单\n- 步骤: 用户下单\n- 预期: 订单创建成功",
+        },
+      },
+      "design",
+      false,
+      ["tests-1"],
+    );
+
+    const constraintIssues = verdict.issues.filter(
+      (issue) => issue.targetField === "test_cases" && issue.description.includes("约束"),
+    );
+    // Should be exactly ONE merged issue, not three separate issues
+    expect(constraintIssues).toHaveLength(1);
+    expect(constraintIssues[0].description).toContain("3 个约束未被测试用例覆盖");
+    expect(constraintIssues[0].description).toContain("CON_FUNC_ABC");
+    expect(constraintIssues[0].description).toContain("CON_FUNC_DEF");
+    expect(constraintIssues[0].description).toContain("CON_FUNC_GHI");
+  });
+
+  it("emits no constraint issue when all constraints are covered", async () => {
+    const evaluator = new EvaluationTool(noopLlm());
+
+    const reqJson = {
+      constraints: [
+        { id: "C001", description: "订单数量限制" },
+      ],
+    };
+
+    const verdict = await evaluator.evaluate(
+      "requirement",
+      reqJson,
+      "",
+      {},
+      "",
+      { "tests-1": { type: "tests", revision: 1 } },
+      {
+        "tests-1": {
+          task_id: "tests-1",
+          type: "tests",
+          revision: 1,
+          content: "## TC-B-001: C001 边界测试\n- 步骤: 构造C001边界值\n- 预期: 系统拒绝",
+        },
+      },
+      "design",
+      false,
+      ["tests-1"],
+    );
+
+    const constraintIssues = verdict.issues.filter(
+      (issue) => issue.targetField === "test_cases" && issue.description.includes("约束"),
+    );
+    expect(constraintIssues).toHaveLength(0);
+  });
+});
+
 describe("EvaluationTool._requirementForReview", () => {
   it("returns the text unchanged when within budget", () => {
     const text = "短需求文本";
