@@ -630,8 +630,8 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     const mergedActors = AnalyzeMerger._mergeActors(allActors);
     const mergedEntities = AnalyzeMerger._mergeEntities(allEntities, registry);
     const mergedFunctions = AnalyzeMerger._mergeFunctions(allFunctions);
-    const mergedConstraints = AnalyzeMerger._mergeByConstraintRef(allConstraints);
-    const mergedExceptions = AnalyzeMerger._mergeByExceptionRef(allExceptions);
+    const mergedConstraints = AnalyzeMerger._mergeByRefField(allConstraints, "constraintRef");
+    const mergedExceptions = AnalyzeMerger._mergeByRefField(allExceptions, "exceptionRef");
     const mergedNFR = AnalyzeMerger._mergeByCategory(allNFR);
     const mergedBP = AnalyzeMerger._mergeByName(allBP);
 
@@ -896,56 +896,19 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     return result;
   }
 
-  // --- Constraints: merge by constraintRef first, fallback to source_text dedup ---
-  private static _mergeByConstraintRef(
+  // --- Constraints/Exceptions: merge by ref field, fallback to source_text dedup ---
+  private static _mergeByRefField(
     items: Record<string, unknown>[],
+    refField: string,
   ): Record<string, unknown>[] {
     if (items.length <= 1) return [...items];
 
-    // Group by constraintRef
+    // Group by the ref field
     const refGroups = new Map<string, Record<string, unknown>[]>();
     const noRefItems: Record<string, unknown>[] = [];
 
     for (const item of items) {
-      const ref = String(item.constraintRef ?? "").trim();
-      if (ref) {
-        let group = refGroups.get(ref);
-        if (!group) { group = []; refGroups.set(ref, group); }
-        group.push(item);
-      } else {
-        noRefItems.push(item);
-      }
-    }
-
-    const result: Record<string, unknown>[] = [];
-
-    // Keep longest description per ref group
-    for (const [_ref, group] of refGroups) {
-      if (group.length === 1) {
-        result.push(group[0]);
-      } else {
-        group.sort((a, b) => String(b.description ?? "").length - String(a.description ?? "").length);
-        result.push(group[0]);
-      }
-    }
-
-    result.push(...AnalyzeMerger._mergeBySourceText(noRefItems));
-
-    return result;
-  }
-
-  // --- Exceptions: merge by exceptionRef first, fallback to source_text dedup ---
-  private static _mergeByExceptionRef(
-    items: Record<string, unknown>[],
-  ): Record<string, unknown>[] {
-    if (items.length <= 1) return [...items];
-
-    // Group by exceptionRef
-    const refGroups = new Map<string, Record<string, unknown>[]>();
-    const noRefItems: Record<string, unknown>[] = [];
-
-    for (const item of items) {
-      const ref = String(item.exceptionRef ?? "").trim();
+      const ref = String(item[refField] ?? "").trim();
       if (ref) {
         let group = refGroups.get(ref);
         if (!group) { group = []; refGroups.set(ref, group); }
