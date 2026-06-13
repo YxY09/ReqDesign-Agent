@@ -372,8 +372,8 @@ export class RepairTool extends BaseTool {
       }
     }
 
-    // 模式 3：约束未被测试覆盖 — "约束 X 未被测试用例覆盖"
-    const constraintMatch = description.match(/约束\s*(C\d+)\s*未被测试用例覆盖/);
+    // 模式 3a：单个约束未被测试覆盖 — "约束 X 未被测试用例覆盖"
+    const constraintMatch = description.match(/^约束\s+([A-Za-z0-9_-]+)\s+未被测试用例覆盖$/);
     if (constraintMatch && task.type === "tests") {
       return this._fixMissingConstraintTest(task, currentContent, constraintMatch[1], context);
     }
@@ -642,7 +642,11 @@ export class RepairTool extends BaseTool {
     const constraints = Array.isArray(reqJson.constraints)
       ? reqJson.constraints as Array<Record<string, unknown>>
       : [];
-    const constraint = constraints.find((c) => String(c.id ?? "").trim() === constraintId);
+    const constraint = constraints.find((c) =>
+      String(c.id ?? "").trim() === constraintId ||
+      String(c.displayId ?? "").trim() === constraintId ||
+      String(c.constraintRef ?? "").trim() === constraintId,
+    );
     if (!constraint) return null;
 
     const desc = String(constraint.description ?? constraintId);

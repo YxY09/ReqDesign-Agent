@@ -810,21 +810,25 @@ export class EvaluationTool extends BaseTool {
       const content = String(snapshot.content ?? "");
       if (!content) continue;
 
+      const uncoveredIds: string[] = [];
       for (const constraint of constraints) {
         const cid = String(constraint.id ?? "").trim();
         if (!cid) continue;
-        // Check if this constraint ID appears in any test case
-        if (!content.includes(cid)) {
-          issues.push(createIssue({
-            severity: "major",
-            targetTaskId: taskId,
-            targetTaskType: "tests",
-            targetField: "test_cases",
-            description: `约束 ${cid} 未被测试用例覆盖`,
-            suggestion: `添加针对约束 ${cid} 的边界测试用例`,
-          }));
-        }
+        if (!content.includes(cid)) uncoveredIds.push(cid);
       }
+
+      if (uncoveredIds.length === 0) continue;
+
+      // Merge all uncovered constraints into a single issue so the repair LLM
+      // can fix all of them in one call, and the issue count stays ≤ convergence threshold.
+      issues.push(createIssue({
+        severity: "major",
+        targetTaskId: taskId,
+        targetTaskType: "tests",
+        targetField: "test_cases",
+        description: `${uncoveredIds.length} 个约束未被测试用例覆盖: ${uncoveredIds.join(", ")}`,
+        suggestion: `为以下每个约束各添加至少一个边界测试用例: ${uncoveredIds.join(", ")}`,
+      }));
     }
 
     return issues;
