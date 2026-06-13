@@ -23,7 +23,7 @@ logging:
 orchestration:
   skip_evaluation: false
   # 单个 worker 会话超时（秒）
-  worker_timeout_seconds: 900
+  worker_timeout_seconds: 2400  # analyze 阶段对复杂文档需多次 ~60s LLM 调用，900s 不够（hospital 曾因此被杀）
   # 主循环空转轮询间隔（毫秒）
   poll_interval_ms: 20
   # 会话心跳间隔（秒）
