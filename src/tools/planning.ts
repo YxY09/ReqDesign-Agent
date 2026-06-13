@@ -143,6 +143,10 @@ export class PlanningTool extends BaseTool {
     // Inject availableConstraints into analyze tasks (section-filtered, capped)
     const MAX_CONSTRAINTS_PER_TASK = 30;
     if (constraintCandidates && constraintCandidates.length > 0) {
+      // constraintRef 基于全局序号必须稳定；预建 Map 避免每条 indexOf 的 O(n²)
+      const candidateIndex = new Map<ConstraintCandidate, number>(
+        constraintCandidates.map((candidate, index) => [candidate, index]),
+      );
       for (const task of plan.tasks) {
         if (task.type === "analyze") {
           const assignedSections = Array.isArray(task.contextHints?.assignedSections)
@@ -176,7 +180,7 @@ export class PlanningTool extends BaseTool {
           }
 
           task.contextHints.availableConstraints = filtered.map((c) => {
-            const originalIndex = constraintCandidates.indexOf(c);
+            const originalIndex = candidateIndex.get(c) ?? -1;
             return {
               constraintRef: `C_RULE_${String(originalIndex + 1).padStart(3, "0")}`,
               description: c.description ?? "",

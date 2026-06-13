@@ -370,8 +370,18 @@ ${text}`;
   ): string[] {
     const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
     if (requirementIndex.exceptions.length === 0) return [];
+    // 异常 ID 前缀从实际数据推导（兼容 X001 / E006 / EXC_xxx 等不同文档约定），
+    // 而不是硬编码 X/EXC_ —— 原文用 E 前缀时硬编码会漏检。
+    const prefixes = new Set<string>();
+    for (const ref of requirementIndex.exceptions) {
+      for (const id of [ref.displayId, ref.canonicalId]) {
+        const match = /^([A-Z]+_?)/.exec(id);
+        if (match) prefixes.add(match[1]);
+      }
+    }
+    const prefixList = [...prefixes];
     const referenced = requirementIndex.extractIds(text)
-      .filter((id) => id.startsWith("X") || id.startsWith("EXC_"));
+      .filter((id) => prefixList.some((prefix) => id.startsWith(prefix)));
     const unknown = requirementIndex.unknownReferences(referenced);
     return unknown.length > 0
       ? [`${label} 引用了未定义的异常 ID: ${unknown.join(", ")}`]

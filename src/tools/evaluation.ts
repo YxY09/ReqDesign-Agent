@@ -914,13 +914,16 @@ export class EvaluationTool extends BaseTool {
     const artifactTypes = presentTypes.length > 0 ? presentTypes.join(", ") : "scoped";
     const system = await this._getSystemPrompt("evaluator.md", "", `review ${reviewMode} ${artifactTypes}`);
 
-    const reqLimit = reviewMode === "quick" ? 800 : 2000;
+    // 覆盖性评审必须看到足够多的需求原文，否则就是盲审。
+    // quick 模式给小预算，full 模式给大预算（中文 1 字符 ≈ 1 token，
+    // full 模式总输入约 30k tokens，主流模型 64k+ 上下文可容纳）。
+    const reqLimit = reviewMode === "quick" ? 4000 : 12000;
     const textLimit = reviewMode === "quick" ? 10000 : 16000;
     const diagramLimit = reviewMode === "quick" ? 3000 : 5000;
 
     const sections: string[] = [];
     if (requirementText) {
-      sections.push(`## 原始需求\n${(requirementText ?? "").slice(0, reqLimit)}`);
+      sections.push(`## 原始需求\n${EvaluationTool._requirementForReview(requirementText, reqLimit)}`);
     }
 
     // NOTE: previousIssues injection removed — LLM evaluators tend to parrot
@@ -988,8 +991,10 @@ export class EvaluationTool extends BaseTool {
     requirementJson: Record<string, unknown>,
   ): Promise<Issue[]> {
     const system = await this._getSystemPrompt("evaluator.md", "", "analyze:" + (requirementText ?? "").slice(0, 150));
-    const reqTextShort = (requirementText ?? "").slice(0, 2000);
-    const reqJsonStr = JSON.stringify(requirementJson ?? {}, null, 2).slice(0, 3000);
+    // 完整性审查不能只看前 2000 字符；JSON 硬切会产生残缺片段误导评审，
+    // 改用 _jsonForReview 自适应摘要（始终输出合法 JSON）。
+    const reqTextShort = EvaluationTool._requirementForReview(requirementText ?? "", 12000);
+    const reqJsonStr = EvaluationTool._jsonForReview(requirementJson ?? {}, 16000);
     const userPrompt = `## 原始需求\n${reqTextShort}\n\n## 需求分析结果\n\`\`\`json\n${reqJsonStr}\n\`\`\`\n\n请审查需求分析结果的完整性和准确性，输出 JSON 裁决。`;
 
     this.llm.streamTag = "[Evaluator:analyze]";
@@ -1028,6 +1033,23 @@ export class EvaluationTool extends BaseTool {
     if (text.length <= maxChars) return text;
     return text.slice(0, Math.max(0, maxChars - 80)) +
       `\n__review_truncated__: ${text.length - Math.max(0, maxChars - 80)} chars omitted`;
+  }
+
+  /**
+   * 需求原文的评审用截断：保留头部 70% + 尾部 30%。
+   * 约束、非功能需求、验收标准往往出现在文档后半部，
+   * 纯头部截断会让评审完全看不到它们。
+   */
+  static _requirementForReview(text: string, maxChars: number): string {
+    if (text.length <= maxChars) return text;
+    const headBudget = Math.floor(maxChars * 0.7);
+    const tailBudget = Math.max(0, maxChars - headBudget - 120);
+    const omitted = text.length - headBudget - tailBudget;
+    return (
+      text.slice(0, headBudget) +
+      `\n\n__review_truncated__: 中部省略 ${omitted} 字符（仅为控制提示长度，不代表原文缺失）\n\n` +
+      text.slice(text.length - tailBudget)
+    );
   }
 
   static _jsonForReview(value: unknown, maxChars: number): string {

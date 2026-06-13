@@ -5,13 +5,10 @@
  */
 
 import { BudgetManager } from "./budget.js";
+import { RemediationLadder, isTaskRunning } from "./remediation.js";
 import { ReviewScheduler } from "./reviewScheduler.js";
 import type { OrchestratorSnapshot } from "./snapshot.js";
 import { type StrategyDecision, createStrategyDecision } from "./strategy.js";
-
-function isTaskRunning(snapshot: OrchestratorSnapshot, taskId: string): boolean {
-  return taskId !== "" && snapshot.runningTasks.includes(taskId);
-}
 
 // ---------------------------------------------------------------------------
 // PolicyGuard
@@ -20,6 +17,7 @@ function isTaskRunning(snapshot: OrchestratorSnapshot, taskId: string): boolean 
 export class PolicyGuard {
   readonly budget: BudgetManager;
   readonly reviewScheduler: ReviewScheduler;
+  readonly ladder: RemediationLadder;
 
   static readonly MAX_REPAIR_PER_TASK = 4;
   static readonly MAX_REPLAN_COUNT = 2;
@@ -31,6 +29,7 @@ export class PolicyGuard {
       this.budget.maxReplanCount = PolicyGuard.MAX_REPLAN_COUNT;
     }
     this.reviewScheduler = new ReviewScheduler();
+    this.ladder = new RemediationLadder(this.budget);
   }
 
   validate(decision: StrategyDecision, snapshot: OrchestratorSnapshot): StrategyDecision {
@@ -125,54 +124,18 @@ export class PolicyGuard {
     return !snapshot.finalReviewCurrent;
   }
 
-  // PolicyGuard 和 DeterministicPolicy 共享的方法
+  // PolicyGuard 和 DeterministicPolicy 共享的方法（实现在 RemediationLadder）
   _isSafeFinalMajorRepairTarget(snapshot: OrchestratorSnapshot, target: string): boolean {
-    const taskType = this.budget.taskType(snapshot, target);
-    const targetIssues = snapshot.latestIssues.filter((issue) => issue["target_task_id"] === target);
-    const majorIssues = targetIssues.filter((issue) => issue["severity"] === "major");
-    if (majorIssues.length === 0) return false;
-
-    if (taskType === "analyze") {
-      const hasLocal = majorIssues.some((issue) => {
-        const scope = String(issue["scope"] ?? "");
-        return scope !== "upstream" && scope !== "systemic";
-      });
-      return hasLocal;
-    }
-
-    const hasLocalIssue = majorIssues.some((issue) => {
-      const scope = String(issue["scope"] ?? "");
-      if (scope === "upstream" || scope === "systemic") return false;
-      const targetType = String(issue["target_task_type"] ?? "");
-      return !targetType || !taskType || targetType === taskType;
-    });
-    return hasLocalIssue;
+    return this.ladder.isSafeFinalMajorRepairTarget(snapshot, target);
   }
 
   private _nextSafeStrategy(snapshot: OrchestratorSnapshot, reason: string): StrategyDecision {
-    if (snapshot.rejectedArtifacts.length > 0) {
-      const target = snapshot.rejectedArtifacts[0];
-      if (this.budget.shouldRegenerate(snapshot, target)) {
-        return createStrategyDecision({ strategy: "regenerate_downstream", targetTaskId: target, affectedTaskIds: [target], reason });
-      }
-      if (!this.budget.canRepair(snapshot, target)) {
-        if (this.canReplan(snapshot)) return createStrategyDecision({ strategy: "escalate_to_replan", reason });
-        return createStrategyDecision({ strategy: "pause_for_user", targetTaskId: target, reason });
-      }
-      return createStrategyDecision({ strategy: "repair_local_artifact", targetTaskId: target, reason });
-    }
+    const rejectedStep = this.ladder.rejectedArtifact(snapshot, reason);
+    if (rejectedStep) return rejectedStep;
 
-    if (snapshot.finalReviewCurrent && snapshot.majorPendingTaskIds.length > 0) {
-      for (const target of snapshot.majorPendingTaskIds) {
-        if (isTaskRunning(snapshot, target)) continue;
-        if (this.budget.canRepairFinalMajor(snapshot, target) && this._isSafeFinalMajorRepairTarget(snapshot, target)) {
-          return createStrategyDecision({ strategy: "repair_local_artifact", targetTaskId: target, reason });
-        }
-      }
-      const runningTarget = snapshot.majorPendingTaskIds.find((taskId) => isTaskRunning(snapshot, taskId));
-      if (runningTarget) return createStrategyDecision({ strategy: "wait_for_running", targetTaskId: runningTarget, reason });
-      if (this.canReplan(snapshot)) return createStrategyDecision({ strategy: "escalate_to_replan", reason });
-      return createStrategyDecision({ strategy: "pause_for_user", targetTaskId: snapshot.majorPendingTaskIds[0], reason });
+    if (snapshot.finalReviewCurrent) {
+      const majorStep = this.ladder.finalMajor(snapshot, reason);
+      if (majorStep) return majorStep;
     }
 
     if (snapshot.readyTasks.length > 0) return createStrategyDecision({ strategy: "advance_ready_work", reason });
@@ -198,11 +161,13 @@ export class DeterministicPolicy {
   readonly guard: PolicyGuard;
   readonly budget: BudgetManager;
   readonly reviewScheduler: ReviewScheduler;
+  readonly ladder: RemediationLadder;
 
   constructor(guard?: PolicyGuard) {
     this.guard = guard ?? new PolicyGuard();
     this.budget = this.guard.budget;
     this.reviewScheduler = new ReviewScheduler();
+    this.ladder = this.guard.ladder;
   }
 
   /**
@@ -267,50 +232,9 @@ export class DeterministicPolicy {
       });
     }
 
-    // 3) 被拒绝的产物 —— 修复、重新生成或重新规划
-    if (snapshot.rejectedArtifacts.length > 0) {
-      const target = snapshot.rejectedArtifacts.find(
-        (taskId) => !isTaskRunning(snapshot, taskId),
-      );
-      if (!target) {
-        return createStrategyDecision({
-          strategy: "wait_for_running",
-          targetTaskId: snapshot.rejectedArtifacts[0],
-          reason: `${snapshot.rejectedArtifacts[0]} repair is already running`,
-        });
-      }
-      if (this.budget.shouldRegenerate(snapshot, target)) {
-        const taskType = this.budget.taskType(snapshot, target);
-        return createStrategyDecision({
-          strategy: "regenerate_downstream",
-          targetTaskId: target,
-          affectedTaskIds: [target],
-          reason: `${target} is a ${taskType || "artifact"} artifact after repeated repair; regenerate`,
-        });
-      }
-      if (
-        snapshot.stalledTaskIds.includes(target) ||
-        !this.budget.canRepair(snapshot, target)
-      ) {
-        if (this.guard.canReplan(snapshot)) {
-          return createStrategyDecision({
-            strategy: "escalate_to_replan",
-            targetTaskId: target,
-            reason: `${target} is stalled or exhausted repair budget`,
-          });
-        }
-        return createStrategyDecision({
-          strategy: "pause_for_user",
-          targetTaskId: target,
-          reason: `${target} cannot be repaired safely and replan budget is exhausted`,
-        });
-      }
-      return createStrategyDecision({
-        strategy: "repair_local_artifact",
-        targetTaskId: target,
-        reason: `current artifact revision is rejected: ${target}`,
-      });
-    }
+    // 3) 被拒绝的产物 —— 修复、重新生成或重新规划（共享降级阶梯）
+    const rejectedStep = this.ladder.rejectedArtifact(snapshot);
+    if (rejectedStep) return rejectedStep;
 
     // 4) 全局卡死且可以重新规划
     if (snapshot.globallyStalled && this.guard.canReplan(snapshot)) {
@@ -366,47 +290,13 @@ export class DeterministicPolicy {
       });
     }
 
-    // 7) 最终审查发现重大问题 —— 尝试按任务修复
+    // 7) 最终审查发现重大问题 —— 尝试按任务修复（共享降级阶梯）
     // 即使 finalReviewCurrent 为 false 也会触发：如果评估器发现了重大问题，
     // 我们应该在重新运行评估之前尝试修复。
     // 当 skipEvaluation 为 true 时跳过（无评估 → 无重大问题）。
-    if (!this.budget.skipEvaluation && snapshot.majorPendingTaskIds.length > 0) {
-      const target = this._selectFinalMajorRepairTarget(snapshot);
-      if (target) {
-        return createStrategyDecision({
-          strategy: "repair_local_artifact",
-          targetTaskId: target,
-          reason: `final review found local major issues in ${target}`,
-        });
-      }
-      const runningTarget = snapshot.majorPendingTaskIds.find((taskId) =>
-        isTaskRunning(snapshot, taskId),
-      );
-      if (runningTarget) {
-        return createStrategyDecision({
-          strategy: "wait_for_running",
-          targetTaskId: runningTarget,
-          reason: `final review repair is already running for ${runningTarget}`,
-        });
-      }
-      if (snapshot.runningTasks.length > 0 || snapshot.evaluatorRunning) {
-        return createStrategyDecision({
-          strategy: "wait_for_running",
-          reason: "final review major issues remain, but workflow work is still running",
-        });
-      }
-      if (this.guard.canReplan(snapshot)) {
-        return createStrategyDecision({
-          strategy: "escalate_to_replan",
-          reason: "final review major issues exceeded repair budget",
-        });
-      }
-      return createStrategyDecision({
-        strategy: "pause_for_user",
-        targetTaskId: snapshot.majorPendingTaskIds[0],
-        reason:
-          "final review major issues remain but repair/replan budget is exhausted",
-      });
+    if (!this.budget.skipEvaluation) {
+      const majorStep = this.ladder.finalMajor(snapshot);
+      if (majorStep) return majorStep;
     }
 
     // 8) 当前最终审查被拒绝，但没有安全的自动修复方案。
@@ -499,17 +389,5 @@ export class DeterministicPolicy {
 
     // 需要 LLM 判断
     return null;
-  }
-
-  private _selectFinalMajorRepairTarget(
-    snapshot: OrchestratorSnapshot,
-  ): string {
-    for (const target of snapshot.majorPendingTaskIds) {
-      if (isTaskRunning(snapshot, target)) continue;
-      if (!this.budget.canRepairFinalMajor(snapshot, target)) continue;
-      if (!this.guard._isSafeFinalMajorRepairTarget(snapshot, target)) continue;
-      return target;
-    }
-    return "";
   }
 }

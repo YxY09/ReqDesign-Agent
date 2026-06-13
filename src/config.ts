@@ -133,6 +133,10 @@ const _dotenvLoadedPaths = new Set<string>();
  * 环境变量。
  */
 function loadDotenv(dotenvDir?: string): void {
+  // 测试环境下跳过 .env，保证测试结果不依赖本机密钥文件
+  //（否则 "无 key 时返回空串" 这类断言会被本地 .env 干扰）。
+  if (process.env.VITEST) return;
+
   const candidates: string[] = [];
   if (dotenvDir) {
     candidates.push(resolve(dotenvDir, ".env"));
