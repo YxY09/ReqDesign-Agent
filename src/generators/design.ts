@@ -49,6 +49,11 @@ const HELPER_CLASS_SUFFIXES = [
   "Mapper",
   "Dao",
   "Repo",
+  "Generator",
+  "Publisher",
+  "Dispatcher",
+  "Executor",
+  "Builder",
 ];
 
 function splitPascalCase(name: string): string[] {
