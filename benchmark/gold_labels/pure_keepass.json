@@ -1,0 +1,63 @@
+{
+  "case": "pure_keepass",
+  "source": "PURE Plain Dataset — 2008 KeePass Password Safe 1.10 SRS (CC-BY 4.0), manual gold annotation",
+  "expected_actors": [
+    "End User",
+    "Advanced End User",
+    "System Administrator"
+  ],
+  "expected_functions": [
+    "Create new database with Master Password",
+    "Open existing database",
+    "Save database",
+    "Save database as new file",
+    "Close database",
+    "Print database entries",
+    "Search database by keyword",
+    "Import data from CSV/Code Wallet/Password Safe/Personal Vault",
+    "Export database",
+    "Add/modify/delete groups and subgroups",
+    "Add/view/edit/duplicate/delete entries",
+    "Change display language",
+    "Configure Auto-Type sequences",
+    "Open database via command line argument",
+    "Use Composite Master Key (password + key file + Windows account)",
+    "Generate passwords (random, pattern-based, rule-based)",
+    "Add and use TAN one-time passwords",
+    "Lock and unlock workspace",
+    "Copy stored passwords to clipboard / send to applications",
+    "Execute URLs and command lines from URL field"
+  ],
+  "expected_entities": [
+    "Database",
+    "MasterKey",
+    "KeyFile",
+    "CompositeMasterKey",
+    "Group",
+    "Subgroup",
+    "Entry",
+    "Password",
+    "TAN"
+  ],
+  "expected_constraints": [
+    "Database encrypted with AES/Rijndael 256-bit key and Twofish 256-bit key",
+    "Clipboard password cleared after 10 seconds",
+    "No recovery mechanism if Master Password is lost",
+    "Single instance only (Global Hot Key to restore)",
+    "Runs on Windows 95/98/NT/2000/XP/Server 2003 and WINE",
+    "Database file extension must be .kdb"
+  ],
+  "expected_exceptions": [
+    "File not found when opening database",
+    "Wrong or invalid Master Password",
+    "Empty group name when creating group",
+    "Empty database when printing",
+    "No search results when keyword not found"
+  ],
+  "expected_processes": [
+    "Create database → set Master Password → add groups/entries → save",
+    "Open database → enter Master Password → access/modify entries → save",
+    "Auto-Type workflow: configure sequence → KeePass sends keystrokes to target window",
+    "Password usage workflow: copy password → paste to website/app (auto-cleared after 10s)"
+  ]
+}

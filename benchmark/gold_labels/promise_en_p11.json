@@ -1,0 +1,24 @@
+{
+  "case": "promise_en_p11",
+  "source": "PROMISE NFR (English original) project 11 (Cleland-Huang et al. 2007, CC-BY-SA 3.0)",
+  "expected_actors": [],
+  "expected_functions": [],
+  "expected_entities": [],
+  "expected_constraints": [
+    "[Usability] The system shall be easy to use by callers and supervisors. Callers and supervisors must be able to accomplish any system task within 2 minutes.",
+    "[Usability] The system shall be easy to learn by callers and supervisors. Callers and supervisors shall learn how to use the system within 10 minutes.",
+    "[Performance] The system shall be responsive. At the DePaul TeleServices Center  when a supervisor uses the system to view a callers schedule  the system response time must be no more than 2 seconds 90% of the time and no more than 5 seconds the rest of the time.",
+    "[Performance] On a 56k connection  the system response time for all operations must be no more than 6 seconds 90% of the time.",
+    "[Performance] On a 112k connection or faster  the system response time for all operations must be no more than 3 seconds 90% of the time.",
+    "[Availability] The system shall have high availability every day of the year.The system must be available for use between 12:00AM and 6:00PM all days of the year.",
+    "[Availability] The system must be available for use between 7:00AM and 11:59PM all days of the year.",
+    "[Maintainability] The product shall be internet browser independent.The product must run using Internet Explorer and Netscape Navigator.",
+    "[Security] The product shall ensure that only supervisors can advertise empty time slots.The product must ensure that supervisors are allowed to access advertise empty time slots.",
+    "[Security] The product shall ensure that only supervisors can enter a callers schedule.The product must ensure that supervisors are allowed to access advertise empty time slots.",
+    "[Security] The product shall ensure that only supervisors can view schedule of all callers.The product must ensure that supervisors are allowed to access advertise empty time slots.",
+    "[Look & Feel] The interface shall have a simple look. In the interface and usability survey  90% of beta testers must report that the interface is adequately simple.",
+    "[Look & Feel] The interface shall be appealing to callers and supervisors. In the interface and usability survey  80% of beta testers must report that the interface is appealing."
+  ],
+  "expected_exceptions": [],
+  "expected_processes": []
+}
