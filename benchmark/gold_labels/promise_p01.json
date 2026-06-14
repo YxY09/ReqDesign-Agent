@@ -1,0 +1,40 @@
+{
+  "case": "promise_p01",
+  "source": "PROMISE NFR project 1 (Cleland-Huang et al.)",
+  "expected_actors": [],
+  "expected_functions": [
+    "El sistema deberá tener un formulario MDI que permita la visualización del gráfico y la tabla de datos.",
+    "El sistema mostrará los eventos en una tabla vertical por tiempo.",
+    "El sistema mostrará los eventos en un gráfico por tiempo.",
+    "El sistema mostrará Eventos o Actividades",
+    "La pantalla debe tener dos regiones: 2/3 a la izquierda de la pantalla son gráficos, 1/3 a la derecha de la pantalla es una tabla de datos",
+    "Los datos que se muestran tanto en los nodos dentro del gráfico como en las filas de la tabla son datos de Resumen de MSEL",
+    "El lado de la tabla de la pantalla se dividirá en 2 regiones: secuencial y temporal",
+    "La cuarta parte superior de la tabla contendrá eventos que ocurrirán secuencialmente",
+    "La parte inferior 3/4 de la tabla contendrá los eventos que ocurren de acuerdo con su relevancia para el tiempo actual",
+    "El sistema codificará con colores los eventos de acuerdo con su variación con respecto a la hora actual",
+    "El sistema debe mostrar datos de las aplicaciones Sync Matrix 1.0 y Exercise Management Tool 1.0",
+    "El sistema vinculará los eventos con las aplicaciones Sync Matrix 1.0 o la herramienta de gestión de ejercicios 1.0 para modificaciones.",
+    "El sistema permitirá la modificación de la pantalla.",
+    "El sistema ofrecerá una visualización de todos los eventos del ejercicio.",
+    "El sistema filtrará los datos por: lugares y eventos clave",
+    "El sistema permitirá al usuario definir los segmentos de tiempo",
+    "El sistema mostrará la hora local y la hora de ejercicio en relojes separados",
+    "El sistema ofrecerá la posibilidad de pausar y reanudar la actualización de datos",
+    "El sistema proporcionará gráficos para la actividad o evento real frente al tiempo supuesto",
+    "El sistema proporcionará un informe histórico de los cambios realizados en los datos de la actividad o el evento"
+  ],
+  "expected_entities": [],
+  "expected_constraints": [
+    "El sistema actualizará la pantalla cada 60 segundos",
+    "La solicitud debe coincidir con el color del esquema establecido por el Departamento de Seguridad Nacional",
+    "Si se proyectan, los datos deben ser legibles. En una pantalla de proyección de 10x10, el 90% de los espectadores deben poder leer los datos de eventos/actividades desde una distancia de visualización de 30",
+    "El producto estará disponible durante el horario laboral normal. Siempre que el usuario tenga acceso a la PC del cliente, el sistema estará disponible el 99% del tiempo durante los primeros seis meses de funcionamiento.",
+    "Si se proyectan, los datos deben ser comprensibles. En una pantalla de proyección de 10x10, el 90% de los espectadores deben poder determinar que los Eventos o Actividades están ocurriendo en el tiempo actual desde una distancia de visualización de 100",
+    "El producto debe garantizar que solo los usuarios autorizados puedan acceder a él. El producto podrá distinguir entre usuarios autorizados y no autorizados en todos los intentos de acceso",
+    "El producto debe ser intuitivo y autoexplicativo.: El 90% de los nuevos usuarios podrán iniciar la visualización de eventos o actividades dentro de los 90 minutos posteriores al uso del producto.",
+    "El producto responderá rápidamente para mantener los datos actualizados en la pantalla."
+  ],
+  "expected_exceptions": [],
+  "expected_processes": []
+}

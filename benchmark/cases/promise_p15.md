@@ -1,0 +1,29 @@
+# PROMISE NFR — Project 15
+
+## 功能需求 (Functional Requirements)
+
+## 非功能需求 (Non-Functional Requirements)
+
+### N001 [Availability]: El sistema RFS debe estar disponible las 24 horas del día, los 7 días de la semana, especialmente durante el período presupuestario. El sistema RFS estará disponible el 90% del tiempo durante todo el año y el 98% durante el período presupuestario. 2% de las veces, el sistema estará disponible dentro de 1 hora desde el momento en que se informa de la situación.
+
+### N002 [Operational]: 98% de las estaciones de trabajo de los usuarios deben cumplir con los requisitos mínimos de hardware antes de la implementación. Espacio mínimo en disco duro: 400 MB.
+
+### N003 [Operational]: 98% de las estaciones de trabajo de los usuarios deben cumplir con los requisitos mínimos de software antes de la implementación: Microsoft Internet Explorer 5.0. Microsoft .NET Framework 1.1. Controles web de Microsoft Internet Explorer
+
+### N004 [Operational]: El sistema RFS debe poder interactuar fácilmente con el entorno BDW para cargar los datos. Se recibirán 7 archivos de datos de la BDW y se cargarán en el sistema RFS dentro de las 3 horas un día antes del inicio del proceso de presupuestación cada año. Los datos serán a fin de mes de octubre. Los archivos de prueba (7) se cargarán hasta 5 veces durante el año desde el BDW.
+
+### N005 [Maintainability]: Los cambios en las fórmulas de ingresos y gastos deben aplicarse al sistema RFS cada año antes del inicio del proceso de presupuestación. Las fórmulas de ingresos y gastos se actualizarán dentro de una semana de su recepción, después de lo cual se asignarán 2 semanas para probar los cálculos presupuestarios que realizarán conjuntamente el equipo de desarrollo del proyecto y PCG Finance.
+
+### N006 [Maintainability]: Las nuevas sucursales/complejos/distritos/regiones y las cuentas de ingresos/gastos agregadas al BDW deben reflejarse en el sistema RFS. El 100% de las entidades (mencionadas anteriormente) disponibles a partir de fin de mes de octubre se cargarán en el sistema RFS antes del proceso de inicio del presupuesto.
+
+### N007 [Security]: Sólo el usuario autorizado podrá acceder al sistema RFS. SÓLO los usuarios que existan en el sistema UAS con el sistema RFS asignado a su función (s) deberán acceder al sistema RFS y utilizarlo.
+
+### N008 [Security]: El acceso de los usuarios debe limitarse a los permisos otorgados a su(s) rol(es). A cada nivel en la jerarquía del PCG se le asignará un rol y los usuarios serán asignados a estos roles. El acceso a la funcionalidad dentro del sistema RFS depende de los privilegios/permisos asignados al rol.
+
+### N009 [Look & Feel]: El producto debe cumplir con los estándares y requisitos de la página de intranet de ENET Securities. El grupo de Arquitectura aprobará el 95% de la apariencia del producto antes de la implementación. El 5% restante se corregirá y aprobará en el plazo de un mes a partir del lanzamiento del producto.
+
+### N010 [Look & Feel]: Las páginas de la intranet deben mostrarse correctamente en todas las resoluciones desde 800x600 y superiores. La visualización de todas las páginas será correcta en el 95% de las resoluciones antes de la implementación. El 5% restante se corregirá en el plazo de una semana a partir de la notificación de la visualización incorrecta.
+
+### N011 [Usability]: Los usuarios deberían poder utilizar fácilmente el sistema para completar con éxito sus presupuestos dentro del tiempo estipulado para su finalización. Con una semana de formación previa a la implementación del producto, el 98% de los usuarios completarán sus presupuestos dentro del tiempo estipulado.
+
+### N012 [Performance]: La interfaz del producto debe ser rápida. El tiempo de respuesta de la interfaz del producto no debe exceder los 2 segundos el 90% del tiempo. Durante el 10% del tiempo, el tiempo de respuesta no debe ser superior a 10 segundos.
