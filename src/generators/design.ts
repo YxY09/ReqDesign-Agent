@@ -318,46 +318,51 @@ export class SystemDesigner extends BaseGenerator<string> {
     ].filter(Boolean).join("\n\n");
   }
 
+  private static _cellSafe(text: string): string {
+    return String(text ?? "").replace(/\|/g, "\\|");
+  }
+
   static renderDesignMarkdown(model: DesignModel): string {
     const lines: string[] = [];
+    const s = SystemDesigner._cellSafe;
 
     lines.push("## 模块划分\n");
     lines.push("| 模块名称 | 职责描述 | 对应功能 |");
     lines.push("|----------|----------|----------|");
     for (const mod of model.modules) {
-      lines.push(`| ${mod.name} | ${mod.responsibility} | ${mod.functionIds.join(", ")} |`);
+      lines.push(`| ${s(mod.name)} | ${s(mod.responsibility)} | ${s(mod.functionIds.join(", "))} |`);
     }
 
     lines.push("\n## 核心类/接口设计\n");
     lines.push("| 类名 | 类型 | 职责 | 关联实体 |");
     lines.push("|------|------|------|----------|");
     for (const cls of model.classes) {
-      lines.push(`| ${cls.name} | ${cls.kind} | ${cls.responsibility} | ${cls.entityRef ?? "-"} |`);
+      lines.push(`| ${s(cls.name)} | ${s(cls.kind)} | ${s(cls.responsibility)} | ${s(cls.entityRef ?? "-")} |`);
     }
     for (const cls of model.classes) {
-      lines.push(`\n### ${cls.name}`);
-      lines.push(`- **职责**: ${cls.responsibility}`);
+      lines.push(`\n### ${s(cls.name)}`);
+      lines.push(`- **职责**: ${s(cls.responsibility)}`);
       if (cls.attributes && cls.attributes.length > 0) {
         lines.push("- **属性**:");
         for (const attr of cls.attributes) {
-          lines.push(`  - ${attr.name}: ${attr.type}${attr.description ? ` — ${attr.description}` : ""}`);
+          lines.push(`  - ${s(attr.name)}: ${s(attr.type)}${attr.description ? ` — ${s(attr.description)}` : ""}`);
         }
       }
       if (cls.methods && cls.methods.length > 0) {
-        lines.push("- **方法**: " + cls.methods.join(", "));
+        lines.push("- **方法**: " + cls.methods.map(s).join(", "));
       }
       if (cls.entityRef) {
-        lines.push(`- **关联实体**: ${cls.entityRef}`);
+        lines.push(`- **关联实体**: ${s(cls.entityRef)}`);
       }
     }
 
     lines.push("\n## 数据流说明\n");
     for (const flow of model.dataFlows) {
-      lines.push(`### ${flow.name}`);
+      lines.push(`### ${s(flow.name)}`);
       if (flow.relatedFunctionIds.length > 0) {
-        lines.push(`相关功能: ${flow.relatedFunctionIds.join(", ")}`);
+        lines.push(`相关功能: ${s(flow.relatedFunctionIds.join(", "))}`);
       }
-      flow.steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
+      flow.steps.forEach((step, i) => lines.push(`${i + 1}. ${s(step)}`));
       lines.push("");
     }
 
@@ -365,9 +370,9 @@ export class SystemDesigner extends BaseGenerator<string> {
     lines.push("| ID | 类型 | 原始描述 | 设计决策 | 影响模块 | 影响类 | 测试启示 |");
     lines.push("|-----|------|----------|----------|---------|------|--------|");
     for (const entry of model.coverageMatrix) {
-      const mods = entry.affectedModuleIds.join(", ");
-      const cls = entry.affectedClassNames.join(", ");
-      lines.push(`| ${entry.refId} | ${entry.refKind} | ${entry.originalDescription} | ${entry.designDecision} | ${mods} | ${cls} | ${entry.testImplication} |`);
+      const mods = s(entry.affectedModuleIds.join(", "));
+      const cls = s(entry.affectedClassNames.join(", "));
+      lines.push(`| ${s(entry.refId)} | ${s(entry.refKind)} | ${s(entry.originalDescription)} | ${s(entry.designDecision)} | ${mods} | ${cls} | ${s(entry.testImplication)} |`);
     }
 
     if (model.supplementaryClasses && model.supplementaryClasses.length > 0) {
@@ -375,7 +380,7 @@ export class SystemDesigner extends BaseGenerator<string> {
       lines.push("| 类名 | 需求原文依据 |");
       lines.push("|------|-------------|");
       for (const sc of model.supplementaryClasses) {
-        lines.push(`| ${sc.name} | ${sc.justification} |`);
+        lines.push(`| ${s(sc.name)} | ${s(sc.justification)} |`);
       }
     }
 
@@ -407,15 +412,23 @@ export class SystemDesigner extends BaseGenerator<string> {
       ? (requirementJson.constraints as Record<string, unknown>[])
       : [];
     for (const c of constraints) {
-      const id = String(c.displayId ?? c.id ?? "");
-      if (id && !coveredRefIds.has(id)) warnings.push(`约束 ${id} 未在 coverageMatrix 中体现`);
+      const displayId = String(c.displayId ?? "");
+      const canonId = String(c.id ?? "");
+      const label = displayId || canonId;
+      if (label && !coveredRefIds.has(displayId) && !coveredRefIds.has(canonId)) {
+        warnings.push(`约束 ${label} 未在 coverageMatrix 中体现`);
+      }
     }
     const exceptions = Array.isArray(requirementJson.exceptions)
       ? (requirementJson.exceptions as Record<string, unknown>[])
       : [];
     for (const e of exceptions) {
-      const id = String(e.displayId ?? e.id ?? "");
-      if (id && !coveredRefIds.has(id)) warnings.push(`异常 ${id} 未在 coverageMatrix 中体现`);
+      const displayId = String(e.displayId ?? "");
+      const canonId = String(e.id ?? "");
+      const label = displayId || canonId;
+      if (label && !coveredRefIds.has(displayId) && !coveredRefIds.has(canonId)) {
+        warnings.push(`异常 ${label} 未在 coverageMatrix 中体现`);
+      }
     }
 
     return warnings;
