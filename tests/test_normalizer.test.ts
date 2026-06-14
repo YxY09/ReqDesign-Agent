@@ -580,6 +580,120 @@ describe("RequirementNormalizer", () => {
   });
 
   // ----------------------------------------------------------------
+  // 8. Similar entity name deduplication
+  // ----------------------------------------------------------------
+  it("deduplicates reified entities with same stem (BookReturning/BookReturn/BookReturningProcess)", () => {
+    const makeEntity = (name: string, attrCount: number) => ({
+      name,
+      reifies: { source: "business_process", sourceName: name, endpoints: ["User", "Book"], evidence: ["has_timestamp"] },
+      attributes: Array.from({ length: attrCount }, (_, i) => ({ name: `attr${i}`, type: "String", description: `属性${i}` })),
+      relationships: [],
+    });
+
+    const input = {
+      actors: [],
+      entities: [
+        { name: "User", attributes: [{ name: "userId", type: "Long", description: "ID" }], relationships: [] },
+        { name: "Book", attributes: [{ name: "bookId", type: "Long", description: "ID" }], relationships: [] },
+        makeEntity("BookReturning", 2),
+        makeEntity("BookReturn", 4),         // most attributes — should survive
+        makeEntity("BookReturningProcess", 3),
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const names = (result.entities as Array<Record<string, unknown>>).map(e => e.name);
+
+    // Non-reified entities are untouched
+    expect(names).toContain("User");
+    expect(names).toContain("Book");
+
+    // Only one of the three "book return" variants should survive
+    const bookReturnVariants = names.filter(n =>
+      ["BookReturning", "BookReturn", "BookReturningProcess"].includes(n as string)
+    );
+    expect(bookReturnVariants.length).toBe(1);
+    // The one with most attributes (BookReturn, 4 attrs) is kept
+    expect(bookReturnVariants[0]).toBe("BookReturn");
+  });
+
+  it("does not merge non-reified entities with similar stems", () => {
+    const input = {
+      actors: [],
+      entities: [
+        // Neither has reifies — should both survive
+        { name: "Booking", attributes: [{ name: "id", type: "Long", description: "ID" }], relationships: [] },
+        { name: "Book", attributes: [{ name: "bookId", type: "Long", description: "ID" }], relationships: [] },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const names = (result.entities as Array<Record<string, unknown>>).map(e => e.name);
+    expect(names).toContain("Booking");
+    expect(names).toContain("Book");
+  });
+
+  it("cleans up dangling relationships after entity deduplication", () => {
+    const input = {
+      actors: [],
+      entities: [
+        {
+          name: "User",
+          attributes: [{ name: "userId", type: "Long", description: "ID" }],
+          relationships: [
+            { target: "BookReturning", type: "one-to-many", description: "有归还记录" },
+            { target: "BookReturningProcess", type: "one-to-many", description: "有归还流程" },
+            { target: "BookReturn", type: "one-to-many", description: "有归还" },
+          ],
+        },
+        {
+          name: "BookReturning",
+          reifies: { source: "business_process", sourceName: "BookReturning" },
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [],
+        },
+        {
+          name: "BookReturn",
+          reifies: { source: "business_process", sourceName: "BookReturn" },
+          attributes: [
+            { name: "id", type: "Long", description: "ID" },
+            { name: "returnDate", type: "DateTime", description: "归还日期" },
+          ],
+          relationships: [],
+        },
+        {
+          name: "BookReturningProcess",
+          reifies: { source: "business_process", sourceName: "BookReturningProcess" },
+          attributes: [{ name: "id", type: "Long", description: "ID" }],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const names = (result.entities as Array<Record<string, unknown>>).map(e => e.name);
+
+    // Only BookReturn (most attrs) survives
+    expect(names).toContain("BookReturn");
+    expect(names).not.toContain("BookReturning");
+    expect(names).not.toContain("BookReturningProcess");
+
+    // User's relationships to removed entities are cleaned up
+    const user = (result.entities as Array<Record<string, unknown>>).find(e => e.name === "User")!;
+    const rels = user.relationships as Array<Record<string, unknown>>;
+    const targets = rels.map(r => r.target);
+    expect(targets).toContain("BookReturn");
+    expect(targets).not.toContain("BookReturning");
+    expect(targets).not.toContain("BookReturningProcess");
+  });
+
+  // ----------------------------------------------------------------
   // Edge cases
   // ----------------------------------------------------------------
   it("handles empty input gracefully", () => {

@@ -22,6 +22,7 @@ export class RequirementNormalizer {
     RequirementNormalizer._ensureFunctionDetailArrays(analysis);
     RequirementNormalizer._dedupConstraints(analysis);
     RequirementNormalizer._splitNestedEntities(analysis);
+    RequirementNormalizer._deduplicateSimilarEntityNames(analysis);
     RequirementNormalizer._ensureUserRole(analysis);
 
     return analysis;
@@ -396,7 +397,68 @@ export class RequirementNormalizer {
   }
 
   // ------------------------------------------------------------------
-  // 8. 基于原文剔除无依据的记录类实体
+  // 8. 按词干去重同概念的多个实体变体
+  // 多个 analyze 子任务对同一业务动作各自进行"实体化"，产生近义词
+  // 变体（如 BookReturning / BookReturn / BookReturningProcess）。
+  // 对含有 `reifies` 字段的实体按去除 Process/ing 词尾后的词干分组，
+  // 同组保留属性最多的一个，其余删除并清理悬挂关系。
+  // ------------------------------------------------------------------
+  private static _deduplicateSimilarEntityNames(analysis: Record<string, unknown>): void {
+    const entities = RequirementNormalizer._getEntities(analysis);
+    if (!entities || entities.length <= 1) return;
+
+    const entityObjs = entities as Record<string, unknown>[];
+
+    const isReified = (e: Record<string, unknown>): boolean => {
+      const reifies = e.reifies;
+      return reifies !== null && reifies !== undefined && typeof reifies === "object";
+    };
+
+    // Iteratively strip "process" and "ing" suffixes to get a canonical stem.
+    const getStem = (name: string): string => {
+      let s = name.toLowerCase();
+      let prev = "";
+      while (s !== prev) {
+        prev = s;
+        s = s.replace(/(process|ing)$/, "");
+      }
+      return s;
+    };
+
+    // Group reified entities by stem.
+    const stemGroups = new Map<string, Record<string, unknown>[]>();
+    for (const entity of entityObjs) {
+      if (!isReified(entity)) continue;
+      const name = String(entity.name ?? "").trim();
+      if (!name) continue;
+      const stem = getStem(name);
+      if (!stemGroups.has(stem)) stemGroups.set(stem, []);
+      stemGroups.get(stem)!.push(entity);
+    }
+
+    // Mark duplicates for removal; keep the entity with the most attributes.
+    const toRemove = new Set<Record<string, unknown>>();
+    for (const [, group] of stemGroups) {
+      if (group.length <= 1) continue;
+      let best = group[0];
+      let bestLen = Array.isArray(best.attributes) ? (best.attributes as unknown[]).length : 0;
+      for (const entity of group.slice(1)) {
+        const len = Array.isArray(entity.attributes) ? (entity.attributes as unknown[]).length : 0;
+        if (len > bestLen) { best = entity; bestLen = len; }
+      }
+      for (const entity of group) {
+        if (entity !== best) toRemove.add(entity);
+      }
+    }
+
+    if (toRemove.size === 0) return;
+
+    analysis.entities = entityObjs.filter((e) => !toRemove.has(e as Record<string, unknown>));
+    RequirementNormalizer._dropRelationshipsToMissingEntities(analysis);
+  }
+
+  // ------------------------------------------------------------------
+  // 9. 基于原文剔除无依据的记录类实体
   // ------------------------------------------------------------------
   private static _removeUnsupportedRecordEntities(
     analysis: Record<string, unknown>,
