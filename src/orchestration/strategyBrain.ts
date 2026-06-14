@@ -13,6 +13,7 @@ import {
 } from "./strategy.js";
 import { makeStreamPrinter } from "../streaming.js";
 import { getMemory } from "../memory/store.js";
+import { loadPrompt } from "../promptLoader.js";
 
 // ---------------------------------------------------------------------------
 // StrategyBrain
@@ -49,9 +50,10 @@ export class StrategyBrain {
   /** 向 LLM 请求策略，而非底层运行时操作。 */
   async decide(snapshot: OrchestratorSnapshot): Promise<StrategyDecision> {
     const prompt = await this._buildPrompt(snapshot);
-    const system =
-      "You are an engineering orchestration strategist. " +
-      "Choose a high-level strategy only. Do not choose low-level spawn/save actions.";
+    const system = loadPrompt(
+      "strategy_brain.md",
+      "You are an engineering orchestration strategist. Choose a high-level strategy only.",
+    ).trim();
 
     const { onChunk, done } = makeStreamPrinter("[Orchestrator]");
     try {
