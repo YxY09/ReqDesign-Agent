@@ -24,6 +24,7 @@ export type PersistStatus = "not_saved" | "final_saved" | "partial_saved";
 
 import {
   type Artifact,
+  type DesignModel,
   type ExecutionPlan,
   type PlanMutation,
   type TaskType,
@@ -121,6 +122,7 @@ export class WorkflowState {
   requirementDraftJson: Record<string, unknown> = {};
   requirementJsonContentKind: "empty" | "draft" | "canonical" | "stale" = "empty";
   designText: string = "";
+  designModel: DesignModel | null = null;
   diagrams: Record<string, unknown> = {};
   testCases: string = "";
   reviewResult: Record<string, unknown> = {};
