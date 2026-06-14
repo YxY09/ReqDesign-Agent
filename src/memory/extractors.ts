@@ -255,29 +255,12 @@ export function extractGeneratorLesson(
         effectiveType,
         artifact.taskId,
         artifact.selfCheckIssues,
-        artifact.selfCorrectRounds,
       ),
       memType: "feedback",
       dedupKey: `gen_fail:${effectiveType}:${short(issuesText)}`,
       topic: `gen_fail_${effectiveType}`,
     });
     return results;
-  }
-
-  // 自检经多轮修正后通过：记录修复策略
-  if (artifact.selfCorrectRounds > 1) {
-    results.push({
-      agentType: "generator",
-      content: formatCorrectionLesson(
-        effectiveType,
-        artifact.taskId,
-        artifact.selfCorrectRounds,
-        artifact.selfCheckIssues,
-      ),
-      memType: "project",
-      dedupKey: `gen_fix:${effectiveType}:rounds=${artifact.selfCorrectRounds}`,
-      topic: `gen_correction_${effectiveType}`,
-    });
   }
 
   return results;
@@ -378,13 +361,11 @@ function formatFailureLesson(
   taskType: string,
   taskId: string,
   issues: string[],
-  rounds: number,
 ): string {
   const lines: string[] = [
     `## 生成失败模式: ${taskType}`,
     `**任务类型**: ${taskType}`,
     `**任务 ID**: ${taskId}`,
-    `**自检轮次**: ${rounds}`,
     `**失败原因**:`,
   ];
   if (issues.length > 0) {
@@ -396,32 +377,6 @@ function formatFailureLesson(
   }
   lines.push(
     `**教训**: ${taskType} 类型制品在自检中失败，需要关注上述问题模式。`,
-  );
-  return lines.join("\n");
-}
-
-function formatCorrectionLesson(
-  taskType: string,
-  taskId: string,
-  rounds: number,
-  issuesBefore: string[],
-): string {
-  const lines: string[] = [
-    `## 修正策略有效: ${taskType}`,
-    `**任务类型**: ${taskType}`,
-    `**任务 ID**: ${taskId}`,
-    `**修正轮次**: ${rounds}`,
-    `**修正前的问题**:`,
-  ];
-  if (issuesBefore.length > 0) {
-    for (const issue of issuesBefore.slice(0, 5)) {
-      lines.push(`  - ${issue}`);
-    }
-  } else {
-    lines.push("  - (无记录)");
-  }
-  lines.push(
-    `**教训**: ${taskType} 类型制品经过 ${rounds} 轮自修正后通过自检。迭代修正策略对该类型问题有效。`,
   );
   return lines.join("\n");
 }

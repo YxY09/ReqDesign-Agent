@@ -150,24 +150,14 @@ describe("extractCoordinatorDecision", () => {
 // ---------------------------------------------------------------------------
 
 describe("extractGeneratorLesson", () => {
-  it("requires nontrivial correction (more than 1 round)", () => {
-    const oneRound = createArtifact({
+  it("returns empty array when self-check passed", () => {
+    const artifact = createArtifact({
       taskId: "diagrams-1",
       type: "diagrams",
       content: {},
       selfCheckPassed: true,
-      selfCorrectRounds: 1,
     });
-    const twoRounds = createArtifact({
-      taskId: "diagrams-1",
-      type: "diagrams",
-      content: {},
-      selfCheckPassed: true,
-      selfCorrectRounds: 2,
-    });
-
-    expect(extractGeneratorLesson(oneRound)).toEqual([]);
-    expect(extractGeneratorLesson(twoRounds)).toHaveLength(1);
+    expect(extractGeneratorLesson(artifact)).toEqual([]);
   });
 });
 

@@ -206,7 +206,6 @@ export class ArtifactManager {
         type: a.type,
         revision: a.revision,
         selfCheckPassed: a.selfCheckPassed,
-        selfCorrectRounds: a.selfCorrectRounds,
         size: a.content !== null && a.content !== undefined ? String(a.content).length : 0,
       };
     }

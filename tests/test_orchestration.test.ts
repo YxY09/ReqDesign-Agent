@@ -27,6 +27,7 @@ function createMockLLM(
   return {
     generateJson: vi.fn().mockResolvedValue(response ?? {}),
     generateText: vi.fn().mockResolvedValue(""),
+    runWithStreamTagContext: (_t: string, _s: string, fn: () => Promise<unknown>) => fn(),
   } as unknown as LLMClient;
 }
 

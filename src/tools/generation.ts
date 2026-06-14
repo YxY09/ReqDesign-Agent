@@ -50,10 +50,7 @@ export class GenerationTool extends BaseTool {
 
 
       let issues = GenerationTool._ruleCheck(task, content, context);
-      let selfCorrectRounds = 0;
-      // 自检问题被记录但不会自动修复。
-      // 自修复在测试中 100% 失败（6/6），会浪费 LLM 调用。
-      // 下游 evaluator 会处理这些问题。
+      // 自检问题被记录但不会自动修复。下游 evaluator 会处理这些问题。
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
 
@@ -77,7 +74,6 @@ export class GenerationTool extends BaseTool {
         content,
         selfCheckPassed: passed,
         selfCheckIssues: issues,
-        selfCorrectRounds,
         generationDuration: elapsed,
       });
     } catch (e: unknown) {

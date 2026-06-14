@@ -124,7 +124,6 @@ export interface Artifact {
   content: unknown;
   selfCheckPassed: boolean;
   selfCheckIssues: string[];
-  selfCorrectRounds: number;
   generationDuration: number;
 }
 
@@ -208,7 +207,6 @@ export function createArtifact(
     content: null,
     selfCheckPassed: true,
     selfCheckIssues: [],
-    selfCorrectRounds: 0,
     generationDuration: 0.0,
     ...overrides,
   };

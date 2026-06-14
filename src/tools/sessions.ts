@@ -197,7 +197,7 @@ export class GenerationSession extends WorkerSession {
 
     if (!artifact.selfCheckPassed) {
       return this._makeNotification("completed", {
-        summary: `self-check warning: ${artifact.selfCheckIssues.length} issues after ${artifact.selfCorrectRounds} corrections`,
+        summary: `self-check warning: ${artifact.selfCheckIssues.length} issues`,
         result: artifact,
       });
     }
@@ -492,7 +492,6 @@ export class RepairSession extends WorkerSession {
     }
 
     const issues = GenerationTool._ruleCheck(task, repaired, ctx);
-    const totalRounds = fixInstructions.length > 0 ? 1 : 0;
     const elapsed = (performance.now() - started) / 1000;
 
     const artifact = createArtifact({
@@ -501,7 +500,6 @@ export class RepairSession extends WorkerSession {
       content: repaired,
       selfCheckPassed: issues.length === 0,
       selfCheckIssues: issues,
-      selfCorrectRounds: totalRounds,
       generationDuration: elapsed,
     });
 
@@ -514,7 +512,6 @@ export class RepairSession extends WorkerSession {
       timestamp: Date.now() / 1000,
       fix_instructions: fixInstructions,
       self_check_passed: artifact.selfCheckPassed,
-      self_correct_rounds: artifact.selfCorrectRounds,
       issues_count: artifact.selfCheckIssues.length,
     });
     this.state.intermediateState.fix_history = history.slice(-10);

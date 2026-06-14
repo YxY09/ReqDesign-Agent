@@ -272,9 +272,7 @@ describe("GenerationTool self-check (no auto-repair)", () => {
       generateText: vi.fn()
         .mockResolvedValueOnce(badDesign),
       generateJson: vi.fn(),
-      _streamTag: "",
-      get streamTag() { return this._streamTag; },
-      set streamTag(v: string) { this._streamTag = v; },
+      runWithStreamTagContext: (_t: string, _s: string, fn: () => Promise<unknown>) => fn(),
     };
     const tool = new GenerationTool(llm as any);
     const artifact = await tool.execute(
@@ -289,7 +287,6 @@ describe("GenerationTool self-check (no auto-repair)", () => {
 
     // Self-check finds issues but does NOT auto-repair
     expect(artifact.selfCheckPassed).toBe(false);
-    expect(artifact.selfCorrectRounds).toBe(0);
     expect(artifact.content).toBe(badDesign);
     // LLM called only once (generation), NOT twice (generation + repair)
     expect(llm.generateText).toHaveBeenCalledTimes(1);

@@ -123,7 +123,6 @@ function restoreArtifact(value: unknown): Artifact | null {
       : Array.isArray(value.self_check_issues)
         ? value.self_check_issues.map((item) => String(item))
         : [],
-    selfCorrectRounds: Number(value.selfCorrectRounds ?? value.self_correct_rounds ?? 0),
     generationDuration: Number(value.generationDuration ?? value.generation_duration ?? 0),
   });
 }

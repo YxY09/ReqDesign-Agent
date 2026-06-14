@@ -8,12 +8,12 @@ import type { Issue } from "../src/shared/types.js";
 // -----------------------------------------------------------------------
 
 /** 从 LLM 返回空的 issues。 */
+const withStreamCtx = { runWithStreamTagContext: (_t: string, _s: string, fn: () => Promise<unknown>) => fn() };
+
 function noopLlm() {
   return {
     generateJson: vi.fn().mockResolvedValue({ issues: [] }),
-    _streamTag: "",
-    get streamTag() { return this._streamTag; },
-    set streamTag(v: string) { this._streamTag = v; },
+    ...withStreamCtx,
   } as any;
 }
 
@@ -32,9 +32,7 @@ function siblingLeakLlm() {
         },
       ],
     }),
-    _streamTag: "",
-    get streamTag() { return this._streamTag; },
-    set streamTag(v: string) { this._streamTag = v; },
+    ...withStreamCtx,
   } as any;
 }
 
@@ -42,9 +40,7 @@ function siblingLeakLlm() {
 function failingLlm() {
   return {
     generateJson: vi.fn().mockRejectedValue(new Error("invalid review json")),
-    _streamTag: "",
-    get streamTag() { return this._streamTag; },
-    set streamTag(v: string) { this._streamTag = v; },
+    ...withStreamCtx,
   } as any;
 }
 
@@ -63,9 +59,7 @@ function analyzeShardFalsePositiveLlm() {
         },
       ],
     }),
-    _streamTag: "",
-    get streamTag() { return this._streamTag; },
-    set streamTag(v: string) { this._streamTag = v; },
+    ...withStreamCtx,
   } as any;
 }
 
@@ -161,7 +155,6 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
           type: "diagrams",
           revision: 1,
           self_check_passed: true,
-          self_correct_rounds: 0,
           size: 12,
         },
       },

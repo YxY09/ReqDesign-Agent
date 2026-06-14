@@ -216,7 +216,6 @@ describe("Coordinator replan fallback", () => {
       content: "some content",
       selfCheckPassed: true,
       selfCheckIssues: [],
-      selfCorrectRounds: 0,
       generationDuration: 0,
     };
     state.artifactRevisionsByTask["analyze-1"] = 1;
@@ -279,7 +278,6 @@ describe("Coordinator replan fallback", () => {
       content: "some content",
       selfCheckPassed: true,
       selfCheckIssues: [],
-      selfCorrectRounds: 0,
       generationDuration: 0,
     };
     state.artifactRevisionsByTask["design-1"] = 1;
@@ -308,7 +306,6 @@ describe("Coordinator replan fallback", () => {
       content: "some content",
       selfCheckPassed: true,
       selfCheckIssues: [],
-      selfCorrectRounds: 0,
       generationDuration: 0,
     };
     state.artifactRevisionsByTask["design-1"] = 1;
