@@ -17,6 +17,7 @@ import { DiagramGenerator } from "../generators/diagrams.js";
 import { MermaidValidator } from "../generators/mermaid.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
+import { getMemory } from "../memory/store.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -95,11 +96,20 @@ export class GenerationTool extends BaseTool {
   // 生成路由
   // ------------------------------------------------------------------
 
+  private async _injectGeneratorMemory(systemPrompt: string, queryContext: string): Promise<string> {
+    try {
+      return getMemory().appendToPrompt("generator", systemPrompt, queryContext);
+    } catch {
+      return systemPrompt;
+    }
+  }
+
   private async _generate(task: Task, context: Record<string, unknown>): Promise<unknown> {
     const hints = (task.contextHints ?? {}) as Record<string, unknown>;
     const desc = task.description ?? "";
     const queryCtx = `${task.type}: ${desc.slice(0, 200)}`;
-    const injectedPrompt = await this._getSystemPrompt("generator.md", "", queryCtx);
+    const basePrompt = await this._getSystemPrompt("generator.md", "", queryCtx);
+    const injectedPrompt = await this._injectGeneratorMemory(basePrompt, queryCtx);
 
     switch (task.type) {
       case "analyze":

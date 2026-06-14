@@ -15,6 +15,7 @@ import { TestCaseGenerator } from "../generators/tests.js";
 import { validateReview, type ReviewValidationResult } from "../shared/reviewValidator.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
+import { getMemory } from "../memory/store.js";
 
 
 export class EvaluationTool extends BaseTool {
@@ -929,7 +930,15 @@ export class EvaluationTool extends BaseTool {
         .filter(Boolean),
     )];
     const artifactTypes = presentTypes.length > 0 ? presentTypes.join(", ") : "scoped";
-    const system = await this._getSystemPrompt("evaluator.md", "", `review ${reviewMode} ${artifactTypes}`);
+    const system = await (async () => {
+      const base = await this._getSystemPrompt("evaluator.md", "", `review ${reviewMode} ${artifactTypes}`);
+      try {
+        const queryCtx = `evaluate ${reviewMode}: ${Object.keys(snapshots).join(", ")}`;
+        return getMemory().appendToPrompt("evaluator", base, queryCtx);
+      } catch {
+        return base;
+      }
+    })();
 
     // 覆盖性评审必须看到足够多的需求原文，否则就是盲审。
     // quick 模式给小预算，full 模式给大预算（中文 1 字符 ≈ 1 token，
@@ -1008,7 +1017,14 @@ export class EvaluationTool extends BaseTool {
     requirementText: string,
     requirementJson: Record<string, unknown>,
   ): Promise<Issue[]> {
-    const system = await this._getSystemPrompt("evaluator.md", "", "analyze:" + (requirementText ?? "").slice(0, 150));
+    const system = await (async () => {
+      const base = await this._getSystemPrompt("evaluator.md", "", "analyze:" + (requirementText ?? "").slice(0, 150));
+      try {
+        return getMemory().appendToPrompt("evaluator", base, `analyze: ${(requirementText ?? "").slice(0, 150)}`);
+      } catch {
+        return base;
+      }
+    })();
     // 完整性审查不能只看前 2000 字符；JSON 硬切会产生残缺片段误导评审，
     // 改用 _jsonForReview 自适应摘要（始终输出合法 JSON）。
     const reqTextShort = EvaluationTool._requirementForReview(requirementText ?? "", 12000);

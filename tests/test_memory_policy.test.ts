@@ -597,3 +597,35 @@ describe("MemoryStore GC", () => {
     }
   });
 });
+
+describe("Generator and evaluator memory agent types", () => {
+  it("appendToPrompt accepts generator agent type without throwing", async () => {
+    const previousMemory = getMemory();
+    const tmp = mkdtempSync(join(tmpdir(), "mem-gen-"));
+    try {
+      const store = new MemoryStore(tmp);
+      setMemory(store);
+      const result = await store.appendToPrompt("generator", "base prompt", "analyze task");
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThanOrEqual("base prompt".length);
+    } finally {
+      setMemory(previousMemory);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("appendToPrompt accepts evaluator agent type without throwing", async () => {
+    const previousMemory = getMemory();
+    const tmp = mkdtempSync(join(tmpdir(), "mem-eval-"));
+    try {
+      const store = new MemoryStore(tmp);
+      setMemory(store);
+      const result = await store.appendToPrompt("evaluator", "eval prompt", "review deep analyze-1");
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThanOrEqual("eval prompt".length);
+    } finally {
+      setMemory(previousMemory);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

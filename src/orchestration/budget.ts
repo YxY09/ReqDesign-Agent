@@ -86,7 +86,7 @@ export class OrchestrationConfig {
     const cfg = new OrchestrationConfig();
     for (const [rawKey, cfgKey] of OrchestrationConfig.RAW_TO_CFG) {
       const v = raw[rawKey];
-      if (v !== undefined) (cfg as Record<string, unknown>)[cfgKey] = v;
+      if (v !== undefined) (cfg as unknown as Record<string, unknown>)[cfgKey] = v;
     }
     return cfg;
   }

@@ -48,6 +48,12 @@ export const AGENT_TYPE_PREFIXES: Record<string, readonly string[]> = {
   coordinator: ["coordinator_", "planner_"],
 };
 
+export const MEMORY_AGENT_TYPES = {
+  COORDINATOR: "coordinator",
+  GENERATOR: "generator",
+  EVALUATOR: "evaluator",
+} as const;
+
 /** 将 Agent 类型映射到其查询的记忆文件。 */
 export const AGENT_TYPE_MAP: Record<string, string> = {
   planner: "planner.md",
