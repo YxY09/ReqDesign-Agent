@@ -47,12 +47,14 @@ export class ArtifactAcceptanceService {
     const existingArtifact = state.artifactsState.artifacts[taskId];
     const candidateIssues = artifact.selfCheckIssues.length;
     const existingIssues = existingArtifact?.selfCheckIssues.length ?? 0;
-    // When the existing artifact passed (0 issues), allow candidates with up to 1 issue —
-    // prevents a livelock where a semantically-necessary regeneration is blocked because the
-    // LLM introduces a single minor structural issue while fixing a semantic problem.
+    // Reject a regeneration candidate only if it is STRICTLY WORSE than the existing artifact:
+    // - existing passed (0 issues): reject candidate only if it has > 1 issue (1 is ok, semantic
+    //   fixes often introduce one minor structural warning)
+    // - both fail: reject only if candidate has STRICTLY MORE issues than existing; a tie means
+    //   the candidate is no worse and may have fixed a semantic issue the self-check can't see
     const wouldRejectVsExisting = existingArtifact?.selfCheckPassed
       ? candidateIssues > 1
-      : candidateIssues >= existingIssues;
+      : candidateIssues > existingIssues;
     const shouldKeepExistingArtifact =
       decision?.action === "regenerate" &&
       existingArtifact?.content !== undefined &&
