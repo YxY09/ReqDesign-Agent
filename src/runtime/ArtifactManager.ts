@@ -1,5 +1,7 @@
 import type { WorkflowState } from "../state.js";
 import type { Artifact } from "../shared/types.js";
+import { isDesignModel } from "../shared/types.js";
+import { SystemDesigner } from "../generators/design.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
 
@@ -76,9 +78,13 @@ export class ArtifactManager {
       } else {
         this._state.requirementJsonContentKind = "stale";
       }
-    } else if (key === "design_text" && typeof content === "string") {
-      if (content) {
+    } else if (key === "design_text") {
+      if (isDesignModel(content)) {
+        this._state.designModel = content;
+        this._state.designText = SystemDesigner.renderDesignMarkdown(content);
+      } else if (typeof content === "string" && content) {
         this._state.designText = content;
+        this._state.designModel = null;
       }
     } else if (key === "diagrams" && typeof content === "object" && !Array.isArray(content)) {
       const diagrams = ArtifactManager._diagramContent(content);
