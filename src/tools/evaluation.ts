@@ -996,8 +996,9 @@ export class EvaluationTool extends BaseTool {
       userPrompt += "\n\n## 重要：这是 Direct 模式的局部审查\n只审查当前 task 的产物质量，不因缺少其他阶段产物而扣分。";
     }
 
-    if (this.llm) this.llm.streamTag = `[Evaluator:${reviewMode}]`;
-    const response = await this.llm.generateJson(userPrompt, system);
+    const response = await this.llm.runWithStreamTagContext(`[Evaluator:${reviewMode}]`, "", () =>
+      this.llm.generateJson(userPrompt, system)
+    );
     const issues = EvaluationTool._parseLlmIssues(response as Record<string, unknown>);
     return [issues, null];
   }
@@ -1013,8 +1014,9 @@ export class EvaluationTool extends BaseTool {
     const reqJsonStr = EvaluationTool._jsonForReview(requirementJson ?? {}, 16000);
     const userPrompt = `## 原始需求\n${reqTextShort}\n\n## 需求分析结果\n\`\`\`json\n${reqJsonStr}\n\`\`\`\n\n请审查需求分析结果的完整性和准确性，输出 JSON 裁决。`;
 
-    this.llm.streamTag = "[Evaluator:analyze]";
-    const response = await this.llm.generateJson(userPrompt, system);
+    const response = await this.llm.runWithStreamTagContext("[Evaluator:analyze]", "", () =>
+      this.llm.generateJson(userPrompt, system)
+    );
     return EvaluationTool._parseLlmIssues(response as Record<string, unknown>);
   }
 

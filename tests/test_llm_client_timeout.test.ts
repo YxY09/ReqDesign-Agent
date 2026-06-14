@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { LLMClient } from "../src/llmClient.js";
+import { LLMClient, type LlmStreamEvent } from "../src/llmClient.js";
 import { AgentConfig } from "../src/config.js";
 
 describe("LLMClient timeout", () => {
@@ -93,6 +93,88 @@ describe("LLMClient timeout", () => {
       llm.chat([{ role: "user", content: "hello" }]),
     ).rejects.toThrow("aborted");
     expect(calls).toBe(1); // 不重试
+  });
+
+  it("Bug 1 回归：重试时每次使用独立的 AbortController，第二次信号不预先中止", async () => {
+    const config = new AgentConfig();
+    config.retry.retryOnTimeout = true;
+    config.retry.maxRetries = 2;
+    config.retry.retryDelayMs = 5;
+    config.retry.maxDelayMs = 20;
+    const llm = new LLMClient(config);
+
+    const signals: AbortSignal[] = [];
+    (llm as any)._chatOpenai = vi.fn().mockImplementation(
+      async (_msgs: any, _temp: any, signal: AbortSignal | undefined) => {
+        signals.push(signal!);
+        if (signals.length === 1) {
+          throw new DOMException("The operation was aborted", "AbortError");
+        }
+        return "ok";
+      },
+    );
+
+    const result = await llm.chat([{ role: "user", content: "hello" }]);
+    expect(result).toBe("ok");
+    expect(signals).toHaveLength(2);
+    // Each attempt must receive a distinct AbortSignal object
+    expect(signals[0]).not.toBe(signals[1]);
+    // The retry's signal must not already be aborted
+    expect(signals[1].aborted).toBe(false);
+  });
+
+  it("Bug 3 回归：runWithStreamTagContext 内 chat() 使用 scoped streamTag 而非空的 _streamTag", async () => {
+    const config = new AgentConfig();
+    const llm = new LLMClient(config);
+
+    const events: LlmStreamEvent[] = [];
+    llm.setStreamListener((e) => events.push(e));
+
+    // Scoped tag enables streaming (hasListener=true); mock the streaming path
+    (llm as any)._chatStreamOpenai = vi
+      .fn()
+      .mockResolvedValue({ text: "ok", usage: undefined });
+
+    await llm.runWithStreamTagContext("scoped-tag", "", async () => {
+      await llm.chat([{ role: "user", content: "hello" }]);
+    });
+
+    const startEvents = events.filter((e) => e.kind === "start");
+    expect(startEvents).toHaveLength(1);
+    expect(startEvents[0].tag).toBe("scoped-tag");
+    const endEvents = events.filter((e) => e.kind === "end");
+    expect(endEvents).toHaveLength(1);
+    expect(endEvents[0].tag).toBe("scoped-tag");
+  });
+
+  it("runWithStreamTagContext 并发隔离：两个 worker 互不污染 streamTag", async () => {
+    const config = new AgentConfig();
+    const llm = new LLMClient(config);
+
+    const observedTags: string[] = [];
+    llm.setStreamListener((e) => {
+      if (e.kind === "start") observedTags.push(e.tag);
+    });
+
+    // Both paths use the streaming route (mocked).
+    (llm as any)._chatStreamOpenai = vi
+      .fn()
+      .mockResolvedValue({ text: "ok", usage: undefined });
+
+    // Run two contexts concurrently — their tags must not bleed into each other.
+    await Promise.all([
+      llm.runWithStreamTagContext("[Worker:A]", "", () =>
+        llm.chat([{ role: "user", content: "a" }]),
+      ),
+      llm.runWithStreamTagContext("[Worker:B]", "", () =>
+        llm.chat([{ role: "user", content: "b" }]),
+      ),
+    ]);
+
+    expect(observedTags).toHaveLength(2);
+    // Each chat call should have received its own scoped tag, not the other's.
+    expect(observedTags).toContain("[Worker:A]");
+    expect(observedTags).toContain("[Worker:B]");
   });
 
   it("retryOnTimeout=true + _chatOpenai 抛 AbortError → 重试", async () => {

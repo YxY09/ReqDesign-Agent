@@ -55,7 +55,9 @@ export class StrategyBrain {
 
     const { onChunk, done } = makeStreamPrinter("[Orchestrator]");
     try {
-      const response = await this.llm.generateJson(prompt, system, onChunk);
+      const response = await this.llm.runWithStreamTagContext("[StrategyBrain]", "", () =>
+        this.llm.generateJson(prompt, system, onChunk)
+      );
       return StrategyBrain._parseResponse(response, snapshot);
     } catch (exc) {
       console.warn(

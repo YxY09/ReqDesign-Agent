@@ -170,8 +170,9 @@ ${text}`;
 ${text}`;
     }
     const analyzer = this._getAnalyzer();
-    if (this.llm) this.llm.streamTag = "[Generator:analyze]";
-    const raw = await analyzer.analyze(text, 3, systemPrompt, existingJson, availableConstraintsText);
+    const raw = await this.llm.runWithStreamTagContext("[Generator:analyze]", "", () =>
+      analyzer.analyze(text, 3, systemPrompt, existingJson, availableConstraintsText)
+    );
     return GenerationTool._unwrapAnalyzeDict(raw);
   }
 
@@ -182,8 +183,9 @@ ${text}`;
     const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!reqJson) throw createToolError("GEN_MISSING_REQJSON", "缺少 requirement_json", { recoverable: false });
 
-    if (this.llm) this.llm.streamTag = "[Generator:design]";
-    return this._getDesigner().generateDesign(reqJson, systemPrompt);
+    return this.llm.runWithStreamTagContext("[Generator:design]", "", () =>
+      this._getDesigner().generateDesign(reqJson, systemPrompt)
+    );
   }
 
   private async _generateDiagrams(
@@ -195,7 +197,6 @@ ${text}`;
     const designText = (ctx.design_text as string) ?? "";
     const diagramKind = GenerationTool._diagramKindForTask(task, hints, desc);
 
-    if (this.llm) this.llm.streamTag = "[Generator:diagrams]";
     const generator = this._getDiagramGen();
 
     if (diagramKind) {
@@ -206,10 +207,12 @@ ${text}`;
       };
       const method = methodMap[diagramKind];
       if (!method) throw createToolError("GEN_UNKNOWN_DIAGRAM", `未知图表类型: ${diagramKind}`, { recoverable: false });
-      const result = await method();
+      const result = await this.llm.runWithStreamTagContext("[Generator:diagrams]", "", method);
       return { [diagramKind]: result };
     }
-    return generator.generateAll(reqJson, designText, systemPrompt, "");
+    return this.llm.runWithStreamTagContext("[Generator:diagrams]", "", () =>
+      generator.generateAll(reqJson, designText, systemPrompt, "")
+    );
   }
 
   private async _generateTests(
@@ -218,8 +221,9 @@ ${text}`;
   ): Promise<string> {
     const reqJson = (ctx.requirement_json ?? {}) as Record<string, unknown>;
     const designText = (ctx.design_text as string) ?? "";
-    if (this.llm) this.llm.streamTag = "[Generator:tests]";
-    return this._getTestGen().generate({ requirementJson: reqJson, designText, systemPrompt, requirementText: "" });
+    return this.llm.runWithStreamTagContext("[Generator:tests]", "", () =>
+      this._getTestGen().generate({ requirementJson: reqJson, designText, systemPrompt, requirementText: "" })
+    );
   }
 
   // ------------------------------------------------------------------
