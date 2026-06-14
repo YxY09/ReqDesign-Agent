@@ -165,8 +165,18 @@ function scoreStateStructure(state: string): number {
 // Deterministic: cross-artifact consistency
 // ---------------------------------------------------------------------------
 
+/** True when text contains CJK characters (Chinese/Japanese/Korean). */
+function hasCjk(text: string): boolean {
+  return /[一-鿿㐀-䶿\u{20000}-\u{2a6df}]/u.test(text);
+}
+
 /** Do the entities identified in the analysis also appear in the class diagram
- *  (and core ones in the behavioural diagrams)? Pure structural check. */
+ *  (and core ones in the behavioural diagrams)? Pure structural check.
+ *
+ *  Cross-language note: when entity names are ASCII (English) but diagrams are
+ *  written in Chinese, the behavioural-diagram check is skipped — the class
+ *  diagram check already confirms structural coverage and the literal name
+ *  will not appear in Chinese prose. */
 export function scoreConsistency(
   result: Record<string, unknown>,
   diagrams: Record<string, unknown>,
@@ -183,8 +193,13 @@ export function scoreConsistency(
     if (!normalizedIncludes(classDiagram, entity)) score -= 10;
   }
   for (const core of entities.slice(0, 3)) {
-    if (activity && !normalizedIncludes(activity, core)) score -= 5;
-    if (state && !normalizedIncludes(state, core)) score -= 3;
+    const coreIsAsciiOnly = Array.from(core).every(c => c.charCodeAt(0) < 128);
+    if (activity && !normalizedIncludes(activity, core)) {
+      if (!coreIsAsciiOnly || !hasCjk(activity)) score -= 5;
+    }
+    if (state && !normalizedIncludes(state, core)) {
+      if (!coreIsAsciiOnly || !hasCjk(state)) score -= 3;
+    }
   }
   return round1(Math.max(0, score));
 }

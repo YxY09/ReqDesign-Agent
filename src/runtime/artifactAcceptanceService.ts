@@ -45,13 +45,20 @@ export class ArtifactAcceptanceService {
     }
 
     const existingArtifact = state.artifactsState.artifacts[taskId];
+    const candidateIssues = artifact.selfCheckIssues.length;
+    const existingIssues = existingArtifact?.selfCheckIssues.length ?? 0;
+    // When the existing artifact passed (0 issues), allow candidates with up to 1 issue —
+    // prevents a livelock where a semantically-necessary regeneration is blocked because the
+    // LLM introduces a single minor structural issue while fixing a semantic problem.
+    const wouldRejectVsExisting = existingArtifact?.selfCheckPassed
+      ? candidateIssues > 1
+      : candidateIssues >= existingIssues;
     const shouldKeepExistingArtifact =
       decision?.action === "regenerate" &&
       existingArtifact?.content !== undefined &&
       existingArtifact.content !== null &&
       !artifact.selfCheckPassed &&
-      (existingArtifact.selfCheckPassed ||
-        artifact.selfCheckIssues.length >= existingArtifact.selfCheckIssues.length);
+      wouldRejectVsExisting;
 
     if (shouldKeepExistingArtifact) {
       const keptRevision = state.currentArtifactRevision(taskId);
