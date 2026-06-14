@@ -55,29 +55,39 @@ export class OrchestrationConfig {
   /** 收敛卡死且趋势非上升时，强制接受的问题数上限。 */
   convergenceAcceptMaxIssuesFlat = 10;
 
+  /** snake_case raw key → camelCase config key pairs. */
+  private static readonly RAW_TO_CFG: ReadonlyArray<
+    [keyof OrchestrationConfigRaw, keyof OrchestrationConfig]
+  > = [
+    ["max_repair_per_task", "maxRepairPerTask"],
+    ["diagram_repair_before_regenerate", "diagramRepairBeforeRegenerate"],
+    ["design_repair_before_regenerate", "designRepairBeforeRegenerate"],
+    ["max_regenerate_per_task", "maxRegeneratePerTask"],
+    ["max_replan_count", "maxReplanCount"],
+    ["max_runtime_seconds", "maxRuntimeSeconds"],
+    ["max_decision_count", "maxDecisionCount"],
+    ["max_planner_failures", "maxPlannerFailures"],
+    ["max_evaluator_timeouts", "maxEvaluatorTimeouts"],
+    ["max_save_failures", "maxSaveFailures"],
+    ["max_final_major_issues", "maxFinalMajorIssues"],
+    ["max_final_major_repair_per_task", "maxFinalMajorRepairPerTask"],
+    ["max_concurrent_evaluators", "maxConcurrentEvaluators"],
+    ["min_runtime_remaining_for_new_work_seconds", "minRuntimeRemainingForNewWorkSeconds"],
+    ["skip_evaluation", "skipEvaluation"],
+    ["worker_timeout_seconds", "workerTimeoutSeconds"],
+    ["poll_interval_ms", "pollIntervalMs"],
+    ["heartbeat_interval_seconds", "heartbeatIntervalSeconds"],
+    ["max_concurrency", "maxConcurrency"],
+    ["convergence_accept_max_issues_decreasing", "convergenceAcceptMaxIssuesDecreasing"],
+    ["convergence_accept_max_issues_flat", "convergenceAcceptMaxIssuesFlat"],
+  ];
+
   static fromRaw(raw: OrchestrationConfigRaw): OrchestrationConfig {
     const cfg = new OrchestrationConfig();
-    if (raw.max_repair_per_task !== undefined) cfg.maxRepairPerTask = raw.max_repair_per_task;
-    if (raw.diagram_repair_before_regenerate !== undefined) cfg.diagramRepairBeforeRegenerate = raw.diagram_repair_before_regenerate;
-    if (raw.design_repair_before_regenerate !== undefined) cfg.designRepairBeforeRegenerate = raw.design_repair_before_regenerate;
-    if (raw.max_regenerate_per_task !== undefined) cfg.maxRegeneratePerTask = raw.max_regenerate_per_task;
-    if (raw.max_replan_count !== undefined) cfg.maxReplanCount = raw.max_replan_count;
-    if (raw.max_runtime_seconds !== undefined) cfg.maxRuntimeSeconds = raw.max_runtime_seconds;
-    if (raw.max_decision_count !== undefined) cfg.maxDecisionCount = raw.max_decision_count;
-    if (raw.max_planner_failures !== undefined) cfg.maxPlannerFailures = raw.max_planner_failures;
-    if (raw.max_evaluator_timeouts !== undefined) cfg.maxEvaluatorTimeouts = raw.max_evaluator_timeouts;
-    if (raw.max_save_failures !== undefined) cfg.maxSaveFailures = raw.max_save_failures;
-    if (raw.max_final_major_issues !== undefined) cfg.maxFinalMajorIssues = raw.max_final_major_issues;
-    if (raw.max_final_major_repair_per_task !== undefined) cfg.maxFinalMajorRepairPerTask = raw.max_final_major_repair_per_task;
-    if (raw.max_concurrent_evaluators !== undefined) cfg.maxConcurrentEvaluators = raw.max_concurrent_evaluators;
-    if (raw.min_runtime_remaining_for_new_work_seconds !== undefined) cfg.minRuntimeRemainingForNewWorkSeconds = raw.min_runtime_remaining_for_new_work_seconds;
-    if (raw.skip_evaluation !== undefined) cfg.skipEvaluation = raw.skip_evaluation;
-    if (raw.worker_timeout_seconds !== undefined) cfg.workerTimeoutSeconds = raw.worker_timeout_seconds;
-    if (raw.poll_interval_ms !== undefined) cfg.pollIntervalMs = raw.poll_interval_ms;
-    if (raw.heartbeat_interval_seconds !== undefined) cfg.heartbeatIntervalSeconds = raw.heartbeat_interval_seconds;
-    if (raw.max_concurrency !== undefined) cfg.maxConcurrency = raw.max_concurrency;
-    if (raw.convergence_accept_max_issues_decreasing !== undefined) cfg.convergenceAcceptMaxIssuesDecreasing = raw.convergence_accept_max_issues_decreasing;
-    if (raw.convergence_accept_max_issues_flat !== undefined) cfg.convergenceAcceptMaxIssuesFlat = raw.convergence_accept_max_issues_flat;
+    for (const [rawKey, cfgKey] of OrchestrationConfig.RAW_TO_CFG) {
+      const v = raw[rawKey];
+      if (v !== undefined) (cfg as Record<string, unknown>)[cfgKey] = v;
+    }
     return cfg;
   }
 }
