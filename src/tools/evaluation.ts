@@ -14,6 +14,7 @@ import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { validateReview, type ReviewValidationResult } from "../shared/reviewValidator.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
+import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
 
 
 export class EvaluationTool extends BaseTool {
@@ -233,7 +234,7 @@ export class EvaluationTool extends BaseTool {
     if (goal.toLowerCase().includes("analyze")) return false;
     return entries.every(([taskId, snapshot]) => {
       if (String(snapshot.type ?? "") !== "analyze") return false;
-      return taskId !== "analyze-final" && taskId !== "analyze-comprehensive";
+      return taskId !== SYNTHETIC_TASK_IDS.ANALYZE_FINAL && taskId !== SYNTHETIC_TASK_IDS.ANALYZE_COMPREHENSIVE;
     });
   }
 
@@ -331,7 +332,7 @@ export class EvaluationTool extends BaseTool {
     const sources = sourceTaskIds.length > 0 ? sourceTaskIds : sourceFromRevisions;
     if (sources.length === 0) return;
 
-    if (taskId === "diagrams-final") {
+    if (taskId === SYNTHETIC_TASK_IDS.DIAGRAMS_FINAL) {
       const field = issue.targetField;
       const wanted = field.includes("class") ? "class" : field.includes("activity") ? "activity" : field.includes("state") ? "state" : "";
       const matched = wanted
@@ -341,7 +342,7 @@ export class EvaluationTool extends BaseTool {
       return;
     }
 
-    if (taskId === "analyze-final") {
+    if (taskId === SYNTHETIC_TASK_IDS.ANALYZE_FINAL) {
       // Try to match the issue to the correct analyze shard by inspecting
       // entity names or function IDs in the issue description
       const desc = issue.description ?? "";

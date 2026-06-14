@@ -1,6 +1,7 @@
 import type { WorkflowState } from "../state.js";
 import type { Artifact } from "../shared/types.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
+import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -244,8 +245,8 @@ export class ArtifactManager {
     const snapshots: Record<string, Record<string, unknown>> = {};
 
     if (this._state.requirementJson && Object.keys(this._state.requirementJson).length > 0) {
-      snapshots["analyze-final"] = {
-        taskId: "analyze-final",
+      snapshots[SYNTHETIC_TASK_IDS.ANALYZE_FINAL] = {
+        taskId: SYNTHETIC_TASK_IDS.ANALYZE_FINAL,
         type: "analyze",
         revision: this._contentRevision(this._state.requirementJson),
         content: this._state.requirementJson,
@@ -273,8 +274,8 @@ export class ArtifactManager {
     }
 
     if (this._state.diagrams && Object.keys(this._state.diagrams).length > 0) {
-      snapshots["diagrams-final"] = {
-        taskId: "diagrams-final",
+      snapshots[SYNTHETIC_TASK_IDS.DIAGRAMS_FINAL] = {
+        taskId: SYNTHETIC_TASK_IDS.DIAGRAMS_FINAL,
         type: "diagrams",
         revision: this._contentRevision(this._state.diagrams),
         content: this._state.diagrams,
