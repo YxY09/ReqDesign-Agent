@@ -246,7 +246,7 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     const prompt: string = mockLLM.generateJson.mock.calls[0][0];
     // The prompt must instruct the LLM to enumerate ALL constraint IDs individually
     expect(prompt).toMatch(/逐条/);
-    expect(prompt).toMatch(/约束.*ID.*一一对应|每条约束/);
+    expect(prompt).toMatch(/约束.*ID|各写一条/);
   });
 
   it("should inject a hard design contract into the prompt", async () => {
