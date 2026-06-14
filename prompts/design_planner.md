@@ -1,6 +1,6 @@
 你是一个资深的系统架构师。请根据以下结构化需求分析结果，生成系统设计方案。
 
-**禁止输出任何对话性开头**（如"好的"、"我来"、"作为一名"等）。直接以 `## 系统概述` 开头。
+**禁止输出任何对话性开头**（如"好的"、"我来"、"作为一名"等）。直接输出 JSON，不要有任何前导文字。
 
 ## 需求分析结果
 
@@ -12,87 +12,79 @@
 
 ## 输出要求
 
-请以Markdown格式输出系统设计方案。不要用JSON包裹，直接输出Markdown文本。包含以下章节：
+**输出格式：合法 JSON 根对象，禁止输出 Markdown、代码围栏或解释文本。**
 
-### 1. 系统概述
-简要描述系统的定位和目标（2-3句话）。
+根对象字段：
 
-### 2. 系统分层架构
-描述系统的整体分层（如表现层、业务层、数据层），每层的职责。
+```json
+{
+  "modules": [
+    {
+      "id": "MOD_USER",
+      "name": "用户管理模块",
+      "responsibility": "负责用户注册、登录、权限管理",
+      "functionIds": ["F001", "F002"]
+    }
+  ],
+  "classes": [
+    {
+      "name": "UserService",
+      "kind": "helper",
+      "responsibility": "处理用户业务逻辑",
+      "attributes": [{"name": "userRepo", "type": "UserRepository", "description": "用户仓储"}],
+      "methods": ["register(dto): User", "login(credentials): Token"],
+      "entityRef": null
+    },
+    {
+      "name": "User",
+      "kind": "domain",
+      "responsibility": "用户领域实体",
+      "attributes": [{"name": "id", "type": "string"}, {"name": "username", "type": "string"}],
+      "methods": ["validate(): boolean"],
+      "entityRef": "User"
+    }
+  ],
+  "dataFlows": [
+    {
+      "name": "用户登录流程",
+      "steps": ["Client → UserService.login()", "UserService → UserRepository.findByUsername()", "返回 JWT Token"],
+      "relatedFunctionIds": ["F001"]
+    }
+  ],
+  "coverageMatrix": [
+    {
+      "refId": "F001",
+      "refKind": "function",
+      "originalDescription": "用户通过用户名和密码登录系统",
+      "designDecision": "UserService.login() 验证凭证，生成 JWT",
+      "affectedModuleIds": ["MOD_USER"],
+      "affectedClassNames": ["UserService", "User"],
+      "testImplication": "正常登录、错误密码、账号不存在三种场景"
+    },
+    {
+      "refId": "C001",
+      "refKind": "constraint",
+      "originalDescription": "密码长度不少于8位",
+      "designDecision": "UserService.register() 校验密码长度",
+      "affectedModuleIds": ["MOD_USER"],
+      "affectedClassNames": ["UserService"],
+      "testImplication": "边界：7位拒绝、8位通过"
+    }
+  ],
+  "supplementaryClasses": []
+}
+```
 
-复杂度匹配要求：
-- 简单无状态需求（如只输入两个数并返回结果）应采用轻量分层或单服务设计，不引入数据库、仓储、历史记录、消息队列、策略类层级、分布式组件，除非需求分析结果明确要求
-- 中大型业务系统才根据需求分析结果中的性能、并发、技术约束选择微服务、缓存、消息队列、分布式锁等方案
-- 如果不采用某个常见复杂机制，应简短说明“不采用原因”，例如“原需求未要求保存计算历史，因此不设计持久化记录”
+### 字段说明
 
-### 3. 模块划分
-列出系统的功能模块，每个模块包含：
-- 模块名称
-- 模块职责
-- 对应的功能需求ID
+- **modules**: 每条映射一个功能模块。`functionIds` 必须包含该模块负责的全部功能 ID（来自合同清单）。每个功能 ID 只映射到语义最匹配的一个模块。
+- **classes**: 核心类和服务类。`kind=domain` 表示业务实体类（须与允许的核心领域类对应，entityRef 填实体名称），`kind=helper` 表示服务/仓储/控制器等辅助类（entityRef 为 null）。
+- **dataFlows**: 主要业务流程的步骤序列，每步描述服务调用或数据传递。`relatedFunctionIds` 引用该流程覆盖的功能 ID。
+- **coverageMatrix**: 设计覆盖矩阵，**必须为每个功能 ID、约束 ID、异常 ID 各写一条**。`refKind` 为 `function`/`constraint`/`exception`。`originalDescription` 保留需求原始语义，不能改写。
+- **supplementaryClasses**: 如需补充未在实体清单中的核心类，在此列出并提供需求原文依据；否则为空数组。
 
-硬性约束：
-- 每个功能 ID 只能映射到语义匹配的模块，不能为了覆盖率把不相关 ID 塞进模块。例如日志审计类功能必须进入日志/审计/运维类模块，不能放进用户认证模块。
-- 模块表必须覆盖 `requirement_json.functions[].id` 的全部 ID，且不要新增不存在的功能 ID。
+### 复杂度匹配要求
 
-格式示例：
-| 模块名称 | 职责描述 | 对应功能 |
-|----------|----------|----------|
-| 用户管理模块 | 处理用户注册、登录、权限管理 | F001, F002 |
-
-### 4. 核心类/接口设计
-列出系统中的核心类或接口，每个包含：
-- 类名
-- 职责描述
-- 主要属性（3-5个关键属性）
-- 主要方法（3-5个关键方法）
-- 关联的实体
-
-格式示例：
-| 类名 | 职责 | 关键属性 | 关键方法 |
-|------|------|----------|----------|
-| 用户 | 用户实体 | 用户ID, 用户名, 邮箱, 角色 | 注册(), 登录(), 更新资料() |
-
-硬性约束：
-- 核心领域类优先来自 `requirement_json.entities[].name`，大小写必须完全一致。
-- 接口和服务类只能在确实有跨模块边界、外部系统交互、复杂策略扩展或技术约束支撑时出现。简单需求不得为了展示模式而新增 `Repository`、`Strategy`、`Validator` 等接口层级。
-- **禁止改名**：如果需求分析中有一个实体叫 `Review`，你不能在设计里把它改成 `Evaluation` 或 `Comment`。必须使用完全相同的英文名。
-- 如果需求分析结果中明确提到了某个业务概念但未列入 entities，你可以在核心类表中补充该类，但不能凭空创造。
-- 如果需求中存在“明细/商品明细/订单行/列表项”等聚合子项，设计中必须用独立明细类承载数量、单价、金额快照等信息，不能让聚合根直接多对多关联资源对象。
-- 如果需求实体带有 `entityKind: "process_record"` 或 `entityKind: "association"`，它表示被实体化的流程/关系，必须作为独立核心类保留。例如 `CaseRegistration`、`CaseInvestigation`、`EnrollmentRecord` 不能被折叠成 `Case.register()` 或 `Student -> Course` 的普通关系。
-- 输出前做一次实体名自检：逐一核对 `requirement_json.entities[].name` 列表，确认每个实体都在核心类表中有对应条目，且类名完全一致。如果发现遗漏或改名，立即修正。
-
-### 5. 数据流说明
-描述系统中主要数据的流转过程，包括：
-- 用户请求的处理流程
-- 核心业务数据的存储和读取路径
-- 模块间的数据传递关系
-- 跨模块/跨实体的数据流和关联关系（如 Order 与 Payment、User 与 Review）
-
-### 6. 接口设计
-列出模块间的接口调用关系。
-
-### 7. 约束与异常处理设计
-针对需求中的每个约束条件，说明在设计中如何实现约束校验。
-针对每个异常流程，说明异常捕获和处理机制。
-
-硬性约束：
-- 约束 ID 必须使用 `requirement_json.constraints[].id` 的原始编号。
-- **逐条引用约束**：必须逐条列举 `requirement_json.constraints` 中的每个约束 ID（如 C001, C002, C003, …），每条约束都要有对应的架构决策或校验实现方案。禁止只概括性地说"所有约束已覆盖"而不逐条展开。
-- 异常 ID 必须使用 `requirement_json.exceptions[].id` 的原始编号，禁止把 X001-X006 改写成 E001-E006。
-
-### 8. 非功能需求设计
-针对需求中的非功能需求（性能、安全、可用性等），说明设计中的实现策略。
-
-注意：
-1. 设计方案必须与需求分析结果中列出的功能和实体一一对应
-1a. 设计方案必须覆盖每个功能的 `sub_capabilities` 和 `acceptance_criteria`；不得只覆盖顶层功能 ID 而忽略子能力
-2. 核心类应覆盖需求中识别出的所有实体
-3. 模块划分应覆盖所有功能需求
-4. 约束条件必须在设计中有对应的校验机制
-5. 异常流程必须在设计中有对应的处理方案
-6. 如果结构化需求结果里没有显式写出跨模块关系，需要结合需求分析结果自行补全
-7. 核心类以需求分析中的实体为准。如果需求分析结果中明确提到某个业务对象但未列入 entities，可以补充为核心类，但必须标注其来源
-8. 同一概念在设计正文、类图、状态图和测试中必须保持统一命名，不要同时出现多套名字
-9. 输出前做一次 ID/命名自检：功能 ID、约束 ID、异常 ID 来自需求分析结果。如需补充分析遗漏的核心类，必须确认需求分析结果中有明确依据
-10. 输出前做一次过度设计自检：删除或降级所有没有需求分析依据的持久化实体、历史记录、仓储接口、策略接口、复杂状态机和分布式技术
+- 简单无状态需求应采用轻量设计，modules 数量 2-3 个，classes 数量 3-6 个，不引入数据库、消息队列、分布式组件，除非需求明确要求。
+- 中大型系统根据需求中的性能、并发、技术约束设计。
+- dataFlows 应覆盖最关键的 2-4 个业务主流程，不需要穷举所有操作。
