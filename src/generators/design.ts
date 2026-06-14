@@ -228,6 +228,9 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
   }
 
   async generate(input: unknown): Promise<DesignModel> {
+    if (input == null || typeof input !== "object" || Array.isArray(input)) {
+      throw createToolError("DESIGN_EMPTY_INPUT", "generate() requires an object input with requirementJson", { recoverable: false });
+    }
     const { requirementJson, systemPrompt } = input as {
       requirementJson: Record<string, unknown>;
       systemPrompt?: string;
@@ -267,7 +270,7 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
         lastError = e instanceof Error ? e : new Error(String(e));
       }
     }
-    throw createToolError("DESIGN_FAILED", `Design JSON generation failed after ${maxAttempts} attempts: ${lastError?.message ?? "unknown"}`, { recoverable: true });
+    throw createToolError("DESIGN_FAILED", `Design JSON generation failed after ${maxAttempts} attempts: ${lastError!.message}`, { recoverable: true });
   }
 
   static buildDesignContract(requirementJson: Record<string, unknown>): string {
