@@ -183,26 +183,29 @@ describe("SystemDesigner.validateDesign", () => {
   });
 });
 
+const MINIMAL_DESIGN_JSON = {
+  modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: ["F001"] }],
+  classes: [{ name: "UserService", kind: "helper", responsibility: "用户服务" }],
+  dataFlows: [{ name: "登录流程", steps: ["client → UserService"], relatedFunctionIds: ["F001"] }],
+  coverageMatrix: [{ refId: "F001", refKind: "function", originalDescription: "用户登录", designDecision: "UserService.login()", affectedModuleIds: ["MOD_USER"], affectedClassNames: ["UserService"], testImplication: "正常/异常登录" }],
+};
+
 describe("SystemDesigner.generateDesign (mock LLM)", () => {
   it("should return design with expected sections on success", async () => {
     const mockLLM = {
-      generateText: vi
-        .fn()
-        .mockResolvedValue(
-          "## 模块划分\n\n用户管理模块\n\n## 核心类\n\nUser类\n\n## 数据流\n\n请求处理",
-        ),
+      generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON),
     };
     const designer = new SystemDesigner(mockLLM as any);
     const req = { functions: [{ id: "F001", name: "用户登录" }], entities: [] };
     const result = await designer.generateDesign(req);
-    expect(result.includes("模块划分")).toBe(true);
-    expect(result.includes("核心类")).toBe(true);
-    expect(mockLLM.generateText).toHaveBeenCalled();
+    expect(result.modules.length).toBeGreaterThan(0);
+    expect(result.classes.length).toBeGreaterThan(0);
+    expect(mockLLM.generateJson).toHaveBeenCalled();
   });
 
   it("should propagate LLM errors", async () => {
     const mockLLM = {
-      generateText: vi.fn().mockRejectedValue(new Error("API timeout")),
+      generateJson: vi.fn().mockRejectedValue(new Error("API timeout")),
     };
     const designer = new SystemDesigner(mockLLM as any);
     const req = { functions: [], entities: [] };
@@ -210,29 +213,29 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
   });
 
   it("should pass requirement JSON into the prompt", async () => {
-    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = {
       functions: [{ id: "F001", name: "登录" }],
       entities: [{ name: "User" }],
     };
     await designer.generateDesign(req);
-    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    const prompt: string = mockLLM.generateJson.mock.calls[0][0];
     expect(prompt.includes("F001")).toBe(true);
     expect(prompt.includes("User")).toBe(true);
   });
 
   it("should pass requirement text into the prompt", async () => {
-    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = { functions: [], entities: [] };
     await designer.generateDesign(req, "订单创建后需要触发支付");
-    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    const prompt: string = mockLLM.generateJson.mock.calls[0][0];
     expect(prompt.includes("订单创建后需要触发支付")).toBe(true);
   });
 
   it("should require per-ID constraint enumeration in the prompt template", async () => {
-    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = {
       functions: [],
@@ -240,14 +243,14 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
       constraints: [{ id: "C001", description: "约束1" }],
     };
     await designer.generateDesign(req);
-    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    const prompt: string = mockLLM.generateJson.mock.calls[0][0];
     // The prompt must instruct the LLM to enumerate ALL constraint IDs individually
     expect(prompt).toMatch(/逐条/);
     expect(prompt).toMatch(/约束.*ID.*一一对应|每条约束/);
   });
 
   it("should inject a hard design contract into the prompt", async () => {
-    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = {
       functions: [{ id: "F043", name: "LogsAndAudit", description: "操作日志记录" }],
@@ -256,7 +259,7 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
       exceptions: [{ id: "X001", description: "支付失败" }],
     };
     await designer.generateDesign(req);
-    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    const prompt: string = mockLLM.generateJson.mock.calls[0][0];
     expect(prompt).toContain("设计合同");
     expect(prompt).toContain("F043 | LogsAndAudit");
     expect(prompt).toContain("Order");
@@ -274,14 +277,14 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     );
     promptLoader.clearCache();
 
-    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = {
       functions: [{ id: "F001", name: "Login" }],
       entities: [{ name: "User" }],
     };
     await designer.generateDesign(req, "system prompt here");
-    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    const prompt: string = mockLLM.generateJson.mock.calls[0][0];
 
     // The design contract and system prompt should be injected via {requirement_text}
     expect(prompt).toContain("设计合同");
@@ -295,12 +298,16 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
 
 describe("GenerationTool self-check (no auto-repair)", () => {
   it("records self-check issues without attempting auto-repair", async () => {
-    const badDesign =
-      "## 模块划分\n\n| 模块 | 对应功能 |\n|---|---|\n| 用户模块 | F001 |\n\n## 核心类\n\nOrder类。\n\n## 数据流\n\n请求处理流程。";
+    // DesignModel that has no functions covered in modules (missing F001 in functionIds)
+    // so self-check will fail, but content should still be the DesignModel object
+    const badDesignModel = {
+      modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: [] }],
+      classes: [{ name: "Order", kind: "entity", responsibility: "订单" }],
+      dataFlows: [{ name: "请求处理流程", steps: ["client → server"], relatedFunctionIds: [] }],
+      coverageMatrix: [],
+    };
     const llm = {
-      generateText: vi.fn()
-        .mockResolvedValueOnce(badDesign),
-      generateJson: vi.fn(),
+      generateJson: vi.fn().mockResolvedValueOnce(badDesignModel),
       runWithStreamTagContext: (_t: string, _s: string, fn: () => Promise<unknown>) => fn(),
     };
     const tool = new GenerationTool(llm as any);
@@ -316,9 +323,9 @@ describe("GenerationTool self-check (no auto-repair)", () => {
 
     // Self-check finds issues but does NOT auto-repair
     expect(artifact.selfCheckPassed).toBe(false);
-    expect(artifact.content).toBe(badDesign);
+    expect(artifact.content).toMatchObject(badDesignModel);
     // LLM called only once (generation), NOT twice (generation + repair)
-    expect(llm.generateText).toHaveBeenCalledTimes(1);
+    expect(llm.generateJson).toHaveBeenCalledTimes(1);
   });
 });
 

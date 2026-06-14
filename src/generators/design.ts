@@ -10,6 +10,7 @@ import { semanticCoverageState, semanticItemId, tokenContains } from "../shared/
 import type { DesignModel } from "../shared/types.js";
 import { isDesignModel } from "../shared/types.js";
 import { createToolError } from "../tools/types.js";
+import { isAbortError } from "../utils/errors.js";
 import { BaseGenerator } from "./base.js";
 
 const GENERIC_SUFFIXES = new Set([
@@ -215,7 +216,7 @@ function extractJustifiedExtraClassNames(designText: string): Set<string> {
 // moved entirely to evaluation phase to avoid false positives from
 // "不采用X" / "未引入X" explanations in design text.
 
-export class SystemDesigner extends BaseGenerator<string> {
+export class SystemDesigner extends BaseGenerator<DesignModel> {
   private promptTemplate: string;
 
   constructor(llm: LLMClient) {
@@ -226,7 +227,7 @@ export class SystemDesigner extends BaseGenerator<string> {
     );
   }
 
-  async generate(input: unknown): Promise<string> {
+  async generate(input: unknown): Promise<DesignModel> {
     const { requirementJson, systemPrompt } = input as {
       requirementJson: Record<string, unknown>;
       systemPrompt?: string;
@@ -237,7 +238,7 @@ export class SystemDesigner extends BaseGenerator<string> {
   async generateDesign(
     requirementJson: Record<string, unknown>,
     systemPrompt?: string,
-  ): Promise<string> {
+  ): Promise<DesignModel> {
     if (!requirementJson || typeof requirementJson !== "object") {
       throw createToolError("DESIGN_EMPTY_INPUT", "需求JSON不能为空且必须是字典类型", { recoverable: false });
     }
@@ -249,13 +250,24 @@ export class SystemDesigner extends BaseGenerator<string> {
     const contractParts: string[] = [];
     if (systemPrompt) contractParts.push(systemPrompt);
     contractParts.push(SystemDesigner.buildDesignContract(requirementJson));
-    prompt = prompt.replace(
-      /\{requirement_text\}/g,
-      contractParts.join("\n\n"),
-    );
+    prompt = prompt.replace(/\{requirement_text\}/g, contractParts.join("\n\n"));
 
-    const result = await this.llm.generateText(prompt, systemPrompt ?? "");
-    return result;
+    const maxAttempts = 3;
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const raw = await this.generateJsonWithRetry(prompt, systemPrompt ?? "", 1);
+        const model = SystemDesigner.parseDesignModel(raw);
+        if (!model) {
+          throw createToolError("DESIGN_PARSE_FAILED", "LLM output is not a valid DesignModel (missing required arrays)", { recoverable: true });
+        }
+        return model;
+      } catch (e) {
+        if (isAbortError(e)) throw e;
+        lastError = e instanceof Error ? e : new Error(String(e));
+      }
+    }
+    throw createToolError("DESIGN_FAILED", `Design JSON generation failed after ${maxAttempts} attempts: ${lastError?.message ?? "unknown"}`, { recoverable: true });
   }
 
   static buildDesignContract(requirementJson: Record<string, unknown>): string {
