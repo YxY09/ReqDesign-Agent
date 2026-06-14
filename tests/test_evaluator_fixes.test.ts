@@ -761,3 +761,60 @@ describe("EvaluationTool._requirementForReview", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// _checkUndefinedExceptionIds — dynamic prefix detection
+// ---------------------------------------------------------------------------
+
+describe("EvaluationTool._checkUndefinedExceptionIds dynamic prefix", () => {
+  function checkIds(
+    text: string,
+    exceptions: Array<{ id: string; displayId?: string; name: string }>,
+  ) {
+    const tool = new EvaluationTool(noopLlm());
+    const requirementJson = {
+      exceptions: exceptions.map((e) => ({ ...e, displayId: e.displayId ?? e.id })),
+    };
+    return (tool as unknown as { _checkUndefinedExceptionIds(a: string, b: string, c: string, d: string, e: Record<string, unknown>): import("../src/shared/types.js").Issue[] })
+      ._checkUndefinedExceptionIds("design-1", "design", "design_text", text, requirementJson);
+  }
+
+  it("detects undefined E-prefix exception ID when exceptions use E-prefix", () => {
+    const issues = checkIds("Throws E999 on failure", [
+      { id: "E001", name: "InvalidInput" },
+      { id: "E002", name: "NotFound" },
+    ]);
+    expect(issues.length).toBe(1);
+    expect(issues[0].description).toContain("E999");
+  });
+
+  it("does NOT flag a valid E-prefix exception ID", () => {
+    const issues = checkIds("Throws E001 on failure", [
+      { id: "E001", name: "InvalidInput" },
+    ]);
+    expect(issues.length).toBe(0);
+  });
+
+  it("detects undefined EXC_-prefix exception ID", () => {
+    const issues = checkIds("See EXC_UNKNOWN for details", [
+      { id: "EXC_TIMEOUT", name: "Timeout" },
+    ]);
+    expect(issues.length).toBe(1);
+    expect(issues[0].description).toContain("EXC_UNKNOWN");
+  });
+
+  it("still detects undefined X-prefix exception ID (legacy format)", () => {
+    const issues = checkIds("Throws X999 on failure", [
+      { id: "X001", name: "InvalidInput" },
+    ]);
+    expect(issues.length).toBe(1);
+    expect(issues[0].description).toContain("X999");
+  });
+
+  it("returns empty when no exceptions defined", () => {
+    const tool = new EvaluationTool(noopLlm());
+    const issues = (tool as unknown as { _checkUndefinedExceptionIds(a: string, b: string, c: string, d: string, e: Record<string, unknown>): import("../src/shared/types.js").Issue[] })
+      ._checkUndefinedExceptionIds("design-1", "design", "design_text", "E001", {});
+    expect(issues.length).toBe(0);
+  });
+});
+

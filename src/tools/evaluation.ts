@@ -843,8 +843,20 @@ export class EvaluationTool extends BaseTool {
   ): Issue[] {
     const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
     if (requirementIndex.exceptions.length === 0) return [];
+
+    // Dynamically derive prefixes from actual exception IDs — same logic as GenerationTool.
+    const prefixes = new Set<string>();
+    for (const ref of requirementIndex.exceptions) {
+      for (const id of [ref.displayId, ref.canonicalId]) {
+        const match = /^([A-Z]+_?)/.exec(id);
+        if (match) prefixes.add(match[1]);
+      }
+    }
+    const prefixList = [...prefixes];
+    if (prefixList.length === 0) return [];
+
     const referenced = requirementIndex.extractIds(text)
-      .filter((id) => id.startsWith("X") || id.startsWith("EXC_"));
+      .filter((id) => prefixList.some((prefix) => id.startsWith(prefix)));
     const unknown = requirementIndex.unknownReferences(referenced);
     if (unknown.length === 0) return [];
 
