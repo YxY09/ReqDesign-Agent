@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SystemDesigner } from "../src/generators/design.js";
 import { GenerationTool } from "../src/tools/generation.js";
-import { createTask } from "../src/shared/types.js";
+import { createTask, isDesignModel } from "../src/shared/types.js";
 import * as promptLoader from "../src/promptLoader.js";
 describe("SystemDesigner.validateDesign", () => {
   it("should warn on missing required sections", () => {
@@ -153,6 +153,34 @@ describe("SystemDesigner.validateDesign", () => {
     expect(warnings.some((w) => w.includes("X001") && w.includes("未在设计中体现"))).toBe(true);
     // "未定义异常 ID" 扫描已移除，不再检查设计中的 E 前缀 ID 是否在需求中定义
   });
+
+  it("should warn when a constraint ID appears with mismatched semantics", () => {
+    const design =
+      "## 模块划分\n\n包含F001。\n\n## 核心类\n\nOrder类。\n\n## 数据流\n\n请求处理流程。\n\n## 约束与异常处理设计\n\nC011 支付超时30分钟自动取消订单。";
+    const req = {
+      functions: [{ id: "F001", name: "CreateOrder" }],
+      entities: [{ name: "Order", description: "订单" }],
+      constraints: [{ id: "C011", description: "同一商品30天内只能追加评价一次" }],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) =>
+      w.includes("C011") && w.includes("语义未匹配"),
+    )).toBe(true);
+  });
+
+  it("should accept constraint coverage when the ID line preserves the original semantics", () => {
+    const design =
+      "## 模块划分\n\n包含F001。\n\n## 核心类\n\nOrder类。\n\n## 数据流\n\n请求处理流程。\n\n## 设计覆盖矩阵\n\n| 类型 | 原始ID | 原始描述 | 设计决策 |\n|---|---|---|---|\n| 约束 | C011 | 同一商品30天内只能追加评价一次 | Review 服务按用户、商品和30天窗口校验追加评价次数 |";
+    const req = {
+      functions: [{ id: "F001", name: "CreateOrder" }],
+      entities: [{ name: "Order", description: "订单" }],
+      constraints: [{ id: "C011", description: "同一商品30天内只能追加评价一次" }],
+    };
+    const warnings = SystemDesigner.validateDesign(design, req);
+    expect(warnings.some((w) =>
+      w.includes("C011") && w.includes("语义未匹配"),
+    )).toBe(false);
+  });
 });
 
 describe("SystemDesigner.generateDesign (mock LLM)", () => {
@@ -233,6 +261,7 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     expect(prompt).toContain("F043 | LogsAndAudit");
     expect(prompt).toContain("Order");
     expect(prompt).toContain("X001 | 支付失败");
+    expect(prompt).toContain("设计覆盖矩阵");
     expect(prompt).toContain("不能改成 E001");
   });
 
@@ -290,5 +319,133 @@ describe("GenerationTool self-check (no auto-repair)", () => {
     expect(artifact.content).toBe(badDesign);
     // LLM called only once (generation), NOT twice (generation + repair)
     expect(llm.generateText).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DesignModel tests (Phase A)
+// ---------------------------------------------------------------------------
+
+const MINIMAL_MODEL = {
+  modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: ["F001"] }],
+  classes: [{ name: "UserService", kind: "helper" as const, responsibility: "用户服务" }],
+  dataFlows: [{ name: "登录流程", steps: ["client → UserService", "UserService → DB"], relatedFunctionIds: ["F001"] }],
+  coverageMatrix: [{ refId: "F001", refKind: "function" as const, originalDescription: "用户登录", designDecision: "UserService.login()", affectedModuleIds: ["MOD_USER"], affectedClassNames: ["UserService"], testImplication: "正常/异常登录场景" }],
+};
+
+describe("renderDesignMarkdown", () => {
+  it("includes module section and function ID", () => {
+    const md = SystemDesigner.renderDesignMarkdown(MINIMAL_MODEL);
+    expect(md).toContain("## 模块划分");
+    expect(md).toContain("F001");
+    expect(md).toContain("用户模块");
+  });
+
+  it("includes class section with class name", () => {
+    const md = SystemDesigner.renderDesignMarkdown(MINIMAL_MODEL);
+    expect(md).toContain("## 核心类/接口设计");
+    expect(md).toContain("UserService");
+  });
+
+  it("includes data flow section", () => {
+    const md = SystemDesigner.renderDesignMarkdown(MINIMAL_MODEL);
+    expect(md).toContain("## 数据流说明");
+    expect(md).toContain("登录流程");
+  });
+
+  it("includes coverage matrix with refId", () => {
+    const md = SystemDesigner.renderDesignMarkdown(MINIMAL_MODEL);
+    expect(md).toContain("## 设计覆盖矩阵");
+    expect(md).toContain("F001");
+    expect(md).toContain("用户登录");
+  });
+
+  it("escapes pipe characters in LLM-supplied strings", () => {
+    const modelWithPipe = {
+      ...MINIMAL_MODEL,
+      coverageMatrix: [{
+        refId: "F001",
+        refKind: "function" as const,
+        originalDescription: "A | B",
+        designDecision: "use C",
+        affectedModuleIds: ["MOD_USER"],
+        affectedClassNames: ["UserService"],
+        testImplication: "test D",
+      }],
+    };
+    const md = SystemDesigner.renderDesignMarkdown(modelWithPipe);
+    expect(md).toContain("A \\| B");
+    expect(md).not.toContain("| A | B |");
+  });
+
+  it("omits supplementaryClasses section when empty", () => {
+    const md = SystemDesigner.renderDesignMarkdown(MINIMAL_MODEL);
+    expect(md).not.toContain("补充核心类依据");
+  });
+
+  it("includes supplementaryClasses section when present", () => {
+    const modelWithSupp = {
+      ...MINIMAL_MODEL,
+      supplementaryClasses: [{ name: "TokenHelper", justification: "需要生成JWT" }],
+    };
+    const md = SystemDesigner.renderDesignMarkdown(modelWithSupp);
+    expect(md).toContain("## 补充核心类依据");
+    expect(md).toContain("TokenHelper");
+  });
+});
+
+describe("validateDesignModel", () => {
+  it("warns when function not in any module functionIds", () => {
+    const reqJson = { functions: [{ id: "F001", displayId: "F001" }, { id: "F002", displayId: "F002" }], constraints: [], exceptions: [] };
+    const warnings = SystemDesigner.validateDesignModel(MINIMAL_MODEL, reqJson);
+    expect(warnings.some((w) => w.includes("F002"))).toBe(true);
+    expect(warnings.some((w) => w.includes("F001"))).toBe(false);
+  });
+
+  it("warns when constraint missing from coverageMatrix (by displayId)", () => {
+    const reqJson = { functions: [], constraints: [{ id: "CON_PASS", displayId: "C001", description: "密码强度" }], exceptions: [] };
+    const warnings = SystemDesigner.validateDesignModel(MINIMAL_MODEL, reqJson);
+    expect(warnings.some((w) => w.includes("C001"))).toBe(true);
+  });
+
+  it("does not warn when constraint covered by canonical id form", () => {
+    const modelWithConstraint = {
+      ...MINIMAL_MODEL,
+      coverageMatrix: [
+        ...MINIMAL_MODEL.coverageMatrix,
+        { refId: "CON_PASS", refKind: "constraint" as const, originalDescription: "密码", designDecision: "validate", affectedModuleIds: ["MOD_USER"], affectedClassNames: ["UserService"], testImplication: "边界" },
+      ],
+    };
+    const reqJson = { functions: [], constraints: [{ id: "CON_PASS", displayId: "C001" }], exceptions: [] };
+    const warnings = SystemDesigner.validateDesignModel(modelWithConstraint, reqJson);
+    expect(warnings.some((w) => w.includes("C001") || w.includes("CON_PASS"))).toBe(false);
+  });
+
+  it("warns when exception missing from coverageMatrix", () => {
+    const reqJson = { functions: [], constraints: [], exceptions: [{ id: "EXC_LOGIN", displayId: "X001", description: "登录失败" }] };
+    const warnings = SystemDesigner.validateDesignModel(MINIMAL_MODEL, reqJson);
+    expect(warnings.some((w) => w.includes("X001"))).toBe(true);
+  });
+
+  it("passes when all requirements covered", () => {
+    const reqJson = { functions: [{ id: "F001", displayId: "F001" }], constraints: [], exceptions: [] };
+    const warnings = SystemDesigner.validateDesignModel(MINIMAL_MODEL, reqJson);
+    const uncoveredWarnings = warnings.filter((w) => w.includes("F001") && w.includes("未"));
+    expect(uncoveredWarnings.length).toBe(0);
+  });
+});
+
+describe("isDesignModel", () => {
+  it("returns false for string", () => {
+    expect(isDesignModel("hello")).toBe(false);
+  });
+  it("returns false for null", () => {
+    expect(isDesignModel(null)).toBe(false);
+  });
+  it("returns false for object missing coverageMatrix array", () => {
+    expect(isDesignModel({ modules: [], classes: [], dataFlows: [] })).toBe(false);
+  });
+  it("returns true for valid minimal model", () => {
+    expect(isDesignModel(MINIMAL_MODEL)).toBe(true);
   });
 });
