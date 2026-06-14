@@ -6,6 +6,9 @@ import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
+import { semanticCoverageState, semanticItemId, tokenContains } from "../shared/semanticCoverage.js";
+import type { DesignModel } from "../shared/types.js";
+import { isDesignModel } from "../shared/types.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 
@@ -150,42 +153,62 @@ function isHelperClassName(name: string): boolean {
   return HELPER_CLASS_SUFFIXES.some((suffix) => name.endsWith(suffix));
 }
 
-function containsToken(text: string, token: string): boolean {
-  const trimmed = token.trim();
-  if (!trimmed) return false;
-  if (/^[A-Za-z][A-Za-z0-9_]+$/.test(trimmed)) {
-    return new RegExp(`\\b${trimmed}\\b`).test(text);
-  }
-  return text.includes(trimmed);
-}
-
-function itemId(item: unknown): string {
-  if (typeof item === "object" && item !== null) {
-    const rec = item as Record<string, unknown>;
-    return String(rec.displayId ?? rec.id ?? "").trim();
-  }
-  return "";
-}
-
-/**
- * 收集未在设计文本中体现的条目 displayId。
- * 按条目逐个配对 displayId / canonicalId（同一对象），
- * 设计文本命中任一形式即视为已覆盖。
- */
-function collectUncoveredIds(designText: string, items: unknown): string[] {
+function collectSemanticCoverageIssues(
+  designText: string,
+  items: unknown,
+  fields: string[],
+  label: string,
+): string[] {
   if (!Array.isArray(items)) return [];
-  const uncovered: string[] = [];
+  const missing: string[] = [];
+  const drifted: string[] = [];
+
   for (const item of items) {
-    const displayId = itemId(item);
+    if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
+    const rec = item as Record<string, unknown>;
+    const displayId = semanticItemId(rec);
     if (!displayId) continue;
-    const canonicalId = typeof item === "object" && item !== null
-      ? String((item as Record<string, unknown>).id ?? "").trim()
-      : "";
-    const found = containsToken(designText, displayId)
-      || (canonicalId !== "" && canonicalId !== displayId && containsToken(designText, canonicalId));
-    if (!found) uncovered.push(displayId);
+    const state = semanticCoverageState(designText, rec, fields);
+    if (state === "missing") {
+      missing.push(displayId);
+      continue;
+    }
+    if (state === "drifted") {
+      drifted.push(displayId);
+    }
   }
-  return uncovered;
+
+  const warnings: string[] = [];
+  if (missing.length > 0) {
+    warnings.push(`以下 ${missing.length} 个${label}未在设计中体现: ${missing.join(", ")}`);
+  }
+  if (drifted.length > 0) {
+    warnings.push(`以下 ${drifted.length} 个${label}编号虽出现但语义未匹配原始需求: ${drifted.join(", ")}`);
+  }
+  return warnings;
+}
+
+function extractJustifiedExtraClassNames(designText: string): Set<string> {
+  const justified = new Set<string>();
+  const headingRe = /^#{2,}\s*.*(?:补充核心类|新增核心类|核心类依据|补充类依据).*$/gim;
+  let match: RegExpExecArray | null;
+  while ((match = headingRe.exec(designText)) !== null) {
+    const start = match.index + match[0].length;
+    const rest = designText.slice(start);
+    const nextHeading = rest.search(/^#{2,}\s+/m);
+    const section = nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
+    for (const line of section.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) continue;
+      if (/^\|\s*-+/.test(trimmed)) continue;
+      if (/类名|Class/i.test(trimmed)) continue;
+      const cells = trimmed.split("|").slice(1, -1).map((cell) => cell.trim().replace(/^`|`$/g, ""));
+      const className = cells[0]?.match(/^I?[A-Z][A-Za-z0-9_]*$/)?.[0];
+      const evidence = cells.slice(1).join(" ");
+      if (className && evidence.trim().length >= 4) justified.add(className);
+    }
+  }
+  return justified;
 }
 
 // isSimpleRequirement / isMediumRequirement removed — overdesign self-check
@@ -285,11 +308,131 @@ export class SystemDesigner extends BaseGenerator<string> {
       exceptions.length > 0 ? `### 异常 ID 清单\n${exceptions.map((item) => `- ${item}`).join("\n")}` : "",
       subCapsLines.length > 0 ? subCapsLines.join("\n") : "",
       "### 输出前自检",
+      "- 必须输出 `## 设计覆盖矩阵` 章节，逐条列出功能、约束、异常的原始 ID、原始描述、设计决策、影响模块、影响类、测试启示。",
+      "- 覆盖矩阵中的原始描述必须保留需求分析中的核心语义，不能只写 ID 或改写成其他约束。",
       "- 模块划分必须覆盖全部功能 ID，且每个 ID 所在模块语义必须匹配功能名称和描述。",
       "- 核心类/接口设计里的核心领域类必须来自“允许的核心领域类”清单，大小写完全一致。",
+      "- 如果确实需要补充未在实体清单中的核心类，必须增加 `## 补充核心类依据` 表格，列出类名和需求原文依据；没有依据的补充类会被拒绝。",
       "- 异常处理设计必须使用异常 ID 清单中的原始编号，例如 X001 就必须写 X001，不能改成 E001。",
       "- 约束处理设计必须使用约束 ID 清单中的原始编号。",
     ].filter(Boolean).join("\n\n");
+  }
+
+  static renderDesignMarkdown(model: DesignModel): string {
+    const lines: string[] = [];
+
+    lines.push("## 模块划分\n");
+    lines.push("| 模块名称 | 职责描述 | 对应功能 |");
+    lines.push("|----------|----------|----------|");
+    for (const mod of model.modules) {
+      lines.push(`| ${mod.name} | ${mod.responsibility} | ${mod.functionIds.join(", ")} |`);
+    }
+
+    lines.push("\n## 核心类/接口设计\n");
+    lines.push("| 类名 | 类型 | 职责 | 关联实体 |");
+    lines.push("|------|------|------|----------|");
+    for (const cls of model.classes) {
+      lines.push(`| ${cls.name} | ${cls.kind} | ${cls.responsibility} | ${cls.entityRef ?? "-"} |`);
+    }
+    for (const cls of model.classes) {
+      lines.push(`\n### ${cls.name}`);
+      lines.push(`- **职责**: ${cls.responsibility}`);
+      if (cls.attributes && cls.attributes.length > 0) {
+        lines.push("- **属性**:");
+        for (const attr of cls.attributes) {
+          lines.push(`  - ${attr.name}: ${attr.type}${attr.description ? ` — ${attr.description}` : ""}`);
+        }
+      }
+      if (cls.methods && cls.methods.length > 0) {
+        lines.push("- **方法**: " + cls.methods.join(", "));
+      }
+      if (cls.entityRef) {
+        lines.push(`- **关联实体**: ${cls.entityRef}`);
+      }
+    }
+
+    lines.push("\n## 数据流说明\n");
+    for (const flow of model.dataFlows) {
+      lines.push(`### ${flow.name}`);
+      if (flow.relatedFunctionIds.length > 0) {
+        lines.push(`相关功能: ${flow.relatedFunctionIds.join(", ")}`);
+      }
+      flow.steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
+      lines.push("");
+    }
+
+    lines.push("\n## 设计覆盖矩阵\n");
+    lines.push("| ID | 类型 | 原始描述 | 设计决策 | 影响模块 | 影响类 | 测试启示 |");
+    lines.push("|-----|------|----------|----------|---------|------|--------|");
+    for (const entry of model.coverageMatrix) {
+      const mods = entry.affectedModuleIds.join(", ");
+      const cls = entry.affectedClassNames.join(", ");
+      lines.push(`| ${entry.refId} | ${entry.refKind} | ${entry.originalDescription} | ${entry.designDecision} | ${mods} | ${cls} | ${entry.testImplication} |`);
+    }
+
+    if (model.supplementaryClasses && model.supplementaryClasses.length > 0) {
+      lines.push("\n## 补充核心类依据\n");
+      lines.push("| 类名 | 需求原文依据 |");
+      lines.push("|------|-------------|");
+      for (const sc of model.supplementaryClasses) {
+        lines.push(`| ${sc.name} | ${sc.justification} |`);
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  static validateDesignModel(model: DesignModel, requirementJson: Record<string, unknown>): string[] {
+    const warnings: string[] = [];
+
+    if (!model.modules || model.modules.length === 0) warnings.push("DesignModel 缺少 modules");
+    if (!model.classes || model.classes.length === 0) warnings.push("DesignModel 缺少 classes");
+    if (!model.dataFlows || model.dataFlows.length === 0) warnings.push("DesignModel 缺少 dataFlows");
+    if (!model.coverageMatrix || model.coverageMatrix.length === 0) warnings.push("DesignModel 缺少 coverageMatrix");
+
+    const coveredFunctionIds = new Set<string>(model.modules.flatMap((m) => m.functionIds));
+    const functions = Array.isArray(requirementJson.functions)
+      ? (requirementJson.functions as Record<string, unknown>[])
+      : [];
+    for (const fn of functions) {
+      const id = String(fn.id ?? "");
+      const displayId = String(fn.displayId ?? "");
+      if ((id || displayId) && !coveredFunctionIds.has(id) && !coveredFunctionIds.has(displayId)) {
+        warnings.push(`功能 ${displayId || id} 未映射到任何模块的 functionIds`);
+      }
+    }
+
+    const coveredRefIds = new Set<string>(model.coverageMatrix.map((e) => e.refId));
+    const constraints = Array.isArray(requirementJson.constraints)
+      ? (requirementJson.constraints as Record<string, unknown>[])
+      : [];
+    for (const c of constraints) {
+      const id = String(c.displayId ?? c.id ?? "");
+      if (id && !coveredRefIds.has(id)) warnings.push(`约束 ${id} 未在 coverageMatrix 中体现`);
+    }
+    const exceptions = Array.isArray(requirementJson.exceptions)
+      ? (requirementJson.exceptions as Record<string, unknown>[])
+      : [];
+    for (const e of exceptions) {
+      const id = String(e.displayId ?? e.id ?? "");
+      if (id && !coveredRefIds.has(id)) warnings.push(`异常 ${id} 未在 coverageMatrix 中体现`);
+    }
+
+    return warnings;
+  }
+
+  static parseDesignModel(raw: Record<string, unknown>): DesignModel | null {
+    const obj = SystemDesigner._unwrapDesignContent(raw);
+    if (!isDesignModel(obj)) return null;
+    return obj;
+  }
+
+  private static _unwrapDesignContent(raw: Record<string, unknown>): unknown {
+    // Unwrap {content: {...}} or {design: {...}} LLM envelope
+    if (isDesignModel(raw)) return raw;
+    const inner = raw["content"] ?? raw["design"] ?? raw["result"];
+    if (inner && typeof inner === "object" && !Array.isArray(inner)) return inner;
+    return raw;
   }
 
   static validateDesign(designText: string, requirementJson: Record<string, unknown>): string[] {
@@ -342,9 +485,9 @@ export class SystemDesigner extends BaseGenerator<string> {
         const name = rec ? (rec.name ?? rec.id) : String(func);
         const fid = rec ? String(rec.id ?? "") : "";
         const fdisplayId = rec ? String(rec.displayId ?? "") : "";
-        const hasName = name ? containsToken(designText, String(name)) : false;
-        const hasId = fid ? containsToken(designText, fid) : false;
-        const hasDisplayId = fdisplayId ? containsToken(designText, fdisplayId) : false;
+        const hasName = name ? tokenContains(designText, String(name)) : false;
+        const hasId = fid ? tokenContains(designText, fid) : false;
+        const hasDisplayId = fdisplayId ? tokenContains(designText, fdisplayId) : false;
         if (name && !hasName && !hasId && !hasDisplayId) {
           const label = fdisplayId || fid || name;
           warnings.push(`功能 ${label} 未在设计中体现`);
@@ -359,18 +502,18 @@ export class SystemDesigner extends BaseGenerator<string> {
 
     // NOTE: Medium overdesign check also moved to evaluation phase for the same reason.
 
-    // Merge per-constraint warnings into one issue to avoid overwhelming the
-    // convergence threshold (previously: one issue per uncovered constraint).
-    const uncoveredConstraints = collectUncoveredIds(designText, requirementJson["constraints"]);
-    if (uncoveredConstraints.length > 0) {
-      warnings.push(`以下 ${uncoveredConstraints.length} 个约束未在设计中体现: ${uncoveredConstraints.join(", ")}`);
-    }
-
-    // Merge per-exception warnings into one issue for the same reason.
-    const uncoveredExceptions = collectUncoveredIds(designText, requirementJson["exceptions"]);
-    if (uncoveredExceptions.length > 0) {
-      warnings.push(`以下 ${uncoveredExceptions.length} 个异常未在设计中体现: ${uncoveredExceptions.join(", ")}`);
-    }
+    warnings.push(...collectSemanticCoverageIssues(
+      designText,
+      requirementJson["constraints"],
+      ["description", "source_text", "sourceText", "canonicalRule", "canonicalRuleEn"],
+      "约束",
+    ));
+    warnings.push(...collectSemanticCoverageIssues(
+      designText,
+      requirementJson["exceptions"],
+      ["description", "trigger", "handling", "source_text", "sourceText"],
+      "异常",
+    ));
 
     const entities = requirementJson["entities"];
     if (Array.isArray(entities)) {
@@ -395,8 +538,10 @@ export class SystemDesigner extends BaseGenerator<string> {
         }
       }
 
+      const justifiedExtraClasses = extractJustifiedExtraClassNames(designText);
       const extraCoreClasses = declaredClassNames.filter((name) => {
         if (isHelperClassName(name)) return false;
+        if (justifiedExtraClasses.has(name)) return false;
         const normalized = normalizeDomainName(name);
         if (!normalized) return false;
         return !normalizedEntityNames.has(normalized);
