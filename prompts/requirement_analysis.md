@@ -68,6 +68,12 @@
 
 如果没有提供 available_constraints 列表，按正常方式提取约束（放入 constraints 数组，使用自增 id）。
 
+## 输出语言规则（必须遵守）
+
+根据需求文档的主要语言决定所有描述性字段的输出语言：
+- 如果需求文档**包含中文**，则 `project_overview`、`description`、`sub_capabilities`、`acceptance_criteria`、`trigger`、`handling`、`steps`、`preconditions` 等所有描述性字段必须用**中文**输出
+- `name` 字段无论需求语言如何，**始终使用英文 PascalCase**（这是跨多次分析去重的必要条件）
+
 ## 输出要求
 
 请以JSON格式输出，包含以下字段：
