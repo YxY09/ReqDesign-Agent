@@ -1,5 +1,7 @@
 import type { WorkflowState } from "../state.js";
 
+const TERMINAL_TASK_STATUSES = new Set(["running", "completed", "rejected", "cancelled", "failed"]);
+
 /**
  * Manages task lifecycle status and notification history.
  *
@@ -134,16 +136,9 @@ export class TaskLifecycleManager {
   getReadyTaskIds(): string[] {
     if (!this._state.plan) return [];
     const ready: string[] = [];
-    const terminalStatuses = new Set([
-      "running",
-      "completed",
-      "rejected",
-      "cancelled",
-      "failed",
-    ]);
     for (const task of this._state.plan.tasks) {
       const status = this.taskStatus(task.id);
-      if (terminalStatuses.has(status)) continue;
+      if (TERMINAL_TASK_STATUSES.has(status)) continue;
       if (task.dependsOn.every((dep) => this.isTaskCompleted(dep))) {
         ready.push(task.id);
       }

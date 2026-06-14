@@ -294,6 +294,42 @@ describe("WorkflowState", () => {
     expect(state.isCurrentArtifactAccepted("design-1")).toBe(true);
   });
 
+  it("addVerdict with scoped verdict preserves prior major pending from other tasks", () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
+    state.addArtifact(createArtifact({ taskId: "tests-1", type: "tests", content: "t1" }));
+
+    // Verdict 1: design-1 has a major issue
+    state.addVerdict(
+      createVerdict({
+        passed: false,
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        issues: [
+          createIssue({
+            severity: "major",
+            targetTaskId: "design-1",
+            targetTaskType: "design",
+            description: "missing architecture section",
+          }),
+        ],
+      }),
+    );
+    expect(state.majorPendingTaskIds.has("design-1")).toBe(true);
+
+    // Verdict 2: scoped to tests-1 only with no issues — must NOT clear design-1
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        evaluatedTaskIds: ["tests-1"],
+        evaluatedRevisions: { "tests-1": 1 },
+        issues: [],
+      }),
+    );
+    expect(state.majorPendingTaskIds.has("design-1")).toBe(true);
+    expect(state.majorPendingTaskIds.has("tests-1")).toBe(false);
+  });
+
   it("addVerdict records major pending for non-blocker major issues", () => {
     const state = new WorkflowState();
     state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));

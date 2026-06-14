@@ -2,7 +2,6 @@ import type { WorkflowState } from "../state.js";
 import type { Artifact } from "../shared/types.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
-import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Task-type → aggregate-field mapping
@@ -177,17 +176,12 @@ export class ArtifactManager {
     }
     const record = content as Record<string, unknown>;
     const nested = record.diagrams;
-    const source = nested && typeof nested === "object" && !Array.isArray(nested)
-      ? nested as Record<string, unknown>
-      : record;
-    const diagrams: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(source)) {
-      if (["class_diagram", "activity_diagram", "state_diagram"].includes(key)) {
-        diagrams[key] = value;
-      }
+    // If the generator wrapped diagrams in a { diagrams: { ... } } envelope,
+    // unwrap it so all diagram types (including future ones) are accepted.
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      return nested as Record<string, unknown>;
     }
-    if (Object.keys(diagrams).length > 0) return diagrams;
-    return source === record ? record : {};
+    return record;
   }
 
   // ------------------------------------------------------------------
@@ -248,7 +242,7 @@ export class ArtifactManager {
       snapshots[SYNTHETIC_TASK_IDS.ANALYZE_FINAL] = {
         taskId: SYNTHETIC_TASK_IDS.ANALYZE_FINAL,
         type: "analyze",
-        revision: this._contentRevision(this._state.requirementJson),
+        revision: this._aggregateRevisionForType("analyze"),
         content: this._state.requirementJson,
         selfCheckPassed: true,
         selfCheckIssues: [],
@@ -277,7 +271,7 @@ export class ArtifactManager {
       snapshots[SYNTHETIC_TASK_IDS.DIAGRAMS_FINAL] = {
         taskId: SYNTHETIC_TASK_IDS.DIAGRAMS_FINAL,
         type: "diagrams",
-        revision: this._contentRevision(this._state.diagrams),
+        revision: this._aggregateRevisionForType("diagrams"),
         content: this._state.diagrams,
         selfCheckPassed: true,
         selfCheckIssues: [],
@@ -341,19 +335,13 @@ export class ArtifactManager {
     return this.latestArtifactTaskIdOfType("diagrams");
   }
 
-  private _contentRevision(content: unknown): number {
-    const text = JSON.stringify(content, (_key, value) => {
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        return Object.fromEntries(
-          Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-            a.localeCompare(b),
-          ),
-        );
-      }
-      return value;
-    });
-    const hex = createHash("sha256").update(text ?? "", "utf8").digest("hex").slice(0, 12);
-    return parseInt(hex, 16) || 1;
+  /** Sum of artifact revisions for all tasks of the given type — monotonically increases. */
+  private _aggregateRevisionForType(type: string): number {
+    let total = 0;
+    for (const [taskId, rev] of Object.entries(this._state.artifactRevisionsByTask)) {
+      if (this._state.artifacts[taskId]?.type === type) total += rev;
+    }
+    return total || 1;
   }
 
   private _sourceRevisionsForType(type: string): Record<string, number> {

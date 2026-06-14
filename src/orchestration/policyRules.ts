@@ -219,17 +219,21 @@ function workRunning(snapshot: OrchestratorSnapshot): StrategyDecision | null {
   return null;
 }
 
-/** Rule 11: No plan yet — delegate initial routing to LLM (StrategyBrain). */
-function noPlanYet(snapshot: OrchestratorSnapshot): StrategyDecision | null {
-  if (!snapshot.planReady && snapshot.requirementLoaded && !snapshot.hasArtifacts) {
-    if (snapshot.plannerFailures >= 3) {
-      return createStrategyDecision({
-        strategy: "pause_for_user",
-        reason: `planner failed ${snapshot.plannerFailures} times`,
-      });
-    }
-    return null;
+/**
+ * Rule 11: No plan yet — return null to let StrategyBrain make the initial
+ * routing decision. This rule is a sentinel: it only fires a hard pause when
+ * the planner has failed too many times; otherwise it returns null to pass
+ * control to the LLM layer rather than the deterministic ladder.
+ */
+function delegateInitialRoutingIfNoPlan(snapshot: OrchestratorSnapshot): StrategyDecision | null {
+  if (snapshot.planReady || !snapshot.requirementLoaded || snapshot.hasArtifacts) return null;
+  if (snapshot.plannerFailures >= 3) {
+    return createStrategyDecision({
+      strategy: "pause_for_user",
+      reason: `planner failed ${snapshot.plannerFailures} times`,
+    });
   }
+  // Return null — StrategyBrain handles initial planning decision
   return null;
 }
 
@@ -316,7 +320,7 @@ export const POLICY_RULES: PolicyRule[] = [
   finalReviewRejectedNoRepair,
   outputSaved,
   workRunning,
-  noPlanYet,
+  delegateInitialRoutingIfNoPlan,
   readyTasks,
   finalReviewReady,
   opportunisticReview,

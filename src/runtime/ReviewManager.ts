@@ -46,11 +46,19 @@ export class ReviewManager {
       }
     }
 
-    // Track tasks with major issues that passed (no blockers)
-    // so the coordinator can attempt one repair round
-    this._state.majorPendingTaskIds = new Set(
-      [...majorTaskIds].filter((id) => !blockerTaskIds.has(id)),
-    );
+    // Delta-update majorPendingTaskIds: only touch tasks covered by this verdict.
+    // Tasks from a prior verdict that were not re-evaluated here retain their status.
+    const evaluatedSet = new Set(verdict.evaluatedTaskIds);
+    for (const taskId of [...this._state.majorPendingTaskIds]) {
+      if (evaluatedSet.has(taskId) && !majorTaskIds.has(taskId)) {
+        this._state.majorPendingTaskIds.delete(taskId);
+      }
+    }
+    for (const taskId of majorTaskIds) {
+      if (!blockerTaskIds.has(taskId)) {
+        this._state.majorPendingTaskIds.add(taskId);
+      }
+    }
     if (this._state.majorPendingTaskIds.size > 0) {
       // Reset major repair tracking in progress (mirrors Python's _counters)
       this._state.progress.recordNoProgress();

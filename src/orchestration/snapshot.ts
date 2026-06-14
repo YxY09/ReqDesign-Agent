@@ -72,8 +72,8 @@ export class StateReader {
     const finalCurrent =
       Object.keys(currentRevisions).length > 0 &&
       state.finalReviewDone &&
-      JSON.stringify(state.finalReviewRevisions) ===
-        JSON.stringify(currentRevisions);
+      Object.keys(currentRevisions).length === Object.keys(state.finalReviewRevisions).length &&
+      Object.entries(currentRevisions).every(([k, v]) => state.finalReviewRevisions[k] === v);
 
     const latestIssues: Record<string, unknown>[] = [];
     if (state.verdicts.length > 0) {
@@ -89,11 +89,10 @@ export class StateReader {
       }
     }
 
+    const unevaluatedSet = new Set(state.getUnevaluatedArtifactTaskIds());
     const reviewCandidates = state
       .getCompletedTaskIds()
-      .filter((taskId) =>
-        state.getUnevaluatedArtifactTaskIds().includes(taskId),
-      )
+      .filter((taskId) => unevaluatedSet.has(taskId))
       .sort();
 
     const counters: Record<string, number> =
