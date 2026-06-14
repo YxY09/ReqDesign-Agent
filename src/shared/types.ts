@@ -264,3 +264,60 @@ export function createRuntimeAction(
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// DesignModel — structured design artifact (Phase A)
+// ---------------------------------------------------------------------------
+
+export interface DesignModuleEntry {
+  id: string;
+  name: string;
+  responsibility: string;
+  functionIds: string[];
+}
+
+export interface DesignClassEntry {
+  name: string;
+  kind: "domain" | "helper";
+  responsibility: string;
+  attributes?: Array<{ name: string; type: string; description?: string }>;
+  methods?: string[];
+  entityRef?: string;
+}
+
+export interface DesignDataFlow {
+  name: string;
+  steps: string[];
+  relatedFunctionIds: string[];
+}
+
+export interface DesignCoverageEntry {
+  refId: string;
+  refKind: "function" | "constraint" | "exception";
+  originalDescription: string;
+  designDecision: string;
+  affectedModuleIds: string[];
+  affectedClassNames: string[];
+  testImplication: string;
+}
+
+export interface DesignSupplementaryClass {
+  name: string;
+  justification: string;
+}
+
+export interface DesignModel {
+  modules: DesignModuleEntry[];
+  classes: DesignClassEntry[];
+  dataFlows: DesignDataFlow[];
+  coverageMatrix: DesignCoverageEntry[];
+  supplementaryClasses?: DesignSupplementaryClass[];
+}
+
+/** Type guard: returns true if value has all required DesignModel array fields. */
+export function isDesignModel(content: unknown): content is DesignModel {
+  if (!content || typeof content !== "object" || Array.isArray(content)) return false;
+  const c = content as Record<string, unknown>;
+  return Array.isArray(c.modules) && Array.isArray(c.classes) &&
+    Array.isArray(c.dataFlows) && Array.isArray(c.coverageMatrix);
+}
