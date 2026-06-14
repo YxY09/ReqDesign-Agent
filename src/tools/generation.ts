@@ -14,6 +14,7 @@ import type { EntityRegistry } from "../shared/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
+import { MermaidValidator } from "../generators/mermaid.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 
@@ -304,8 +305,9 @@ ${text}`;
               issues.push(`classDiagram 有 ${openClasses} 个类定义但只有 ${closeBraces} 个闭合括号，输出可能被截断`);
             }
           }
-          if (key === "activity_diagram") {
-            // 活动图覆盖率检查已移除硬编码域规则，由 LLM 自行判断
+          const syntaxResult = new MermaidValidator().validate(text, key);
+          if (!syntaxResult.valid) {
+            issues.push(`${key} Mermaid语法错误: ${syntaxResult.message}`);
           }
         }
       }
