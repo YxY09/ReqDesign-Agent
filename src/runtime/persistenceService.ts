@@ -12,6 +12,8 @@ import { validateReview } from "../shared/reviewValidator.js";
 import { buildMatrix } from "../shared/traceabilityMatrix.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { OutputSnapshotBuilder } from "./outputSnapshotBuilder.js";
+import { isDesignModel } from "../shared/types.js";
+import { SystemDesigner } from "../generators/design.js";
 
 /**
  * Callback signatures used by PersistenceService to emit runtime events
@@ -52,11 +54,13 @@ export class PersistenceService {
   ): void {
     const manager = new this.deps.outputManagerCtor(state.outputDir);
     try {
-      if (
-        artifact.type === "design" &&
-        typeof artifact.content === "string"
-      ) {
-        manager.saveSystemDesign(artifact.content);
+      if (artifact.type === "design") {
+        if (isDesignModel(artifact.content)) {
+          const rendered = SystemDesigner.renderDesignMarkdown(artifact.content);
+          manager.saveSystemDesign(rendered);
+        } else if (typeof artifact.content === "string" && artifact.content) {
+          manager.saveSystemDesign(artifact.content);
+        }
       } else if (artifact.type === "diagrams" && isRecord(artifact.content)) {
         manager.saveDiagrams(state.diagrams);
       } else if (
