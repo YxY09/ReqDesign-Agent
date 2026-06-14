@@ -332,7 +332,7 @@ export class WorkerDispatcher {
     context: SessionContext,
     scope: "repair" | "task",
   ): void {
-    const currentArtifact = state.artifactsState.artifacts[taskId];
+    const currentArtifact = state.artifacts[taskId];
     if (currentArtifact?.content !== undefined && currentArtifact.content !== null) {
       context.hints.previous_artifact_content = currentArtifact.content;
       context.hints.previous_artifact_type = currentArtifact.type;

@@ -39,42 +39,6 @@ import { ArtifactManager } from "./runtime/ArtifactManager.js";
 import { ReviewManager } from "./runtime/ReviewManager.js";
 import { WorkflowStores } from "./runtime/workflowStores.js";
 
-export interface ArtifactsState {
-  artifacts: Record<string, Artifact>;
-  requirementJson: Record<string, unknown>;
-  requirementDraftJson: Record<string, unknown>;
-  requirementJsonContentKind: "empty" | "draft" | "canonical" | "stale";
-  designText: string;
-  diagrams: Record<string, unknown>;
-  testCases: string;
-  artifactRevisionsByTask: Record<string, number>;
-}
-
-export interface ExecutionState {
-  goal: string;
-  inputPath: string;
-  outputDir: string;
-  taskStatuses: Record<string, string>;
-  taskSessions: Record<string, string>;
-  notifications: Record<string, unknown>[];
-  errors: string[];
-  runStatus: string;
-  startTime: number;
-  endTime: number;
-  decisionCount: number;
-}
-
-export interface ReviewState {
-  verdicts: Verdict[];
-  evaluatedRevisionsByTask: Record<string, number>;
-  acceptedRevisionsByTask: Record<string, number>;
-  reviewStatusByTask: Record<string, string>;
-  majorPendingTaskIds: Set<string>;
-  finalReviewDone: boolean;
-  finalReviewPassed: boolean;
-  finalReviewRevisions: Record<string, number>;
-}
-
 // ---------------------------------------------------------------------------
 // WorkflowState
 // ---------------------------------------------------------------------------
@@ -182,9 +146,6 @@ export class WorkflowState {
   private readonly _planMutator: PlanMutator;
   private readonly _artifactManager: ArtifactManager;
   private readonly _reviewManager: ReviewManager;
-  private readonly _artifactsStateView: ArtifactsState;
-  private readonly _executionStateView: ExecutionState;
-  private readonly _reviewStateView: ReviewState;
   readonly stores: WorkflowStores;
 
   constructor() {
@@ -193,74 +154,6 @@ export class WorkflowState {
     this._artifactManager = new ArtifactManager(this, () => this.majorPendingTaskIds.clear());
     this._reviewManager = new ReviewManager(this);
     this.stores = new WorkflowStores(this);
-    this._artifactsStateView = this._linkedView<ArtifactsState>([
-      "artifacts",
-      "requirementJson",
-      "requirementDraftJson",
-      "requirementJsonContentKind",
-      "designText",
-      "diagrams",
-      "testCases",
-      "artifactRevisionsByTask",
-    ]);
-    this._executionStateView = this._linkedView<ExecutionState>([
-      "goal",
-      "inputPath",
-      "outputDir",
-      "taskStatuses",
-      "taskSessions",
-      "notifications",
-      "errors",
-      "runStatus",
-      "startTime",
-      "endTime",
-      "decisionCount",
-    ]);
-    this._reviewStateView = this._linkedView<ReviewState>([
-      "verdicts",
-      "evaluatedRevisionsByTask",
-      "acceptedRevisionsByTask",
-      "reviewStatusByTask",
-      "majorPendingTaskIds",
-      "finalReviewDone",
-      "finalReviewPassed",
-      "finalReviewRevisions",
-    ]);
-  }
-
-  /**
-   * 构建一个与本实例字段双向绑定的视图对象：
-   * 视图的每个属性读写都直接代理到 WorkflowState 的同名字段，
-   * 保证旧版消费者通过视图修改时不会产生状态分叉。
-   */
-  private _linkedView<TView extends object>(
-    keys: ReadonlyArray<keyof TView & keyof this & string>,
-  ): TView {
-    const view = {} as TView;
-    const self = this as Record<string, unknown>;
-    for (const key of keys) {
-      Object.defineProperty(view, key, {
-        get: () => self[key],
-        set: (value: unknown) => {
-          self[key] = value;
-        },
-        enumerable: true,
-        configurable: false,
-      });
-    }
-    return view;
-  }
-
-  get artifactsState(): ArtifactsState {
-    return this._artifactsStateView;
-  }
-
-  get executionState(): ExecutionState {
-    return this._executionStateView;
-  }
-
-  get reviewState(): ReviewState {
-    return this._reviewStateView;
   }
 
   // ------------------------------------------------------------------

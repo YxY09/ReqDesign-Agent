@@ -68,19 +68,16 @@ export class StateReader {
     state: WorkflowState,
     _mailbox: TaskMailbox,
   ): OrchestratorSnapshot {
-    const artifactsState = state.artifactsState;
-    const executionState = state.executionState;
-    const reviewState = state.reviewState;
     const currentRevisions = StateReader._finalReviewRevisions(state);
     const finalCurrent =
       Object.keys(currentRevisions).length > 0 &&
-      reviewState.finalReviewDone &&
-      JSON.stringify(reviewState.finalReviewRevisions) ===
+      state.finalReviewDone &&
+      JSON.stringify(state.finalReviewRevisions) ===
         JSON.stringify(currentRevisions);
 
     const latestIssues: Record<string, unknown>[] = [];
-    if (reviewState.verdicts.length > 0) {
-      for (const issue of reviewState.verdicts[reviewState.verdicts.length - 1].issues) {
+    if (state.verdicts.length > 0) {
+      for (const issue of state.verdicts[state.verdicts.length - 1].issues) {
       latestIssues.push({
           severity: issue.severity,
           target_task_id: issue.targetTaskId,
@@ -117,7 +114,7 @@ export class StateReader {
     }
 
     const artifactTypesByTask: Record<string, string> = {};
-    for (const [taskId, artifact] of Object.entries(artifactsState.artifacts).sort(
+    for (const [taskId, artifact] of Object.entries(state.artifacts).sort(
       ([a], [b]) => a.localeCompare(b),
     )) {
       artifactTypesByTask[taskId] =
@@ -139,7 +136,7 @@ export class StateReader {
     const completedPlanTasks = state.getCompletedPlanTaskIds();
 
     return {
-      goal: executionState.goal,
+      goal: state.goal,
       requirementLoaded: Boolean((state.requirementText ?? "").trim()),
       requirementPreview: (state.requirementText ?? "").slice(0, 2000),
       planReady: Boolean(state.plan && state.plan.tasks.length > 0),
@@ -151,19 +148,19 @@ export class StateReader {
         planTaskIds.includes(taskId),
       ),
       completedPlanTasks,
-      artifactTaskIds: Object.keys(artifactsState.artifacts).sort(),
+      artifactTaskIds: Object.keys(state.artifacts).sort(),
       artifactTypesByTask,
       unacceptedArtifacts: state.getUnacceptedArtifactTaskIds(),
       unevaluatedArtifacts: state.getUnevaluatedArtifactTaskIds(),
       rejectedArtifacts: state.getRejectedArtifactTaskIds(),
       reviewCandidates,
       latestIssues,
-      finalReviewDone: reviewState.finalReviewDone,
-      finalReviewPassed: reviewState.finalReviewPassed,
+      finalReviewDone: state.finalReviewDone,
+      finalReviewPassed: state.finalReviewPassed,
       finalReviewCurrent: finalCurrent,
       outputSaved: state.persisted,
       isDirectMode: state.isDirectMode,
-      directModeArtifacts: Object.keys(artifactsState.artifacts)
+      directModeArtifacts: Object.keys(state.artifacts)
         .filter((tid) => tid.startsWith("direct_"))
         .sort(),
       evaluatorRunning: state.taskStatus("evaluator") === "running",
@@ -174,7 +171,7 @@ export class StateReader {
       stalledTaskIds: [...state.progress.stalledTaskIds].sort(),
       majorPendingTaskIds: state.getMajorPendingTaskIds(),
       globallyStalled: state.progress.isGloballyStalled(3),
-      recentErrors: executionState.errors.slice(-5),
+      recentErrors: state.errors.slice(-5),
       convergenceStalled: state.convergence.isStalled(),
       convergenceStalledFingerprints: state.convergence.stalledFingerprints(),
       convergenceTrend: state.convergence.trend(),
@@ -182,7 +179,7 @@ export class StateReader {
       planAllCompleted:
         planTaskIds.length > 0 &&
         completedPlanTasks.length === planTaskIds.length,
-      hasArtifacts: Object.keys(artifactsState.artifacts).length > 0,
+      hasArtifacts: Object.keys(state.artifacts).length > 0,
     };
   }
 

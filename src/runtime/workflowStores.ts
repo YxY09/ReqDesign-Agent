@@ -47,7 +47,7 @@ export class ArtifactStore {
   }
 
   get(taskId: string): Artifact | undefined {
-    return this.state.artifactsState.artifacts[taskId];
+    return this.state.artifacts[taskId];
   }
 
   currentRevision(taskId: string): number {

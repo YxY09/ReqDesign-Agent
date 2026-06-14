@@ -10,54 +10,8 @@ import {
 import { WorkflowState } from "../src/state.js";
 import { RunSummaryBuilder } from "../src/orchestration/runManager.js";
 
-describe("WorkflowState subdomain views", () => {
-  it("keeps artifacts view and legacy fields synchronized", () => {
-    const state = new WorkflowState();
-    const artifactsState = state.artifactsState;
-
-    state.requirementJson = { actors: ["student"] };
-    expect(artifactsState.requirementJson).toEqual({ actors: ["student"] });
-
-    artifactsState.designText = "design-v1";
-    artifactsState.testCases = "test-v1";
-    expect(state.designText).toBe("design-v1");
-    expect(state.testCases).toBe("test-v1");
-    expect(state.artifactsState).toBe(artifactsState);
-  });
-
-  it("keeps execution view and legacy fields synchronized", () => {
-    const state = new WorkflowState();
-    const executionState = state.executionState;
-
-    state.goal = "review";
-    state.taskStatuses["design-1"] = "running";
-    expect(executionState.goal).toBe("review");
-    expect(executionState.taskStatuses["design-1"]).toBe("running");
-
-    executionState.runStatus = "failed";
-    executionState.decisionCount = 7;
-    expect(state.runStatus).toBe("failed");
-    expect(state.decisionCount).toBe(7);
-    expect(state.executionState).toBe(executionState);
-  });
-
-  it("keeps review view and legacy fields synchronized", () => {
-    const state = new WorkflowState();
-    const reviewState = state.reviewState;
-
-    state.majorPendingTaskIds.add("design-1");
-    expect(reviewState.majorPendingTaskIds.has("design-1")).toBe(true);
-
-    reviewState.finalReviewDone = true;
-    reviewState.finalReviewPassed = true;
-    reviewState.finalReviewRevisions = { "design-1": 2 };
-    expect(state.finalReviewDone).toBe(true);
-    expect(state.finalReviewPassed).toBe(true);
-    expect(state.finalReviewRevisions["design-1"]).toBe(2);
-    expect(state.reviewState).toBe(reviewState);
-  });
-
-  it("preserves addArtifact/addVerdict compatibility with subdomain views", () => {
+describe("WorkflowState", () => {
+  it("preserves addArtifact/addVerdict state updates", () => {
     const state = new WorkflowState();
 
     state.addArtifact(
@@ -68,7 +22,6 @@ describe("WorkflowState subdomain views", () => {
       }),
     );
     expect(state.artifacts["design-1"]).toBeDefined();
-    expect(state.artifactsState.artifacts["design-1"]).toBe(state.artifacts["design-1"]);
     expect(state.artifactRevisionsByTask["design-1"]).toBe(1);
 
     state.addVerdict(
@@ -88,22 +41,16 @@ describe("WorkflowState subdomain views", () => {
     );
 
     expect(state.reviewStatusByTask["design-1"]).toBe("rejected");
-    expect(state.reviewState.reviewStatusByTask["design-1"]).toBe("rejected");
     expect(state.verdicts).toHaveLength(1);
-    expect(state.reviewState.verdicts).toHaveLength(1);
-    expect(state.reviewState.reviewStatusByTask).toBe(state.reviewStatusByTask);
-    expect(state.reviewState.verdicts).toBe(state.verdicts);
-    expect(state.reviewState.evaluatedRevisionsByTask).toBe(state.evaluatedRevisionsByTask);
-    expect(state.reviewState.acceptedRevisionsByTask).toBe(state.acceptedRevisionsByTask);
+    expect(state.evaluatedRevisionsByTask["design-1"]).toBe(1);
   });
 
   it("preserves final review state on addArtifact (repair should not reset review)", () => {
     const state = new WorkflowState();
-    const reviewState = state.reviewState;
 
-    reviewState.finalReviewDone = true;
-    reviewState.finalReviewPassed = true;
-    reviewState.finalReviewRevisions = { "design-1": 2 };
+    state.finalReviewDone = true;
+    state.finalReviewPassed = true;
+    state.finalReviewRevisions = { "design-1": 2 };
 
     state.addArtifact(
       createArtifact({
@@ -116,13 +63,9 @@ describe("WorkflowState subdomain views", () => {
     // Repair adding an artifact should NOT reset the final review state.
     // Resetting finalReviewDone on every addArtifact causes the orchestrator
     // to skip repair and re-trigger evaluation instead.
-    expect(reviewState.finalReviewDone).toBe(true);
-    expect(reviewState.finalReviewPassed).toBe(true);
-    expect(reviewState.finalReviewRevisions).toEqual({ "design-1": 2 });
     expect(state.finalReviewDone).toBe(true);
     expect(state.finalReviewPassed).toBe(true);
     expect(state.finalReviewRevisions).toEqual({ "design-1": 2 });
-    expect(state.finalReviewRevisions).toBe(reviewState.finalReviewRevisions);
   });
 
   // --- Task lifecycle / plan mutation tests ---
@@ -278,29 +221,29 @@ describe("WorkflowState subdomain views", () => {
   it("addArtifact increments revision and syncs design aggregate", () => {
     const state = new WorkflowState();
     state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v1" }));
-    expect(state.artifactsState.artifactRevisionsByTask["design-1"]).toBe(1);
-    expect(state.artifactsState.designText).toBe("v1");
+    expect(state.artifactRevisionsByTask["design-1"]).toBe(1);
+    expect(state.designText).toBe("v1");
 
     state.addArtifact(createArtifact({ taskId: "design-1", type: "design", content: "v2" }));
-    expect(state.artifactsState.artifactRevisionsByTask["design-1"]).toBe(2);
-    expect(state.artifactsState.designText).toBe("v2");
+    expect(state.artifactRevisionsByTask["design-1"]).toBe(2);
+    expect(state.designText).toBe("v2");
   });
 
   it("addArtifact syncs test_cases and diagrams aggregates", () => {
     const state = new WorkflowState();
     state.addArtifact(createArtifact({ taskId: "tests-1", type: "tests", content: "TC-001" }));
-    expect(state.artifactsState.testCases).toBe("TC-001");
+    expect(state.testCases).toBe("TC-001");
 
     state.addArtifact(
       createArtifact({ taskId: "diag-1", type: "diagrams", content: { classDiagram: "class A{}" } }),
     );
-    expect(state.artifactsState.diagrams).toEqual({ classDiagram: "class A{}" });
+    expect(state.diagrams).toEqual({ classDiagram: "class A{}" });
 
     // Second diagram merges
     state.addArtifact(
       createArtifact({ taskId: "diag-2", type: "diagrams", content: { sequenceDiagram: "A->B" } }),
     );
-    expect(state.artifactsState.diagrams).toEqual({ classDiagram: "class A{}", sequenceDiagram: "A->B" });
+    expect(state.diagrams).toEqual({ classDiagram: "class A{}", sequenceDiagram: "A->B" });
   });
 
   it("flattens nested diagram content into aggregate state", () => {
@@ -391,8 +334,8 @@ describe("WorkflowState subdomain views", () => {
       }),
     );
 
-    expect(state.reviewState.finalReviewDone).toBe(true);
-    expect(state.reviewState.finalReviewPassed).toBe(true);
+    expect(state.finalReviewDone).toBe(true);
+    expect(state.finalReviewPassed).toBe(true);
     expect(state.qualityStatus).toBe("passed");
   });
 
@@ -417,8 +360,8 @@ describe("WorkflowState subdomain views", () => {
       }),
     );
 
-    expect(state.reviewState.finalReviewDone).toBe(true);
-    expect(state.reviewState.finalReviewPassed).toBe(false);
+    expect(state.finalReviewDone).toBe(true);
+    expect(state.finalReviewPassed).toBe(false);
     expect(state.qualityStatus).toBe("rejected");
     expect(state.reviewResult.passed).toBe(false);
     expect(state.reviewResult.acceptedNoBlockers).toBe(true);
@@ -469,27 +412,19 @@ describe("WorkflowState subdomain views", () => {
     state.recordNotification({ type: "task_complete", taskId: "design-1" });
 
     expect(state.notifications).toHaveLength(2);
-    expect(state.executionState.notifications).toHaveLength(2);
 
     state.recordRepairAttempt("design-1");
     state.recordRepairAttempt("design-1");
     expect(state.progress._counters["repair_count:design-1"]).toBe(2);
   });
 
-  it("routes markTaskStatus through execution subdomain view", () => {
+  it("markTaskStatus updates taskStatuses and taskSessions", () => {
     const state = new WorkflowState();
-    const executionState = state.executionState;
-    const statusesRef = executionState.taskStatuses;
-    const sessionsRef = executionState.taskSessions;
 
     state.markTaskStatus("design-1", "running", "session-1", { phase: "draft" });
 
-    expect(executionState.taskStatuses["design-1"]).toBe("running");
-    expect(executionState.taskSessions["design-1"]).toBe("session-1");
-    expect(state.taskStatuses).toBe(statusesRef);
-    expect(state.taskSessions).toBe(sessionsRef);
-    expect(state.executionState.taskStatuses).toBe(statusesRef);
-    expect(state.executionState.taskSessions).toBe(sessionsRef);
+    expect(state.taskStatuses["design-1"]).toBe("running");
+    expect(state.taskSessions["design-1"]).toBe("session-1");
     expect(state.taskHistory).toHaveLength(1);
     expect(state.taskHistory[0]).toMatchObject({
       taskId: "design-1",

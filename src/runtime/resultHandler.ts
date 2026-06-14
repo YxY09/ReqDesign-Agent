@@ -338,7 +338,7 @@ export class ResultHandler {
     // 收集所有 analyze 产物
     const artifacts = analyzeTasks
       .map((t) => {
-        const art = state.artifactsState.artifacts[t.id];
+        const art = state.artifacts[t.id];
         if (!art || !art.content || typeof art.content !== "object") return null;
         return { taskId: t.id, content: art.content as Record<string, unknown> };
       })

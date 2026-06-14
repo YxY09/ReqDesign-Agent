@@ -418,7 +418,7 @@ describe("WorkflowState — artifacts", () => {
     );
 
     expect(state.currentArtifactRevision("design-1")).toBe(1);
-    expect(String(state.artifactsState.artifacts["design-1"].content)).not.toContain("F999");
+    expect(String(state.artifacts["design-1"].content)).not.toContain("F999");
   });
 
   it("keeps existing artifact when regenerate candidate fails self-check without improvement", async () => {
@@ -473,7 +473,7 @@ describe("WorkflowState — artifacts", () => {
     );
 
     expect(state.currentArtifactRevision("design-1")).toBe(1);
-    expect(state.artifactsState.artifacts["design-1"].content).toBe("stable design");
+    expect(state.artifacts["design-1"].content).toBe("stable design");
     expect(state.taskStatus("design-1")).toBe("failed");
     expect(state.errors.at(-1)).toContain("regenerate candidate rejected");
     expect(events).toContain("regenerate_rejected");

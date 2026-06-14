@@ -44,7 +44,7 @@ export class ArtifactAcceptanceService {
       artifact.content = cleaned;
     }
 
-    const existingArtifact = state.artifactsState.artifacts[taskId];
+    const existingArtifact = state.artifacts[taskId];
     const candidateIssues = artifact.selfCheckIssues.length;
     const existingIssues = existingArtifact?.selfCheckIssues.length ?? 0;
     // Reject a regeneration candidate only if it is STRICTLY WORSE than the existing artifact:
