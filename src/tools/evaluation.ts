@@ -8,14 +8,14 @@ import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import {
   type Issue, type Task, type Verdict, type Scope,
-  createIssue, createTask, createVerdict,
+  createIssue, createTask, createVerdict, isDesignModel,
 } from "../shared/types.js";
 import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { validateReview, type ReviewValidationResult } from "../shared/reviewValidator.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
-import { getMemory } from "../memory/store.js";
+import { appendMemorySafely } from "../memory/promptMemory.js";
 
 
 export class EvaluationTool extends BaseTool {
@@ -197,6 +197,7 @@ export class EvaluationTool extends BaseTool {
       if (String(snapshot.type ?? "") === "design") {
         const content = snapshot.content;
         if (typeof content === "string") return content;
+        if (isDesignModel(content)) return SystemDesigner.renderDesignMarkdown(content);
         if (typeof content === "object" && content !== null) return JSON.stringify(content);
       }
     }
@@ -437,8 +438,26 @@ export class EvaluationTool extends BaseTool {
 
       if (taskType === "design") {
         if (skipMissingArtifact) continue;
-        if (typeof content !== "string" || !(content as string).trim()) {
+        const isEmpty = content === null || content === undefined ||
+          (typeof content === "string" && !content.trim()) ||
+          (typeof content === "object" && !isDesignModel(content));
+        if (isEmpty) {
           issues.push(createIssue({ severity: "blocker", targetTaskId: taskId, targetTaskType: "design", targetField: "design_text", description: "系统设计文档为空", suggestion: "重新执行设计生成任务" }));
+        } else if (isDesignModel(content)) {
+          for (const warning of SystemDesigner.validateDesignModel(content, requirementJson)) {
+            issues.push(createIssue({
+              severity: "major",
+              targetTaskId: taskId,
+              targetTaskType: "design",
+              targetField: "design_text",
+              description: warning,
+              suggestion: "补充对应模块、实体或章节，并保持与需求一致",
+            }));
+          }
+          const rendered = SystemDesigner.renderDesignMarkdown(content);
+          issues.push(
+            ...this._checkUndefinedExceptionIds(taskId, "design", "design_text", rendered, requirementJson),
+          );
         } else {
           for (const warning of SystemDesigner.validateDesign(String(content), requirementJson)) {
             issues.push(createIssue({
@@ -453,13 +472,7 @@ export class EvaluationTool extends BaseTool {
             }));
           }
           issues.push(
-            ...this._checkUndefinedExceptionIds(
-              taskId,
-              "design",
-              "design_text",
-              String(content),
-              requirementJson,
-            ),
+            ...this._checkUndefinedExceptionIds(taskId, "design", "design_text", String(content), requirementJson),
           );
         }
         continue;
@@ -932,12 +945,8 @@ export class EvaluationTool extends BaseTool {
     const artifactTypes = presentTypes.length > 0 ? presentTypes.join(", ") : "scoped";
     const system = await (async () => {
       const base = await this._getSystemPrompt("evaluator.md", "", `review ${reviewMode} ${artifactTypes}`);
-      try {
-        const queryCtx = `evaluate ${reviewMode}: ${Object.keys(snapshots).join(", ")}`;
-        return getMemory().appendToPrompt("evaluator", base, queryCtx);
-      } catch {
-        return base;
-      }
+      const queryCtx = `evaluate ${reviewMode}: ${Object.keys(snapshots).join(", ")}`;
+      return appendMemorySafely("evaluator", base, queryCtx);
     })();
 
     // 覆盖性评审必须看到足够多的需求原文，否则就是盲审。
@@ -1019,11 +1028,7 @@ export class EvaluationTool extends BaseTool {
   ): Promise<Issue[]> {
     const system = await (async () => {
       const base = await this._getSystemPrompt("evaluator.md", "", "analyze:" + (requirementText ?? "").slice(0, 150));
-      try {
-        return getMemory().appendToPrompt("evaluator", base, `analyze: ${(requirementText ?? "").slice(0, 150)}`);
-      } catch {
-        return base;
-      }
+      return appendMemorySafely("evaluator", base, `analyze: ${(requirementText ?? "").slice(0, 150)}`);
     })();
     // 完整性审查不能只看前 2000 字符；JSON 硬切会产生残缺片段误导评审，
     // 改用 _jsonForReview 自适应摘要（始终输出合法 JSON）。
