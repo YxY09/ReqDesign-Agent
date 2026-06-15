@@ -34,15 +34,13 @@
 
 ### design（系统设计）
 
-产出 Markdown 格式的系统设计文档，包含：
-1. 系统概述
-2. 系统分层架构（表现层/业务层/数据层）
-3. 模块划分（模块名 → 职责 → 对应功能 ID）
-4. 核心类/接口设计（类名 → 职责 → 属性 → 方法）
-5. 数据流说明
-6. 接口设计
-7. 约束与异常处理设计
-8. 非功能需求设计
+产出结构化 JSON 系统设计模型（DesignModel），核心字段：
+- `modules`: 模块划分（模块名 → 职责 → 覆盖的功能 ID）
+- `classes`: 核心类/服务类（类名 → kind → 职责 → 属性 → 方法；domain 类对应实体）
+- `dataFlows`: 关键业务流程的步骤序列
+- `coverageMatrix`: 每个功能/约束/异常 ID 的设计覆盖说明
+
+具体 JSON Schema 以 design 任务子 prompt 为准，直接输出合法 JSON，禁止 Markdown 或代码围栏。
 
 **重要规则**：
 - 核心类必须覆盖 requirement_json 中的所有 entities
@@ -120,4 +118,4 @@
 }
 ```
 
-**design / diagrams / tests 任务**：直接输出产物内容（Markdown 或 Mermaid），不要用 JSON 包裹。具体格式由各任务的子 prompt 指定。
+**design / diagrams / tests 任务**：直接输出产物本身，不要套用 analyze 的 `{content, self_check_passed}` 外层结构。design 与 tests 输出 JSON，diagrams 输出 Mermaid 源码；具体格式由各任务的子 prompt 指定。
