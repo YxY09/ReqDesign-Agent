@@ -9,7 +9,7 @@ import { TestCaseGenerator } from "../generators/tests.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { ArtifactPatcher, type PatchOp, type Section, type JsonPatchOp } from "./artifactPatcher.js";
-import type { Task } from "../shared/types.js";
+import { isDesignModel, type Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
 import { isTemplateLike } from "../generators/testQualityValidator.js";
 
@@ -860,9 +860,12 @@ export class RepairTool extends BaseTool {
       const requirementJson = isRecord(context.requirement_json)
         ? context.requirement_json
         : null;
-      const designText = typeof currentContent === "string"
-        ? currentContent
-        : String(currentContent ?? "");
+      let designText: string;
+      if (isDesignModel(currentContent)) {
+        designText = SystemDesigner.renderDesignMarkdown(currentContent);
+      } else {
+        designText = typeof currentContent === "string" ? currentContent : String(currentContent ?? "");
+      }
       const designWarnings = requirementJson
         ? SystemDesigner.validateDesign(designText, requirementJson)
         : [];
