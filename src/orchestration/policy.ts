@@ -10,6 +10,7 @@ import { ReviewScheduler } from "./reviewScheduler.js";
 import type { OrchestratorSnapshot } from "./snapshot.js";
 import { type StrategyDecision, createStrategyDecision } from "./strategy.js";
 import { POLICY_RULES } from "./policyRules.js";
+import { nextForwardProgressStrategy } from "./policyForward.js";
 
 // ---------------------------------------------------------------------------
 // PolicyGuard
@@ -139,17 +140,14 @@ export class PolicyGuard {
       if (majorStep) return majorStep;
     }
 
-    if (snapshot.readyTasks.length > 0) return createStrategyDecision({ strategy: "advance_ready_work", reason });
-    if (!this.budget.skipEvaluation && this.canRunFinalReview(snapshot)) return createStrategyDecision({ strategy: "run_final_review", reason });
+    const forwardStep = nextForwardProgressStrategy(snapshot, {
+      budget: this.budget,
+      reviewScheduler: this.reviewScheduler,
+      canRunFinalReview: (snap) => this.canRunFinalReview(snap),
+      canSave: (snap) => this.canSave(snap),
+    }, reason);
+    if (forwardStep) return forwardStep;
 
-    if (!this.budget.skipEvaluation) {
-      const reviewPlan = this.reviewScheduler.nextScope(snapshot);
-      if (reviewPlan.hasScope && !snapshot.evaluatorRunning) {
-        return createStrategyDecision({ strategy: "run_opportunistic_review", affectedTaskIds: [...reviewPlan.scopeTaskIds], reason });
-      }
-    }
-
-    if (snapshot.outputSaved) return createStrategyDecision({ strategy: "finish", reason });
     return createStrategyDecision({ strategy: "pause_for_user", reason });
   }
 }

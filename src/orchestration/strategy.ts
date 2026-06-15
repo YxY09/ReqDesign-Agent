@@ -2,20 +2,71 @@
  * 工程化编排器的策略级类型。
  */
 
-export type StrategyName =
-  | "start_planning"
-  | "route_direct_diagrams"
-  | "advance_ready_work"
-  | "wait_for_running"
-  | "run_opportunistic_review"
-  | "run_final_review"
-  | "repair_local_artifact"
-  | "repair_upstream_artifact"
-  | "regenerate_downstream"
-  | "escalate_to_replan"
-  | "save_outputs"
-  | "finish"
-  | "pause_for_user";
+export const STRATEGY_DEFINITIONS = [
+  {
+    name: "start_planning",
+    description: "Create an execution plan for requirements that need analysis/design/tests.",
+  },
+  {
+    name: "route_direct_diagrams",
+    description: "Use only for simple diagram-focused requests that do not need full planning.",
+  },
+  {
+    name: "advance_ready_work",
+    description: "Run tasks that are ready and unblocked.",
+  },
+  {
+    name: "wait_for_running",
+    description: "Wait when relevant work or evaluation is already running.",
+  },
+  {
+    name: "run_opportunistic_review",
+    description: "Review newly completed artifacts before final review.",
+  },
+  {
+    name: "run_final_review",
+    description: "Run the full final quality review once all plan tasks are complete.",
+  },
+  {
+    name: "repair_local_artifact",
+    description: "Patch a specific artifact when the issue is local and repair budget remains.",
+  },
+  {
+    name: "repair_upstream_artifact",
+    description: "Patch an upstream artifact when the downstream issue is caused upstream.",
+  },
+  {
+    name: "regenerate_downstream",
+    description: "Regenerate a task after failed repair or repeated local issues.",
+  },
+  {
+    name: "escalate_to_replan",
+    description: "Ask the planner to mutate the plan when local repair/regeneration is not enough.",
+  },
+  {
+    name: "save_outputs",
+    description: "Persist final outputs after quality gates are satisfied.",
+  },
+  {
+    name: "finish",
+    description: "Finish when work is complete or nothing actionable is loaded.",
+  },
+  {
+    name: "pause_for_user",
+    description: "Pause when automatic progress is unsafe or budgets are exhausted.",
+  },
+] as const;
+
+export type StrategyName = typeof STRATEGY_DEFINITIONS[number]["name"];
+export const VALID_STRATEGIES: ReadonlySet<string> = new Set(
+  STRATEGY_DEFINITIONS.map((strategy) => strategy.name),
+);
+
+export function strategyPromptCatalog(): string {
+  return STRATEGY_DEFINITIONS
+    .map((strategy) => `- ${strategy.name}: ${strategy.description}`)
+    .join("\n");
+}
 
 /** 编译为运行时操作之前的 Agent 级策略。 */
 export interface StrategyDecision {

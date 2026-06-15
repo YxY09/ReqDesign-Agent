@@ -10,6 +10,7 @@ import { isTaskRunning } from "./remediation.js";
 import type { OrchestratorSnapshot } from "./snapshot.js";
 import { type StrategyDecision, createStrategyDecision } from "./strategy.js";
 import type { DeterministicPolicy } from "./policy.js";
+import { nextForwardProgressStrategy } from "./policyForward.js";
 
 // ---------------------------------------------------------------------------
 // Rule type
@@ -237,64 +238,20 @@ function delegateInitialRoutingIfNoPlan(snapshot: OrchestratorSnapshot): Strateg
   return null;
 }
 
-/** Rule 12: Tasks are ready to run — advance them. */
-function readyTasks(snapshot: OrchestratorSnapshot): StrategyDecision | null {
-  if (snapshot.readyTasks.length > 0) {
-    return createStrategyDecision({
-      strategy: "advance_ready_work",
-      affectedTaskIds: [...snapshot.readyTasks],
-      reason: `${snapshot.readyTasks.length} task(s) are ready`,
-    });
-  }
-  return null;
-}
-
-/** Rule 13: All tasks done, final review not yet run — run it. */
-function finalReviewReady(
+/** Rule 12: Shared forward-progress ladder after all blocking gates are clear. */
+function forwardProgress(
   snapshot: OrchestratorSnapshot,
   policy: DeterministicPolicy,
 ): StrategyDecision | null {
-  if (!policy.budget.skipEvaluation && policy.guard.canRunFinalReview(snapshot)) {
-    return createStrategyDecision({
-      strategy: "run_final_review",
-      reason: "final full review is required",
-    });
-  }
-  return null;
+  return nextForwardProgressStrategy(snapshot, {
+    budget: policy.budget,
+    reviewScheduler: policy.reviewScheduler,
+    canRunFinalReview: (snap) => policy.guard.canRunFinalReview(snap),
+    canSave: (snap) => policy.guard.canSave(snap),
+  });
 }
 
-/** Rule 14: Opportunistic incremental review. */
-function opportunisticReview(
-  snapshot: OrchestratorSnapshot,
-  policy: DeterministicPolicy,
-): StrategyDecision | null {
-  if (policy.budget.skipEvaluation) return null;
-  const reviewPlan = policy.reviewScheduler.nextScope(snapshot);
-  if (reviewPlan.hasScope) {
-    return createStrategyDecision({
-      strategy: "run_opportunistic_review",
-      affectedTaskIds: [...reviewPlan.scopeTaskIds],
-      reason: reviewPlan.reason,
-    });
-  }
-  return null;
-}
-
-/** Rule 15: Quality gate and save gate both passed — save outputs. */
-function qualityAndSaveGates(
-  snapshot: OrchestratorSnapshot,
-  policy: DeterministicPolicy,
-): StrategyDecision | null {
-  if (policy.guard.canSave(snapshot)) {
-    return createStrategyDecision({
-      strategy: "save_outputs",
-      reason: "quality and save gates passed",
-    });
-  }
-  return null;
-}
-
-/** Rule 16: Nothing has been loaded — finish. */
+/** Rule 13: Nothing has been loaded — finish. */
 function nothingLoaded(snapshot: OrchestratorSnapshot): StrategyDecision | null {
   if (!snapshot.requirementLoaded && !snapshot.hasArtifacts) {
     return createStrategyDecision({
@@ -321,9 +278,6 @@ export const POLICY_RULES: PolicyRule[] = [
   outputSaved,
   workRunning,
   delegateInitialRoutingIfNoPlan,
-  readyTasks,
-  finalReviewReady,
-  opportunisticReview,
-  qualityAndSaveGates,
+  forwardProgress,
   nothingLoaded,
 ];

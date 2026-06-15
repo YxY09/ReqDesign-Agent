@@ -8,11 +8,15 @@ import { describe, it, expect } from "vitest";
 import {
   createStrategyDecision,
   ActionCompiler,
+  STRATEGY_DEFINITIONS,
+  strategyPromptCatalog,
 } from "../src/orchestration/strategy.js";
 import type { StrategyName, StrategyDecision } from "../src/orchestration/strategy.js";
 import type { OrchestratorSnapshot } from "../src/orchestration/snapshot.js";
 import { createRuntimeAction } from "../src/shared/types.js";
 import type { RuntimeAction } from "../src/shared/types.js";
+
+const validStrategies = STRATEGY_DEFINITIONS.map((strategy) => strategy.name);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,22 +72,6 @@ function makeSnapshot(overrides: Partial<OrchestratorSnapshot> = {}): Orchestrat
 // ============================================================================
 
 describe("StrategyName type", () => {
-  const validStrategies: StrategyName[] = [
-    "start_planning",
-    "route_direct_diagrams",
-    "advance_ready_work",
-    "wait_for_running",
-    "run_opportunistic_review",
-    "run_final_review",
-    "repair_local_artifact",
-    "repair_upstream_artifact",
-    "regenerate_downstream",
-    "escalate_to_replan",
-    "save_outputs",
-    "finish",
-    "pause_for_user",
-  ];
-
   it("has all 13 known strategies", () => {
     expect(validStrategies).toHaveLength(13);
   });
@@ -205,24 +193,16 @@ describe("createStrategyDecision", () => {
   });
 
   it("supports all strategy names", () => {
-    const strategies: StrategyName[] = [
-      "start_planning",
-      "route_direct_diagrams",
-      "advance_ready_work",
-      "wait_for_running",
-      "run_opportunistic_review",
-      "run_final_review",
-      "repair_local_artifact",
-      "repair_upstream_artifact",
-      "regenerate_downstream",
-      "escalate_to_replan",
-      "save_outputs",
-      "finish",
-      "pause_for_user",
-    ];
-    for (const s of strategies) {
+    for (const s of validStrategies) {
       const d = createStrategyDecision({ strategy: s });
       expect(d.strategy).toBe(s);
+    }
+  });
+
+  it("renders the same strategy registry into the LLM prompt catalog", () => {
+    const catalog = strategyPromptCatalog();
+    for (const s of validStrategies) {
+      expect(catalog).toContain(s);
     }
   });
 });
@@ -511,22 +491,7 @@ describe("ActionCompiler", () => {
       // We test the fallback indirectly by confirming every known
       // strategy is handled explicitly, so the default is never hit
       // with valid input.
-      const allStrategies: StrategyName[] = [
-        "start_planning",
-        "route_direct_diagrams",
-        "advance_ready_work",
-        "wait_for_running",
-        "run_opportunistic_review",
-        "run_final_review",
-        "repair_local_artifact",
-        "repair_upstream_artifact",
-        "regenerate_downstream",
-        "escalate_to_replan",
-        "save_outputs",
-        "finish",
-        "pause_for_user",
-      ];
-      for (const s of allStrategies) {
+      for (const s of validStrategies) {
         const d = createStrategyDecision({ strategy: s, reason: "test" });
         const result = compiler.compile(d, makeSnapshot());
         // All should be handled explicitly, none should hit the default pause fallback

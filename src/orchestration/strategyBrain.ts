@@ -9,32 +9,13 @@ import type { OrchestratorSnapshot } from "./snapshot.js";
 import {
   type StrategyDecision,
   type StrategyName,
+  VALID_STRATEGIES,
   createStrategyDecision,
+  strategyPromptCatalog,
 } from "./strategy.js";
 import { makeStreamPrinter } from "../streaming.js";
-import { getMemory } from "../memory/store.js";
+import { appendMemorySafely } from "../memory/promptMemory.js";
 import { loadPrompt } from "../promptLoader.js";
-
-// ---------------------------------------------------------------------------
-// StrategyBrain
-// ---------------------------------------------------------------------------
-
-/** LLM 可选择的有效策略名称集合。 */
-const VALID_STRATEGIES: ReadonlySet<string> = new Set<StrategyName>([
-  "start_planning",
-  "route_direct_diagrams",
-  "advance_ready_work",
-  "wait_for_running",
-  "run_opportunistic_review",
-  "run_final_review",
-  "repair_local_artifact",
-  "repair_upstream_artifact",
-  "regenerate_downstream",
-  "escalate_to_replan",
-  "save_outputs",
-  "finish",
-  "pause_for_user",
-]);
 
 // ---------------------------------------------------------------------------
 // StrategyBrain
@@ -55,7 +36,7 @@ export class StrategyBrain {
       "You are an engineering orchestration strategist. Choose a high-level strategy only.",
     ).trim();
 
-    const { onChunk, done } = makeStreamPrinter("[Orchestrator]");
+    const { onChunk, done } = makeStreamPrinter("[StrategyBrain]");
     try {
       const response = await this.llm.runWithStreamTagContext("[StrategyBrain]", "", () =>
         this.llm.generateJson(prompt, system, onChunk)
@@ -99,10 +80,9 @@ export class StrategyBrain {
     const knownTaskIds = StrategyBrain._knownTaskIds(snapshot);
     const basePrompt = (
       "Read this workflow snapshot and choose one strategy.\n" +
-      "Allowed strategies: start_planning, route_direct_diagrams, advance_ready_work, wait_for_running, " +
-      "run_opportunistic_review, run_final_review, repair_local_artifact, " +
-      "repair_upstream_artifact, regenerate_downstream, escalate_to_replan, " +
-      "save_outputs, finish, pause_for_user.\n" +
+      "Allowed strategies:\n" +
+      strategyPromptCatalog() +
+      "\n" +
       "Initial routing: choose route_direct_diagrams only for simple diagram-focused requests; " +
       "choose start_planning for multi-module requirements, ambiguous requirements, or anything needing analysis/design/tests.\n" +
       (knownTaskIds.length > 0
@@ -114,23 +94,18 @@ export class StrategyBrain {
       "\n```"
     );
 
-    try {
-      const memory = getMemory();
-      const queryContext = [
-        snapshot.goal,
-        snapshot.readyTasks.join(" "),
-        snapshot.rejectedArtifacts.join(" "),
-        snapshot.majorPendingTaskIds.join(" "),
-        snapshot.latestIssues
-          .map((issue) => String(issue["description"] ?? ""))
-          .join(" "),
-      ]
-        .filter(Boolean)
-        .join("\n");
-      return await memory.appendToPrompt("coordinator", basePrompt, queryContext);
-    } catch {
-      return basePrompt;
-    }
+    const queryContext = [
+      snapshot.goal,
+      snapshot.readyTasks.join(" "),
+      snapshot.rejectedArtifacts.join(" "),
+      snapshot.majorPendingTaskIds.join(" "),
+      snapshot.latestIssues
+        .map((issue) => String(issue["description"] ?? ""))
+        .join(" "),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    return appendMemorySafely("coordinator", basePrompt, queryContext);
   }
 
   // -------------------------------------------------------------------
