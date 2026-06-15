@@ -8,7 +8,7 @@ import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { createToolError } from "./types.js";
-import { type Task, type Artifact, createArtifact } from "../shared/types.js";
+import { type Task, type Artifact, createArtifact, isDesignModel } from "../shared/types.js";
 import { buildRegistrySummary } from "../shared/registrySummary.js";
 import type { EntityRegistry } from "../shared/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
@@ -17,7 +17,7 @@ import { DiagramGenerator } from "../generators/diagrams.js";
 import { MermaidValidator } from "../generators/mermaid.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
-import { getMemory } from "../memory/store.js";
+import { appendMemorySafely } from "../memory/promptMemory.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -96,20 +96,12 @@ export class GenerationTool extends BaseTool {
   // 生成路由
   // ------------------------------------------------------------------
 
-  private async _injectGeneratorMemory(systemPrompt: string, queryContext: string): Promise<string> {
-    try {
-      return getMemory().appendToPrompt("generator", systemPrompt, queryContext);
-    } catch {
-      return systemPrompt;
-    }
-  }
-
   private async _generate(task: Task, context: Record<string, unknown>): Promise<unknown> {
     const hints = (task.contextHints ?? {}) as Record<string, unknown>;
     const desc = task.description ?? "";
     const queryCtx = `${task.type}: ${desc.slice(0, 200)}`;
     const basePrompt = await this._getSystemPrompt("generator.md", "", queryCtx);
-    const injectedPrompt = await this._injectGeneratorMemory(basePrompt, queryCtx);
+    const injectedPrompt = await appendMemorySafely("generator", basePrompt, queryCtx);
 
     switch (task.type) {
       case "analyze":
@@ -185,7 +177,7 @@ ${text}`;
   private async _generateDesign(
     ctx: Record<string, unknown>, _hints: Record<string, unknown>,
     _desc: string, systemPrompt: string,
-  ): Promise<string> {
+  ): Promise<unknown> {
     const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!reqJson) throw createToolError("GEN_MISSING_REQJSON", "缺少 requirement_json", { recoverable: false });
 
@@ -277,11 +269,17 @@ ${text}`;
         issues.push(...RequirementAnalyzer.validateResult(c));
     }
     else if (taskType === "design") {
-      if (typeof content !== "string" || !content.trim())
-        return ["设计文档为空"];
       const reqJson = (context.requirement_json ?? {}) as Record<string, unknown>;
-      issues.push(...SystemDesigner.validateDesign(String(content), reqJson));
-      issues.push(...GenerationTool._checkUndefinedExceptionIds(String(content), reqJson, "设计"));
+      if (isDesignModel(content)) {
+        issues.push(...SystemDesigner.validateDesignModel(content, reqJson));
+        const rendered = SystemDesigner.renderDesignMarkdown(content);
+        issues.push(...GenerationTool._checkUndefinedExceptionIds(rendered, reqJson, "设计"));
+      } else if (typeof content === "string" && content.trim()) {
+        issues.push(...SystemDesigner.validateDesign(String(content), reqJson));
+        issues.push(...GenerationTool._checkUndefinedExceptionIds(String(content), reqJson, "设计"));
+      } else {
+        return ["设计文档为空"];
+      }
     }
     else if (taskType === "diagrams") {
       const c = GenerationTool._diagramContent(content);
