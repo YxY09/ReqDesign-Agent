@@ -52,7 +52,7 @@
 
 ### diagrams（图表生成）
 
-产出 Mermaid 语法的三类图，以 JSON 格式返回：
+产出 Mermaid 语法的三类图，各图表直接输出 Mermaid 源码（格式见各子 prompt）：
 - `class_diagram`: Mermaid classDiagram（含类、属性、方法、关系）
 - `activity_diagram`: Mermaid flowchart（含主流程、分支、异常流程、结束节点）
 - `state_diagram`: Mermaid stateDiagram-v2（含初始态、终态、转换条件）

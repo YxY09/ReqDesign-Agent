@@ -39,8 +39,7 @@
 20. 每个 `class Xxx {` 必须有对应的闭合 `}`；输出前清点 `class` 与 `}` 数量是否一致
 21. 关系标签含中文括号、逗号、引号等特殊字符时，改用简短英文或加双引号包裹
 
-示例格式：
-```mermaid
+示例格式（直接输出，不加代码围栏）：
 classDiagram
     class User {
         -int userId
@@ -68,4 +67,3 @@ classDiagram
     }
     User "1" --> "*" Order : places
     Product "1" --> "*" Order : included_in
-```
