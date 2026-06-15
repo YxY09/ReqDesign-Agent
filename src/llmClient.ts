@@ -12,6 +12,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { AgentConfig } from "./config.js";
 import { setupLogger, type Logger } from "./logger.js";
 import { withRetry } from "./utils/retry.js";
+import { isAbortError } from "./utils/errors.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -241,7 +242,7 @@ export class LLMClient {
     onChunk?: OnChunk,
   ): Promise<string> {
     const startTime = Date.now();
-    const streamTag = this._streamTag;
+    const streamTag = this.streamTag;
     const chunkHandler = this._buildChunkHandler(onChunk, streamTag);
     const shouldStream = chunkHandler !== undefined;
     const emitMetadata = shouldStream && this._streamListener !== null && streamTag.trim().length > 0;
@@ -269,18 +270,6 @@ export class LLMClient {
       : "";
     const inputChars = messages.reduce((total, message) => total + Array.from(message.content).length, 0);
 
-    // 为非流式调用创建 AbortController 超时控制
-    const abortController = new AbortController();
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-
-    if (!shouldStream) {
-      const timeoutMs = (this.timeout ?? 120) * 1000;
-      timeoutHandle = setTimeout(() => {
-        abortController.abort();
-        this._logger.warn(`[LLMClient] Request timed out after ${this.timeout}s`);
-      }, timeoutMs);
-    }
-
     try {
       let resultText: string;
       let usage: LlmTokenUsage | undefined;
@@ -292,13 +281,27 @@ export class LLMClient {
           usage = response.usage;
         } else {
           resultText = await withRetry(
-            async () => await this._chatOpenai(messages, temperature, abortController.signal),
+            async () => {
+              const ac = new AbortController();
+              const timeoutMs = (this.timeout ?? 120) * 1000;
+              const handle = setTimeout(() => {
+                ac.abort();
+                this._logger.warn(`[LLMClient] Request timed out after ${this.timeout}s`);
+              }, timeoutMs);
+              try {
+                return await this._chatOpenai(messages, temperature, ac.signal);
+              } finally {
+                clearTimeout(handle);
+              }
+            },
             {
               maxRetries: this._retryConfig.maxRetries,
               baseDelayMs: this._retryConfig.retryDelayMs,
               maxDelayMs: this._retryConfig.maxDelayMs,
               shouldRetry: (error) => {
-                if (error instanceof DOMException && error.name === "AbortError") {
+                // 用户主动中止（APIUserAbortError 等）：按 retryOnTimeout 决定。
+                // 真实 SDK 错误不是 DOMException，必须用 isAbortError 统一判断。
+                if (isAbortError(error)) {
                   return this._retryConfig.retryOnTimeout;
                 }
                 return true;
@@ -318,11 +321,30 @@ export class LLMClient {
           usage = response.usage;
         } else {
           const result = await withRetry(
-            async () => await this._chatAnthropic(messages, temperature, undefined),
+            async () => {
+              const ac = new AbortController();
+              const timeoutMs = (this.timeout ?? 120) * 1000;
+              const handle = setTimeout(() => {
+                ac.abort();
+                this._logger.warn(`[LLMClient] Request timed out after ${this.timeout}s`);
+              }, timeoutMs);
+              try {
+                return await this._chatAnthropic(messages, temperature, undefined, ac.signal);
+              } finally {
+                clearTimeout(handle);
+              }
+            },
             {
               maxRetries: this._retryConfig.maxRetries,
               baseDelayMs: this._retryConfig.retryDelayMs,
               maxDelayMs: this._retryConfig.maxDelayMs,
+              shouldRetry: (error) => {
+                // 与 OpenAI 路径保持一致：用户中止按 retryOnTimeout 决定。
+                if (isAbortError(error)) {
+                  return this._retryConfig.retryOnTimeout;
+                }
+                return true;
+              },
               onRetry: (err, attempt) => {
                 this._logger.warn(
                   `[LLMClient] Retry attempt ${attempt + 1}/${this._retryConfig.maxRetries}: ${err instanceof Error ? err.message : String(err)}`,
@@ -359,10 +381,6 @@ export class LLMClient {
         this._emitStreamEvent(streamTag, "end", { text: `error: ${message}` });
       }
       throw error;
-    } finally {
-      if (timeoutHandle !== undefined) {
-        clearTimeout(timeoutHandle);
-      }
     }
   }
 
@@ -456,6 +474,8 @@ export class LLMClient {
       const opts: OpenAIClientOptions = {
         apiKey,
         timeout: this.timeout * 1000,
+        // 禁用 SDK 内置重试：重试由外层 withRetry 统一管理，避免双重重试叠加。
+        maxRetries: 0,
       };
       if (baseUrl) {
         opts.baseURL = baseUrl;
@@ -507,7 +527,11 @@ export class LLMClient {
         temperature: temperature ?? this.temperature,
         max_tokens: this.maxTokens,
       },
-      signal ? { signal } : undefined,
+      {
+        // 禁用 SDK 内置重试：由外层 withRetry 管理（与流式路径一致）。
+        maxRetries: 0,
+        ...(signal ? { signal } : {}),
+      },
     );
 
     const content = completion.choices[0]?.message?.content ?? "";
@@ -579,7 +603,9 @@ export class LLMClient {
           stream_options: { include_usage: true },
         },
         {
-          maxRetries: this.config.retry.maxRetries,
+          // 禁用 SDK 内置重试：流式路径无外层 withRetry，但与架构“重试由
+          // withRetry 统一管理”保持一致，避免 SDK 内部隐式重试与超时叠加。
+          maxRetries: 0,
           signal: abortController.signal,
         },
       );
@@ -604,6 +630,13 @@ export class LLMClient {
 
       this._logger.debug(`[LLMClient] Stream completed, ${full.length} chars`);
       return { text: full, usage };
+    } catch (error) {
+      // 用户主动中止（含超时触发的 abort）：识别后原样向上抛出，绝不吞掉或转成普通错误。
+      // 流式路径无 withRetry，中止/超时一律立即抛出（与非流式 shouldRetry 语义一致）。
+      if (isAbortError(error)) {
+        this._logger.info("[LLMClient] Streaming request aborted");
+      }
+      throw error;
     } finally {
       clearTimeout(timeoutHandle);
     }
@@ -617,6 +650,7 @@ export class LLMClient {
     messages: ChatMessage[],
     temperature?: number,
     onChunk?: OnChunk,
+    signal?: AbortSignal,
   ): Promise<StreamResult> {
     const client = this._client as Anthropic;
 
@@ -628,7 +662,8 @@ export class LLMClient {
       return this._chatStreamAnthropic(client, systemMessage, nonSystemMessages, temperature, onChunk);
     }
 
-    // 非流式
+    // 非流式：传入 signal 以支持 AbortController 超时；maxRetries=0
+    // 避免与外层 withRetry 重复重试（与 OpenAI 非流式路径架构一致）。
     const msg = await client.messages.create(
       {
         model: this.model,
@@ -638,7 +673,8 @@ export class LLMClient {
         temperature: temperature ?? this.temperature,
       },
       {
-        maxRetries: this.config.retry.maxRetries,
+        maxRetries: 0,
+        ...(signal ? { signal } : {}),
       },
     );
 
@@ -668,51 +704,78 @@ export class LLMClient {
     temperature: number | undefined,
     onChunk: OnChunk,
   ): Promise<StreamResult> {
-    const stream = client.messages.stream({
-      model: this.model,
-      max_tokens: this.maxTokens,
-      system: systemMessage || undefined,
-      messages: messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      temperature: temperature ?? this.temperature,
-    });
+    // 与 OpenAI 流式路径对称：AbortController + 超时保护，超时触发 abort。
+    const abortController = new AbortController();
+    const timeoutMs = (this.timeout ?? 120) * 1000;
+    const timeoutHandle = setTimeout(() => {
+      abortController.abort();
+      this._logger.warn(`[LLMClient] Anthropic streaming request timed out after ${this.timeout}s`);
+    }, timeoutMs);
 
-    let full = "";
-    let promptTokens: number | undefined;
-    let completionTokens: number | undefined;
-    for await (const event of stream) {
-      const typedEvent = event as {
-        type: string;
-        message?: { usage?: { input_tokens?: number; output_tokens?: number } };
-        usage?: { input_tokens?: number; output_tokens?: number };
+    try {
+      const stream = client.messages.stream(
+        {
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemMessage || undefined,
+          messages: messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+          temperature: temperature ?? this.temperature,
+        },
+        {
+          // 禁用 SDK 内置重试：流式路径无外层 withRetry，避免 SDK 内部隐式重试
+          // 与超时叠加（与 OpenAI 流式/非流式路径架构一致）。
+          maxRetries: 0,
+          signal: abortController.signal,
+        },
+      );
+
+      let full = "";
+      let promptTokens: number | undefined;
+      let completionTokens: number | undefined;
+      for await (const event of stream) {
+        const typedEvent = event as {
+          type: string;
+          message?: { usage?: { input_tokens?: number; output_tokens?: number } };
+          usage?: { input_tokens?: number; output_tokens?: number };
+        };
+        if (typedEvent.type === "message_start" && typedEvent.message?.usage) {
+          promptTokens = typedEvent.message.usage.input_tokens ?? promptTokens;
+          completionTokens = typedEvent.message.usage.output_tokens ?? completionTokens;
+        }
+        if (typedEvent.type === "message_delta" && typedEvent.usage) {
+          completionTokens = typedEvent.usage.output_tokens ?? completionTokens;
+        }
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          const text = event.delta.text;
+          full += text;
+          onChunk(text);
+        }
+      }
+
+      this._logger.debug(`[LLMClient] Anthropic stream completed, ${full.length} chars`);
+      return {
+        text: full,
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens !== undefined || completionTokens !== undefined
+            ? (promptTokens ?? 0) + (completionTokens ?? 0)
+            : undefined,
+        },
       };
-      if (typedEvent.type === "message_start" && typedEvent.message?.usage) {
-        promptTokens = typedEvent.message.usage.input_tokens ?? promptTokens;
-        completionTokens = typedEvent.message.usage.output_tokens ?? completionTokens;
+    } catch (error) {
+      // 用户主动中止（含超时触发的 abort）：识别后原样向上抛出，绝不吞掉或转成普通错误。
+      // 与 _chatStreamOpenai 行为对称。
+      if (isAbortError(error)) {
+        this._logger.info("[LLMClient] Anthropic streaming request aborted");
       }
-      if (typedEvent.type === "message_delta" && typedEvent.usage) {
-        completionTokens = typedEvent.usage.output_tokens ?? completionTokens;
-      }
-      if (
-        event.type === "content_block_delta" &&
-        event.delta.type === "text_delta"
-      ) {
-        const text = event.delta.text;
-        full += text;
-        onChunk(text);
-      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutHandle);
     }
-
-    this._logger.debug(`[LLMClient] Anthropic stream completed, ${full.length} chars`);
-    return {
-      text: full,
-      usage: {
-        promptTokens,
-        completionTokens,
-        totalTokens: promptTokens !== undefined || completionTokens !== undefined
-          ? (promptTokens ?? 0) + (completionTokens ?? 0)
-          : undefined,
-      },
-    };
   }
 
   // -----------------------------------------------------------------------

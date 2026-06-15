@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { APIUserAbortError, APIConnectionTimeoutError } from "openai";
 import { LLMClient, type LlmStreamEvent } from "../src/llmClient.js";
 import { AgentConfig } from "../src/config.js";
+import { isAbortError } from "../src/utils/errors.js";
 
 describe("LLMClient timeout", () => {
   beforeEach(() => {
@@ -40,15 +42,14 @@ describe("LLMClient timeout", () => {
       [Symbol.asyncIterator]() {
         return {
           next() {
-            // 挂起，直到 signal 中止
+            // 挂起，直到 signal 中止。中止时抛出真实 SDK 中止错误。
             return new Promise<IteratorResult<any, any>>((_, reject) => {
+              const abort = () => reject(new APIUserAbortError());
               if (capturedSignal?.aborted) {
-                reject(new DOMException("Aborted", "AbortError"));
+                abort();
                 return;
               }
-              capturedSignal?.addEventListener("abort", () =>
-                reject(new DOMException("Aborted", "AbortError")),
-              );
+              capturedSignal?.addEventListener("abort", abort);
             });
           },
         };
@@ -75,6 +76,110 @@ describe("LLMClient timeout", () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
+  // 流式路径中止回归：确保 isAbortError 在 OpenAI 流式路径被应用 ——
+  // APIUserAbortError 不被吞没/不被转换、不重试，原样向上抛出。
+  it("流式 OpenAI 路径中止：APIUserAbortError 正确抛出不吞没/不转换", async () => {
+    const config = new AgentConfig();
+    const llm = new LLMClient(config);
+
+    const abortError = new APIUserAbortError();
+    // mock create 返回一个 next() 立即抛出真实中止错误的 async iterator
+    const fakeStream = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            return Promise.reject(abortError);
+          },
+        };
+      },
+    };
+    let createCalls = 0;
+    (llm as any)._client = {
+      chat: {
+        completions: {
+          create: async (_params: any, _opts: any) => {
+            createCalls++;
+            return fakeStream;
+          },
+        },
+      },
+    };
+
+    // 传入 onChunk 触发流式路径
+    let thrown: unknown;
+    try {
+      await llm.chat([{ role: "user", content: "hello" }], undefined, () => {});
+    } catch (e) {
+      thrown = e;
+    }
+    // 必须抛出，且是同一个中止错误（不被吞没/转换）
+    expect(thrown).toBe(abortError);
+    expect(isAbortError(thrown)).toBe(true);
+    // 流式路径无 withRetry，create 只被调用一次（不重试）
+    expect(createCalls).toBe(1);
+  });
+
+  // 流式路径中止回归：确保 Anthropic 流式路径的 AbortController/超时保护与
+  // isAbortError 识别与 OpenAI 路径对称。
+  it("流式 Anthropic 路径：超时触发 abort 并经 isAbortError 识别抛出", async () => {
+    process.env.ANTHROPIC_AUTH_TOKEN = "test-key";
+    const config = new AgentConfig();
+    config.llm.provider = "anthropic";
+    config.llm.apiKey = "test-api-key";
+    config.llm.timeout = 0.05; // 50ms 超时
+    const llm = new LLMClient(config);
+
+    let capturedSignal: AbortSignal | undefined;
+    // mock messages.stream 返回 MessageStream-like 对象：异步迭代挂起，
+    // 超时 abort 后以 constructor.name === 'APIUserAbortError' 形式拒绝
+    // （模拟 Anthropic 跨包中止错误的 constructor.name 兜底路径）。
+    const fakeStream = {
+      [Symbol.asyncIterator]() {
+        return {
+          next() {
+            return new Promise<IteratorResult<any, any>>((_, reject) => {
+              const abort = () => {
+                const e: { constructor: { name: string }; message: string } = {
+                  constructor: { name: "APIUserAbortError" },
+                  message: "Request was aborted.",
+                };
+                reject(e);
+              };
+              if (capturedSignal?.aborted) {
+                abort();
+                return;
+              }
+              capturedSignal?.addEventListener("abort", abort);
+            });
+          },
+        };
+      },
+    };
+    (llm as any)._client = {
+      messages: {
+        stream: (_body: any, opts: any) => {
+          capturedSignal = opts?.signal;
+          return fakeStream;
+        },
+      },
+    };
+
+    const start = Date.now();
+    let thrown: unknown;
+    try {
+      await llm.chat([{ role: "user", content: "hello" }], undefined, () => {});
+    } catch (e) {
+      thrown = e;
+    }
+    // 超时后应抛出中止错误，并在 ~50ms 内（宽松上限 2s）
+    expect(thrown).toBeDefined();
+    expect(isAbortError(thrown)).toBe(true);
+    expect(Date.now() - start).toBeLessThan(2000);
+    // AbortController 的确被超时中止
+    expect(capturedSignal?.aborted).toBe(true);
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+  });
+
   it("retryOnTimeout=false + _chatOpenai 抛 AbortError → 不重试直接 throw", async () => {
     const config = new AgentConfig();
     config.retry.retryOnTimeout = false;
@@ -85,7 +190,8 @@ describe("LLMClient timeout", () => {
     (llm as any)._chatOpenai = vi.fn().mockImplementation(
       async (_msgs: any, _temp: any, _signal: AbortSignal | undefined) => {
         calls++;
-        throw new DOMException("The operation was aborted", "AbortError");
+        // 真实 SDK 抛出的是 APIUserAbortError，不是 DOMException
+        throw new APIUserAbortError();
       },
     );
 
@@ -108,7 +214,8 @@ describe("LLMClient timeout", () => {
       async (_msgs: any, _temp: any, signal: AbortSignal | undefined) => {
         signals.push(signal!);
         if (signals.length === 1) {
-          throw new DOMException("The operation was aborted", "AbortError");
+          // 真实 SDK 中止错误
+          throw new APIUserAbortError();
         }
         return "ok";
       },
@@ -190,7 +297,8 @@ describe("LLMClient timeout", () => {
       async (_msgs: any, _temp: any, _signal: AbortSignal | undefined) => {
         calls++;
         if (calls <= 2) {
-          throw new DOMException("The operation was aborted", "AbortError");
+          // 真实 SDK 中止错误
+          throw new APIUserAbortError();
         }
         return "ok-on-retry";
       },
@@ -199,5 +307,51 @@ describe("LLMClient timeout", () => {
     const result = await llm.chat([{ role: "user", content: "hello" }]);
     expect(result).toBe("ok-on-retry");
     expect(calls).toBe(3); // 1 initial + 2 retries
+  });
+});
+
+describe("isAbortError 检测真实 SDK 中止错误", () => {
+  it("识别 OpenAI SDK 的 APIUserAbortError（真实类型，非 DOMException）", () => {
+    const e = new APIUserAbortError();
+    // 关键回归：旧的 DOMException 守卫对这个真实错误返回 false（失败）
+    // isAbortError 必须返回 true
+    expect(isAbortError(e)).toBe(true);
+    // 确认这个错误确实不是 DOMException（正是旧守卫失败的原因）
+    expect(e instanceof DOMException).toBe(false);
+    expect(e.name).toBe("Error"); // APIUserAbortError.name === "Error"
+  });
+
+  it("识别通过 constructor.name 的中止错误（跨包兼容，如 Anthropic SDK）", () => {
+    // 模拟 Anthropic SDK 的同名类实例（不同包，instanceof 不可靠）
+    const fake = { constructor: { name: "APIUserAbortError" } };
+    expect(isAbortError(fake)).toBe(true);
+  });
+
+  it("识别浏览器/Node 原生 DOMException AbortError", () => {
+    const e = new DOMException("aborted", "AbortError");
+    expect(isAbortError(e)).toBe(true);
+  });
+
+  it("识别 name === 'AbortError' 的通用中止错误（Node fetch abort）", () => {
+    const e = Object.assign(new Error("aborted"), { name: "AbortError" });
+    expect(isAbortError(e)).toBe(true);
+  });
+
+  it("不误判 APIConnectionTimeoutError（保留超时重试语义）", () => {
+    const e = new APIConnectionTimeoutError();
+    expect(isAbortError(e)).toBe(false);
+    expect(e.constructor.name).toBe("APIConnectionTimeoutError");
+  });
+
+  it("不误判普通网络错误", () => {
+    expect(isAbortError(new Error("network error"))).toBe(false);
+    expect(isAbortError(new Error("Request timed out."))).toBe(false);
+  });
+
+  it("对空值/非对象返回 false", () => {
+    expect(isAbortError(null)).toBe(false);
+    expect(isAbortError(undefined)).toBe(false);
+    expect(isAbortError("error")).toBe(false);
+    expect(isAbortError(42)).toBe(false);
   });
 });

@@ -10,6 +10,7 @@
 
 import type { LLMClient } from "../llmClient.js";
 import { createToolError } from "../tools/types.js";
+import { isAbortError } from "../utils/errors.js";
 
 export abstract class BaseGenerator<TOutput> {
   protected llm: LLMClient;
@@ -80,6 +81,9 @@ export abstract class BaseGenerator<TOutput> {
         return result as Record<string, unknown>;
       } catch (e) {
         lastError = e instanceof Error ? e : new Error(String(e));
+        // 用户主动中止时立即抛出，绝不重试 —— 避免 N×timeout 放大。
+        // 注意：真实 SDK 抛出的是 APIUserAbortError（不是 DOMException）。
+        if (isAbortError(e)) throw e;
         if (attempt >= maxRetries) {
           throw createToolError("GEN_FAILED", `Generation failed after ${maxRetries} attempts: ${lastError.message}`, { recoverable: true });
         }
