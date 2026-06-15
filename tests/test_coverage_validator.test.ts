@@ -63,7 +63,7 @@ describe("validateCoverage", () => {
       ],
     };
 
-    const designText = "设计中提到了 C001。"; // C002 missing in design
+    const designText = "设计中提到了 C001，密码长度至少8位。"; // C002 missing in design
     const testCasesText = "测试 F001 功能。"; // F002, C001, C002, X001, X002 all missing in tests
 
     const report = validateCoverage(requirementJson, designText, testCasesText);
@@ -78,6 +78,22 @@ describe("validateCoverage", () => {
     expect(report.exceptionCoverage.uncovered).toHaveLength(2);
 
     expect(report.overall).toBeLessThan(100);
+  });
+
+  it("does not count a constraint ID as design coverage when the nearby semantics drift", () => {
+    const requirementJson = {
+      functions: [],
+      constraints: [
+        { id: "CON_REVIEW", displayId: "C011", description: "同一商品30天内只能追加评价一次" },
+      ],
+      exceptions: [],
+    };
+    const designText = "C011 支付超时30分钟自动取消订单。";
+
+    const report = validateCoverage(requirementJson, designText, "");
+
+    expect(report.constraintDesignCoverage.uncovered).toHaveLength(1);
+    expect(report.constraintDesignCoverage.uncovered[0].displayId).toBe("C011");
   });
 
   it("detects invalid references to IDs that are not defined", () => {

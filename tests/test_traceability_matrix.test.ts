@@ -45,8 +45,8 @@ describe("buildMatrix", () => {
     const json = makeRequirementJson();
 
     const designText = `
-      Design for C001 audit constraint.
-      Design also addresses C002 performance constraint.
+      Design for C001 audit trail data cannot be modified or deleted.
+      Design also addresses C002 response time under 2 seconds.
     `;
     const testCasesText = `
       Test F001 UserRegister.
@@ -95,7 +95,7 @@ describe("buildMatrix", () => {
   it("populates uncovered arrays for items not referenced in design or tests", () => {
     const json = makeRequirementJson();
 
-    const designText = "Design for C001 only.";
+    const designText = "Design for C001 audit trail data cannot be modified or deleted only.";
     const testCasesText = "Test F001 and X001 only.";
 
     const matrix = buildMatrix(json, designText, testCasesText);

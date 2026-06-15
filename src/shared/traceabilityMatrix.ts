@@ -7,6 +7,7 @@
  */
 
 import type { SpanEvidence } from "./documentNormalizer.js";
+import { semanticCoverageState } from "./semanticCoverage.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -228,10 +229,20 @@ export function buildMatrix(
   // --- constraintToDesign ---
   const constraintToDesign: Record<string, string[]> = {};
   if (designStr) {
-    const designRefs = extractConstraintRefs(designStr);
-    for (const ref of designRefs) {
-      if (!constraintToDesign[ref]) constraintToDesign[ref] = [];
-      constraintToDesign[ref].push(ref); // reference ID itself as the design reference
+    const designRefs = new Set(extractConstraintRefs(designStr));
+    for (const c of constraints) {
+      const cid = String(c.id ?? "");
+      const did = String(c.displayId ?? "");
+      if (!designRefs.has(cid) && !designRefs.has(did)) continue;
+      if (semanticCoverageState(
+        designStr,
+        c,
+        ["description", "text", "source_text", "sourceText"],
+      ) !== "covered") continue;
+      for (const ref of [did, cid].filter(Boolean)) {
+        if (!constraintToDesign[ref]) constraintToDesign[ref] = [];
+        constraintToDesign[ref].push(ref);
+      }
     }
   }
 

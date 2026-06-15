@@ -1,3 +1,5 @@
+import { semanticCoverageState } from "./semanticCoverage.js";
+
 /**
  * Coverage Validator - 程序化检查覆盖率
  *
@@ -95,7 +97,12 @@ export function validateCoverage(
   const uncoveredConstraintsDesign = constraints.filter(c => {
     const id = String(c.id ?? "");
     const displayId = String(c.displayId ?? "");
-    return !designConstraintRefs.has(id) && !designConstraintRefs.has(displayId);
+    if (!designConstraintRefs.has(id) && !designConstraintRefs.has(displayId)) return true;
+    return semanticCoverageState(
+      designText,
+      c,
+      ["description", "text", "source_text", "sourceText"],
+    ) !== "covered";
   }).map(c => ({
     id: String(c.id ?? ""),
     displayId: String(c.displayId ?? ""),
