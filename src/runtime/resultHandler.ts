@@ -359,8 +359,8 @@ export class ResultHandler {
         undefined,
         state.registry ?? undefined,
       );
-      state.setRequirementJson(RequirementNormalizer.normalize(merged));
       RequirementNormalizer.normalizeAgainstSource(merged, state.requirementText ?? "");
+      state.setRequirementJson(RequirementNormalizer.normalize(merged));
 
       // 将合并结果持久化到磁盘
       const outputManager = new (this.deps.outputManagerCtor)(state.outputDir);
@@ -388,8 +388,8 @@ export class ResultHandler {
       // 合并失败：回退到程序化并集作为 requirementJson
       try {
         const fallback = this.deps.analyzeMerger.preMerge(artifacts, state.registry ?? undefined);
-        state.setRequirementJson(RequirementNormalizer.normalize(fallback));
         RequirementNormalizer.normalizeAgainstSource(fallback, state.requirementText ?? "");
+        state.setRequirementJson(RequirementNormalizer.normalize(fallback));
         const outputManager = new (this.deps.outputManagerCtor)(state.outputDir);
         outputManager.saveRequirementAnalysis(fallback);
         this.deps.onEmitRuntimeEvent("merge_failed_with_fallback", "merge failed, persisted preMerge fallback", {

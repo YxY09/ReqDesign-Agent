@@ -13,7 +13,7 @@
 
 根据产物内容类型选择合适的 patch 格式：
 
-### 格式 1：JSON ops（用于 JSON 产物：test_cases、analysis）
+### 格式 1：JSON ops（用于 JSON 产物：test_cases）
 
 当产物是 JSON 格式（如 `{"test_cases": [...]}`）时，使用 ops 数组进行精细操作：
 

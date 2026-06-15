@@ -60,8 +60,7 @@
     {
       "id": "design-1",
       "type": "design",
-      "description": "更新设计以覆盖支付回调（只更新description和context_hints，不改type/depends_on）",
-      "depends_on": ["analyze-1"],
+      "description": "更新设计以覆盖支付回调",
       "context_hints": {
         "focus_areas": ["支付模块"]
       }

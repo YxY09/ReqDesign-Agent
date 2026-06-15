@@ -572,7 +572,7 @@ export class RepairTool extends BaseTool {
     context: Record<string, unknown>,
   ): unknown | null {
     // Get analysis function IDs for fallback
-    const reqJson = context.requirementJson as Record<string, unknown> | undefined;
+    const reqJson = context.requirement_json as Record<string, unknown> | undefined;
     const functions = Array.isArray(reqJson?.functions)
       ? (reqJson!.functions as Array<Record<string, unknown>>)
       : [];
