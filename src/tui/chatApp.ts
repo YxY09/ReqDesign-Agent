@@ -1204,7 +1204,7 @@ export class TerminalChatApp {
             `reason: ${decision.reason}`,
             `input: ${decision.input}`,
           ].join("\n"));
-          await this.runWorkflowCommand(decision.goal, decision.input, decision.output ?? `outputs/${decision.goal}`);
+          await this.runWorkflowCommand(decision.goal, decision.input, decision.output ?? this.resolveDefaultOutput(decision.goal));
         } else if (decision.action === "ask_clarification") {
           this.pendingFilePath = decision.filePath;
           this.pushAssistantMessage("Clarification", decision.message);
@@ -1255,7 +1255,7 @@ export class TerminalChatApp {
         action: "run_workflow",
         goal: explicitGoal,
         input: filePath,
-        output: `outputs/${explicitGoal}`,
+        output: this.resolveDefaultOutput(explicitGoal),
         reason: `explicit ${explicitGoal} intent with local file path`,
       };
     }
@@ -1309,7 +1309,7 @@ export class TerminalChatApp {
           action: "run_workflow",
           goal: parsed.goal,
           input: filePath,
-          output: `outputs/${parsed.goal}`,
+          output: this.resolveDefaultOutput(parsed.goal),
           reason: parsed.reason || "LLM coordinator selected workflow",
         };
       }
@@ -1360,7 +1360,7 @@ export class TerminalChatApp {
         action: "run_workflow",
         goal: "design",
         input: this.pendingFilePath,
-        output: "outputs/design",
+        output: this.resolveDefaultOutput("design"),
         reason: "user selected design for pending file",
       };
     }
@@ -1524,7 +1524,7 @@ export class TerminalChatApp {
       }
       const goal = command.slice(1);
       const input = args[0];
-      const output = args[1] ?? `outputs/${goal}`;
+      const output = args[1] ?? this.resolveDefaultOutput(goal);
       await this.runWorkflowCommand(goal, input, output);
       return;
     }
@@ -1536,6 +1536,10 @@ export class TerminalChatApp {
     }
 
     this.pushMessage("error", "Command Error", `未知命令: ${command}`);
+  }
+
+  private resolveDefaultOutput(goal: string): string {
+    return path.join(this.config.output.defaultDir, goal);
   }
 
   private async runWorkflowCommand(goal: string, input: string, output: string): Promise<void> {
@@ -1604,7 +1608,7 @@ export class TerminalChatApp {
             action: "run_workflow",
             goal: "design",
             input,
-            output: "outputs/design",
+            output: this.resolveDefaultOutput("design"),
             reason: "follow-up action after analyze",
           },
         },

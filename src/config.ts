@@ -53,8 +53,27 @@ const RetryConfigSchema = z.object({
   retryOnTimeout: z.boolean().default(true),
 });
 
+const TraceConfigSchema = z.object({
+  /** When false, run_summary.json is omitted (it's on by default since it's small/canonical). */
+  runSummary: z.boolean().default(true),
+  llmTrace: z.boolean().default(true),
+  multiAgentTrace: z.boolean().default(true),
+  traceabilityMatrix: z.boolean().default(true),
+  /** When true, multi_agent_trace.json embeds the full mailbox notification dump. */
+  multiAgentTraceFullDump: z.boolean().default(false),
+});
+
+/**
+ * Trace output may be toggled either with a single boolean (gates all trace
+ * outputs except run_summary.json) or with a granular object. Both shapes are
+ * accepted so `output.trace: false` is a valid one-liner kill switch.
+ */
+const OutputTraceSchema = z.union([z.boolean(), TraceConfigSchema]);
+
 const OutputConfigSchema = z.object({
   defaultDir: z.string().default("outputs/"),
+  /** Controls which trace files are written. Defaults to all-on (object form). */
+  trace: OutputTraceSchema.default({}),
 });
 
 const LoggingConfigSchema = z.object({
@@ -94,6 +113,48 @@ export type RetryConfig = z.infer<typeof RetryConfigSchema>;
 
 /** 输出目录设置。 */
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
+
+/** Fine-grained trace output switches. */
+export type TraceConfig = z.infer<typeof TraceConfigSchema>;
+
+/**
+ * Normalized trace flags resolved from either the boolean or object form of
+ * `config.output.trace`.
+ */
+export interface TraceFlags {
+  runSummary: boolean;
+  llmTrace: boolean;
+  multiAgentTrace: boolean;
+  traceabilityMatrix: boolean;
+  multiAgentTraceFullDump: boolean;
+}
+
+/**
+ * Resolve `config.output.trace` (boolean or object) into normalized TraceFlags.
+ *
+ * - `true`  → all trace outputs on, full dump off
+ * - `false` → all trace outputs off (except run_summary.json), full dump off
+ * - object  → per-flag values (defaults: all on, full dump off)
+ */
+export function resolveTraceFlags(trace: boolean | TraceConfig): TraceFlags {
+  if (typeof trace === "boolean") {
+    return {
+      // run_summary.json is canonical and small — stays on even under `trace: false`
+      runSummary: true,
+      llmTrace: trace,
+      multiAgentTrace: trace,
+      traceabilityMatrix: trace,
+      multiAgentTraceFullDump: false,
+    };
+  }
+  return {
+    runSummary: trace.runSummary,
+    llmTrace: trace.llmTrace,
+    multiAgentTrace: trace.multiAgentTrace,
+    traceabilityMatrix: trace.traceabilityMatrix,
+    multiAgentTraceFullDump: trace.multiAgentTraceFullDump,
+  };
+}
 
 /** 日志设置。 */
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
@@ -205,7 +266,16 @@ function defaultRetryConfig(): RetryConfig {
 }
 
 function defaultOutputConfig(): OutputConfig {
-  return { defaultDir: "outputs/" };
+  return {
+    defaultDir: "outputs/",
+    trace: {
+      runSummary: true,
+      llmTrace: true,
+      multiAgentTrace: true,
+      traceabilityMatrix: true,
+      multiAgentTraceFullDump: false,
+    },
+  };
 }
 
 function defaultLoggingConfig(): LoggingConfig {

@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
-import type { AgentConfig } from "./config.js";
+import { type AgentConfig, resolveTraceFlags } from "./config.js";
 import { ConstitutionLoader, setConstitution } from "./constitution.js";
 import { WorkerFactory } from "./execution/factory.js";
 import { SessionBackend } from "./execution/backend.js";
@@ -185,6 +185,7 @@ export class MultiAgentRuntime {
       onEmitRuntimeEvent: (kind, message, extras) =>
         this.eventBridge.emitRuntimeEvent(kind, message, extras),
       onSnapshotState: (state) => this.snapshotState(state),
+      traceFlags: resolveTraceFlags(this.config.output.trace),
     });
 
     this.workerDispatcher = new WorkerDispatcher({

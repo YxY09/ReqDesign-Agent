@@ -327,6 +327,14 @@ export class OutputManager {
     this._logger.info(`所有产物已保存到: ${this.outputDir}`);
   }
 
+  /** Generate summary_report.md from the requirement + review result. */
+  generateSummary(
+    req: Record<string, unknown>,
+    reviewResult: Record<string, unknown> | null,
+  ): void {
+    this._generateSummary(req, reviewResult);
+  }
+
   // ---------------------------------------------------------------
   // SVG 渲染（可选 - 已跳过）
   // ---------------------------------------------------------------

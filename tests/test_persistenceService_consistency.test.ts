@@ -3,6 +3,7 @@ import { PersistenceService } from "../src/runtime/persistenceService.js";
 import type { PersistenceServiceDeps } from "../src/runtime/persistenceService.js";
 import type { WorkflowState } from "../src/state.js";
 import { WorkflowState as RealWorkflowState } from "../src/state.js";
+import { resolveTraceFlags } from "../src/config.js";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -30,6 +31,8 @@ function makeDeps(): PersistenceServiceDeps {
     logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as unknown as PersistenceServiceDeps["logger"],
     onEmitRuntimeEvent: () => {},
     onSnapshotState: () => ({}),
+    // Resolve real trace flags so exportTrace won't TypeError if invoked.
+    traceFlags: resolveTraceFlags({}),
   };
 }
 
