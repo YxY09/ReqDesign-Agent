@@ -9,7 +9,6 @@ import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import { createToolError } from "./types.js";
 import { type Task, type Artifact, createArtifact, isDesignModel } from "../shared/types.js";
-import { buildRegistrySummary } from "../shared/registrySummary.js";
 import type { EntityRegistry } from "../shared/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
 import { SystemDesigner } from "../generators/design.js";
@@ -125,18 +124,7 @@ export class GenerationTool extends BaseTool {
     const existingJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!text && !existingJson) throw createToolError("GEN_MISSING_INPUT", "缺少 requirement_text 和 requirement_json", { recoverable: false });
 
-    // Inject registry summary if available in context hints
     const registry = ctx.registry as EntityRegistry | undefined;
-    if (registry && registry.entities.length > 0) {
-      const summary = buildRegistrySummary(registry);
-      if (summary) {
-        text = text.replace(/\{registry_summary\}/g, summary);
-        // If placeholder wasn't in text, prepend it
-        if (!text.includes(summary)) {
-          text = `## 全局实体注册表\n${summary}\n\n${text}`;
-        }
-      }
-    }
 
     // Inject available constraints into prompt template
     let availableConstraintsText: string | undefined;
@@ -169,7 +157,7 @@ ${text}`;
     }
     const analyzer = this._getAnalyzer();
     const raw = await this.llm.runWithStreamTagContext("[Generator:analyze]", "", () =>
-      analyzer.analyze(text, 3, systemPrompt, existingJson, availableConstraintsText)
+      analyzer.analyze(text, 3, systemPrompt, existingJson, availableConstraintsText, registry)
     );
     return GenerationTool._unwrapAnalyzeDict(raw);
   }
