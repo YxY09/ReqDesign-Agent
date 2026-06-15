@@ -113,3 +113,170 @@ describe("RequirementAnalyzer — registry_summary injection", () => {
     expect(capturedPrompt).not.toContain("{registry_summary}");
   });
 });
+
+// ═══════════════════════════════════════════════════════
+//  merge.ts — proposeNewEntities absorption
+// ═══════════════════════════════════════════════════════
+
+describe("AnalyzeMerger — proposeNewEntities absorbed into final entities", () => {
+  it("merge() single-artifact: proposeNewEntities items are added to entities", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+
+    const result = await merger.merge(
+      [
+        {
+          taskId: "a1",
+          content: {
+            entities: [
+              {
+                entityRef: "E_CASE",
+                name: "Case",
+                description: "案件",
+                attributes: [{ name: "id", type: "Long", description: "ID" }],
+                relationships: [],
+              },
+            ],
+            functions: [], actors: [], constraints: [], exceptions: [],
+            non_functional_requirements: [], business_processes: [],
+            proposeNewEntities: [
+              {
+                name: "Evidence",
+                description: "证据",
+                attributes: [{ name: "evidenceId", type: "Long", description: "证据ID" }],
+                relationships: [],
+              },
+            ],
+            proposeNewFunctions: [],
+          },
+        },
+      ],
+      "Case has an Evidence attachment."
+    );
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const evidenceEntity = entities.find(
+      (e) => String(e.name ?? e.canonicalName ?? "").includes("Evidence"),
+    );
+    expect(evidenceEntity).toBeDefined();
+  });
+
+  it("merge() multi-artifact: proposeNewEntities from shards are absorbed", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+
+    const result = await merger.merge(
+      [
+        {
+          taskId: "a1",
+          content: {
+            entities: [
+              { entityRef: "E_CASE", name: "Case", description: "案件", attributes: [], relationships: [] },
+            ],
+            functions: [], actors: [], constraints: [], exceptions: [],
+            non_functional_requirements: [], business_processes: [],
+            proposeNewEntities: [
+              {
+                name: "Evidence",
+                description: "证据",
+                attributes: [{ name: "evidenceId", type: "Long", description: "" }],
+                relationships: [],
+              },
+            ],
+            proposeNewFunctions: [],
+          },
+        },
+        {
+          taskId: "a2",
+          content: {
+            entities: [
+              { entityRef: "E_USER", name: "User", description: "用户", attributes: [], relationships: [] },
+            ],
+            functions: [], actors: [], constraints: [], exceptions: [],
+            non_functional_requirements: [], business_processes: [],
+            proposeNewEntities: [],
+            proposeNewFunctions: [],
+          },
+        },
+      ],
+      "Case has User and Evidence."
+    );
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const evidenceEntity = entities.find(
+      (e) => String(e.name ?? e.canonicalName ?? "").includes("Evidence"),
+    );
+    expect(evidenceEntity).toBeDefined();
+    // Original entities still present
+    expect(entities.some((e) => String(e.name ?? "").includes("Case"))).toBe(true);
+    expect(entities.some((e) => String(e.name ?? "").includes("User"))).toBe(true);
+  });
+
+  it("_absorbProposedEntities skips entities whose name already exists in entities", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+
+    const result = await merger.merge(
+      [
+        {
+          taskId: "a1",
+          content: {
+            entities: [
+              { name: "Case", description: "案件（已有）", attributes: [], relationships: [] },
+            ],
+            functions: [], actors: [], constraints: [], exceptions: [],
+            non_functional_requirements: [], business_processes: [],
+            proposeNewEntities: [
+              { name: "Case", description: "案件（重复）", attributes: [], relationships: [] },
+            ],
+            proposeNewFunctions: [],
+          },
+        },
+      ],
+      "Case entity dedup test."
+    );
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const caseEntities = entities.filter(
+      (e) => String(e.name ?? e.canonicalName ?? "").toLowerCase().includes("case"),
+    );
+    // Must not have been duplicated
+    expect(caseEntities.length).toBe(1);
+  });
+
+  it("absorbed entities receive canonical IDs via normalizeEntityIdentities", async () => {
+    const { AnalyzeMerger } = await import("../src/generators/merge.js");
+    const merger = new (AnalyzeMerger as any)(null);
+
+    const result = await merger.merge(
+      [
+        {
+          taskId: "a1",
+          content: {
+            entities: [],
+            functions: [], actors: [], constraints: [], exceptions: [],
+            non_functional_requirements: [], business_processes: [],
+            proposeNewEntities: [
+              {
+                name: "EvidenceDocument",
+                description: "证据文件",
+                attributes: [{ name: "docId", type: "Long", description: "文件ID" }],
+                relationships: [],
+              },
+            ],
+            proposeNewFunctions: [],
+          },
+        },
+      ],
+      "EvidenceDocument is a core entity."
+    );
+
+    const entities = result.entities as Array<Record<string, unknown>>;
+    const doc = entities.find(
+      (e) => String(e.name ?? e.canonicalName ?? "").toLowerCase().includes("evidence"),
+    );
+    expect(doc).toBeDefined();
+    // Should have a canonical ID (starts with E_)
+    expect(String(doc!.id ?? "")).toMatch(/^E_/);
+  });
+});

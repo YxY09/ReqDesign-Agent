@@ -406,6 +406,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       for (const e of (single.entities as Array<Record<string, unknown>> | undefined) ?? []) {
         if (e.entityRef) e.id = e.entityRef;
       }
+      AnalyzeMerger._absorbProposedEntities(single);
       // Canonicalize IDs & resolve cross-references first, then constraints
       canonicalizeAndLink(single);
       canonicalizeConstraintsPipeline(single);
@@ -415,6 +416,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
 
     // 程序化预合并：将所有分析结果按名称去重取并集
     const preMerged = this.preMerge(artifacts, registry);
+    AnalyzeMerger._absorbProposedEntities(preMerged);
     const safeText = this.sanitizePlaceholder(requirementText || "", "requirement_text");
 
     // 直接用 preMerge 结果（保全集），跳过 LLM merge
@@ -715,6 +717,26 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       result.push(groupItems[0]);
     }
     return result;
+  }
+
+  private static _absorbProposedEntities(merged: Record<string, unknown>): void {
+    const proposed = asArray(merged["proposeNewEntities"]);
+    if (proposed.length === 0) return;
+
+    const entities = asArray(merged["entities"]);
+    const existingNames = new Set(
+      entities.map((e) => String(e.name ?? e.canonicalName ?? "").trim().toLowerCase()),
+    );
+
+    for (const item of proposed) {
+      const name = String(item.name ?? "").trim();
+      if (!name || existingNames.has(name.toLowerCase())) continue;
+      entities.push(item);
+      existingNames.add(name.toLowerCase());
+    }
+
+    merged["entities"] = entities;
+    delete merged["proposeNewEntities"];
   }
 
   // --- Entities: merge by entityRef first, then by normalized name ---
