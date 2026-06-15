@@ -7,6 +7,7 @@ import { MultiAgentRuntime } from "../runtime.js";
 import { createWorkflowEvent, type WorkflowEvent, type WorkflowEventSink } from "../workflowEvents.js";
 import {
   casePassed,
+  caseGateFailures,
   combineScores,
   computeRunSummary,
   judgeCoverage,
@@ -37,6 +38,8 @@ export interface RuntimeLike {
     diagrams: unknown;
     getMajorPendingTaskIds(): string[];
     finalReviewPassed: boolean;
+    persisted: boolean;
+    qualityStatus: string;
   }>;
   cancel(reason?: string): void;
 }
@@ -155,7 +158,15 @@ export class BenchmarkRunner {
       // Respect the pipeline's own final-review gate: a case it rejected
       // (unresolved blocker/major issues) must not be reported as passed.
       const openMajor = state.getMajorPendingTaskIds().length;
-      const passed = casePassed(scores.overall, openMajor);
+      const gateInput = {
+        overall: scores.overall,
+        openMajorIssues: openMajor,
+        finalReviewPassed: Boolean(state.finalReviewPassed),
+        persisted: Boolean(state.persisted),
+        qualityStatus: String(state.qualityStatus ?? "unknown"),
+      };
+      const gateFailures = caseGateFailures(gateInput);
+      const passed = casePassed(gateInput);
 
       this.emitEvent("benchmark_case_completed", `case ${testCase.name} completed`, {
         caseName: testCase.name,
@@ -171,6 +182,9 @@ export class BenchmarkRunner {
         coverage_detail: coverage.detail,
         review_passed: Boolean(state.finalReviewPassed),
         review_blockers: openMajor,
+        persisted: Boolean(state.persisted),
+        quality_status: String(state.qualityStatus ?? "unknown"),
+        gate_failures: gateFailures,
       };
     } catch (error: unknown) {
       return this.errorResult(testCase, msg(error), options);
@@ -254,25 +268,28 @@ export class BenchmarkRunner {
       "",
       "## 各案例详情",
       "",
-      "| 案例 | 状态 | 覆盖度 | 图语法 | 图结构 | 一致性 | 综合 | 通过 |",
-      "|------|------|--------|--------|--------|--------|------|------|",
+      "| 案例 | 状态 | 覆盖度 | 图语法 | 图结构 | 一致性 | 综合 | 通过 | 失败门禁 |",
+      "|------|------|--------|--------|--------|--------|------|------|----------|",
     );
     for (const r of results) {
       if (r.status === "success") {
         const s = r.scores ?? {};
+        const gateFailures = (r.gate_failures ?? []).join("; ");
         lines.push(
-          `| ${r.case_name} | success | ${s.coverage ?? 0} | ${s.diagram_syntax ?? 0} | ${s.diagram_structure ?? 0} | ${s.consistency ?? 0} | ${s.overall ?? 0} | ${r.passed ? "是" : "否"} |`,
+          `| ${r.case_name} | success | ${s.coverage ?? 0} | ${s.diagram_syntax ?? 0} | ${s.diagram_structure ?? 0} | ${s.consistency ?? 0} | ${s.overall ?? 0} | ${r.passed ? "是" : "否"} | ${gateFailures || "-"} |`,
         );
       } else {
-        lines.push(`| ${r.case_name} | ${r.status} | - | - | - | - | - | - |`);
+        lines.push(`| ${r.case_name} | ${r.status} | - | - | - | - | - | - | - |`);
       }
     }
     const gated = results.filter(
-      (r) => r.status === "success" && !r.passed && (r.review_blockers ?? 0) > 0,
+      (r) => r.status === "success" && !r.passed && (r.gate_failures ?? []).length > 0,
     );
     if (gated.length > 0) {
-      lines.push("", "> 注：以下案例综合分达标，但被系统自评否决（仍有未决 major/blocker），故记为未通过：");
-      for (const r of gated) lines.push(`> - ${r.case_name}: ${r.review_blockers} 个未决 major`);
+      lines.push("", "> 注：以下案例综合分可能达标，但未通过运行时质量门禁，故记为未通过：");
+      for (const r of gated) {
+        lines.push(`> - ${r.case_name}: ${(r.gate_failures ?? []).join("; ")}`);
+      }
     }
     lines.push("");
     return lines.join("\n");

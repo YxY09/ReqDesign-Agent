@@ -14,6 +14,7 @@ import {
   computeOverall,
   combineScores,
   computeRunSummary,
+  caseGateFailures,
   casePassed,
   type JudgeClient,
   type GoldLabel,
@@ -182,9 +183,33 @@ describe("computeRunSummary", () => {
 });
 
 describe("casePassed (review gate)", () => {
-  it("passes only when overall clears the bar and no open major issues", () => {
-    expect(casePassed(90, 0)).toBe(true);
-    expect(casePassed(90, 3)).toBe(false);
-    expect(casePassed(50, 0)).toBe(false);
+  it("passes only when all score/review/persistence gates pass", () => {
+    const base = {
+      overall: 90,
+      openMajorIssues: 0,
+      finalReviewPassed: true,
+      persisted: true,
+      qualityStatus: "passed",
+    };
+    expect(casePassed(base)).toBe(true);
+    expect(casePassed({ ...base, openMajorIssues: 3 })).toBe(false);
+    expect(casePassed({ ...base, overall: 50 })).toBe(false);
+    expect(casePassed({ ...base, finalReviewPassed: false })).toBe(false);
+    expect(casePassed({ ...base, persisted: false })).toBe(false);
+    expect(casePassed({ ...base, qualityStatus: "rejected" })).toBe(false);
+  });
+
+  it("reports concrete quality gate failures", () => {
+    expect(caseGateFailures({
+      overall: 100,
+      openMajorIssues: 0,
+      finalReviewPassed: false,
+      persisted: false,
+      qualityStatus: "rejected",
+    })).toEqual([
+      "final review did not pass",
+      "quality status is rejected",
+      "outputs were not persisted",
+    ]);
   });
 });

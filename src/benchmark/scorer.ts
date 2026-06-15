@@ -51,6 +51,12 @@ export interface BenchmarkCaseResult {
   review_passed?: boolean;
   /** Count of unresolved blocker/major issues from the system's review. */
   review_blockers?: number;
+  /** Whether the runtime persisted final outputs successfully. */
+  persisted?: boolean;
+  /** Runtime quality status after final review/persistence. */
+  quality_status?: string;
+  /** Machine-readable reasons why a scored case did not pass. */
+  gate_failures?: string[];
   error?: string;
 }
 
@@ -338,13 +344,40 @@ export function isPassing(overall: number): boolean {
   return overall >= PASS_THRESHOLD;
 }
 
+export interface CaseGateInput {
+  overall: number;
+  openMajorIssues: number;
+  finalReviewPassed: boolean;
+  persisted: boolean;
+  qualityStatus: string;
+}
+
+export function caseGateFailures(input: CaseGateInput): string[] {
+  const failures: string[] = [];
+  if (!isPassing(input.overall)) {
+    failures.push(`overall score below ${PASS_THRESHOLD}`);
+  }
+  if (input.openMajorIssues > 0) {
+    failures.push(`${input.openMajorIssues} unresolved major/blocker issue(s)`);
+  }
+  if (!input.finalReviewPassed) {
+    failures.push("final review did not pass");
+  }
+  if (input.qualityStatus !== "passed") {
+    failures.push(`quality status is ${input.qualityStatus || "unknown"}`);
+  }
+  if (!input.persisted) {
+    failures.push("outputs were not persisted");
+  }
+  return failures;
+}
+
 /**
- * A case only counts as passed if its overall clears the bar AND the system's
- * own final review left no unresolved blocker/major issues. A high score must
- * not paper over a verdict the pipeline itself rejected.
+ * A case only counts as passed if the score clears the bar AND the runtime's
+ * own quality gates passed through final persistence.
  */
-export function casePassed(overall: number, openMajorIssues: number): boolean {
-  return isPassing(overall) && openMajorIssues <= 0;
+export function casePassed(input: CaseGateInput): boolean {
+  return caseGateFailures(input).length === 0;
 }
 
 /** Combine an already-computed coverage score with deterministic scoring over

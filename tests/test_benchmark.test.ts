@@ -114,14 +114,18 @@ describe("BenchmarkRunner", () => {
           status: "success",
           passed: false,
           review_blockers: 6,
+          review_passed: true,
+          persisted: true,
+          quality_status: "passed",
+          gate_failures: ["6 unresolved major/blocker issue(s)"],
           scores: { coverage: 90, diagram_syntax: 100, diagram_structure: 100, consistency: 66, overall: 90 },
         },
       ],
       summary: { passed: 0, failed: 1, error: 0, avg_scores: { overall: 90 } },
     });
-    expect(md).toContain("被系统自评否决");
+    expect(md).toContain("未通过运行时质量门禁");
     expect(md).toContain("hospital");
-    expect(md).toContain("6 个未决 major");
+    expect(md).toContain("6 unresolved major/blocker issue(s)");
   });
 
   it("runCase returns error and calls cancel on per-case timeout", async () => {
@@ -174,6 +178,8 @@ describe("BenchmarkRunner", () => {
       diagrams: {},
       getMajorPendingTaskIds: () => [],
       finalReviewPassed: true,
+      persisted: true,
+      qualityStatus: "passed",
     };
     const mockFactory: RuntimeFactory = () => ({
       run: () => Promise.resolve(mockState),
@@ -195,6 +201,62 @@ describe("BenchmarkRunner", () => {
 
     expect(result.status).toBe("success");
   }, 5000);
+
+  it("runCase fails when runtime final quality gates fail despite high score", async () => {
+    const casesDir = join(tmpDir, "cases");
+    const goldDir = join(tmpDir, "gold");
+    const outDir = join(tmpDir, "out");
+    mkdirSync(casesDir);
+    mkdirSync(goldDir);
+    writeFileSync(join(casesDir, "rejected.md"), "# Rejected", "utf8");
+    writeFileSync(
+      join(goldDir, "rejected.json"),
+      JSON.stringify({ expected_functions: ["登录"] }),
+      "utf8",
+    );
+
+    const mockState = {
+      requirementJson: { functions: [{ name: "登录" }], entities: [] },
+      diagrams: {
+        class_diagram: "classDiagram\n  class User",
+        activity_diagram: "flowchart TD\n  A[开始] --> B{判断} -->|是| C[结束]",
+        state_diagram: "stateDiagram-v2\n  [*] --> Open\n  Open --> Closed\n  Closed --> [*]",
+      },
+      getMajorPendingTaskIds: () => [],
+      finalReviewPassed: false,
+      persisted: false,
+      qualityStatus: "rejected",
+    };
+    const mockFactory: RuntimeFactory = () => ({
+      run: () => Promise.resolve(mockState),
+      cancel: () => {},
+    });
+    const stubJudge = {
+      generateJson: async () => ({
+        functions: { covered: ["登录"], missing: [] },
+      }),
+    } as never;
+
+    const runner = new BenchmarkRunner(
+      new AgentConfig(),
+      casesDir,
+      goldDir,
+      outDir,
+      stubJudge,
+      mockFactory,
+    );
+    const [testCase] = runner.findCases();
+    const result = await runner.runCase(testCase);
+
+    expect(result.status).toBe("success");
+    expect(result.scores?.overall).toBeGreaterThanOrEqual(80);
+    expect(result.passed).toBe(false);
+    expect(result.gate_failures).toEqual([
+      "final review did not pass",
+      "quality status is rejected",
+      "outputs were not persisted",
+    ]);
+  });
 });
 
 // ===========================================================================
