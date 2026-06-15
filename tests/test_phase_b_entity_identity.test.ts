@@ -86,5 +86,30 @@ describe("RequirementAnalyzer — registry_summary injection", () => {
     await analyzer.analyze("some requirement text", 1, undefined, undefined, undefined, registry);
 
     expect(capturedPrompt).toContain("some requirement text");
+    // Registry data must NOT appear in prompt when template has no {registry_summary} slot
+    expect(capturedPrompt).not.toContain("E_CASE");
+  });
+
+  it("analyze() replaces {registry_summary} with empty string when registry has no entities", async () => {
+    const { RequirementAnalyzer } = await import("../src/generators/analyze.js");
+    let capturedPrompt = "";
+    const mockLlm = {
+      generateJson: vi.fn().mockImplementation((prompt: string) => {
+        capturedPrompt = prompt;
+        return Promise.resolve({
+          actors: [], functions: [], entities: [], constraints: [], exceptions: [],
+          non_functional_requirements: [], business_processes: [],
+          proposeNewEntities: [], proposeNewFunctions: [],
+        });
+      }),
+    };
+    const analyzer = new RequirementAnalyzer(mockLlm as any);
+    (analyzer as any).promptTemplate =
+      "header: {registry_summary}\nbody: {requirement_text}\n{available_constraints}";
+
+    const emptyRegistry = { entities: [], actors: [] };
+    await analyzer.analyze("some requirement text", 1, undefined, undefined, undefined, emptyRegistry);
+
+    expect(capturedPrompt).not.toContain("{registry_summary}");
   });
 });

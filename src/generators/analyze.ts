@@ -57,6 +57,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     if (availableConstraintsText !== undefined) {
       tpl = tpl.replace(/\{available_constraints\}/g, availableConstraintsText);
     }
+    // Always replace {registry_summary} — even with "" — so the literal never reaches the LLM.
     tpl = tpl.replace(
       /\{registry_summary\}/g,
       (registry && registry.entities.length > 0) ? buildRegistrySummary(registry) : "",
