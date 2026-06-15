@@ -1,5 +1,6 @@
 import type { WorkflowState } from "../state.js";
 import type { Artifact, RuntimeAction } from "../shared/types.js";
+import { ConvergenceTracker } from "../orchestration/snapshot.js";
 import { PostGenerationValidator } from "../tools/validator.js";
 
 export type ArtifactAcceptanceOutcome =
@@ -47,11 +48,18 @@ export class ArtifactAcceptanceService {
     const existingArtifact = state.artifacts[taskId];
     const candidateIssues = artifact.selfCheckIssues.length;
     const existingIssues = existingArtifact?.selfCheckIssues.length ?? 0;
+    const evaluatorIssueFingerprints =
+      decision?.action === "regenerate"
+        ? this.evaluatorIssueFingerprintsForTask(state, taskId)
+        : [];
+    const isEvaluatorTriggeredRegenerate = evaluatorIssueFingerprints.length > 0;
     // Reject a regeneration candidate only if it is STRICTLY WORSE than the existing artifact:
     // - existing passed (0 issues): reject candidate only if it has > 1 issue (1 is ok, semantic
     //   fixes often introduce one minor structural warning)
     // - both fail: reject only if candidate has STRICTLY MORE issues than existing; a tie means
     //   the candidate is no worse and may have fixed a semantic issue the self-check can't see
+    // - evaluator-triggered regeneration: accept the candidate into a new revision so the
+    //   evaluator can check whether the semantic issue fingerprints actually moved.
     const wouldRejectVsExisting = existingArtifact?.selfCheckPassed
       ? candidateIssues > 1
       : candidateIssues > existingIssues;
@@ -60,7 +68,8 @@ export class ArtifactAcceptanceService {
       existingArtifact?.content !== undefined &&
       existingArtifact.content !== null &&
       !artifact.selfCheckPassed &&
-      wouldRejectVsExisting;
+      wouldRejectVsExisting &&
+      !isEvaluatorTriggeredRegenerate;
 
     if (shouldKeepExistingArtifact) {
       const keptRevision = state.currentArtifactRevision(taskId);
@@ -77,10 +86,26 @@ export class ArtifactAcceptanceService {
           candidateIssues: artifact.selfCheckIssues.slice(0, 10),
           candidateIssueCount: artifact.selfCheckIssues.length,
           keptRevision,
+          evaluatorIssueFingerprints,
         },
       };
     }
 
     return { action: "accept", artifact };
+  }
+
+  private evaluatorIssueFingerprintsForTask(
+    state: WorkflowState,
+    taskId: string,
+  ): string[] {
+    const latestVerdict = state.latestVerdict;
+    if (!latestVerdict) return [];
+    const currentRevision = state.currentArtifactRevision(taskId);
+    if (currentRevision === 0) return [];
+    if (latestVerdict.evaluatedRevisions[taskId] !== currentRevision) return [];
+
+    return latestVerdict.issues
+      .filter((issue) => issue.targetTaskId === taskId)
+      .map((issue) => ConvergenceTracker.fingerprint(issue.description));
   }
 }

@@ -480,6 +480,79 @@ describe("WorkflowState — artifacts", () => {
     expect(saveCalls).toBe(0);
   });
 
+  it("accepts evaluator-triggered regenerate candidates for re-evaluation", async () => {
+    const state = new WorkflowState();
+    state.addArtifact(createArtifact({
+      taskId: "design-1",
+      type: "design",
+      content: "design with semantic issue",
+      selfCheckPassed: true,
+      selfCheckIssues: [],
+    }));
+    state.markTaskStatus("design-1", "completed");
+    state.addVerdict(createVerdict({
+      passed: false,
+      evaluatedTaskIds: ["design-1"],
+      evaluatedRevisions: { "design-1": 1 },
+      issues: [
+        createIssue({
+          severity: "blocker",
+          targetTaskId: "design-1",
+          targetTaskType: "design",
+          description: "设计未落实 C011 的业务约束",
+          scope: "local",
+        }),
+      ],
+    }));
+
+    let saveCalls = 0;
+    const events: string[] = [];
+    const handler = new ResultHandler({
+      backend: {} as never,
+      mailbox: {} as never,
+      logger: {} as never,
+      analyzeMerger: {} as never,
+      outputManagerCtor: class {} as never,
+      getInflight: () => new Map(),
+      getActiveStreamContext: () => null,
+      setActiveStreamContext: () => {},
+      onEmitRuntimeEvent: (kind) => events.push(kind),
+      onSnapshotState: () => ({}),
+      onSaveArtifactIncrementally: () => { saveCalls += 1; },
+      onPersistValidatedCoordinatorDecision: () => {},
+    });
+    const candidate = createArtifact({
+      taskId: "design-1",
+      type: "design",
+      content: "regenerated design that should be reviewed",
+      selfCheckPassed: false,
+      selfCheckIssues: ["missing traceability", "missing exception flow"],
+    });
+
+    await handler.applyGeneratorCompletion(
+      state,
+      "design-1",
+      createTaskNotification({
+        taskId: "design-1",
+        sessionId: "s3",
+        status: "completed",
+        result: candidate,
+      }),
+      "spawn",
+      createRuntimeAction({
+        action: "regenerate",
+        taskId: "design-1",
+        reason: "retry design after evaluator rejection",
+      }),
+    );
+
+    expect(state.currentArtifactRevision("design-1")).toBe(2);
+    expect(state.artifacts["design-1"].content).toBe("regenerated design that should be reviewed");
+    expect(state.taskStatus("design-1")).toBe("completed");
+    expect(events).not.toContain("regenerate_rejected");
+    expect(saveCalls).toBe(1);
+  });
+
   it("addVerdict does NOT auto-set finished", () => {
     const state = new WorkflowState();
     const verdict = createVerdict({ passed: true });
