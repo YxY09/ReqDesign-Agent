@@ -361,17 +361,12 @@ function asArray(val: unknown): Record<string, unknown>[] {
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private relationshipPromptTemplate: string;
-  private constraintPromptTemplate: string;
   private postProcessPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
     this.relationshipPromptTemplate = loadPrompt(
       "merge_relationships.md",
-      "",
-    );
-    this.constraintPromptTemplate = loadPrompt(
-      "merge_constraints.md",
       "",
     );
     this.postProcessPromptTemplate = loadPrompt(
@@ -1187,78 +1182,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       return patches;
     }
     return null;
-  }
-
-  /**
-   * 约束补全：传入合并后的结果和原始需求，LLM 扫描缺失的业务规则和异常流程。
-   * 失败时返回空对象，不影响主流程。
-   * @deprecated 已合并至 _completeAll，保留供未来单独使用。
-   */
-  // @ts-expect-error TS6133 - preserved for future standalone use
-  private async _completeConstraints(
-    merged: Record<string, unknown>,
-    requirementText: string,
-  ): Promise<{ constraints: Array<Record<string, unknown>>; exceptions: Array<Record<string, unknown>> }> {
-    if (!this.constraintPromptTemplate) {
-      return { constraints: [], exceptions: [] };
-    }
-
-    const constraints = merged.constraints as Array<Record<string, unknown>> | undefined;
-    const exceptions = merged.exceptions as Array<Record<string, unknown>> | undefined;
-    const entities = merged.entities as Array<Record<string, unknown>> | undefined;
-    const functions = merged.functions as Array<Record<string, unknown>> | undefined;
-
-    const existingConstraints = (constraints ?? [])
-      .map((c) => `- [${c.id ?? "?"}] ${c.description ?? ""}`)
-      .join("\n") || "（无）";
-    const existingExceptions = (exceptions ?? [])
-      .map((e) => `- [${e.id ?? "?"}] ${e.description ?? ""}`)
-      .join("\n") || "（无）";
-    const entityNames = (entities ?? [])
-      .map((e) => `- ${e.name ?? "?"}`)
-      .join("\n") || "（无）";
-    const functionNames = (functions ?? [])
-      .map((f) => `- [${f.id ?? "?"}] ${f.name ?? "?"}`)
-      .join("\n") || "（无）";
-
-    const prompt = this.buildPrompt(this.constraintPromptTemplate, {
-      existing_constraints: existingConstraints,
-      existing_exceptions: existingExceptions,
-      entity_names: entityNames,
-      function_names: functionNames,
-      requirement_text: requirementText,
-    });
-
-    try {
-      const result = await this.llm.generateJson(prompt, "");
-      const obj = typeof result === "object" && result !== null && !Array.isArray(result)
-        ? result as Record<string, unknown>
-        : null;
-      if (!obj) {
-        return { constraints: [], exceptions: [] };
-      }
-
-      const rawConstraints = Array.isArray(obj.constraints) ? obj.constraints : [];
-      const rawExceptions = Array.isArray(obj.exceptions) ? obj.exceptions : [];
-
-      const validConstraints: Array<Record<string, unknown>> = [];
-      for (const c of rawConstraints) {
-        if (typeof c === "object" && c !== null && "description" in c) {
-          validConstraints.push(c as Record<string, unknown>);
-        }
-      }
-
-      const validExceptions: Array<Record<string, unknown>> = [];
-      for (const e of rawExceptions) {
-        if (typeof e === "object" && e !== null && "description" in e) {
-          validExceptions.push(e as Record<string, unknown>);
-        }
-      }
-
-      return { constraints: validConstraints, exceptions: validExceptions };
-    } catch {
-      return { constraints: [], exceptions: [] };
-    }
   }
 
   /**

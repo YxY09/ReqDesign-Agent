@@ -13,7 +13,7 @@
 ## 输出格式
 {"relationships":[{"entity":"X","target":"Y","type":"o2m","description":"..."}],
  "relationship_entities":[{"name":"CaseRegistration","entityKind":"process_record","description":"...","attributes":[{"name":"caseRegistrationId","type":"Long","description":"唯一标识"},{"name":"status","type":"String","description":"状态"}],"relationships":[{"target":"Case","type":"many-to-one","description":"关联案件"}],"reifies":{"source":"business_process","sourceName":"CaseRegistration","endpoints":["Case"],"evidence":["has_identifier","has_status"]}}],
- "constraints":[{"id":"Cxxx","constraintRef":"注册表中的约束ID（若已在注册表中），否则省略此字段","description":"...","related_functions":["F001"],"source_text":"文档中触发此约束的原文片段"}],
+ "constraints":[{"description":"...","related_functions":["F001"],"source_text":"文档中触发此约束的原文片段"}],
  "exceptions":[{"id":"Xxxx","description":"...","trigger":"...","handling":"..."}]}
 空字段传空数组即可。
 

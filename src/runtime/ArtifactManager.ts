@@ -316,7 +316,7 @@ export class ArtifactManager {
     let latest: Artifact | null = null;
     for (const artifact of Object.values(this._state.artifacts)) {
       if (artifact.type !== type) continue;
-      latest = artifact;
+      if (!latest || artifact.revision > latest.revision) latest = artifact;
     }
     return latest;
   }
