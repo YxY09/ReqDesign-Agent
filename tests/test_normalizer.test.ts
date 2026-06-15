@@ -313,6 +313,26 @@ describe("RequirementNormalizer", () => {
     expect(constraints.length).toBe(2);
   });
 
+  it("deduplicates exceptions with same semantics", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [],
+      constraints: [],
+      exceptions: [
+        { id: "X001", description: "支付失败", trigger: "支付网关超时", related_functions: ["F001"] },
+        { id: "X002", description: "支付失败", trigger: "支付网关超时", related_functions: ["F002"] },
+        { id: "X003", description: "库存不足", trigger: "扣减库存失败" },
+      ],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const exceptions = result.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions.length).toBe(2);
+    const payment = exceptions.find((e) => e.description === "支付失败")!;
+    expect(payment.related_functions).toEqual(["F001", "F002"]);
+  });
+
   // ----------------------------------------------------------------
   // 5. User.role
   // ----------------------------------------------------------------
@@ -470,6 +490,31 @@ describe("RequirementNormalizer", () => {
     const result = RequirementNormalizer.normalizeAgainstSource(input, "系统需要保存借阅记录并支持查询历史。");
     const entities = result.entities as Array<Record<string, unknown>>;
     expect(entities.map(e => e.name)).toContain("BorrowRecord");
+  });
+
+  it("prunes low-evidence over-extracted constraints only when the list is too large", () => {
+    const input = {
+      actors: [],
+      entities: [],
+      functions: [],
+      constraints: [
+        ...Array.from({ length: 18 }, (_, i) => ({
+          id: `C${String(i + 1).padStart(3, "0")}`,
+          description: `真实约束${i + 1}`,
+          source_text: `真实约束${i + 1}`,
+        })),
+        { id: "C019", description: "模型臆造约束A" },
+        { id: "C020", description: "模型臆造约束B" },
+      ],
+      exceptions: [],
+    };
+    const source = Array.from({ length: 18 }, (_, i) => `真实约束${i + 1}`).join("。");
+
+    const result = RequirementNormalizer.normalizeAgainstSource(input, source);
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    expect(constraints).toHaveLength(18);
+    expect(constraints.map((c) => c.id)).not.toContain("C019");
+    expect(constraints.map((c) => c.id)).not.toContain("C020");
   });
 
   it("promotes order item from product detail source text", () => {

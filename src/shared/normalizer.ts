@@ -21,6 +21,7 @@ export class RequirementNormalizer {
     RequirementNormalizer._normalizeAcronyms(analysis);
     RequirementNormalizer._ensureFunctionDetailArrays(analysis);
     RequirementNormalizer._dedupConstraints(analysis);
+    RequirementNormalizer._dedupExceptions(analysis);
     RequirementNormalizer._splitNestedEntities(analysis);
     RequirementNormalizer._deduplicateSimilarEntityNames(analysis);
     RequirementNormalizer._ensureUserRole(analysis);
@@ -39,6 +40,7 @@ export class RequirementNormalizer {
     if (!analysis || typeof analysis !== "object") return analysis;
     const source = String(requirementText ?? "");
     RequirementNormalizer._removeUnsupportedRecordEntities(analysis, source);
+    RequirementNormalizer._pruneLowEvidenceRequirementItems(analysis, source);
     RequirementNormalizer._promoteAggregationLineItems(analysis, source);
     RequirementNormalizer._promoteReifiedRelationships(analysis, source);
     return analysis;
@@ -231,6 +233,50 @@ export class RequirementNormalizer {
     if (kept.length < constraints.length) {
       analysis.constraints = kept;
     }
+  }
+
+  private static _dedupExceptions(analysis: Record<string, unknown>): void {
+    const exceptions = Array.isArray(analysis.exceptions)
+      ? analysis.exceptions as Record<string, unknown>[]
+      : [];
+    if (exceptions.length <= 1) return;
+
+    const seen = new Map<string, Record<string, unknown>>();
+    const kept: Record<string, unknown>[] = [];
+    for (const e of exceptions) {
+      const text = [
+        e.description,
+        e.trigger,
+        e.handling,
+      ].map((value) => String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join(" | ");
+      if (!text) { kept.push(e); continue; }
+
+      const existing = seen.get(text);
+      if (existing) {
+        RequirementNormalizer._mergeArrayField(existing, e, "related_functions");
+        RequirementNormalizer._mergeArrayField(existing, e, "related_constraints");
+      } else {
+        seen.set(text, e);
+        kept.push(e);
+      }
+    }
+
+    if (kept.length < exceptions.length) {
+      analysis.exceptions = kept;
+    }
+  }
+
+  private static _mergeArrayField(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+    field: string,
+  ): void {
+    const left = Array.isArray(target[field]) ? target[field] as unknown[] : [];
+    const right = Array.isArray(source[field]) ? source[field] as unknown[] : [];
+    if (right.length === 0) return;
+    target[field] = [...new Set([...left, ...right].map((item) => String(item)))];
   }
 
   // ------------------------------------------------------------------
@@ -481,6 +527,79 @@ export class RequirementNormalizer {
       analysis.entities = kept;
       RequirementNormalizer._dropRelationshipsToMissingEntities(analysis);
     }
+  }
+
+  private static _pruneLowEvidenceRequirementItems(
+    analysis: Record<string, unknown>,
+    requirementText: string,
+  ): void {
+    if (!requirementText.trim()) return;
+    RequirementNormalizer._pruneLowEvidenceList(analysis, "constraints", requirementText, 18);
+    RequirementNormalizer._pruneLowEvidenceList(analysis, "exceptions", requirementText, 12);
+  }
+
+  private static _pruneLowEvidenceList(
+    analysis: Record<string, unknown>,
+    key: "constraints" | "exceptions",
+    requirementText: string,
+    softLimit: number,
+  ): void {
+    const items = Array.isArray(analysis[key])
+      ? analysis[key] as Record<string, unknown>[]
+      : [];
+    if (items.length <= softLimit) return;
+
+    const sourceNorm = RequirementNormalizer._normalizeEvidenceText(requirementText);
+    const scored = items.map((item, index) => ({
+      item,
+      index,
+      score: RequirementNormalizer._requirementEvidenceScore(item, sourceNorm),
+    }));
+
+    const highConfidence = scored.filter((entry) => entry.score >= 2);
+    if (highConfidence.length >= Math.ceil(softLimit * 0.75)) {
+      analysis[key] = highConfidence
+        .sort((a, b) => a.index - b.index)
+        .map((entry) => entry.item);
+      return;
+    }
+
+    analysis[key] = scored
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, softLimit)
+      .sort((a, b) => a.index - b.index)
+      .map((entry) => entry.item);
+  }
+
+  private static _requirementEvidenceScore(
+    item: Record<string, unknown>,
+    normalizedSource: string,
+  ): number {
+    let score = 0;
+    const sourceText = String(item.source_text ?? item.sourceText ?? "").trim();
+    const description = String(item.description ?? "").trim();
+    const trigger = String(item.trigger ?? "").trim();
+    const handling = String(item.handling ?? "").trim();
+
+    if (sourceText && normalizedSource.includes(RequirementNormalizer._normalizeEvidenceText(sourceText))) {
+      score += 3;
+    }
+    for (const text of [description, trigger, handling]) {
+      const normalized = RequirementNormalizer._normalizeEvidenceText(text);
+      if (normalized.length >= 6 && normalizedSource.includes(normalized)) {
+        score += 2;
+      }
+    }
+    if (Array.isArray(item.related_functions) && item.related_functions.length > 0) score += 1;
+    if (Array.isArray(item.related_constraints) && item.related_constraints.length > 0) score += 1;
+    if (sourceText) score += 1;
+    return score;
+  }
+
+  private static _normalizeEvidenceText(text: string): string {
+    return String(text ?? "")
+      .toLowerCase()
+      .replace(/[\s`'"“”‘’（）()【】\[\]{}<>:：,，.。;；、|/\\_-]+/g, "");
   }
 
   // ------------------------------------------------------------------
