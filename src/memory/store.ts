@@ -17,7 +17,7 @@ import type { LLMClient } from "../llmClient.js";
 import {
   MEMORY_DIR_NAME,
   MEMORY_INDEX_NAME,
-  AGENT_TYPE_MAP,
+  AGENT_TYPES,
   MAX_INDEX_LINES,
   MAX_INDEX_BYTES,
   MAX_MEMORY_FILES,
@@ -212,7 +212,7 @@ export class MemoryStore {
    * 上下文时走同一条检索路径，保证排序一致性。
    */
   load(agentType: string): string {
-    if (!(agentType in AGENT_TYPE_MAP)) {
+    if (!AGENT_TYPES.has(agentType)) {
       this._logger.warn(`未知的 Agent 类型: ${agentType}`);
       return "";
     }
@@ -240,7 +240,7 @@ export class MemoryStore {
    */
   loadAll(): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const agentType of Object.keys(AGENT_TYPE_MAP)) {
+    for (const agentType of AGENT_TYPES) {
       result[agentType] = this.load(agentType);
     }
     return result;

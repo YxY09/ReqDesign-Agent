@@ -54,14 +54,14 @@ export const MEMORY_AGENT_TYPES = {
   EVALUATOR: "evaluator",
 } as const;
 
-/** 将 Agent 类型映射到其查询的记忆文件。 */
-export const AGENT_TYPE_MAP: Record<string, string> = {
-  planner: "planner.md",
-  generator: "generator.md",
-  evaluator: "evaluator.md",
-  coordinator: "coordinator.md",
-  repair: "generator.md",
-};
+/** 合法的 Agent 类型集合（记忆检索时用于类型校验与遍历）。 */
+export const AGENT_TYPES: ReadonlySet<string> = new Set([
+  "planner",
+  "generator",
+  "evaluator",
+  "coordinator",
+  "repair",
+]);
 
 // ---------------------------------------------------------------------------
 // 数据结构
