@@ -97,14 +97,20 @@ describe("SystemDesigner — displayId in contract", () => {
   });
 
   it("generateDesign prompt contains displayId", async () => {
-    const mockLLM = { generateText: vi.fn().mockResolvedValue("设计结果") };
+    const minimalModel = {
+      modules: [{ id: "MOD_1", name: "M", responsibility: "r", functionIds: ["F001"] }],
+      classes: [{ name: "Svc", kind: "helper", responsibility: "r" }],
+      dataFlows: [{ name: "flow", steps: ["a"], relatedFunctionIds: ["F001"] }],
+      coverageMatrix: [{ refId: "F001", refKind: "function", originalDescription: "搜索", designDecision: "d", affectedModuleIds: ["MOD_1"], affectedClassNames: ["Svc"], testImplication: "t" }],
+    };
+    const mockLLM = { generateJson: vi.fn().mockResolvedValue(minimalModel) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = {
       functions: [{ id: "FUN_SEARCH_CASE", displayId: "F001", name: "SearchCase", description: "搜索" }],
       entities: [],
     };
     await designer.generateDesign(req);
-    const prompt: string = mockLLM.generateText.mock.calls[0][0];
+    const prompt: string = mockLLM.generateJson.mock.calls[0][0];
     expect(prompt).toContain("F001");
   });
 });
