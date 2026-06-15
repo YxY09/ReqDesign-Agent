@@ -7,6 +7,8 @@ import { loadPrompt } from "../promptLoader.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
+import type { EntityRegistry } from "../shared/types.js";
+import { buildRegistrySummary } from "../shared/registrySummary.js";
 
 export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> {
   static readonly REQUIRED_FIELDS = ["actors", "functions", "entities"];
@@ -38,6 +40,7 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     systemPrompt?: string,
     existingJson?: Record<string, unknown>,
     availableConstraintsText?: string,
+    registry?: EntityRegistry,
   ): Promise<Record<string, unknown>> {
     if (!requirementText && !existingJson) {
       throw createToolError("ANALYZE_EMPTY_INPUT", "需求文本和已有分析结果不能同时为空", { recoverable: false });
@@ -54,6 +57,10 @@ export class RequirementAnalyzer extends BaseGenerator<Record<string, unknown>> 
     if (availableConstraintsText !== undefined) {
       tpl = tpl.replace(/\{available_constraints\}/g, availableConstraintsText);
     }
+    tpl = tpl.replace(
+      /\{registry_summary\}/g,
+      (registry && registry.entities.length > 0) ? buildRegistrySummary(registry) : "",
+    );
     const prompt = prefix + tpl;
 
     let result = await this.generateJsonWithRetry(prompt, systemPrompt ?? "", maxRetries);
