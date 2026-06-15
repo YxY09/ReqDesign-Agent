@@ -140,20 +140,16 @@ export class GenerationTool extends BaseTool {
 
     if (Array.isArray(hints.focus_areas) && hints.focus_areas.length > 0) {
       const focus = hints.focus_areas.map(String).join(", ");
-      text = `[重点关注: ${focus}]\\n\\n${text}`;
+      text = `[重点关注: ${focus}]\n\n${text}`;
     }
     if (hints.note) text = `[补充说明: ${hints.note}]\n\n${text}`;
     if (Array.isArray(hints.suggested_entities) && hints.suggested_entities.length > 0) {
       const entities = hints.suggested_entities.map(String).join(", ");
-      text = `[必须提取的实体（以下每个概念都必须作为独立实体出现在输出中，不得遗漏或合并）: ${entities}]\\n
-
-${text}`;
+      text = `[必须提取的实体（以下每个概念都必须作为独立实体出现在输出中，不得遗漏或合并）: ${entities}]\n\n${text}`;
     }
     if (Array.isArray(hints.suggested_functions) && hints.suggested_functions.length > 0) {
       const funcs = hints.suggested_functions.map(String).join(", ");
-      text = `[必须提取的功能（以下每个功能都必须作为独立功能项出现在输出中）: ${funcs}]\\n
-
-${text}`;
+      text = `[必须提取的功能（以下每个功能都必须作为独立功能项出现在输出中）: ${funcs}]\n\n${text}`;
     }
     const analyzer = this._getAnalyzer();
     const raw = await this.llm.runWithStreamTagContext("[Generator:analyze]", "", () =>

@@ -299,7 +299,11 @@ export class EvaluationTool extends BaseTool {
       if (!taskId) taskId = singleTaskId;
       if (!snapshots[taskId] && singleTaskId) taskId = singleTaskId;
       const snapshot = snapshots[taskId];
-      if (!snapshot) continue;
+      if (!snapshot) {
+        // taskId 为空时（LLM 未指定目标）保留 issue；非空时说明 LLM 幻觉了一个不存在的 ID，丢弃。
+        if (!taskId) filtered.push(issue);
+        continue;
+      }
 
       issue.targetTaskId = taskId;
       issue.targetTaskType = String(snapshot.type ?? "");
