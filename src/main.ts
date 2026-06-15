@@ -82,7 +82,7 @@ async function main(): Promise<void> {
     .description("ReqDesign-Agent: an LLM-based requirements analysis and system design assistant")
     .option("--goal <goal>", "Task goal: design (analyze is internal only)", "design")
     .requiredOption("-i, --input <path>", "Input requirement document path")
-    .option("-o, --output <path>", "Output directory", "outputs/")
+    .option("-o, --output <path>", "Output directory")
     .option("-c, --config <path>", "Config file path", "config.yaml")
     .option("-m, --model <model>", "Override model from config")
     .option("-p, --provider <provider>", "Override LLM provider from config")
@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   const args = program.opts<{
     goal: string;
     input: string;
-    output: string;
+    output?: string;
     config: string;
     model?: string;
     provider?: string;
@@ -110,6 +110,7 @@ async function main(): Promise<void> {
   }
 
   const { config } = loadConfig(args);
+  const output = args.output ?? config.output.defaultDir;
 
   if (args.benchmark) {
     const streamer = new ConsoleWorkflowStreamer();
@@ -117,7 +118,7 @@ async function main(): Promise<void> {
       config,
       args.input,
       "benchmark/gold_labels",
-      args.output,
+      output,
     );
     const report = await runner.runAll({
       onEvent: (event) => streamer.push(event),
@@ -125,7 +126,7 @@ async function main(): Promise<void> {
     streamer.close();
     const summary = (report.summary as Record<string, unknown> | undefined) ?? {};
     const benchLines = [
-      `Benchmark complete. Output directory: ${args.output}`,
+      `Benchmark complete. Output directory: ${output}`,
       `Passed: ${String(summary.passed ?? 0)} / ${String(report.total_cases ?? 0)}`,
       `Average overall: ${String((summary.avg_scores as Record<string, unknown> | undefined)?.overall ?? 0)}`,
     ];
@@ -138,13 +139,13 @@ async function main(): Promise<void> {
 
   const streamer = new ConsoleWorkflowStreamer();
   const runtime = new MultiAgentRuntime(config, args.executionBackend);
-  const state = await runtime.run(args.goal, args.input, args.output, {
+  const state = await runtime.run(args.goal, args.input, output, {
     onEvent: (event) => streamer.push(event),
   });
   streamer.close();
 
   const summaryLines = [
-    `Run ended. Output directory: ${args.output}`,
+    `Run ended. Output directory: ${output}`,
     `  backend: ${runtime.executionBackendName}`,
     `  artifacts: ${String(state.totalArtifacts)}`,
     `  finished: ${state.finished ? "yes" : "no"}`,

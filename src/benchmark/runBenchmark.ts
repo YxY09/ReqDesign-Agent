@@ -4,6 +4,7 @@ import type { AgentConfig } from "../config.js";
 import { setupLogger } from "../logger.js";
 import { LLMClient } from "../llmClient.js";
 import { MultiAgentRuntime } from "../runtime.js";
+import { OutputManager } from "../outputManager.js";
 import { createWorkflowEvent, type WorkflowEvent, type WorkflowEventSink } from "../workflowEvents.js";
 import {
   casePassed,
@@ -40,6 +41,7 @@ export interface RuntimeLike {
     finalReviewPassed: boolean;
     persisted: boolean;
     qualityStatus: string;
+    reviewResult: Record<string, unknown>;
   }>;
   cancel(reason?: string): void;
 }
@@ -53,6 +55,16 @@ export class BenchmarkRunner {
   private readonly runtimeFactory: RuntimeFactory;
 
   /**
+   * All benchmark artifacts — case outputs, summary reports, and the
+   * aggregate report — are grouped under a `benchmark` subdirectory of the
+   * caller-provided base output dir, so they align with the `.bat` log files
+   * (also written under `outputs/benchmark/`).
+   */
+  private readonly benchmarkDir: string;
+
+  /**
+   * @param outputDir base output directory (e.g. `outputs/`); benchmark
+   *   artifacts are nested under `<outputDir>/benchmark/`.
    * @param judge optional coverage judge; defaults to an LLMClient built from
    *   `config` (constructed lazily so report/discovery helpers need no LLM).
    * @param runtimeFactory optional factory for creating runtime instances;
@@ -62,12 +74,13 @@ export class BenchmarkRunner {
     private readonly config: AgentConfig,
     private readonly casesDir: string,
     private readonly goldDir: string,
-    private readonly outputDir: string,
+    outputDir: string,
     judge?: JudgeClient,
     runtimeFactory?: RuntimeFactory,
   ) {
     this.judge = judge;
     this.runtimeFactory = runtimeFactory ?? ((c) => new MultiAgentRuntime(c));
+    this.benchmarkDir = join(outputDir, "benchmark");
   }
 
   private coverageJudge(): JudgeClient {
@@ -113,7 +126,7 @@ export class BenchmarkRunner {
     }
 
     try {
-      const caseOutputDir = join(this.outputDir, testCase.name);
+      const caseOutputDir = join(this.benchmarkDir, testCase.name);
       const runtime = this.runtimeFactory(this.config);
       const timeoutSeconds = this.config.benchmark.caseTimeoutSeconds;
 
@@ -168,6 +181,19 @@ export class BenchmarkRunner {
       const gateFailures = caseGateFailures(gateInput);
       const passed = casePassed(gateInput);
 
+      // Best-effort: generate summary_report.md for the benchmark case. The
+      // normal exit path bypasses OutputManager.saveAll (which generates the
+      // summary), so benchmark runs otherwise lose this artifact. Wrap in
+      // try/catch so a summary failure never affects case scoring.
+      try {
+        const manager = new OutputManager(caseOutputDir);
+        manager.generateSummary(result, state.reviewResult);
+      } catch (summaryError: unknown) {
+        this.logger.warn(
+          `summary_report.md generation failed for ${testCase.name}: ${summaryError instanceof Error ? summaryError.message : String(summaryError)}`,
+        );
+      }
+
       this.emitEvent("benchmark_case_completed", `case ${testCase.name} completed`, {
         caseName: testCase.name,
         status: passed ? "completed" : "failed",
@@ -208,7 +234,7 @@ export class BenchmarkRunner {
     const cases = this.findCases();
     this.emitEvent("benchmark_started", `benchmark started with ${cases.length} cases`, {
       status: "running",
-      data: { casesDir: this.casesDir, outputDir: this.outputDir, totalCases: cases.length },
+      data: { casesDir: this.casesDir, outputDir: this.benchmarkDir, totalCases: cases.length },
     }, options?.onEvent);
 
     const results: BenchmarkCaseResult[] = [];
@@ -225,9 +251,9 @@ export class BenchmarkRunner {
     };
 
     if (cases.length > 0) {
-      mkdirSync(this.outputDir, { recursive: true });
-      writeFileSync(join(this.outputDir, "benchmark_report.json"), JSON.stringify(report, null, 2), "utf8");
-      writeFileSync(join(this.outputDir, "benchmark_report.md"), this.generateMdReport(report), "utf8");
+      mkdirSync(this.benchmarkDir, { recursive: true });
+      writeFileSync(join(this.benchmarkDir, "benchmark_report.json"), JSON.stringify(report, null, 2), "utf8");
+      writeFileSync(join(this.benchmarkDir, "benchmark_report.md"), this.generateMdReport(report), "utf8");
     }
 
     this.emitEvent("benchmark_completed", "benchmark completed", {

@@ -6,6 +6,7 @@ import type { Artifact } from "../shared/types.js";
 import type { TaskMailbox } from "../messaging.js";
 import type { OutputManager } from "../outputManager.js";
 import type { WorkflowEvent } from "../workflowEvents.js";
+import type { TraceFlags } from "../config.js";
 import { formatReviewReport } from "../formatReviewReport.js";
 import { isRecord } from "../utils/isRecord.js";
 import { validateReview } from "../shared/reviewValidator.js";
@@ -32,6 +33,8 @@ export interface PersistenceServiceDeps {
   ) => void;
   /** Take a snapshot of the current WorkflowState for event payloads. */
   onSnapshotState: (state: WorkflowState) => Record<string, unknown>;
+  /** Resolved trace output flags (drives which trace files get written). */
+  traceFlags: TraceFlags;
 }
 
 /**
@@ -245,21 +248,38 @@ export class PersistenceService {
     try {
       mkdirSync(state.outputDir, { recursive: true });
       const manager = new this.deps.outputManagerCtor(state.outputDir);
-      manager.saveTraceJson("run_summary.json", state.runSummary);
-      manager.saveTraceJson("multi_agent_trace.json", {
-        summary: state.runSummary,
-        goal: state.goal,
-        finished: state.finished,
-        persisted: state.persisted,
-        run_status: state.runStatus,
-        quality_status: state.qualityStatus,
-        persist_status: state.persistStatus,
-        duration: state.duration(),
-        notifications: this.deps.mailbox.peekAllNotifications(),
-      });
-      if (this.deps.trace.entries.length > 0) {
+      const flags = this.deps.traceFlags;
+
+      // run_summary.json is small and canonical; gated by `output.trace.run_summary`
+      // (on by default; the boolean kill-switch `trace: false` still keeps it on).
+      if (flags.runSummary) {
+        manager.saveTraceJson("run_summary.json", state.runSummary);
+      }
+
+      // multi_agent_trace.json: lightweight multi-agent collaboration info.
+      // The full mailbox notification dump is gated behind multiAgentTraceFullDump
+      // (off by default — it was the 6.5MB bloat source). The `summary` field is
+      // intentionally NOT duplicated here (it equals run_summary.json).
+      if (flags.multiAgentTrace) {
+        const tracePayload: Record<string, unknown> = {
+          goal: state.goal,
+          finished: state.finished,
+          persisted: state.persisted,
+          run_status: state.runStatus,
+          quality_status: state.qualityStatus,
+          persist_status: state.persistStatus,
+          duration: state.duration(),
+        };
+        if (flags.multiAgentTraceFullDump) {
+          tracePayload.notifications = this.deps.mailbox.peekAllNotifications();
+        }
+        manager.saveTraceJson("multi_agent_trace.json", tracePayload);
+      }
+
+      if (flags.llmTrace && this.deps.trace.entries.length > 0) {
         manager.saveTrace("llm_trace.json", this.deps.trace.exportJson());
       }
+
       this.deps.onEmitRuntimeEvent("trace_exported", "trace files exported", {
         goal: state.goal,
         phase: "persist",
@@ -268,21 +288,23 @@ export class PersistenceService {
       });
 
       // Traceability matrix
-      try {
-        const matrix = buildMatrix(
-          state.requirementJson as Record<string, unknown>,
-          state.designText ?? "",
-          state.testCases ?? "",
-          state.spanMap,
-        );
-        manager.saveTraceJson("traceability_matrix.json", matrix as unknown as Record<string, unknown>);
-        this.deps.logger.info(
-          `Traceability: ${matrix.uncoveredConstraints.length} uncovered constraints, ${matrix.uncoveredFunctions.length} uncovered functions, ${matrix.uncoveredExceptions.length} uncovered exceptions`,
-        );
-      } catch (matrixError: unknown) {
-        this.deps.logger.warn(
-          "traceability matrix build failed: " + (matrixError instanceof Error ? matrixError.message : String(matrixError)),
-        );
+      if (flags.traceabilityMatrix) {
+        try {
+          const matrix = buildMatrix(
+            state.requirementJson as Record<string, unknown>,
+            state.designText ?? "",
+            state.testCases ?? "",
+            state.spanMap,
+          );
+          manager.saveTraceJson("traceability_matrix.json", matrix as unknown as Record<string, unknown>);
+          this.deps.logger.info(
+            `Traceability: ${matrix.uncoveredConstraints.length} uncovered constraints, ${matrix.uncoveredFunctions.length} uncovered functions, ${matrix.uncoveredExceptions.length} uncovered exceptions`,
+          );
+        } catch (matrixError: unknown) {
+          this.deps.logger.warn(
+            "traceability matrix build failed: " + (matrixError instanceof Error ? matrixError.message : String(matrixError)),
+          );
+        }
       }
     } catch (error: unknown) {
       this.deps.logger.warn(

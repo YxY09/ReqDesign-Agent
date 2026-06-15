@@ -180,6 +180,7 @@ describe("BenchmarkRunner", () => {
       finalReviewPassed: true,
       persisted: true,
       qualityStatus: "passed",
+      reviewResult: {},
     };
     const mockFactory: RuntimeFactory = () => ({
       run: () => Promise.resolve(mockState),
@@ -226,6 +227,7 @@ describe("BenchmarkRunner", () => {
       finalReviewPassed: false,
       persisted: false,
       qualityStatus: "rejected",
+      reviewResult: {},
     };
     const mockFactory: RuntimeFactory = () => ({
       run: () => Promise.resolve(mockState),

@@ -14,6 +14,12 @@ retry:
 
 output:
   default_dir: outputs/
+  trace:
+    run_summary: true
+    llm_trace: true
+    multi_agent_trace: true
+    traceability_matrix: true
+    multi_agent_trace_full_dump: false
 
 logging:
   level: INFO
