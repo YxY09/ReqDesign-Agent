@@ -7,7 +7,7 @@
  */
 
 import type { SpanEvidence } from "./documentNormalizer.js";
-import { semanticCoverageState } from "./semanticCoverage.js";
+import type { DesignModel } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -17,6 +17,8 @@ export interface TraceabilityMatrix {
   functionToConstraints: Record<string, string[]>;   // functionId → constraintId[]
   constraintToFunctions: Record<string, string[]>;    // constraintId → functionId[]
   constraintToDesign: Record<string, string[]>;       // constraintId → designDecision[]
+  functionToDesign: Record<string, string[]>;         // functionId → designDecision[]
+  exceptionToDesign: Record<string, string[]>;        // exceptionId → designDecision[]
   constraintToTests: Record<string, string[]>;        // constraintId → testCaseId[]
   constraintToEvidence: Record<string, string[]>;     // constraintId → sentenceId[]
   functionToTests: Record<string, string[]>;
@@ -29,6 +31,60 @@ export interface TraceabilityMatrix {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/** Coerce an unknown value to a trimmed string array. */
+function asArrayOfStrings(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.map((v) => String(v ?? "").trim()).filter(Boolean);
+}
+
+/**
+ * Resolve a raw function reference (displayId F001 or canonicalId
+ * FUN_USER_REGISTER) to its displayId, when it belongs to the known function
+ * display set. Returns "" if it cannot be resolved.
+ */
+function resolveDisplayFunctionId(
+  rawFid: string,
+  funcDisplay: Set<string>,
+  canonicalToDisplay: Map<string, string>,
+): string {
+  const trimmed = rawFid.trim();
+  if (!trimmed) return "";
+  if (funcDisplay.has(trimmed)) return trimmed;
+  const mapped = canonicalToDisplay.get(trimmed);
+  if (mapped && funcDisplay.has(mapped)) return mapped;
+  // A bare canonical FUN_ id with no displayId mapping cannot be keyed.
+  return "";
+}
+
+interface RefIdLookup {
+  funcDisplay: Set<string>;
+  funcMap: Map<string, string>;
+  conDisplay: Set<string>;
+  conMap: Map<string, string>;
+  excDisplay: Set<string>;
+  excMap: Map<string, string>;
+}
+
+/**
+ * Normalize a coverageMatrix entry refId (which may be a displayId or a
+ * canonicalId) to its displayId, using the refKind to pick the right lookup.
+ */
+function normalizeRefId(rawRefId: string, refKind: string, lookup: RefIdLookup): string {
+  const id = rawRefId.trim();
+  if (!id) return "";
+  let display: Set<string>;
+  let map: Map<string, string>;
+  if (refKind === "function") { display = lookup.funcDisplay; map = lookup.funcMap; }
+  else if (refKind === "exception") { display = lookup.excDisplay; map = lookup.excMap; }
+  else { display = lookup.conDisplay; map = lookup.conMap; }
+  if (display.has(id)) return id;
+  const mapped = map.get(id);
+  if (mapped && display.has(mapped)) return mapped;
+  // If the refId is itself a displayId shape but not in the set (orphan),
+  // keep it only when it is a displayId-shaped token matching the kind.
+  return "";
+}
 
 /** Identical to coverageValidator.ts's asArray — safely cast unknown to array. */
 function asArray(val: unknown): Record<string, unknown>[] {
@@ -86,51 +142,104 @@ function resolveSentenceIds(
 }
 
 // ---------------------------------------------------------------------------
-// ID extraction helpers
+// ID extraction helpers (displayId only — canonicalIds are normalized away)
 // ---------------------------------------------------------------------------
 
 const RE_DISPLAY_CONSTRAINT = /\bC\d{3}\b/g;
-const RE_CANONICAL_CONSTRAINT = /\bCON_[A-Za-z0-9_]+\b/g;
 const RE_DISPLAY_FUNCTION = /\bF\d{3}\b/g;
-const RE_CANONICAL_FUNCTION = /\bFUN_[A-Za-z0-9_]+\b/g;
 const RE_DISPLAY_EXCEPTION = /\bX\d{3}\b/g;
-const RE_CANONICAL_EXCEPTION = /\bEXC_[A-Za-z0-9_]+\b/g;
 
 function extractConstraintRefs(text: string): string[] {
-  const refs = new Set<string>();
-  for (const m of text.match(RE_DISPLAY_CONSTRAINT) ?? []) refs.add(m);
-  for (const m of text.match(RE_CANONICAL_CONSTRAINT) ?? []) refs.add(m);
-  return [...refs];
+  return [...new Set(text.match(RE_DISPLAY_CONSTRAINT) ?? [])];
 }
 
 function extractFunctionRefs(text: string): string[] {
-  const refs = new Set<string>();
-  for (const m of text.match(RE_DISPLAY_FUNCTION) ?? []) refs.add(m);
-  for (const m of text.match(RE_CANONICAL_FUNCTION) ?? []) refs.add(m);
-  return [...refs];
+  return [...new Set(text.match(RE_DISPLAY_FUNCTION) ?? [])];
 }
 
 function extractExceptionRefs(text: string): string[] {
-  const refs = new Set<string>();
-  for (const m of text.match(RE_DISPLAY_EXCEPTION) ?? []) refs.add(m);
-  for (const m of text.match(RE_CANONICAL_EXCEPTION) ?? []) refs.add(m);
-  return [...refs];
+  return [...new Set(text.match(RE_DISPLAY_EXCEPTION) ?? [])];
 }
 
-/** Build a set of all recognized IDs (canonical + display) for a given entity type. */
-function buildIdSet(items: Record<string, unknown>[]): { canonical: Set<string>; display: Set<string>; all: Set<string> } {
-  const canonical = new Set<string>();
-  const display = new Set<string>();
-  const all = new Set<string>();
+/**
+ * Parse test-cases text into {id, target} pairs. Supports structured JSON
+ * ({test_cases:[...]} or a bare array, optionally fenced in ```json) and
+ * markdown sections ("## TC-...: title" + "**测试对象**: ...").
+ *
+ * Inlined here (rather than imported from generators/tests.ts) to keep this
+ * shared module free of a shared→generators cross-layer dependency. Mirrors
+ * the parsing patterns in reviewValidator._parseTestCaseEntries and
+ * TestCaseGenerator.parseStructuredTestCases.
+ */
+function parseTestCaseTargets(text: string): Array<{ id: string; target: string }> {
+  const entries: Array<{ id: string; target: string }> = [];
 
-  for (const item of items) {
-    const cid = String(item.id ?? "");
-    const did = String(item.displayId ?? "");
-    if (cid) { canonical.add(cid); all.add(cid); }
-    if (did) { display.add(did); all.add(did); }
+  // Strip a surrounding code fence if present.
+  let body = text.trim();
+  if (body.startsWith("```")) {
+    const firstNl = body.indexOf("\n");
+    const lastFence = body.lastIndexOf("```");
+    if (firstNl >= 0 && lastFence > firstNl) {
+      body = body.slice(firstNl + 1, lastFence).trim();
+    }
   }
 
-  return { canonical, display, all };
+  // Structured JSON ({test_cases:[...]} or a bare array)
+  if (body.startsWith("{") || body.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(body) as unknown;
+      const arr: unknown[] = Array.isArray(parsed)
+        ? parsed
+        : typeof parsed === "object" && parsed !== null &&
+            Array.isArray((parsed as Record<string, unknown>).test_cases)
+          ? (parsed as Record<string, unknown>).test_cases as unknown[]
+          : [];
+      for (const item of arr) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const id = String(rec.id ?? "").trim();
+        const target = String(rec.target ?? "").trim();
+        if (id && target) entries.push({ id, target });
+      }
+      if (entries.length > 0) return entries;
+    } catch {
+      // fall through to markdown parsing
+    }
+  }
+
+  // Markdown sections: "## TC-...: title" then "- **测试对象**: ..."
+  const sections = text.split(/^##\s+/m);
+  for (const section of sections) {
+    if (!/^TC-/.test(section)) continue;
+    const idMatch = section.match(/^(TC-[A-Z]-\d{3,})/);
+    const targetMatch = section.match(/\*\*测试对象\*\*:\s*([^\n]*)/);
+    const id = (idMatch?.[1] ?? "").trim();
+    const target = (targetMatch?.[1] ?? "").trim();
+    if (id && target) entries.push({ id, target });
+  }
+  return entries;
+}
+
+/**
+ * Build ID lookup helpers for an entity collection. Returns the set of
+ * displayIds plus a canonical→display map so that related_functions (which
+ * carry canonicalIds like FUN_USER_REGISTER) can be resolved to displayIds.
+ */
+function buildIdSet(items: Record<string, unknown>[]): {
+  display: Set<string>;
+  canonicalToDisplay: Map<string, string>;
+} {
+  const display = new Set<string>();
+  const canonicalToDisplay = new Map<string, string>();
+
+  for (const item of items) {
+    const cid = String(item.id ?? "").trim();
+    const did = String(item.displayId ?? "").trim();
+    if (did) display.add(did);
+    if (cid && did) canonicalToDisplay.set(cid, did);
+  }
+
+  return { display, canonicalToDisplay };
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +253,10 @@ function buildIdSet(items: Record<string, unknown>[]): { canonical: Set<string>;
  * @param requirementJson - The analysis.json structure (functions, constraints, exceptions).
  * @param designText - System design document text (optional).
  * @param testCasesText - Test cases document text (optional).
+ * @param spanMap - Optional span evidence map.
+ * @param designModel - Optional structured DesignModel; when provided, its
+ *   coverageMatrix drives constraintToDesign/functionToDesign/exceptionToDesign
+ *   instead of the raw designText (which is self-referential and unreliable).
  * @returns A fully populated TraceabilityMatrix.
  */
 export function buildMatrix(
@@ -151,6 +264,7 @@ export function buildMatrix(
   designText?: string,
   testCasesText?: string,
   spanMap?: SpanMapInput,
+  designModel?: DesignModel,
 ): TraceabilityMatrix {
   const functions = asArray(requirementJson["functions"]);
   const constraints = asArray(requirementJson["constraints"]);
@@ -159,44 +273,44 @@ export function buildMatrix(
 
   const funcIds = buildIdSet(functions);
 
-  const designStr = designText ?? "";
+  // design coverage is sourced from designModel.coverageMatrix when available;
+  // otherwise fall back to a non-self-referential presence check against the
+  // design text (constraint displayId mentioned → marked as designed).
   const testsStr = testCasesText ?? "";
 
   // --- functionToConstraints / constraintToFunctions (from related_functions) ---
+  // Keys are displayIds only. related_functions carry canonicalIds, so resolve
+  // them through the canonical→display map before keying.
   const functionToConstraints: Record<string, string[]> = {};
   const constraintToFunctions: Record<string, string[]> = {};
 
   for (const c of constraints) {
-    const cid = String(c.id ?? "");
-    const did = String(c.displayId ?? "");
+    const did = String(c.displayId ?? "").trim();
+    if (!did) continue;
     const related = asArray(c["related_functions"] ?? c["relatedFunctions"] ?? []);
 
-    const funcRefs: string[] = [];
+    const entry: string[] = [];
     for (const rel of related) {
       const relStr = String(rel);
       // It could be the functionId directly, or an object with functionId
       if (typeof rel === "object" && rel !== null) {
-        const fnId = String((rel as Record<string, unknown>).functionId ?? "");
-        if (fnId) funcRefs.push(fnId);
+        const fnId = String((rel as Record<string, unknown>).functionId ?? "").trim();
+        if (fnId) funcRefsPush(fnId);
       } else if (relStr) {
-        funcRefs.push(relStr);
+        funcRefsPush(relStr.trim());
       }
     }
 
-    const entry: string[] = [];
-    for (const fid of funcRefs) {
-      if (funcIds.all.has(fid)) {
-        entry.push(fid);
-        // Add to functionToConstraints
-        if (!functionToConstraints[fid]) functionToConstraints[fid] = [];
-        if (did && !functionToConstraints[fid].includes(did)) functionToConstraints[fid].push(did);
-        if (cid && !functionToConstraints[fid].includes(cid)) functionToConstraints[fid].push(cid);
-      }
+    function funcRefsPush(rawFid: string): void {
+      const fid = resolveDisplayFunctionId(rawFid, funcIds.display, funcIds.canonicalToDisplay);
+      if (!fid) return;
+      if (!entry.includes(fid)) entry.push(fid);
+      if (!functionToConstraints[fid]) functionToConstraints[fid] = [];
+      if (!functionToConstraints[fid].includes(did)) functionToConstraints[fid].push(did);
     }
 
     if (entry.length > 0) {
-      if (did) constraintToFunctions[did] = entry;
-      if (cid) constraintToFunctions[cid] = entry;
+      constraintToFunctions[did] = entry;
     }
   }
 
@@ -204,8 +318,8 @@ export function buildMatrix(
   const constraintToEvidence: Record<string, string[]> = {};
 
   for (const c of constraints) {
-    const cid = String(c.id ?? "");
-    const did = String(c.displayId ?? "");
+    const did = String(c.displayId ?? "").trim();
+    if (!did) continue;
     const evidence = asArray(c["evidence"] ?? []);
 
     const sentenceIds: string[] = [];
@@ -221,90 +335,127 @@ export function buildMatrix(
     }
 
     if (sentenceIds.length > 0) {
-      if (did) constraintToEvidence[did] = sentenceIds;
-      if (cid) constraintToEvidence[cid] = sentenceIds;
+      constraintToEvidence[did] = sentenceIds;
     }
   }
 
-  // --- constraintToDesign ---
+  // --- constraintToDesign / functionToDesign / exceptionToDesign ---
+  // Prefer the structured DesignModel.coverageMatrix when available (it carries
+  // real module/class names). Otherwise fall back to the design text. Keys are
+  // displayIds only; refId may be a displayId or a canonicalId, so normalize via
+  // lookup maps built from the requirement collections.
   const constraintToDesign: Record<string, string[]> = {};
-  if (designStr) {
-    const designRefs = new Set(extractConstraintRefs(designStr));
+  const functionToDesign: Record<string, string[]> = {};
+  const exceptionToDesign: Record<string, string[]> = {};
+
+  if (designModel && Array.isArray(designModel.coverageMatrix)) {
+    const conLookup = buildIdSet(constraints);
+    const excLookup = buildIdSet(exceptions);
+    const lookup: RefIdLookup = {
+      funcDisplay: funcIds.display,
+      funcMap: funcIds.canonicalToDisplay,
+      conDisplay: conLookup.display,
+      conMap: conLookup.canonicalToDisplay,
+      excDisplay: excLookup.display,
+      excMap: excLookup.canonicalToDisplay,
+    };
+    for (const entry of designModel.coverageMatrix) {
+      const rawRefId = String(entry.refId ?? "").trim();
+      if (!rawRefId) continue;
+      const refKind = String(entry.refKind ?? "").trim();
+      const displayId = normalizeRefId(rawRefId, refKind, lookup);
+      if (!displayId) continue;
+
+      // A coverageMatrix entry existing for this refId means the design
+      // addressed it. Collect real module/class names when present.
+      const designTargets: string[] = [
+        ...asArrayOfStrings(entry.affectedModuleIds),
+        ...asArrayOfStrings(entry.affectedClassNames),
+      ];
+      if (designTargets.length === 0) designTargets.push("design");
+
+      const bucket = refKind === "function" ? functionToDesign
+        : refKind === "exception" ? exceptionToDesign
+        : constraintToDesign;
+      if (!bucket[displayId]) bucket[displayId] = [];
+      pushUnique(bucket[displayId], designTargets);
+    }
+  } else if (designText) {
+    // Non-self-referential fallback: a constraint is "designed" when its
+    // displayId is mentioned in the design text.
+    const designRefs = new Set(extractConstraintRefs(designText));
     for (const c of constraints) {
-      const cid = String(c.id ?? "");
-      const did = String(c.displayId ?? "");
-      if (!designRefs.has(cid) && !designRefs.has(did)) continue;
-      if (semanticCoverageState(
-        designStr,
-        c,
-        ["description", "text", "source_text", "sourceText"],
-      ) !== "covered") continue;
-      for (const ref of [did, cid].filter(Boolean)) {
-        if (!constraintToDesign[ref]) constraintToDesign[ref] = [];
-        constraintToDesign[ref].push(ref);
+      const did = String(c.displayId ?? "").trim();
+      if (did && designRefs.has(did)) {
+        constraintToDesign[did] = ["design"];
       }
     }
   }
 
-  // --- constraintToTests ---
+  // --- constraintToTests / functionToTests / exceptionToTests ---
+  // Each maps a constraint/function/exception displayId → the list of test
+  // case IDs (TC-xxx) that target it. When the test-cases text is parseable
+  // into {id, target} pairs (structured JSON or markdown), map properly so
+  // the values are real TC-xxx ids. When it is plain text with no TC ids,
+  // fall back to presence detection (key exists) so coverage booleans still
+  // work — there is simply no TC id to record in that case.
   const constraintToTests: Record<string, string[]> = {};
-  if (testsStr) {
-    const testConstraintRefs = extractConstraintRefs(testsStr);
-    for (const ref of testConstraintRefs) {
-      if (!constraintToTests[ref]) constraintToTests[ref] = [];
-      constraintToTests[ref].push(ref);
-    }
-  }
-
-  // --- functionToTests ---
   const functionToTests: Record<string, string[]> = {};
-  if (testsStr) {
-    const testFuncRefs = extractFunctionRefs(testsStr);
-    for (const ref of testFuncRefs) {
-      if (!functionToTests[ref]) functionToTests[ref] = [];
-      functionToTests[ref].push(ref);
-    }
-  }
-
-  // --- exceptionToTests ---
   const exceptionToTests: Record<string, string[]> = {};
   if (testsStr) {
-    const testExRefs = extractExceptionRefs(testsStr);
-    for (const ref of testExRefs) {
-      if (!exceptionToTests[ref]) exceptionToTests[ref] = [];
-      exceptionToTests[ref].push(ref);
+    const parsedTests = parseTestCaseTargets(testsStr);
+    if (parsedTests.length > 0) {
+      for (const { id, target } of parsedTests) {
+        for (const ref of extractConstraintRefs(target)) {
+          if (!constraintToTests[ref]) constraintToTests[ref] = [];
+          if (!constraintToTests[ref].includes(id)) constraintToTests[ref].push(id);
+        }
+        for (const ref of extractFunctionRefs(target)) {
+          if (!functionToTests[ref]) functionToTests[ref] = [];
+          if (!functionToTests[ref].includes(id)) functionToTests[ref].push(id);
+        }
+        for (const ref of extractExceptionRefs(target)) {
+          if (!exceptionToTests[ref]) exceptionToTests[ref] = [];
+          if (!exceptionToTests[ref].includes(id)) exceptionToTests[ref].push(id);
+        }
+      }
+    } else {
+      // Plain-text fallback: no TC ids to map to — record presence only.
+      for (const ref of extractConstraintRefs(testsStr)) constraintToTests[ref] = [ref];
+      for (const ref of extractFunctionRefs(testsStr)) functionToTests[ref] = [ref];
+      for (const ref of extractExceptionRefs(testsStr)) exceptionToTests[ref] = [ref];
     }
   }
 
   // --- uncovered computation ---
   const uncoveredConstraints: string[] = [];
   for (const c of constraints) {
-    const did = String(c.displayId ?? "");
-    const cid = String(c.id ?? "");
-    const inDesign = (did && constraintToDesign[did]) || (cid && constraintToDesign[cid]);
-    const inTests = (did && constraintToTests[did]) || (cid && constraintToTests[cid]);
+    const did = String(c.displayId ?? "").trim();
+    if (!did) continue;
+    const inDesign = Boolean(constraintToDesign[did]);
+    const inTests = Boolean(constraintToTests[did]);
     if (!inDesign && !inTests) {
-      uncoveredConstraints.push(did || cid);
+      uncoveredConstraints.push(did);
     }
   }
 
   const uncoveredFunctions: string[] = [];
   for (const f of functions) {
-    const did = String(f.displayId ?? "");
-    const fid = String(f.id ?? "");
-    const inTests = (did && functionToTests[did]) || (fid && functionToTests[fid]);
+    const did = String(f.displayId ?? "").trim() || String(f.id ?? "").trim();
+    if (!did) continue;
+    const inTests = Boolean(functionToTests[did]);
     if (!inTests) {
-      uncoveredFunctions.push(did || fid);
+      uncoveredFunctions.push(did);
     }
   }
 
   const uncoveredExceptions: string[] = [];
   for (const e of exceptions) {
-    const did = String(e.displayId ?? "");
-    const eid = String(e.id ?? "");
-    const inTests = (did && exceptionToTests[did]) || (eid && exceptionToTests[eid]);
+    const did = String(e.displayId ?? "").trim() || String(e.id ?? "").trim();
+    if (!did) continue;
+    const inTests = Boolean(exceptionToTests[did]);
     if (!inTests) {
-      uncoveredExceptions.push(did || eid);
+      uncoveredExceptions.push(did);
     }
   }
 
@@ -312,6 +463,8 @@ export function buildMatrix(
     functionToConstraints,
     constraintToFunctions,
     constraintToDesign,
+    functionToDesign,
+    exceptionToDesign,
     constraintToTests,
     constraintToEvidence,
     functionToTests,

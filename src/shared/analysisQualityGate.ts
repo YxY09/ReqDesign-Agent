@@ -292,30 +292,40 @@ export function checkAnalysisQuality(
     }
   }
 
-  // 9. No unverified constraints
+  // 9. No unverified constraints + all exceptions/constraints have source_text
   {
     let unverifiedCount = 0;
-    if (sourceText && sourceText.trim().length > 0) {
-      const normalizedSource = normalizeForMatch(sourceText);
-      for (const listKey of ["constraints", "exceptions"] as const) {
-        const items = arrVal(analysis, listKey);
-        for (const item of items) {
-          const st = String(item.source_text ?? "").trim();
-          if (!st) continue;
+    let missingSourceCount = 0;
+
+    // Always check for empty source_text on constraints and exceptions
+    for (const listKey of ["constraints", "exceptions"] as const) {
+      const items = arrVal(analysis, listKey);
+      for (const item of items) {
+        const st = String(item.source_text ?? "").trim();
+        if (!st) {
+          missingSourceCount++;
+          continue;
+        }
+        // Verify source_text exists in source only when sourceText is provided
+        if (sourceText && sourceText.trim().length > 0) {
           const normalized = normalizeForMatch(st);
+          const normalizedSource = normalizeForMatch(sourceText);
           if (!normalizedSource.includes(normalized)) {
             unverifiedCount++;
           }
         }
       }
     }
-    const passed = unverifiedCount === 0;
+    const passed = unverifiedCount === 0 && missingSourceCount === 0;
+    const detailParts: string[] = [];
+    if (unverifiedCount > 0) detailParts.push(`${unverifiedCount} unverified source_text reference(s)`);
+    if (missingSourceCount > 0) detailParts.push(`${missingSourceCount} item(s) missing source_text`);
     checks.push({
       name: "no_unverified_constraints",
       passed,
       detail: passed
         ? "All source_text references verified"
-        : `${unverifiedCount} unverified source_text reference(s)`,
+        : detailParts.join("; "),
     });
   }
 

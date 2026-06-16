@@ -15,6 +15,10 @@ export interface RequirementTargetRef {
 
 const ID_RE = /\b(?:F\d{3,4}|C\d{3,4}|[EX]\d{3,4}|FUN_[A-Za-z0-9_]+|CON_[A-Za-z0-9_]+|EXC_[A-Za-z0-9_]+)\b/g;
 const TARGET_PAIR_RE = /\b([FCX]\d{3,4})\s*\|\s*((?:FUN|CON|EXC)_[A-Za-z0-9_]+)/g;
+// A bare canonicalId not already part of a “displayId | canonicalId” pair.
+// The negative lookbehind avoids double-rewriting the canonicalId that sits
+// after a “|” in an existing pair.
+const BARE_CANONICAL_RE = /(?<!\|\s)\b(FUN_[A-Za-z0-9_]+|CON_[A-Za-z0-9_]+|EXC_[A-Za-z0-9_]+)\b/g;
 
 const KEYWORDS = [
   "help",
@@ -141,7 +145,20 @@ export class RequirementIndex {
 
   normalizeTargetReferences(target: string, testCase: Record<string, unknown>): string {
     const originalTarget = target.trim();
-    const normalized = originalTarget.replace(
+    // Pre-rewrite: a bare canonicalId (CON_/FUN_/EXC_) with no displayId is
+    // likely a fabricated target. When the canonicalId maps to a known
+    // displayId, rewrite it into the canonical “displayId | canonicalId”
+    // pair so the downstream TARGET_PAIR_RE pass validates it; otherwise it
+    // is left as-is and removeUnknownRefs drops it.
+    const preRewritten = originalTarget.replace(
+      BARE_CANONICAL_RE,
+      (canonicalRaw) => {
+        const canonicalId = canonicalRaw.trim();
+        const displayId = this.canonicalToDisplay.get(canonicalId);
+        return displayId ? `${displayId} | ${canonicalId}` : canonicalId;
+      },
+    );
+    const normalized = preRewritten.replace(
       TARGET_PAIR_RE,
       (_match, displayRaw: string, canonicalRaw: string) => {
         const displayId = displayRaw.trim();

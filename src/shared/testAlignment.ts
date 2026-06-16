@@ -36,6 +36,11 @@ export const TARGET_ALIGNMENT_REJECT_THRESHOLD = 0;
  * warns (true). Defaults to warn-only so the threshold can be calibrated on
  * real corpora before flipping. Flip to `false` once calibration confirms no
  * false positives.
+ *
+ * TODO(decision-gate): before flipping this to `false`, gather a calibration
+ * corpus and confirm the Jaccard reject threshold (TARGET_ALIGNMENT_REJECT_
+ * THRESHOLD) produces no false positives on legitimate low-overlap tests.
+ * Record the flip decision + date + evidence here. Do NOT flip immediately.
  */
 export const TARGET_ALIGNMENT_WARN_ONLY = true;
 

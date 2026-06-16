@@ -12,7 +12,7 @@ import {
 
 export interface QualityIssue {
   testId: string;
-  issue: "template_like" | "missing_input" | "vague_expected" | "too_few_steps" | "wrong_target" | "target_content_alignment";
+  issue: "template_like" | "missing_input" | "vague_expected" | "too_few_steps" | "wrong_target" | "target_content_alignment" | "canonical_only_target";
   severity: "reject" | "warning";
   detail: string;
 }
@@ -75,6 +75,19 @@ export function validateTestCases(
         issue: "wrong_target",
         severity: "reject",
         detail: `测试用例 ${testId} 目标引用了未知 ID`,
+      });
+    }
+
+    // Check 4b: canonical-only target (CON_/FUN_/EXC_ with no displayId C/F/X)
+    // — a fabricated/hallucinated target that points at a bare canonicalId
+    // instead of the human-facing displayId. The displayId is the contract;
+    // canonical-only targets indicate the LLM invented a constraint.
+    if (hasCanonicalOnlyTarget(tc)) {
+      issues.push({
+        testId,
+        issue: "canonical_only_target",
+        severity: "reject",
+        detail: `测试用例 ${testId} 目标仅使用 canonicalId (CON_/FUN_/EXC_) 而未携带 displayId，疑似指向编造约束`,
       });
     }
 
@@ -179,6 +192,26 @@ export function hasWrongTarget(
 
   // If ALL referenced IDs are unknown, it's wrong
   return matches.every((id) => !knownIds.has(id));
+}
+
+/**
+ * 检测目标仅使用 canonicalId（CON_/FUN_/EXC_）而未携带 displayId（C/F/X\d{3}）。
+ * 这种目标指向一个裸 canonicalId，通常意味着 LLM 凭空编造了一个约束/
+ * 功能/异常，而不是引用真实的、带 displayId 的需求项。
+ */
+export function hasCanonicalOnlyTarget(tc: Record<string, unknown>): boolean {
+  const target = String(tc.target ?? "").trim();
+  if (!target) return false;
+
+  const canonicalPattern = /\b(?:FUN_[A-Za-z0-9_]+|CON_[A-Za-z0-9_]+|EXC_[A-Za-z0-9_]+)\b/g;
+  const displayPattern = /\b(?:F\d{3,4}|C\d{3,4}|[EX]\d{3,4})\b/g;
+
+  const canonicalMatches = target.match(canonicalPattern);
+  const displayMatches = target.match(displayPattern);
+
+  // Has at least one canonicalId but no displayId at all
+  return (canonicalMatches !== null && canonicalMatches.length > 0)
+    && (displayMatches === null || displayMatches.length === 0);
 }
 
 // ---------------------------------------------------------------------------

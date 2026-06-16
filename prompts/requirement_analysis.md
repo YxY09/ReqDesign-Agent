@@ -143,9 +143,10 @@
   "exceptions": [
     {
       "id": "X001",
-      "description": "异常流程描述",
+      "description": "异常流程描述（异常=错误路径，不是功能行为）",
       "trigger": "触发条件",
-      "handling": "处理方式"
+      "handling": "处理方式",
+      "source_text": "触发该异常的文档原文片段"
     }
   ],
   "non_functional_requirements": [

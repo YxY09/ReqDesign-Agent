@@ -304,7 +304,9 @@ describe("GenerationTool self-check (no auto-repair)", () => {
       modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: [] }],
       classes: [{ name: "Order", kind: "entity", responsibility: "订单" }],
       dataFlows: [{ name: "请求处理流程", steps: ["client → server"], relatedFunctionIds: [] }],
-      coverageMatrix: [],
+      coverageMatrix: [
+        { refId: "F001", refKind: "function", originalDescription: "Login", designDecision: "Login", affectedModuleIds: ["MOD_USER"], affectedClassNames: [], testImplication: "test" },
+      ],
     };
     const llm = {
       generateJson: vi.fn().mockResolvedValueOnce(badDesignModel),
@@ -454,5 +456,132 @@ describe("isDesignModel", () => {
   });
   it("returns true for valid minimal model", () => {
     expect(isDesignModel(MINIMAL_MODEL)).toBe(true);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// SystemDesigner.checkCoverageGaps — coverage matrix gap detection
+// ---------------------------------------------------------------------------
+
+describe("SystemDesigner.checkCoverageGaps", () => {
+  it("returns empty when all items covered", () => {
+    const model = {
+      modules: [{ id: "MOD_USER", name: "User", responsibility: "r", functionIds: ["F001"] }],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        { refId: "F001", refKind: "function" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+        { refId: "C001", refKind: "constraint" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+        { refId: "X001", refKind: "exception" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+      ],
+    };
+    const req = {
+      functions: [{ displayId: "F001", id: "FUN_abc", name: "Login" }],
+      constraints: [{ displayId: "C001", id: "CON_def", description: "c" }],
+      exceptions: [{ displayId: "X001", id: "EXC_ghi", description: "e" }],
+    };
+    const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    expect(gaps).toHaveLength(0);
+  });
+
+  it("detects uncovered functions, constraints, and exceptions", () => {
+    const model = {
+      modules: [{ id: "MOD_USER", name: "User", responsibility: "r", functionIds: ["F001"] }],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        { refId: "F001", refKind: "function" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+      ],
+    };
+    const req = {
+      functions: [{ displayId: "F001", id: "FUN_abc", name: "Login" }, { displayId: "F002", id: "FUN_def", name: "Register" }],
+      constraints: [{ displayId: "C001", id: "CON_ghi", description: "c" }],
+      exceptions: [{ displayId: "X001", id: "EXC_jkl", description: "e" }],
+    };
+    const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    expect(gaps).toHaveLength(3); // F002, C001, X001 uncovered
+    expect(gaps.map((g) => g.id).sort()).toEqual(["C001", "F002", "X001"]);
+  });
+
+  it("matches by canonical id when displayId absent", () => {
+    const model = {
+      modules: [],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        { refId: "CON_abc", refKind: "constraint" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+      ],
+    };
+    const req = {
+      functions: [],
+      constraints: [{ displayId: "", id: "CON_abc", description: "c" }],
+      exceptions: [],
+    };
+    const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    expect(gaps).toHaveLength(0);
+  });
+
+  it("handles empty requirement gracefully", () => {
+    const model = {
+      modules: [],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [],
+    };
+    const req: Record<string, unknown> = { functions: [], constraints: [], exceptions: [] };
+    const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    expect(gaps).toHaveLength(0);
+  });
+
+  it("flags a listed constraint as a gap when designDecision is empty/too thin", () => {
+    const model = {
+      modules: [],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        // Listed by refId but designDecision is empty → content-incomplete gap
+        { refId: "C001", refKind: "constraint" as const, originalDescription: "", designDecision: "", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+        // Listed with a ≤10-char generic decision → also a gap
+        { refId: "C002", refKind: "constraint" as const, originalDescription: "", designDecision: "ok", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+        // Listed with a substantive, semantically-matching decision → not a gap
+        { refId: "C003", refKind: "constraint" as const, originalDescription: "抗生素处方", designDecision: "抗生素处方需要医生审核与药库校验", affectedModuleIds: ["MOD_RX"], affectedClassNames: ["RxService"], testImplication: "t" },
+      ],
+    };
+    const req = {
+      functions: [],
+      constraints: [
+        { displayId: "C001", id: "CON_a", source_text: "审计跟踪数据不可修改与删除" },
+        { displayId: "C002", id: "CON_b", source_text: "系统响应时间必须低于两秒钟以内" },
+        { displayId: "C003", id: "CON_c", source_text: "抗生素处方需要医生审核" },
+      ],
+      exceptions: [],
+    };
+    const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    expect(gaps.map((g) => g.id).sort()).toEqual(["C001", "C002"]);
+    // C003 has a substantive matching decision → not flagged
+    expect(gaps.map((g) => g.id)).not.toContain("C003");
+  });
+
+  it("flags a listed constraint as a gap when designDecision omits source keywords (antibiotic drift)", () => {
+    const model = {
+      modules: [],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        // Listed with a substantive decision that does NOT mention the source
+        // keyword “抗生素” → content-drift gap
+        { refId: "C001", refKind: "constraint" as const, originalDescription: "", designDecision: "普通处方需要药师审核并记录日志", affectedModuleIds: ["MOD_RX"], affectedClassNames: ["RxService"], testImplication: "t" },
+      ],
+    };
+    const req = {
+      functions: [],
+      constraints: [
+        { displayId: "C001", id: "CON_a", source_text: "抗生素处方必须由主任医师审核" },
+      ],
+      exceptions: [],
+    };
+    const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    expect(gaps.map((g) => g.id)).toContain("C001");
   });
 });

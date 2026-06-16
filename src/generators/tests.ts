@@ -93,7 +93,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     // Reuses the shared semanticDeduper (same_source / normalized_text /
     // glossary / token-overlap layers) and adds a CJK bigram Jaccard fallback
     // because tokenize() collapses unsegmented CJK into a single token.
-    const dedupedTestCases = TestCaseGenerator._dedupTestCases(allTestCases);
+    const dedupedTestCases = TestCaseGenerator._dedupTestCases(allTestCases, requirementJson);
 
     // Phase 3b: Quality validation
     const issues = validateTestQuality(dedupedTestCases, requirementJson);
@@ -179,6 +179,7 @@ export class TestCaseGenerator extends BaseGenerator<string> {
    */
   static _dedupTestCases(
     cases: Array<Record<string, unknown>>,
+    requirementJson?: Record<string, unknown>,
   ): Array<Record<string, unknown>> {
     if (cases.length < 2) return cases;
 
@@ -187,17 +188,15 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       const steps = Array.isArray(tc.steps) ? (tc.steps as string[]).map(String) : [];
       return [String(tc.title ?? ""), ...steps, String(tc.expected_result ?? "")].join(" ");
     };
-    const getSourceText = (tc: Record<string, unknown>) => String(tc.target ?? "");
-
+    // NOTE: getSourceText is intentionally omitted from config. Many test
+    // cases legitimately share the same target constraint ID; passing `target`
+    // as sourceText would collapse ALL same-target tests via the
+    // same_source layer (score 1.0). Same-target near-dupes are handled
+    // by the explicit CJK bigram fallback in Layer 2 below.
     const config: DedupConfig<Record<string, unknown>> = {
       items: cases,
       getId,
       getText,
-      // NOTE: getSourceText is intentionally omitted. Many test cases
-      // legitimately share the same target constraint ID; passing `target`
-      // as sourceText would collapse ALL same-target tests via the
-      // same_source layer (score 1.0). Same-target near-dupes are handled
-      // by the explicit CJK bigram fallback in Layer 2 below.
     };
 
     const candidates = findDuplicateCandidates(config);
@@ -216,16 +215,40 @@ export class TestCaseGenerator extends BaseGenerator<string> {
         return acc + (present ? 1 : 0);
       }, 0);
 
+    // Resolve target key: when requirementJson is provided, use
+    // RequirementIndex.idMapFor("constraint") to normalize displayId→canonicalId
+    // so that tests targeting the same constraint via different ID forms match.
+    // Fallback: simple string comparison on tc.target.
+    let constraintIdMap: Map<string, string> | null = null;
+    if (requirementJson) {
+      const ri = RequirementIndex.fromRequirementJson(requirementJson);
+      constraintIdMap = ri.idMapFor("constraint");
+    }
+    const getTargetKey = (tc: Record<string, unknown>): string => {
+      const raw = String(tc.target ?? "").trim();
+      if (!constraintIdMap || constraintIdMap.size === 0) return raw;
+      // Try each displayId→canonicalId mapping; if any matches, return canonicalId
+      for (const [dispId, canonId] of constraintIdMap) {
+        if (raw.includes(dispId)) return canonId;
+      }
+      // Also try constraint canonical ID extraction from the raw string
+      const m = raw.match(/CON_[A-Za-z0-9_]+/);
+      if (m) return m[0];
+      return raw;
+    };
+
     const absorbed = new Set<string>();
     const ids = survivors.map((tc, i) => getId(tc, i));
+    const targetKeys = survivors.map((tc) => getTargetKey(tc));
     for (let i = 0; i < survivors.length; i++) {
       if (absorbed.has(ids[i])) continue;
       const aTerms = extractContentTerms(getText(survivors[i]));
       if (aTerms.size === 0) continue;
       for (let j = i + 1; j < survivors.length; j++) {
         if (absorbed.has(ids[j])) continue;
-        // Only compare tests that share the same target ID.
-        if (getSourceText(survivors[i]) !== getSourceText(survivors[j])) continue;
+        // Only compare tests that share the same target (by normalized ID set,
+        // so a displayId test and a canonicalId test for one constraint match).
+        if (targetKeys[i] !== targetKeys[j]) continue;
         const bTerms = extractContentTerms(getText(survivors[j]));
         if (bTerms.size === 0) continue;
         const sim = jaccard(aTerms, bTerms);
@@ -242,9 +265,20 @@ export class TestCaseGenerator extends BaseGenerator<string> {
   }
 
   static buildTestContract(requirementJson: Record<string, unknown>): string {
-    const functions = BaseGenerator.formatContractList(requirementJson.functions, ["displayId", "id", "name", "description"]);
-    const exceptions = BaseGenerator.formatContractList(requirementJson.exceptions, ["displayId", "id", "description", "trigger"]);
-    const constraints = BaseGenerator.formatContractList(requirementJson.constraints, ["displayId", "id", "description", "source_text", "related_functions"]);
+    // 只暴露 displayId（或短式 id），不再暴露 canonicalId 哈希（FUN_/CON_/EXC_），
+    // 避免 LLM 对同一约束同时生成 displayId 与 canonicalId 两套测试并混淆标签。
+    const functions = BaseGenerator.formatContractList(
+      BaseGenerator.itemsWithSafeDisplayId(requirementJson.functions),
+      ["displayId", "name", "description"],
+    );
+    const exceptions = BaseGenerator.formatContractList(
+      BaseGenerator.itemsWithSafeDisplayId(requirementJson.exceptions),
+      ["displayId", "description", "trigger"],
+    );
+    const constraints = BaseGenerator.formatContractList(
+      BaseGenerator.itemsWithSafeDisplayId(requirementJson.constraints),
+      ["displayId", "description", "source_text", "related_functions"],
+    );
 
     return [
       "## 测试生成合同（硬性约束）",

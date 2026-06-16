@@ -10,7 +10,7 @@ import { loadPrompt } from "../promptLoader.js";
 import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
-import { checkAnalysisQuality } from "../shared/analysisQualityGate.js";
+import { checkAnalysisQuality, type QualityCheckResult } from "../shared/analysisQualityGate.js";
 import { canonicalizeAndLink } from "../shared/canonicalizer.js";
 import {
   canonicalizeConstraints as canonicalizeConstraintsNew,
@@ -435,8 +435,28 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     canonicalizeConstraintsPipeline(merged);
     normalizeEntityIdentities(merged, registry);
 
-    // Quality gate: attach result without blocking
-    const qualityResult = checkAnalysisQuality(merged, requirementText);
+    // Quality gate: attach result without blocking. When source_text is
+    // missing on constraints/exceptions, attempt a bounded LLM repair first;
+    // on any error or persistent failure, fall back to the pre-repair result.
+    let qualityResult = checkAnalysisQuality(merged, requirementText);
+    const needsRepair = AnalyzeMerger.hasMissingSourceText(merged, requirementText)
+      && !AnalyzeMerger.noUnverifiedPassed(qualityResult);
+    if (needsRepair) {
+      const repaired = await this.repairMissingSourceText(merged, requirementText, systemPrompt);
+      if (repaired) {
+        try {
+          canonicalizeConstraintsPipeline(repaired);
+          const reChecked = checkAnalysisQuality(repaired, requirementText);
+          // Only adopt the repair if it improved the source_text situation.
+          if (!AnalyzeMerger.hasMissingSourceText(repaired, requirementText)) {
+            Object.assign(merged, repaired);
+            qualityResult = reChecked;
+          }
+        } catch {
+          // Repair post-processing failed → keep the original merged result.
+        }
+      }
+    }
     (merged as Record<string, unknown>).__qualityGate = qualityResult;
 
     return merged;
@@ -1370,5 +1390,155 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       .replace(/[\u201C\u201D\u201F\u00AB\u00BB]/g, '"')
       .replace(/\s+/g, "")
       .trim();
+  }
+
+  /**
+   * Whether any constraint/exception in the merged result has an empty
+   * source_text. Used to decide whether to attempt an LLM source_text repair.
+   */
+  /**
+   * Whether any constraint/exception has a problematic source_text.
+   *
+   * A source_text is problematic when it is empty, or — when a requirement
+   * text is supplied — when it is non-empty but cannot be verified against
+   * the requirement (i.e. the canonicalizer may have back-filled it from the
+   * description, in which case it is not a real quote from the source doc).
+   */
+  static hasMissingSourceText(
+    merged: Record<string, unknown>,
+    requirementText?: string,
+  ): boolean {
+    const normalizedSource = requirementText
+      ? AnalyzeMerger._normalizeForMatch(requirementText)
+      : "";
+    for (const listKey of ["constraints", "exceptions"] as const) {
+      const list = merged[listKey];
+      if (!Array.isArray(list)) continue;
+      for (const item of list) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        if (AnalyzeMerger._sourceTextIsProblematic(rec, normalizedSource)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * A single item's source_text is problematic when empty, or when (given a
+   * non-empty normalized requirement source) it is not contained in the
+   * requirement text. Empty source with no requirement text → problematic.
+   */
+  private static _sourceTextIsProblematic(
+    rec: Record<string, unknown>,
+    normalizedSource: string,
+  ): boolean {
+    const st = String(rec.source_text ?? "").trim();
+    if (!st) return true;
+    if (!normalizedSource) return false;
+    const normalized = AnalyzeMerger._normalizeForMatch(st);
+    if (!normalized) return true;
+    return !normalizedSource.includes(normalized);
+  }
+
+  /** Whether the no_unverified_constraints quality check passed. */
+  static noUnverifiedPassed(qualityResult: QualityCheckResult): boolean {
+    const check = qualityResult.checks.find((c) => c.name === "no_unverified_constraints");
+    return Boolean(check?.passed);
+  }
+
+  /**
+   * Attempt a bounded LLM repair to fill missing source_text on
+   * constraints/exceptions. Returns a deep-cloned, repaired copy of `merged`
+   * on success, or null on any error. The caller is responsible for
+   * re-canonicalizing and re-checking quality, and for falling back to the
+   * original on persistent failure.
+   */
+  private async repairMissingSourceText(
+    merged: Record<string, unknown>,
+    requirementText: string,
+    systemPrompt?: string,
+  ): Promise<Record<string, unknown> | null> {
+    // Gather the items that need a source_text, preserving their index so we
+    // can write the LLM result back deterministically.
+    interface RepairTarget { kind: "constraints" | "exceptions"; index: number; id: string; description: string; }
+    const targets: RepairTarget[] = [];
+    const normalizedSource = requirementText
+      ? AnalyzeMerger._normalizeForMatch(requirementText)
+      : "";
+    for (const listKey of ["constraints", "exceptions"] as const) {
+      const list = merged[listKey];
+      if (!Array.isArray(list)) continue;
+      list.forEach((item, index) => {
+        if (typeof item !== "object" || item === null) return;
+        const rec = item as Record<string, unknown>;
+        if (AnalyzeMerger._sourceTextIsProblematic(rec, normalizedSource)) {
+          targets.push({
+            kind: listKey,
+            index,
+            id: String(rec.displayId ?? rec.id ?? index),
+            description: String(rec.description ?? "").trim(),
+          });
+        }
+      });
+    }
+    if (targets.length === 0) return null;
+
+    const itemsBlock = targets.map((t, i) =>
+      `- ${i}: [${t.kind}] id=${t.id} desc=${t.description || "(无描述)"}`,
+    ).join("\n");
+
+    // Custom inline prompt: reconstruct source_text from the requirement doc.
+    const prompt = [
+      "你是需求分析修复助手。下列约束/异常缺失了 source_text（来自原始需求文档的原文）。",
+      "请仅根据下方需求原文，为每个条目找回最贴切的原文片段作为 source_text。",
+      "严格输出 JSON，格式：{ \"repairs\": [{ \"index\": 0, \"source_text\": \"...\" }, ...] }。",
+      "index 必须对应下方列表的序号；source_text 必须是需求原文中的连续片段，不得编造。",
+      "若某条目在原文中确实找不到，则将其 source_text 置为空字符串。",
+      "",
+      "### 需要修复的条目",
+      itemsBlock,
+      "",
+      "### 需求原文",
+      requirementText || "(无需求原文)",
+    ].join("\n");
+
+    let result: unknown;
+    try {
+      result = await this.llm.generateJson(prompt, systemPrompt ?? "");
+    } catch {
+      return null;
+    }
+    const obj = typeof result === "object" && result !== null && !Array.isArray(result)
+      ? result as Record<string, unknown>
+      : null;
+    if (!obj) return null;
+    const repairs = Array.isArray(obj.repairs) ? obj.repairs : null;
+    if (!repairs) return null;
+
+    // Deep clone the merged result so the original is untouched on failure.
+    const repaired = structuredClone
+      ? structuredClone(merged)
+      : (JSON.parse(JSON.stringify(merged)) as Record<string, unknown>);
+
+    let applied = 0;
+    for (const repair of repairs) {
+      if (typeof repair !== "object" || repair === null) continue;
+      const r = repair as Record<string, unknown>;
+      const idx = Number(r.index);
+      const sourceText = String(r.source_text ?? "").trim();
+      if (!Number.isInteger(idx) || idx < 0 || idx >= targets.length) continue;
+      if (!sourceText) continue;
+      const target = targets[idx];
+      const list = repaired[target.kind];
+      if (!Array.isArray(list)) continue;
+      const item = list[target.index];
+      if (typeof item !== "object" || item === null) continue;
+      (item as Record<string, unknown>).source_text = sourceText;
+      applied++;
+    }
+    // Require at least one useful repair to adopt the result.
+    return applied > 0 ? repaired : null;
   }
 }

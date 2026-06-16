@@ -56,7 +56,7 @@
       "refId": "F001",
       "refKind": "function",
       "originalDescription": "用户通过用户名和密码登录系统",
-      "designDecision": "UserService.login() 验证凭证，生成 JWT",
+      "designDecision": "用户提交用户名和密码，系统验证凭证有效性后签发JWT令牌",
       "affectedModuleIds": ["MOD_USER"],
       "affectedClassNames": ["UserService", "User"],
       "testImplication": "正常登录、错误密码、账号不存在三种场景"
@@ -65,7 +65,7 @@
       "refId": "C001",
       "refKind": "constraint",
       "originalDescription": "密码长度不少于8位",
-      "designDecision": "UserService.register() 校验密码长度",
+      "designDecision": "在用户注册或修改密码时强制校验密码不少于8位字符，不满足则拒绝操作并提示",
       "affectedModuleIds": ["MOD_USER"],
       "affectedClassNames": ["UserService"],
       "testImplication": "边界：7位拒绝、8位通过"
@@ -80,7 +80,7 @@
 - **modules**: 每条映射一个功能模块。`functionIds` 必须包含该模块负责的全部功能 ID（来自合同清单）。每个功能 ID 只映射到语义最匹配的一个模块。
 - **classes**: 核心类和服务类。`kind=domain` 表示业务实体类（须与允许的核心领域类对应，entityRef 填实体名称），`kind=helper` 表示服务/仓储/控制器等辅助类（entityRef 为 null）。
 - **dataFlows**: 主要业务流程的步骤序列，每步描述服务调用或数据传递。`relatedFunctionIds` 引用该流程覆盖的功能 ID。
-- **coverageMatrix**: 设计覆盖矩阵，**必须为每个功能 ID、约束 ID、异常 ID 各写一条**。`refKind` 为 `function`/`constraint`/`exception`。`originalDescription` 保留需求原始语义，不能改写。
+- **coverageMatrix**: 设计覆盖矩阵，**必须为每个功能 ID、约束 ID、异常 ID 各写一条**（逐条覆盖，不得遗漏）。`refKind` 为 `function`/`constraint`/`exception`。`originalDescription` 保留需求原始语义，不能改写。`designDecision` 必须描述完整的业务规则或设计方案，**严禁使用方法名**（如 `XxxService.method()`），应说明具体做了什么、在什么条件下执行、结果如何。
 - **supplementaryClasses**: 如需补充未在实体清单中的核心类，在此列出并提供需求原文依据；否则为空数组。
 
 ### 复杂度匹配要求

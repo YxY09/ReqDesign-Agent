@@ -295,6 +295,7 @@ export class PersistenceService {
             state.designText ?? "",
             state.testCases ?? "",
             state.spanMap,
+            state.designModel ?? undefined,
           );
           manager.saveTraceJson("traceability_matrix.json", matrix as unknown as Record<string, unknown>);
           this.deps.logger.info(

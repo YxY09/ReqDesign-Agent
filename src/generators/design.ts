@@ -7,7 +7,7 @@ import { loadPrompt } from "../promptLoader.js";
 import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { extractRelationEndpoints } from "../shared/mermaidRelations.js";
-import { semanticCoverageState, semanticItemId, tokenContains } from "../shared/semanticCoverage.js";
+import { semanticCoverageState, semanticItemId, tokenContains, semanticMatch, semanticTerms } from "../shared/semanticCoverage.js";
 import type { DesignModel } from "../shared/types.js";
 import { isDesignModel } from "../shared/types.js";
 import { createToolError } from "../tools/types.js";
@@ -258,6 +258,9 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
     prompt = prompt.replace(/\{requirement_text\}/g, contractParts.join("\n\n"));
 
     const maxAttempts = 3;
+    const basePrompt = prompt;
+    let bestModel: DesignModel | null = null;
+    let bestGapCount = Infinity;
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -266,33 +269,160 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
         if (!model) {
           throw createToolError("DESIGN_PARSE_FAILED", "LLM output is not a valid DesignModel (missing required arrays)", { recoverable: true });
         }
-        return model;
+        const gaps = SystemDesigner.checkCoverageGaps(model, requirementJson);
+        if (gaps.length === 0) {
+          return model;
+        }
+        if (gaps.length < bestGapCount) {
+          bestModel = model;
+          bestGapCount = gaps.length;
+        }
+        if (attempt >= maxAttempts) break;
+        prompt = basePrompt + "\n\n" + SystemDesigner.buildCoverageHint(gaps, requirementJson);
       } catch (e) {
         if (isAbortError(e)) throw e;
         lastError = e instanceof Error ? e : new Error(String(e));
+        prompt = basePrompt;
       }
     }
+    if (bestModel) return bestModel;
     throw createToolError("DESIGN_FAILED", `Design JSON generation failed after ${maxAttempts} attempts: ${lastError!.message}`, { recoverable: true });
   }
 
+  /**
+   * Compare coverageMatrix entries against requirement items (functions,
+   * constraints, exceptions) and return the list of items that lack a
+   * corresponding coverage entry. Each gap includes the item id and kind.
+   */
+  static checkCoverageGaps(
+    model: DesignModel,
+    requirementJson: Record<string, unknown>,
+  ): Array<{ id: string; kind: "function" | "constraint" | "exception" }> {
+    const gaps: Array<{ id: string; kind: "function" | "constraint" | "exception" }> = [];
+
+    // Index coverageMatrix entries by refId so we can fetch the designDecision
+    // for content-completeness checks (e.g. a constraint listed by refId but
+    // with an empty/generic designDecision that omits the source sub-rules).
+    const entryByRefId = new Map<string, { designDecision: string }>();
+    for (const entry of model.coverageMatrix) {
+      const refId = String(entry.refId ?? "").trim();
+      if (refId) entryByRefId.set(refId, { designDecision: String(entry.designDecision ?? "") });
+    }
+
+    const sourceTextOf = (rec: Record<string, unknown>): string => {
+      return String(
+        rec.source_text ?? rec.sourceText ?? rec.description ?? rec.text ?? "",
+      ).trim();
+    };
+
+    const checkList = (
+      items: unknown,
+      kind: "function" | "constraint" | "exception",
+    ) => {
+      if (!Array.isArray(items)) return;
+      for (const item of items) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const displayId = String(rec.displayId ?? "").trim();
+        const id = String(rec.id ?? "").trim();
+        // A coverage entry matches if its refId equals displayId or id
+        const matchedEntry = entryByRefId.get(displayId) ?? entryByRefId.get(id);
+        if (!matchedEntry) {
+          gaps.push({ id: displayId || id, kind });
+          continue;
+        }
+        // Content completeness is enforced only for constraints with a
+        // substantive source text (>10 chars): a listed-but-empty/generic
+        // designDecision, or one that omits the source sub-rules/keywords
+        // (e.g. “抗生素”), is treated as an uncovered gap.
+        if (kind !== "constraint") continue;
+        const designDecision = matchedEntry.designDecision.trim();
+        const sourceText = sourceTextOf(rec);
+        if (sourceText.length <= 10) continue;
+        const tooThin = designDecision.length <= 10;
+        // Content drift: the design decision must reflect the source text's
+        // distinctive terms. semanticMatch alone is permissive for CJK
+        // (structural bigrams like 处方/审核 can mask a dropped domain keyword
+        // such as “抗生素”), so additionally require a ≥0.5 overlap ratio of
+        // the source's distinctive terms in the decision.
+        const drifted = !semanticMatch(designDecision, sourceText)
+          || sourceTermOverlap(designDecision, sourceText) < 0.5;
+        if (tooThin || drifted) {
+          gaps.push({ id: displayId || id, kind });
+        }
+      }
+    };
+
+    checkList(requirementJson.functions, "function");
+    checkList(requirementJson.constraints, "constraint");
+    checkList(requirementJson.exceptions, "exception");
+
+    return gaps;
+  }
+
+  /**
+   * Build a retry prompt section listing coverage gaps with descriptions
+   * so the LLM knows exactly which items it missed. Each gap includes the
+   * item kind (function/constraint/exception), its ID, and its description
+   * looked up from the requirement JSON.
+   */
+  static buildCoverageHint(
+    gaps: Array<{ id: string; kind: "function" | "constraint" | "exception" }>,
+    requirementJson: Record<string, unknown>,
+  ): string {
+    const findDescription = (
+      list: unknown,
+      id: string,
+    ): string => {
+      if (!Array.isArray(list)) return "";
+      for (const item of list) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        if (String(rec.displayId ?? "").trim() === id || String(rec.id ?? "").trim() === id) {
+          return String(rec.description ?? "").trim();
+        }
+      }
+      return "";
+    };
+
+    const kindLabel: Record<string, string> = {
+      function: "功能",
+      constraint: "约束",
+      exception: "异常",
+    };
+
+    const lines: string[] = [];
+    lines.push("## 二次覆盖率要求");
+    lines.push("上一轮设计在 coverageMatrix 中缺失以下条目，请务必逐一补充，每条都要有完整的设计决策（原始描述、设计决策、影响模块、影响类、测试启示）。");
+    lines.push("");
+    lines.push("必须保留约束源文本中的全部子规则与关键词（例如“抗生素”），不得遗漏。");
+    lines.push("");
+
+    for (const gap of gaps) {
+      const desc = findDescription(requirementJson[`${gap.kind}s`], gap.id);
+      lines.push(`- **${gap.id}** (${kindLabel[gap.kind]})${desc ? `: ${desc}` : ""}`);
+    }
+
+    return lines.join("\n");
+  }
+
   static buildDesignContract(requirementJson: Record<string, unknown>): string {
+    const safeFunctions = BaseGenerator.itemsWithSafeDisplayId(requirementJson.functions);
     const functions = BaseGenerator.formatContractList(
-      requirementJson.functions,
-      ["displayId", "id", "name", "description"],
+      safeFunctions,
+      ["displayId", "name", "description"],
     );
 
     // Build sub-capabilities section for each function that has them
-    const functionsWithSubs = (Array.isArray(requirementJson.functions)
-      ? requirementJson.functions as Array<Record<string, unknown>>
-      : []).filter((fn) =>
-        Array.isArray(fn.sub_capabilities) && fn.sub_capabilities.length > 0 ||
-        Array.isArray(fn.acceptance_criteria) && fn.acceptance_criteria.length > 0,
-      );
+    const functionsWithSubs = safeFunctions.filter((fn) =>
+      Array.isArray(fn.sub_capabilities) && fn.sub_capabilities.length > 0 ||
+      Array.isArray(fn.acceptance_criteria) && fn.acceptance_criteria.length > 0,
+    );
     const subCapsLines = functionsWithSubs.length > 0
       ? [
           "### 功能子能力与验收点（设计必须覆盖）",
           ...functionsWithSubs.map((fn) => {
-            const id = String(fn.displayId ?? fn.id ?? "");
+            const id = String(fn.displayId ?? "");
             const subs = Array.isArray(fn.sub_capabilities) ? fn.sub_capabilities as string[] : [];
             const acs = Array.isArray(fn.acceptance_criteria) ? fn.acceptance_criteria as string[] : [];
             const parts: string[] = [];
@@ -308,12 +438,12 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
       ["name", "description"],
     );
     const constraints = BaseGenerator.formatContractList(
-      requirementJson.constraints,
-      ["displayId", "id", "description", "source_text"],
+      BaseGenerator.itemsWithSafeDisplayId(requirementJson.constraints),
+      ["displayId", "description", "source_text"],
     );
     const exceptions = BaseGenerator.formatContractList(
-      requirementJson.exceptions,
-      ["displayId", "id", "description", "trigger", "handling"],
+      BaseGenerator.itemsWithSafeDisplayId(requirementJson.exceptions),
+      ["displayId", "description", "trigger", "handling"],
     );
 
     return [
@@ -583,4 +713,22 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
 
     return warnings;
   }
+}
+
+/**
+ * Content-drift helper for constraint coverage: fraction of the source
+ * text's distinctive terms (via semanticTerms, so CJK bigrams + ASCII word
+ * tokens, stop words removed) that are reflected in the design decision.
+ * Returns 1 when the source has no distinctive terms. Used to catch decisions
+ * that list the constraint by id but drop a domain keyword (e.g. “抗生素").
+ */
+function sourceTermOverlap(designDecision: string, sourceText: string): number {
+  const sourceTerms = new Set(semanticTerms(sourceText));
+  if (sourceTerms.size === 0) return 1;
+  const decisionTerms = new Set(semanticTerms(designDecision));
+  let matched = 0;
+  for (const term of sourceTerms) {
+    if (decisionTerms.has(term)) matched++;
+  }
+  return matched / sourceTerms.size;
 }

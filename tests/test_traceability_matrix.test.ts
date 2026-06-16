@@ -59,13 +59,14 @@ describe("buildMatrix", () => {
 
     const matrix = buildMatrix(json, designText, testCasesText);
 
-    // functionToConstraints
-    expect(matrix.functionToConstraints["FUN_USER_REGISTER"]).toContain("C001");
-    expect(matrix.functionToConstraints["FUN_USER_LOGIN"]).toContain("C002");
+    // functionToConstraints (keyed by displayId F001/F002; related_functions
+    // carry canonicalIds FUN_USER_REGISTER which resolve to displayIds)
+    expect(matrix.functionToConstraints["F001"]).toContain("C001");
+    expect(matrix.functionToConstraints["F002"]).toContain("C002");
 
-    // constraintToFunctions (inverse)
-    expect(matrix.constraintToFunctions["C001"]).toContain("FUN_USER_REGISTER");
-    expect(matrix.constraintToFunctions["C002"]).toContain("FUN_USER_LOGIN");
+    // constraintToFunctions (inverse, displayId only)
+    expect(matrix.constraintToFunctions["C001"]).toContain("F001");
+    expect(matrix.constraintToFunctions["C002"]).toContain("F002");
 
     // constraintToDesign
     expect(matrix.constraintToDesign["C001"]).toBeDefined();
@@ -178,7 +179,8 @@ describe("buildMatrix", () => {
     });
 
     expect(matrix.constraintToEvidence["C001"]).toEqual(["SEC_AUDIT_001"]);
-    expect(matrix.constraintToEvidence["CON_SEC_AUDIT_ABC1"]).toEqual(["SEC_AUDIT_001"]);
+    // displayId-only keys: canonicalId key must not be present
+    expect(matrix.constraintToEvidence["CON_SEC_AUDIT_ABC1"]).toBeUndefined();
   });
 
   // ---------------------------------------------------------------------------
@@ -210,8 +212,12 @@ describe("buildMatrix", () => {
     const matrix = buildMatrix(json); // no designText, no testCasesText
 
     // functionToConstraints should still be populated from related_functions
-    expect(matrix.functionToConstraints["FUN_USER_REGISTER"]).toContain("C001");
-    expect(matrix.functionToConstraints["FUN_USER_LOGIN"]).toContain("C002");
+    // (related_functions carry canonicalId FUN_USER_REGISTER → resolved to F001)
+    expect(matrix.functionToConstraints["F001"]).toContain("C001");
+    expect(matrix.functionToConstraints["F002"]).toContain("C002");
+    // canonicalId keys must not be present
+    expect(matrix.functionToConstraints["FUN_USER_REGISTER"]).toBeUndefined();
+    expect(matrix.functionToConstraints["FUN_USER_LOGIN"]).toBeUndefined();
 
     // constraintToEvidence should still be populated
     expect(matrix.constraintToEvidence["C001"]).toBeDefined();
@@ -226,5 +232,169 @@ describe("buildMatrix", () => {
     expect(matrix.uncoveredConstraints.length).toBeGreaterThan(0);
     expect(matrix.uncoveredFunctions.length).toBeGreaterThan(0);
     expect(matrix.uncoveredExceptions.length).toBeGreaterThan(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 7: designModel.coverageMatrix drives constraintToDesign with real
+  // module/class names (displayId keys, canonical refIds normalized).
+  // ---------------------------------------------------------------------------
+  it("builds constraintToDesign from designModel.coverageMatrix with module/class names", () => {
+    const json = makeRequirementJson();
+    const designModel = {
+      modules: [],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        {
+          refId: "C001",
+          refKind: "constraint",
+          originalDescription: "audit",
+          designDecision: "audit module",
+          affectedModuleIds: ["MOD_AUDIT"],
+          affectedClassNames: ["AuditService"],
+          testImplication: "t",
+        },
+        {
+          refId: "CON_PERF_RESP_ABC2",
+          refKind: "constraint",
+          originalDescription: "perf",
+          designDecision: "cache",
+          affectedModuleIds: ["MOD_CACHE"],
+          affectedClassNames: [],
+          testImplication: "t",
+        },
+        {
+          refId: "F001",
+          refKind: "function",
+          originalDescription: "register",
+          designDecision: "register module",
+          affectedModuleIds: ["MOD_USER"],
+          affectedClassNames: ["UserService"],
+          testImplication: "t",
+        },
+        {
+          refId: "X001",
+          refKind: "exception",
+          originalDescription: "exists",
+          designDecision: "handle",
+          affectedModuleIds: [],
+          affectedClassNames: [],
+          testImplication: "t",
+        },
+      ],
+    };
+
+    const matrix = buildMatrix(json, undefined, undefined, undefined, designModel);
+
+    // constraintToDesign keyed by displayId, with real module/class names
+    expect(matrix.constraintToDesign["C001"]).toEqual(
+      expect.arrayContaining(["MOD_AUDIT", "AuditService"]),
+    );
+    // canonicalId refId normalized to displayId C002
+    expect(matrix.constraintToDesign["C002"]).toEqual(
+      expect.arrayContaining(["MOD_CACHE"]),
+    );
+    // functionToDesign / exceptionToDesign populated
+    expect(matrix.functionToDesign["F001"]).toEqual(
+      expect.arrayContaining(["MOD_USER", "UserService"]),
+    );
+    // exception with no module/class still marked designed (non-empty)
+    expect(matrix.exceptionToDesign["X001"]).toBeDefined();
+    expect(matrix.exceptionToDesign["X001"].length).toBeGreaterThan(0);
+
+    // No canonicalId keys leak into the maps
+    expect(matrix.constraintToDesign["CON_SEC_AUDIT_ABC1"]).toBeUndefined();
+    expect(matrix.constraintToDesign["CON_PERF_RESP_ABC2"]).toBeUndefined();
+
+    // Both constraints designed → not uncovered (no tests, but design covers them)
+    expect(matrix.uncoveredConstraints).not.toContain("C001");
+    expect(matrix.uncoveredConstraints).not.toContain("C002");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 8: *ToTests maps must hold real test-case IDs (TC-xxx), not
+  // self-referential constraint/function/exception displayIds.
+  // ---------------------------------------------------------------------------
+  it("maps structured JSON test cases to TC-xxx ids (no self-reference)", () => {
+    const json = makeRequirementJson();
+    const testCasesText = JSON.stringify({
+      test_cases: [
+        { id: "TC-N-001", title: "Audit", type: "正常", target: "C001", steps: [], expected_result: "ok" },
+        { id: "TC-N-002", title: "Perf", type: "正常", target: "C002", steps: [], expected_result: "ok" },
+        { id: "TC-N-003", title: "Reg", type: "正常", target: "F001", steps: [], expected_result: "ok" },
+        { id: "TC-N-004", title: "Log", type: "正常", target: "F002", steps: [], expected_result: "ok" },
+        { id: "TC-E-001", title: "Exists", type: "异常", target: "X001", steps: [], expected_result: "ok" },
+        { id: "TC-E-002", title: "Pwd", type: "异常", target: "X002", steps: [], expected_result: "ok" },
+      ],
+    });
+
+    const matrix = buildMatrix(json, undefined, testCasesText);
+
+    // Values are TC-xxx ids, not the constraint/function/exception id itself.
+    expect(matrix.constraintToTests["C001"]).toEqual(["TC-N-001"]);
+    expect(matrix.constraintToTests["C001"]).not.toContain("C001");
+    expect(matrix.constraintToTests["C002"]).toEqual(["TC-N-002"]);
+    expect(matrix.functionToTests["F001"]).toEqual(["TC-N-003"]);
+    expect(matrix.functionToTests["F002"]).toEqual(["TC-N-004"]);
+    expect(matrix.exceptionToTests["X001"]).toEqual(["TC-E-001"]);
+    expect(matrix.exceptionToTests["X002"]).toEqual(["TC-E-002"]);
+
+    // Coverage booleans still work (everything covered).
+    expect(matrix.uncoveredConstraints).toHaveLength(0);
+    expect(matrix.uncoveredFunctions).toHaveLength(0);
+    expect(matrix.uncoveredExceptions).toHaveLength(0);
+  });
+
+  it("maps markdown test cases to TC-xxx ids via the 测试对象 field", () => {
+    const json = makeRequirementJson();
+    const testCasesText = [
+      "## TC-N-001: Audit",
+      "- **类型**: 正常",
+      "- **测试对象**: C001",
+      "- **测试步骤**: check audit",
+      "- **预期结果**: ok",
+      "",
+      "## TC-E-001: Exists",
+      "- **类型**: 异常",
+      "- **测试对象**: X001",
+      "- **测试步骤**: register existing",
+      "- **预期结果**: error",
+      "",
+    ].join("\n");
+
+    const matrix = buildMatrix(json, undefined, testCasesText);
+
+    expect(matrix.constraintToTests["C001"]).toEqual(["TC-N-001"]);
+    expect(matrix.exceptionToTests["X001"]).toEqual(["TC-E-001"]);
+    // A single TC can target multiple refs when listed together.
+  });
+
+  it("collects multiple TC ids per target and dedupes", () => {
+    const json = makeRequirementJson();
+    const testCasesText = JSON.stringify({
+      test_cases: [
+        { id: "TC-N-001", title: "A", type: "正常", target: "C001", steps: [], expected_result: "" },
+        { id: "TC-N-002", title: "B", type: "正常", target: "C001", steps: [], expected_result: "" },
+        // duplicate id for the same target should not appear twice
+        { id: "TC-N-002", title: "B2", type: "正常", target: "C001", steps: [], expected_result: "" },
+      ],
+    });
+
+    const matrix = buildMatrix(json, undefined, testCasesText);
+
+    expect(matrix.constraintToTests["C001"]).toEqual(["TC-N-001", "TC-N-002"]);
+  });
+
+  it("falls back to presence detection for plain-text test cases without TC ids", () => {
+    const json = makeRequirementJson();
+    const testCasesText = "Test C001 audit constraint. Test F001 register.";
+
+    const matrix = buildMatrix(json, undefined, testCasesText);
+
+    // No TC id available → key presence still drives coverage.
+    expect(matrix.constraintToTests["C001"]).toBeDefined();
+    expect(matrix.functionToTests["F001"]).toBeDefined();
+    // C002 is not mentioned → uncovered.
+    expect(matrix.uncoveredConstraints).toContain("C002");
   });
 });

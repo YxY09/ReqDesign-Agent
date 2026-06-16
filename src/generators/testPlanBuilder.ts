@@ -56,7 +56,7 @@ export function buildTestPlan(analysis: Record<string, unknown>): TestTask[] {
 
     normalCounter.value++;
     tasks.push({
-      taskId: `TASK-FUN_${funcCanonicalId}_NORMAL`,
+      taskId: `TASK-${funcDisplayId}_NORMAL`,
       testIdPrefix: `TC-N-${pad3(normalCounter.value)}`,
       type: "normal",
       targetFunction: funcDisplayId || funcCanonicalId,
@@ -79,7 +79,7 @@ export function buildTestPlan(analysis: Record<string, unknown>): TestTask[] {
 
       boundaryCounter.value++;
       tasks.push({
-        taskId: `TASK-FUN_${funcCanonicalId}_BOUNDARY`,
+        taskId: `TASK-${funcDisplayId}_BOUNDARY`,
         testIdPrefix: `TC-B-${pad3(boundaryCounter.value)}`,
         type: "boundary",
         targetFunction: funcDisplayId || funcCanonicalId,
@@ -102,7 +102,7 @@ export function buildTestPlan(analysis: Record<string, unknown>): TestTask[] {
 
     boundaryCounter.value++;
     tasks.push({
-      taskId: `TASK-CON_${conId}_BOUNDARY`,
+      taskId: `TASK-${conDisplayId}_BOUNDARY`,
       testIdPrefix: `TC-B-${pad3(boundaryCounter.value)}`,
       type: "boundary",
       targetFunction: undefined,
@@ -116,14 +116,13 @@ export function buildTestPlan(analysis: Record<string, unknown>): TestTask[] {
   // For each exception, create 1 exception test task
   for (const exc of exceptions) {
     const excDisplayId = str(exc["displayId"] ?? exc["id"]);
-    const excCanonicalId = str(exc["id"]);
     const trigger = str(exc["trigger"]);
     const description = str(exc["description"]);
     const module = deriveModuleFromException(exc, tasks);
 
     exceptionCounter.value++;
     tasks.push({
-      taskId: `TASK-EXC_${excCanonicalId}_EXCEPTION`,
+      taskId: `TASK-${excDisplayId}_EXCEPTION`,
       testIdPrefix: `TC-E-${pad3(exceptionCounter.value)}`,
       type: "exception",
       targetFunction: undefined,
@@ -233,6 +232,19 @@ function asStrings(val: unknown): string[] {
   return [];
 }
 
+/** Extract function IDs from related_functions which can be:
+ *  - Array<{functionId, relation, confidence}> (from constraintCanonicalizer)
+ *  - string[] (from older analysis artifacts) */
+function extractFunctionIds(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.map((v) => {
+    if (typeof v === "object" && v !== null && "functionId" in v) {
+      return String((v as Record<string, unknown>).functionId ?? "").trim();
+    }
+    return String(v ?? "").trim();
+  }).filter(Boolean);
+}
+
 function str(val: unknown): string {
   return String(val ?? "").trim();
 }
@@ -276,7 +288,8 @@ function deriveModuleFromConstraint(
   existingTasks: TestTask[],
 ): string {
   // If constraint has related_functions, inherit module from first related function
-  const related = asStrings(con["related_functions"]);
+  const raw = con["related_functions"];
+  const related = extractFunctionIds(raw);
   if (related.length > 0) {
     for (const relFn of related) {
       const match = existingTasks.find(
@@ -311,7 +324,10 @@ function findConstraintsForFunction(
 ): Array<Record<string, unknown>> {
   const result: Array<Record<string, unknown>> = [];
   for (const con of constraints) {
-    const related = asStrings(con["related_functions"]);
+    const raw = con["related_functions"];
+    // related_functions is Array<{functionId, relation, confidence}> from
+    // constraintCanonicalizer, or string[] from older analysis artifacts.
+    const related = extractFunctionIds(raw);
     if (
       related.includes(funcDisplayId) ||
       related.includes(funcCanonicalId)

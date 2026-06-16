@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { TestCaseGenerator } from "../src/generators/tests.js";
+import { validateTestCases } from "../src/generators/testQualityValidator.js";
 
 describe("TestCaseGenerator.validateTestCases", () => {
   it("normalizes structured test case IDs generated from requirement IDs", () => {
@@ -276,6 +277,56 @@ describe("TestCaseGenerator.validateTestCases", () => {
     const warnings = TestCaseGenerator.validateTestCases(testCases, req);
     expect(warnings.some((w) => w.includes("X001") && w.includes("未被测试用例覆盖"))).toBe(false);
     expect(warnings.some((w) => w.includes("未定义的异常 ID: X001"))).toBe(false);
+  });
+});
+
+describe("validateTestCases (testQualityValidator) — canonical_only_target", () => {
+  it("rejects a test whose target uses only a canonicalId with no displayId", () => {
+    const analysis = {
+      functions: [{ id: "FUN_LOGIN", displayId: "F001", name: "Login" }],
+      constraints: [{ id: "CON_AUDIT", displayId: "C001", description: "审计约束" }],
+      exceptions: [{ id: "EXC_DENY", displayId: "X001", description: "拒绝访问" }],
+    };
+    // Target references a canonicalId CON_FABRICATED that has no displayId
+    // and is not in the analysis → canonical-only / fabricated target.
+    const cases = [
+      {
+        id: "TC-E-001",
+        title: "伪造约束测试",
+        type: "异常",
+        target: "CON_FABRICATED_RULE_XYZ",
+        preconditions: "无",
+        steps: ["触发编造约束"],
+        expected_result: "系统拦截",
+        priority: "P0",
+      },
+    ];
+    const issues = validateTestCases(cases, analysis);
+    const canonicalIssue = issues.find((i) => i.issue === "canonical_only_target");
+    expect(canonicalIssue).toBeDefined();
+    expect(canonicalIssue!.severity).toBe("reject");
+  });
+
+  it("does not flag a target that carries a displayId (F001) even with a canonicalId", () => {
+    const analysis = {
+      functions: [{ id: "FUN_LOGIN", displayId: "F001", name: "Login" }],
+      constraints: [],
+      exceptions: [],
+    };
+    const cases = [
+      {
+        id: "TC-N-001",
+        title: "正常登录",
+        type: "正常",
+        target: "F001 | FUN_LOGIN",
+        preconditions: "用户存在",
+        steps: ["输入账号密码", "点击登录"],
+        expected_result: "登录成功",
+        priority: "P0",
+      },
+    ];
+    const issues = validateTestCases(cases, analysis);
+    expect(issues.some((i) => i.issue === "canonical_only_target")).toBe(false);
   });
 });
 

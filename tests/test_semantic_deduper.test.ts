@@ -10,6 +10,7 @@ import {
 import { jaccardSimilarity as jaccard } from "../src/shared/testAlignment.js";
 import { normalizeForComparison } from "../src/shared/constraintCanonicalizer.js";
 import { TestCaseGenerator } from "../src/generators/tests.js";
+import { RequirementIndex } from "../src/shared/requirementIndex.js";
 
 /** Deduplicate a list of test-case-shaped records via TestCaseGenerator. */
 function dedupCases(
@@ -451,5 +452,66 @@ describe("TestCaseGenerator._dedupTestCases", () => {
         preconditions: "x", steps: ["a"], expected_result: "r", priority: "P1" },
     ];
     expect(dedupCases(cases)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _dedupTestCases with requirementJson — displayId↔canonicalId normalization
+// ---------------------------------------------------------------------------
+
+describe("TestCaseGenerator._dedupTestCases with requirementJson", () => {
+  it("merges tests that share target via displayId vs canonicalId", () => {
+    // Two tests for the same constraint C001, one uses displayId, the other
+    // uses canonicalId CON_abc123. With requirementJson, they should match.
+    const req = {
+      functions: [],
+      constraints: [
+        { displayId: "C001", id: "CON_abc123", description: "密码长度≥8" },
+      ],
+      exceptions: [],
+    };
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001 密码约束", title: "密码边界",
+        preconditions: "x", steps: ["密码7位", "提交"], expected_result: "拒绝", priority: "P1" },
+      { id: "TC-B-002", type: "边界", target: "CON_abc123 密码规则", title: "密码边界测试",
+        preconditions: "x", steps: ["密码7位", "提交"], expected_result: "拒绝", priority: "P1" },
+    ];
+    const out = TestCaseGenerator._dedupTestCases(cases, req);
+    // Should have merged to 1 because both target the same constraint
+    expect(out).toHaveLength(1);
+  });
+
+  it("keeps distinct constraint tests even with requirementJson", () => {
+    const req = {
+      functions: [],
+      constraints: [
+        { displayId: "C001", id: "CON_abc123", description: "密码长度≥8" },
+        { displayId: "C002", id: "CON_def456", description: "账号锁定3次" },
+      ],
+      exceptions: [],
+    };
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001 密码约束", title: "密码边界",
+        preconditions: "x", steps: ["密码7位"], expected_result: "拒绝", priority: "P1" },
+      { id: "TC-B-002", type: "边界", target: "C002 锁定约束", title: "锁定边界",
+        preconditions: "x", steps: ["失败3次"], expected_result: "锁定", priority: "P1" },
+    ];
+    const out = TestCaseGenerator._dedupTestCases(cases, req);
+    expect(out).toHaveLength(2);
+  });
+
+  it("falls back to string comparison when no requirementJson provided", () => {
+    // Two tests with different targets (C001 vs CON_abc123) and different
+    // content (so CJK bigram won't merge them). Without requirementJson,
+    // getTargetKey returns the raw tc.target string → they don't match.
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001 密码约束", title: "密码长度不够",
+        preconditions: "x", steps: ["输入7位密码", "点击提交"], expected_result: "系统提示密码过短", priority: "P1" },
+      { id: "TC-B-002", type: "边界", target: "CON_abc123 密码约束", title: "密码为空",
+        preconditions: "x", steps: ["不输入密码直接提交"], expected_result: "系统提示密码必填", priority: "P1" },
+    ];
+    const out = TestCaseGenerator._dedupTestCases(cases);
+    // Fallback: different target strings, different content → both kept
+    expect(out).toHaveLength(2);
   });
 });

@@ -63,6 +63,32 @@ export abstract class BaseGenerator<TOutput> {
     }).filter(Boolean);
   }
 
+  /**
+   * 返回 items 的浅拷贝，其中 displayId 被填充为“安全的展示 ID”，
+   * 用于从 LLM 可见的契约/合同视图中剥离不透明 canonical 哈希
+   * （FUN_/CON_/EXC_ 前缀的哈希会让 LLM 混淆并导致标签错位）。
+   *
+   * 选择规则：
+   *   - 有 displayId → 用 displayId；
+   *   - 无 displayId 但 id 是短式（F001/C001/X001…，非 FUN_/CON_/EXC_）→ 用 id；
+   *   - 否则 → 不展示 ID（displayId 置空，仅靠 name/description 识别）。
+   *
+   * 传入 formatContractList 时配合 ["displayId", ...] 使用（不再传 "id"）。
+   */
+  static itemsWithSafeDisplayId(items: unknown): Array<Record<string, unknown>> {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) {
+        return { displayId: String(item ?? "").trim() };
+      }
+      const rec = item as Record<string, unknown>;
+      const displayId = String(rec.displayId ?? "").trim();
+      const id = String(rec.id ?? "").trim();
+      const safeId = displayId || (/^(?:FUN|CON|EXC)_/.test(id) ? "" : id);
+      return { ...rec, displayId: safeId };
+    });
+  }
+
   /** generateJson 的重试包装器，带类型验证。
    * 子类应调用此方法而非自行实现重试循环。
    */

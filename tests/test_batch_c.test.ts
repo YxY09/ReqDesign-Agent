@@ -1316,3 +1316,262 @@ describe("merge entity canonical identity normalization", () => {
     expect((userPreference.relationships as Array<Record<string, unknown>>)[0].target).toBe("E_USER_GROUP");
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Quality gate check 9: flag missing source_text instead of silent skip
+// ---------------------------------------------------------------------------
+
+describe("Quality gate check 9 — no_unverified_constraints", () => {
+  it("flags exceptions without source_text as issue when sourceText provided", () => {
+    const analysis = {
+      actors: [{ name: "User" }],
+      functions: [{ id: "FUN_login", displayId: "F001", name: "Login", description: "Login" }],
+      entities: [{ name: "User", attributes: [], relationships: [] }],
+      constraints: [
+        { id: "CON_pass", displayId: "C001", description: "Password 8+", source_text: "密码长度不少于8位" },
+      ],
+      exceptions: [
+        { id: "EXC_timeout", displayId: "X001", description: "Timeout", trigger: "超时", handling: "重试" },
+        // Missing source_text!
+      ],
+    };
+    const sourceText = "系统要求密码长度不少于8位，网络超时用户重新登录";
+    const result = checkAnalysisQuality(analysis, sourceText);
+    const c9 = result.checks.find((c) => c.name === "no_unverified_constraints");
+    expect(c9).toBeDefined();
+    // Should fail because exception X001 has no source_text
+    expect(c9!.passed).toBe(false);
+    expect(c9!.detail).toContain("missing source_text");
+  });
+
+  it("passes when all constraints and exceptions have source_text", () => {
+    const analysis = {
+      actors: [{ name: "User" }],
+      functions: [{ id: "FUN_login", displayId: "F001", name: "Login", description: "Login" }],
+      entities: [{ name: "User", attributes: [], relationships: [] }],
+      constraints: [
+        { id: "CON_pass", displayId: "C001", description: "Password 8+", source_text: "密码长度不少于8位" },
+      ],
+      exceptions: [
+        { id: "EXC_timeout", displayId: "X001", description: "Timeout", trigger: "超时", handling: "重试", source_text: "网络超时用户重新登录" },
+      ],
+    };
+    const sourceText = "系统要求密码长度不少于8位，网络超时用户重新登录";
+    const result = checkAnalysisQuality(analysis, sourceText);
+    const c9 = result.checks.find((c) => c.name === "no_unverified_constraints");
+    expect(c9).toBeDefined();
+    expect(c9!.passed).toBe(true);
+  });
+
+  it("flags missing source_text even without sourceText", () => {
+    const analysis = {
+      actors: [{ name: "User" }],
+      functions: [{ id: "FUN_login", displayId: "F001", name: "Login", description: "Login" }],
+      entities: [{ name: "User", attributes: [], relationships: [] }],
+      constraints: [],
+      exceptions: [
+        { id: "EXC_timeout", displayId: "X001", description: "Timeout", trigger: "超时", handling: "重试", source_text: "网络超时用户重新登录" },
+      ],
+    };
+    const result = checkAnalysisQuality(analysis);
+    const c9 = result.checks.find((c) => c.name === "no_unverified_constraints");
+    expect(c9).toBeDefined();
+    // source_text is present on all items, and without sourceText the unverified sub-check cannot run
+    expect(c9!.passed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// merge() source_text repair (LLM-assisted, with fallback)
+// ---------------------------------------------------------------------------
+
+describe("merge — source_text repair", () => {
+  it("hasMissingSourceText detects constraints/exceptions missing source_text", () => {
+    expect(AnalyzeMerger.hasMissingSourceText({
+      constraints: [{ source_text: "ok" }],
+      exceptions: [{ source_text: "ok" }],
+    })).toBe(false);
+    expect(AnalyzeMerger.hasMissingSourceText({
+      constraints: [{ source_text: "" }],
+      exceptions: [],
+    })).toBe(true);
+    expect(AnalyzeMerger.hasMissingSourceText({
+      constraints: [{ source_text: "ok" }],
+      exceptions: [{ description: "no source" }],
+    })).toBe(true);
+  });
+
+  it("noUnverifiedPassed reads the no_unverified_constraints check", () => {
+    const pass = { passed: true, score: 1, checks: [{ name: "no_unverified_constraints", passed: true, detail: "" }] };
+    const fail = { passed: false, score: 0, checks: [{ name: "no_unverified_constraints", passed: false, detail: "x" }] };
+    expect(AnalyzeMerger.noUnverifiedPassed(pass as QualityCheckResult)).toBe(true);
+    expect(AnalyzeMerger.noUnverifiedPassed(fail as QualityCheckResult)).toBe(false);
+  });
+
+  it("adopts LLM-provided source_text when constraints lack it, and re-attaches __qualityGate", async () => {
+    // LLM responds to the repair prompt with a source_text for index 0.
+    const repairLlm = {
+      generateJson: async () => ({
+        repairs: [{ index: 0, source_text: "密码长度不少于8位" }],
+      }),
+    };
+    const merger = new AnalyzeMerger(repairLlm as any);
+    const result = await merger.merge(
+      [
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [{ id: "FUN_login", displayId: "F001", name: "Login", description: "Login" }],
+          entities: [{ name: "User", attributes: [], relationships: [] }],
+          constraints: [{ id: "C001", description: "Password 8+", source_text: "" }],
+          exceptions: [],
+        }),
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [],
+          entities: [],
+          constraints: [],
+          exceptions: [],
+        }),
+      ],
+      "系统要求密码长度不少于8位",
+    );
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    // The repaired source_text should be present on the constraint.
+    expect(constraints.some((c) => String(c.source_text ?? "").includes("密码长度不少于8位"))).toBe(true);
+    // __qualityGate should be re-attached.
+    expect(result.__qualityGate).toBeDefined();
+  });
+
+  it("falls back to the original result when the LLM repair fails", async () => {
+    const failingLlm = {
+      generateJson: async () => {
+        throw new Error("LLM unavailable");
+      },
+    };
+    const merger = new AnalyzeMerger(failingLlm as any);
+    const result = await merger.merge(
+      [
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [],
+          entities: [{ name: "User", attributes: [], relationships: [] }],
+          constraints: [{ id: "C001", description: "Password 8+", source_text: "" }],
+          exceptions: [],
+        }),
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [],
+          entities: [],
+          constraints: [],
+          exceptions: [],
+        }),
+      ],
+      "系统要求密码长度不少于8位",
+    );
+    // Fallback: merge still returns a result and attaches __qualityGate,
+    // even though source_text could not be repaired.
+    expect(result).toBeDefined();
+    expect(result.__qualityGate).toBeDefined();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Back-filled / non-real source_text detection + repair writeback
+  // ---------------------------------------------------------------------------
+  it("hasMissingSourceText detects back-filled source_text not present in requirementText", () => {
+    // source_text is non-empty but NOT a real quote from the requirement →
+    // the canonicalizer back-filled it from the description. This must count
+    // as problematic so the repair path triggers.
+    const requirementText = "系统要求密码长度不少于8位";
+    expect(AnalyzeMerger.hasMissingSourceText({
+      constraints: [{ source_text: "Password must be long enough" }], // not in req text
+      exceptions: [],
+    }, requirementText)).toBe(true);
+
+    // A genuine quote from the requirement is NOT problematic.
+    expect(AnalyzeMerger.hasMissingSourceText({
+      constraints: [{ source_text: "密码长度不少于8位" }], // substring of req text
+      exceptions: [],
+    }, requirementText)).toBe(false);
+
+    // Without a requirementText, a non-empty source_text cannot be judged →
+    // not problematic.
+    expect(AnalyzeMerger.hasMissingSourceText({
+      constraints: [{ source_text: "Password must be long enough" }],
+      exceptions: [],
+    })).toBe(false);
+  });
+
+  it("repairs back-filled source_text via LLM and writes the real quote back", async () => {
+    // The constraint has a back-filled (non-real) source_text that does not
+    // appear in the requirement text. The LLM repair supplies the real quote.
+    const repairLlm = {
+      generateJson: async () => ({
+        repairs: [{ index: 0, source_text: "密码长度不少于8位" }],
+      }),
+    };
+    const merger = new AnalyzeMerger(repairLlm as any);
+    const result = await merger.merge(
+      [
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [{ id: "FUN_login", displayId: "F001", name: "Login", description: "Login" }],
+          entities: [{ name: "User", attributes: [], relationships: [] }],
+          // back-filled, non-real source_text
+          constraints: [{ id: "C001", description: "Password 8+", source_text: "Password must be long enough" }],
+          exceptions: [],
+        }),
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [],
+          entities: [],
+          constraints: [],
+          exceptions: [],
+        }),
+      ],
+      "系统要求密码长度不少于8位",
+    );
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    // The back-filled value must be replaced with the real quote.
+    expect(constraints.some((c) => String(c.source_text ?? "") === "密码长度不少于8位")).toBe(true);
+    expect(constraints.some((c) => String(c.source_text ?? "").includes("Password must be long enough"))).toBe(false);
+    expect(result.__qualityGate).toBeDefined();
+  });
+
+  it("keeps the original (un-mutated) when the repaired source_text is still non-real", async () => {
+    // The LLM returns a repair, but its source_text is ALSO not present in the
+    // requirement text → the repair must not be adopted, and the original
+    // merged object must be untouched (structuredClone isolation).
+    const repairLlm = {
+      generateJson: async () => ({
+        repairs: [{ index: 0, source_text: "still a made-up quote" }],
+      }),
+    };
+    const merger = new AnalyzeMerger(repairLlm as any);
+    const result = await merger.merge(
+      [
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [{ id: "FUN_login", displayId: "F001", name: "Login", description: "Login" }],
+          entities: [{ name: "User", attributes: [], relationships: [] }],
+          constraints: [{ id: "C001", description: "Password 8+", source_text: "original back-filled text" }],
+          exceptions: [],
+        }),
+        artifact({
+          actors: [{ name: "User" }],
+          functions: [],
+          entities: [],
+          constraints: [],
+          exceptions: [],
+        }),
+      ],
+      "系统要求密码长度不少于8位",
+    );
+    const constraints = result.constraints as Array<Record<string, unknown>>;
+    // Repair not adopted → original back-filled text preserved (not the LLM junk).
+    expect(constraints.some((c) => String(c.source_text ?? "").includes("still a made-up quote"))).toBe(false);
+    // A result is still returned with a quality gate attached.
+    expect(result).toBeDefined();
+    expect(result.__qualityGate).toBeDefined();
+  });
+});

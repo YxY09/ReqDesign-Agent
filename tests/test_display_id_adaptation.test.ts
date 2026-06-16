@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SystemDesigner } from "../src/generators/design.js";
 import { TestCaseGenerator } from "../src/generators/tests.js";
 import { DiagramGenerator } from "../src/generators/diagrams.js";
+import { RequirementIndex } from "../src/shared/requirementIndex.js";
 import type { LLMClient } from "../src/llmClient.js";
 
 // ═══════════════════════════════════════════════════════
@@ -335,5 +336,45 @@ describe("DiagramGenerator — displayId in prompts", () => {
       "activity_diagram",
     );
     expect(result).toContain("F001");
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+//  RequirementIndex.normalizeTargetReferences — bare canonicalId pre-rewrite
+// ═══════════════════════════════════════════════════════
+
+describe("RequirementIndex.normalizeTargetReferences — canonical pre-rewrite", () => {
+  function makeIndex() {
+    return RequirementIndex.fromRequirementJson({
+      functions: [{ id: "FUN_LOGIN", displayId: "F001", name: "Login" }],
+      constraints: [{ id: "CON_AUDIT", displayId: "C001", description: "审计" }],
+      exceptions: [{ id: "EXC_DENY", displayId: "X001", description: "拒绝" }],
+    });
+  }
+
+  it("rewrites a bare canonicalId into a displayId | canonicalId pair", () => {
+    const idx = makeIndex();
+    const tc = { type: "异常" };
+    const out = idx.normalizeTargetReferences("CON_AUDIT 审计约束", tc);
+    // Should now carry the displayId C001 paired with CON_AUDIT
+    expect(out).toContain("C001");
+    expect(out).toContain("CON_AUDIT");
+  });
+
+  it("does not double-rewrite a canonicalId already in a pair", () => {
+    const idx = makeIndex();
+    const tc = { type: "异常" };
+    // Already a well-formed pair
+    const out = idx.normalizeTargetReferences("C001 | CON_AUDIT", tc);
+    expect(out).toBe("C001 | CON_AUDIT");
+  });
+
+  it("drops a fabricated canonicalId that maps to no displayId", () => {
+    const idx = makeIndex();
+    const tc = { type: "异常", title: "伪造", expected_result: "拦截" };
+    // CON_FABRICATED has no mapping → removed by removeUnknownRefs → fallback
+    const out = idx.normalizeTargetReferences("CON_FABRICATED_XYZ", tc);
+    // Should not contain the fabricated canonicalId
+    expect(out).not.toContain("CON_FABRICATED_XYZ");
   });
 });
