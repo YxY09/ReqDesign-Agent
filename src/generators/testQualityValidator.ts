@@ -1,12 +1,18 @@
 /**
  * TestQualityValidator — 程序化测试用例质量检查器。
  *
- * 检测模板化测试、缺失输入、模糊预期结果、错误目标等问题。
+ * 检测模板化测试、缺失输入、模糊预期结果、错误目标、目标/内容不匹配等问题。
  */
+
+import {
+  evaluateTargetAlignment,
+  collectConstraintSourceTexts,
+  TARGET_ALIGNMENT_WARN_ONLY,
+} from "../shared/testAlignment.js";
 
 export interface QualityIssue {
   testId: string;
-  issue: "template_like" | "missing_input" | "vague_expected" | "too_few_steps" | "wrong_target";
+  issue: "template_like" | "missing_input" | "vague_expected" | "too_few_steps" | "wrong_target" | "target_content_alignment";
   severity: "reject" | "warning";
   detail: string;
 }
@@ -20,6 +26,7 @@ export function validateTestCases(
 ): QualityIssue[] {
   const issues: QualityIssue[] = [];
   const knownIds = collectKnownIds(analysis);
+  const constraintTexts = collectConstraintSourceTexts(analysis);
 
   for (const tc of cases) {
     const testId = String(tc.id ?? "unknown").trim();
@@ -61,13 +68,34 @@ export function validateTestCases(
       });
     }
 
-    // Check 4: wrong target
+    // Check 4: wrong target (unknown IDs)
     if (hasWrongTarget(tc, knownIds)) {
       issues.push({
         testId,
         issue: "wrong_target",
         severity: "reject",
         detail: `测试用例 ${testId} 目标引用了未知 ID`,
+      });
+    }
+
+    // Check 5: target-content alignment (valid ID, fabricated content)
+    const alignment = evaluateTargetAlignment({
+      target: String(tc.target ?? ""),
+      content: [
+        tc.title,
+        ...(Array.isArray(tc.steps) ? tc.steps.map(String) : []),
+        tc.expected_result ?? "",
+      ].map((v) => String(v ?? "")).join(" "),
+      constraintTexts,
+    });
+    if (alignment.misaligned && !alignment.allIdsUnknown) {
+      issues.push({
+        testId,
+        issue: "target_content_alignment",
+        // Warn-only by default until the overlap threshold is calibrated on
+        // a real corpus; flip TARGET_ALIGNMENT_WARN_ONLY to hard-reject.
+        severity: TARGET_ALIGNMENT_WARN_ONLY ? "warning" : "reject",
+        detail: `测试用例 ${testId} 目标约束 ${alignment.matchedId ?? ""} 的内容与步骤/预期结果无重叠（overlap=${alignment.overlap.toFixed(2)}），疑似编造不相关规则`,
       });
     }
   }

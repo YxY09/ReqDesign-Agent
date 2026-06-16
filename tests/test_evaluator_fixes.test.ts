@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { EvaluationTool } from "../src/tools/evaluation.js";
 import { createIssue } from "../src/shared/types.js";
 import type { Issue } from "../src/shared/types.js";
+import { validateReview } from "../src/shared/reviewValidator.js";
 
 // -----------------------------------------------------------------------
 // 模拟 LLM 存根
@@ -808,6 +809,146 @@ describe("EvaluationTool._checkUndefinedExceptionIds dynamic prefix", () => {
     const issues = (tool as unknown as { _checkUndefinedExceptionIds(a: string, b: string, c: string, d: string, e: Record<string, unknown>): import("../src/shared/types.js").Issue[] })
       ._checkUndefinedExceptionIds("design-1", "design", "design_text", "E001", {});
     expect(issues.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: _checkClassDiagramEntities — relationship endpoint completeness
+// (defect 1: associations like "1" --> "*" previously slipped through)
+// ---------------------------------------------------------------------------
+
+describe("EvaluationTool._checkClassDiagramEntities — relationship endpoints", () => {
+  function checkEntities(
+    mermaidText: string,
+    requirementJson: Record<string, unknown>,
+  ) {
+    const tool = new EvaluationTool(noopLlm());
+    return (tool as unknown as {
+      _checkClassDiagramEntities(
+        taskId: string,
+        mermaidText: string,
+        requirementJson: Record<string, unknown>,
+      ): import("../src/shared/types.js").Issue[];
+    })._checkClassDiagramEntities("diagrams-final", mermaidText, requirementJson);
+  }
+
+  it('flags dangling association endpoints (`"1" --> "*"`) referenced but never defined', () => {
+    const mermaid = `classDiagram
+    class Patient {
+        -String id
+    }
+    class Doctor {
+        -String id
+    }
+    Patient "1" --> "*" Doctor : visits
+    Patient "1" --> "*" Insurance : uses
+    Doctor "1" --> "*" PrescriptionItem : writes`;
+    const issues = checkEntities(mermaid, { entities: [] });
+    const dangling = issues.find((i) =>
+      i.description.includes("类图关系引用了未定义的类"));
+    expect(dangling).toBeDefined();
+    expect(dangling!.description).toContain("Insurance");
+    expect(dangling!.description).toContain("PrescriptionItem");
+    // Doctor IS defined, so it must not appear in the dangling list.
+    expect(dangling!.description).not.toContain("Doctor");
+  });
+
+  it("does NOT flag endpoints when every referenced class is defined", () => {
+    const mermaid = `classDiagram
+    class User {
+        -int id
+    }
+    class Book {
+        -int id
+    }
+    User --> Book : borrows`;
+    const issues = checkEntities(mermaid, { entities: [] });
+    expect(issues.some((i) => i.description.includes("类图关系引用了未定义的类"))).toBe(false);
+  });
+
+  it("flags dangling inheritance endpoints (<|-- / --|>)", () => {
+    const mermaid = `classDiagram
+    class Dog {
+        -String name
+    }
+    Dog --|> Animal
+    Cat <|-- Feline`;
+    const issues = checkEntities(mermaid, { entities: [] });
+    const dangling = issues.find((i) =>
+      i.description.includes("类图关系引用了未定义的类"));
+    expect(dangling).toBeDefined();
+    // Animal, Cat and Feline are all undefined
+    expect(dangling!.description).toContain("Animal");
+  });
+
+  it("uses precise set membership for missing entities (not fuzzy substring)", () => {
+    // User is required; UserAccount is defined. Fuzzy `.includes` would hide User.
+    const mermaid = `classDiagram
+    class UserAccount {
+        -String id
+    }`;
+    const issues = checkEntities(mermaid, {
+      entities: [{ name: "User", attributes: [] }],
+    });
+    const missing = issues.find((i) =>
+      i.description.includes("类图缺少需求分析中的核心实体"));
+    expect(missing).toBeDefined();
+    expect(missing!.description).toContain("User");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: target-content alignment (defect 2: hallucinated tests)
+// ---------------------------------------------------------------------------
+
+describe("target-content alignment", () => {
+  const analysis = {
+    constraints: [
+      { id: "C001", displayId: "C001", source_text: "挂号约束：每位医生每日限号50，同一患者同日同科限挂1次" },
+    ],
+  };
+
+  it("flags a test whose valid target ID verifies an unrelated fabricated rule", () => {
+    const verdict = validateReview(
+      analysis,
+      "",
+      JSON.stringify({
+        test_cases: [
+          {
+            id: "TC-B-001",
+            target: "C001",
+            title: "密码复杂度边界",
+            steps: ["输入8位密码", "输入含特殊字符密码"],
+            expected_result: "密码强度达标",
+          },
+        ],
+      }),
+    );
+    const check = verdict.checks.find((c) => c.name === "测试目标/内容对齐检测");
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(false);
+    expect(check!.detail).toContain("TC-B-001");
+  });
+
+  it("does NOT flag a test that verifies the constraint's actual rule", () => {
+    const verdict = validateReview(
+      analysis,
+      "",
+      JSON.stringify({
+        test_cases: [
+          {
+            id: "TC-B-001",
+            target: "C001 挂号约束",
+            title: "医生限号边界",
+            steps: ["医生当日挂号达到50次", "患者再次挂号"],
+            expected_result: "系统拒绝挂号提示达上限",
+          },
+        ],
+      }),
+    );
+    const check = verdict.checks.find((c) => c.name === "测试目标/内容对齐检测");
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(true);
   });
 });
 

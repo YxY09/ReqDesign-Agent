@@ -3,6 +3,8 @@
  * 纯同步校验，无 LLM 调用。
  */
 
+import { matchRelationLine } from "../shared/mermaidRelations.js";
+
 export class MermaidValidator {
   constructor() {}
 
@@ -155,11 +157,19 @@ export class MermaidValidator {
           classNames.set(name, i + 1);
         }
       }
+    }
 
-      const relMatch = line.match(/^(\w+)\s*([<|].*[>|])\s*(\w+)\s*:/);
+    // Check every relationship line's endpoints resolve to a defined class.
+    // Uses the shared relation-line matcher (shared/mermaidRelations.ts) so
+    // associations (-->), leftward associations (<--), inheritance (<|-- / --|>),
+    // composition (*--), aggregation (o--) and dependency (..>) — incl. mermaid
+    // cardinality labels like "1" / "*" — all stay in sync across the codebase.
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const relMatch = matchRelationLine(line);
       if (relMatch) {
-        for (const refName of [relMatch[1], relMatch[3]]) {
-          if (!classNames.has(refName) && !refName.startsWith('"')) {
+        for (const refName of [relMatch[1], relMatch[2]]) {
+          if (!classNames.has(refName)) {
             errors.push(`关系引用了未定义的类: '${refName}' (行 ${i + 1})`);
           }
         }

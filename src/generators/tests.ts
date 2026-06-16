@@ -15,6 +15,12 @@ import { createToolError } from "../tools/types.js";
 import { BaseGenerator } from "./base.js";
 import { buildTestPlan, groupByModule, formatTaskGroupForPrompt } from "./testPlanBuilder.js";
 import { validateTestCases as validateTestQuality } from "./testQualityValidator.js";
+import {
+  findDuplicateCandidates,
+  applyDeterministicMerges,
+  type DedupConfig,
+} from "../shared/semanticDeduper.js";
+import { extractContentTerms, jaccardSimilarity as jaccard } from "../shared/testAlignment.js";
 
 export class TestCaseGenerator extends BaseGenerator<string> {
   private promptTemplate: string;
@@ -83,12 +89,18 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       return this.generateSingleShot(requirementJson, designText, systemPrompt);
     }
 
-    // Phase 3: Quality validation
-    const issues = validateTestQuality(allTestCases, requirementJson);
+    // Phase 3a: semantic deduplication across tests that share a target.
+    // Reuses the shared semanticDeduper (same_source / normalized_text /
+    // glossary / token-overlap layers) and adds a CJK bigram Jaccard fallback
+    // because tokenize() collapses unsegmented CJK into a single token.
+    const dedupedTestCases = TestCaseGenerator._dedupTestCases(allTestCases);
+
+    // Phase 3b: Quality validation
+    const issues = validateTestQuality(dedupedTestCases, requirementJson);
     const rejectedIds = new Set(
       issues.filter((i) => i.severity === "reject").map((i) => i.testId),
     );
-    const goodCases = allTestCases.filter(
+    const goodCases = dedupedTestCases.filter(
       (tc) => !rejectedIds.has(String(tc.id ?? "").trim()),
     );
 
@@ -147,6 +159,86 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       }
     }
     return allCases;
+  }
+
+  /**
+   * Semantic deduplication of test cases that share a target constraint/ID.
+   *
+   * Layer 1: reuse shared semanticDeduper.findDuplicateCandidates +
+   * applyDeterministicMerges — catches identical source, normalized text,
+   * glossary-equivalent and high-overlap token pairs deterministically.
+   *
+   * Layer 2 (CJK fallback): the shared tokenize() collapses unsegmented CJK
+   * into one token, so token_overlap is unreliable for Chinese tests. For
+   * same-target pairs not already merged by layer 1, compute Jaccard over
+   * CJK character bigrams (via extractContentTerms) and merge when ≥ 0.7.
+   * Field completeness breaks ties: the case with more non-empty required
+   * fields survives.
+   *
+   * Returns the de-duplicated case list (order preserved).
+   */
+  static _dedupTestCases(
+    cases: Array<Record<string, unknown>>,
+  ): Array<Record<string, unknown>> {
+    if (cases.length < 2) return cases;
+
+    const getId = (tc: Record<string, unknown>, i: number) => String(tc.id ?? `idx-${i}`).trim();
+    const getText = (tc: Record<string, unknown>) => {
+      const steps = Array.isArray(tc.steps) ? (tc.steps as string[]).map(String) : [];
+      return [String(tc.title ?? ""), ...steps, String(tc.expected_result ?? "")].join(" ");
+    };
+    const getSourceText = (tc: Record<string, unknown>) => String(tc.target ?? "");
+
+    const config: DedupConfig<Record<string, unknown>> = {
+      items: cases,
+      getId,
+      getText,
+      // NOTE: getSourceText is intentionally omitted. Many test cases
+      // legitimately share the same target constraint ID; passing `target`
+      // as sourceText would collapse ALL same-target tests via the
+      // same_source layer (score 1.0). Same-target near-dupes are handled
+      // by the explicit CJK bigram fallback in Layer 2 below.
+    };
+
+    const candidates = findDuplicateCandidates(config);
+    const { kept: layer1Kept, merged: layer1Merged } = applyDeterministicMerges(cases, candidates, config);
+
+    // Collect the survivor set after layer 1.
+    const survivors: Array<Record<string, unknown>> = [...layer1Kept, ...layer1Merged.map((g) => g.survivors[0])];
+    if (survivors.length < 2) return survivors;
+
+    // Layer 2: CJK bigram Jaccard fallback for same-target pairs.
+    const REQUIRED_FIELDS = ["title", "steps", "expected_result", "preconditions", "target"];
+    const fieldScore = (tc: Record<string, unknown>) =>
+      REQUIRED_FIELDS.reduce((acc, f) => {
+        const v = tc[f];
+        const present = Array.isArray(v) ? v.length > 0 : !!v && String(v).trim() !== "";
+        return acc + (present ? 1 : 0);
+      }, 0);
+
+    const absorbed = new Set<string>();
+    const ids = survivors.map((tc, i) => getId(tc, i));
+    for (let i = 0; i < survivors.length; i++) {
+      if (absorbed.has(ids[i])) continue;
+      const aTerms = extractContentTerms(getText(survivors[i]));
+      if (aTerms.size === 0) continue;
+      for (let j = i + 1; j < survivors.length; j++) {
+        if (absorbed.has(ids[j])) continue;
+        // Only compare tests that share the same target ID.
+        if (getSourceText(survivors[i]) !== getSourceText(survivors[j])) continue;
+        const bTerms = extractContentTerms(getText(survivors[j]));
+        if (bTerms.size === 0) continue;
+        const sim = jaccard(aTerms, bTerms);
+        if (sim >= 0.7) {
+          // Break ties by field completeness; keep the more complete case.
+          const loser = fieldScore(survivors[i]) >= fieldScore(survivors[j]) ? j : i;
+          absorbed.add(ids[loser]);
+        }
+      }
+    }
+
+    if (absorbed.size === 0) return survivors;
+    return survivors.filter((_tc, i) => !absorbed.has(ids[i]));
   }
 
   static buildTestContract(requirementJson: Record<string, unknown>): string {

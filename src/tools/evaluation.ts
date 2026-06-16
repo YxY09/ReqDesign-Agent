@@ -16,6 +16,7 @@ import { validateReview, type ReviewValidationResult } from "../shared/reviewVal
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
 import { appendMemorySafely } from "../memory/promptMemory.js";
+import { extractRelationEndpoints } from "../shared/mermaidRelations.js";
 
 
 export class EvaluationTool extends BaseTool {
@@ -895,17 +896,17 @@ export class EvaluationTool extends BaseTool {
     requirementJson: Record<string, unknown>,
   ): Issue[] {
     const reqEntities = (requirementJson.entities ?? []) as Array<Record<string, unknown>>;
-    if (!reqEntities || reqEntities.length === 0) return [];
 
     const expectedNames: string[] = [];
-    for (const entity of reqEntities) {
-      const name = String(entity.name ?? entity.ename ?? "").trim();
-      if (!name) continue;
-      // Skip Chinese characters — can't match Mermaid class names
-      if (/[\u4e00-\u9fff]/.test(name)) continue;
-      expectedNames.push(name);
+    if (Array.isArray(reqEntities)) {
+      for (const entity of reqEntities) {
+        const name = String(entity.name ?? entity.ename ?? "").trim();
+        if (!name) continue;
+        // Skip Chinese characters — can't match Mermaid class names
+        if (/[\u4e00-\u9fff]/.test(name)) continue;
+        expectedNames.push(name);
+      }
     }
-    if (expectedNames.length === 0) return [];
 
     const classRe = /class\s+(\w+)\s*\{/g;
     const diagramClasses = new Set<string>();
@@ -914,20 +915,44 @@ export class EvaluationTool extends BaseTool {
       diagramClasses.add(m[1]);
     }
 
-    const missing = expectedNames.filter(
-      (name) => !diagramClasses.has(name) && ![...diagramClasses].some((dc) => dc.includes(name)),
-    );
+    const issues: Issue[] = [];
 
-    if (missing.length === 0) return [];
+    // Missing entities: required entities not defined in the diagram.
+    // Use a precise set membership check (not a fuzzy `.includes` substring,
+    // which let e.g. "User" hide inside "UserAccount").
+    const missing = expectedNames.filter((name) => !diagramClasses.has(name));
 
-    return [createIssue({
-      severity: "major",
-      targetTaskId: taskId,
-      targetTaskType: "diagrams",
-      targetField: "diagrams.class_diagram",
-      description: `类图缺少需求分析中的核心实体: ${missing.join(", ")}`,
-      suggestion: `在类图中补充以下实体的类定义: ${missing.join(", ")}`,
-    })];
+    if (missing.length > 0) {
+      issues.push(createIssue({
+        severity: "major",
+        targetTaskId: taskId,
+        targetTaskType: "diagrams",
+        targetField: "diagrams.class_diagram",
+        description: `类图缺少需求分析中的核心实体: ${missing.join(", ")}`,
+        suggestion: `在类图中补充以下实体的类定义: ${missing.join(", ")}`,
+      }));
+    }
+
+    // Dangling relationship endpoints: any relationship line that references
+    // a class which has no `class X {}` definition block. This catches
+    // associations (`"1" --> "*"`) that slipped past the inheritance-only
+    // checks. Mirrors the mermaid.ts semantic check so the evaluator can
+    // emit an actionable issue with the canonical phrasing the repair tool
+    // routes on (see _trySingleDeterministicFix).
+    const dangling = extractRelationEndpoints(mermaidText)
+      .filter((name) => !diagramClasses.has(name));
+    if (dangling.length > 0) {
+      issues.push(createIssue({
+        severity: "major",
+        targetTaskId: taskId,
+        targetTaskType: "diagrams",
+        targetField: "diagrams.class_diagram",
+        description: `类图关系引用了未定义的类: ${dangling.join(", ")}`,
+        suggestion: `为以下关系端点补充 \`class X {}\` 定义块，或删除引用该类的关系行: ${dangling.join(", ")}`,
+      }));
+    }
+
+    return issues;
   }
 
   // --------------------------------------------------------------

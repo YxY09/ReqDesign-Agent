@@ -9,6 +9,10 @@
  */
 
 import { RequirementIndex } from "./requirementIndex.js";
+import {
+  evaluateTargetAlignment,
+  collectConstraintSourceTexts,
+} from "./testAlignment.js";
 
 export interface ReviewValidationCheck {
   name: string;
@@ -32,6 +36,7 @@ export function validateReview(
   checks.push(_checkReferenceIntegrity(requirementJson, designText, testCasesText));
   checks.push(_checkSelfInventedIds(requirementJson, designText, testCasesText));
   checks.push(_checkEmptySteps(requirementJson, testCasesText));
+  checks.push(_checkTestTargetContentAlignment(requirementJson, testCasesText));
 
   const passed = checks.every((c) => c.passed);
 
@@ -214,6 +219,97 @@ function _checkEmptySteps(
   }
 
   return { name: "空步骤/空预期检测", passed: true, detail: "步骤和预期结果均有内容" };
+}
+
+// ---------------------------------------------------------------------------
+// Check 5: 测试目标/内容对齐检测（合法 ID 但内容编造）
+// ---------------------------------------------------------------------------
+
+function _checkTestTargetContentAlignment(
+  requirementJson: Record<string, unknown>,
+  testCasesText: string,
+): ReviewValidationCheck {
+  if (!testCasesText?.trim()) {
+    return { name: "测试目标/内容对齐检测", passed: true, detail: "无测试用例文本" };
+  }
+
+  const constraintTexts = collectConstraintSourceTexts(requirementJson);
+  if (constraintTexts.size === 0) {
+    return { name: "测试目标/内容对齐检测", passed: true, detail: "无约束可供对齐" };
+  }
+
+  const entries = _parseTestCaseEntries(testCasesText);
+  if (entries.length === 0) {
+    return { name: "测试目标/内容对齐检测", passed: true, detail: "未解析到带目标约束的测试用例" };
+  }
+
+  const misaligned: string[] = [];
+  for (const e of entries) {
+    const r = evaluateTargetAlignment({
+      target: e.target,
+      content: e.content,
+      constraintTexts,
+    });
+    if (r.misaligned && !r.allIdsUnknown) {
+      misaligned.push(`${e.id || "未知用例"}(${r.matchedId ?? ""}, overlap=${r.overlap.toFixed(2)})`);
+    }
+  }
+
+  if (misaligned.length > 0) {
+    return {
+      name: "测试目标/内容对齐检测",
+      passed: false,
+      detail: `以下测试用例的目标约束内容与步骤/预期结果无重叠，疑似编造不相关规则: ${misaligned.join(", ")}`,
+    };
+  }
+  return { name: "测试目标/内容对齐检测", passed: true, detail: "测试用例内容与目标约束对齐" };
+}
+
+/** Parse test case target + content (steps/expected_result) from JSON or markdown text. */
+function _parseTestCaseEntries(
+  text: string,
+): Array<{ id: string; target: string; content: string }> {
+  const entries: Array<{ id: string; target: string; content: string }> = [];
+
+  // Structured JSON (object with test_cases array, or a bare array).
+  const trimmed = text.trim();
+  const looksJson = trimmed.startsWith("{") || trimmed.startsWith("[");
+  if (looksJson) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const arr: unknown[] = Array.isArray(parsed)
+        ? parsed
+        : typeof parsed === "object" && parsed !== null && Array.isArray((parsed as Record<string, unknown>).test_cases)
+          ? ((parsed as Record<string, unknown>).test_cases as unknown[])
+          : [];
+      for (const item of arr) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const steps = Array.isArray(rec.steps) ? (rec.steps as string[]).map(String) : [];
+        const content = [String(rec.title ?? ""), ...steps, String(rec.expected_result ?? "")].join(" ");
+        const target = String(rec.target ?? "");
+        if (target) entries.push({ id: String(rec.id ?? ""), target, content });
+      }
+      if (entries.length > 0) return entries;
+    } catch {
+      // fall through to markdown parsing
+    }
+  }
+
+  // Markdown sections: "## TC-...: title" then "- **测试对象**: ..." etc.
+  const sections = text.split(/^##\s+/m);
+  for (const section of sections) {
+    if (!/^TC-/.test(section)) continue;
+    const idMatch = section.match(/^(TC-\S+)/);
+    const targetMatch = section.match(/\*\*测试对象\*\*:\s*([^\n]*)/);
+    const stepsMatch = section.match(/\*\*测试步骤\*\*:\s*([^\n]*)/);
+    const expectedMatch = section.match(/\*\*预期结果\*\*:\s*([^\n]*)/);
+    const target = (targetMatch?.[1] ?? "").trim();
+    if (!target) continue;
+    const content = [stepsMatch?.[1] ?? "", expectedMatch?.[1] ?? ""].join(" ");
+    entries.push({ id: (idMatch?.[1] ?? "").trim(), target, content });
+  }
+  return entries;
 }
 
 // ---------------------------------------------------------------------------

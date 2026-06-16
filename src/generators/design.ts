@@ -6,6 +6,7 @@ import type { LLMClient } from "../llmClient.js";
 import { loadPrompt } from "../promptLoader.js";
 import { minimizeForPrompt } from "../shared/minimizeJsonForPrompt.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
+import { extractRelationEndpoints } from "../shared/mermaidRelations.js";
 import { semanticCoverageState, semanticItemId, tokenContains } from "../shared/semanticCoverage.js";
 import type { DesignModel } from "../shared/types.js";
 import { isDesignModel } from "../shared/types.js";
@@ -135,11 +136,12 @@ function extractReferencedClassNames(designText: string): string[] {
   const classDiagramText = extractClassDiagramSections(designText).join("\n");
   if (!classDiagramText.trim()) return [];
 
-  const relationRe = /^\s*([A-Za-z_]\w*)\s+(?:"[^"]*"\s+)?(?:<?--|-->|--|o--|\*--|\.\.>)\s+(?:"[^"]*"\s+)?([A-Za-z_]\w*)/gm;
-  let relation: RegExpExecArray | null;
-  while ((relation = relationRe.exec(classDiagramText)) !== null) {
-    refs.add(relation[1]);
-    refs.add(relation[2]);
+  // Single source of truth: relation-endpoint extraction lives in
+  // shared/mermaidRelations.js. Reusing it also picks up the `<|--` / `--|>`
+  // inheritance arrows so dangling inheritance endpoints are flagged here
+  // too, consistent with the entity (checkEntities) validation path.
+  for (const name of extractRelationEndpoints(classDiagramText)) {
+    refs.add(name);
   }
 
   const genericRe = /(?:List|Set|Array|Collection|Map)~([A-Za-z_]\w*)~/g;

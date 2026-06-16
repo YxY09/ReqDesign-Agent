@@ -4,11 +4,19 @@ import {
   applyDeterministicMerges,
   normalizeText,
   tokenize,
-  jaccard,
   DEFAULT_GLOSSARY,
   type DedupConfig,
 } from "../src/shared/semanticDeduper.js";
+import { jaccardSimilarity as jaccard } from "../src/shared/testAlignment.js";
 import { normalizeForComparison } from "../src/shared/constraintCanonicalizer.js";
+import { TestCaseGenerator } from "../src/generators/tests.js";
+
+/** Deduplicate a list of test-case-shaped records via TestCaseGenerator. */
+function dedupCases(
+  cases: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  return TestCaseGenerator._dedupTestCases(cases);
+}
 
 // ---------------------------------------------------------------------------
 // Test item type
@@ -378,5 +386,70 @@ describe("applyDeterministicMerges", () => {
       const result = applyDeterministicMerges(items, candidates, config);
       expect(result.kept).toHaveLength(2);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Medical glossary extension (defect 2 step 8)
+// ---------------------------------------------------------------------------
+
+describe("DEFAULT_GLOSSARY — medical/hospital equivalence groups", () => {
+  it("detects glossary_equiv between 挂号 and appointment/registration", () => {
+    const items: TestItem[] = [
+      { id: "1", text: "appointment booking limit reached", source: "s1" },
+      { id: "2", text: "挂号数量达到上限", source: "s2" },
+    ];
+    const candidates = findDuplicateCandidates(makeConfig(items));
+    const glossaryPair = candidates.find((c) => c.reason === "glossary_equiv");
+    expect(glossaryPair).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TestCaseGenerator._dedupTestCases — near-duplicate test case pairs
+// (defect 2 step 8: CJK bigram fallback for same-target tests)
+// ---------------------------------------------------------------------------
+
+describe("TestCaseGenerator._dedupTestCases", () => {
+  it("deduplicates near-identical CJK test cases sharing the same target", () => {
+    // Nearly verbatim duplicates (the realistic LLM repeat pattern).
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001 挂号约束", title: "医生每日限号边界",
+        preconditions: "已登录", steps: ["医生当日挂号达到50次", "患者再次挂号"], expected_result: "系统拒绝挂号提示已达上限", priority: "P1" },
+      { id: "TC-B-002", type: "边界", target: "C001 挂号约束", title: "医生每日限号边界测试",
+        preconditions: "已登录", steps: ["医生当日挂号达到50次", "患者再次挂号"], expected_result: "系统拒绝挂号提示已达上限", priority: "P1" },
+    ];
+    const out = dedupCases(cases);
+    expect(out).toHaveLength(1);
+  });
+
+  it("keeps distinct tests even when they share a target", () => {
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001 挂号约束", title: "医生每日限号",
+        preconditions: "x", steps: ["医生当日挂号达到50次", "患者挂号"], expected_result: "拒绝挂号", priority: "P1" },
+      { id: "TC-B-002", type: "边界", target: "C001 挂号约束", title: "同患者同科限挂",
+        preconditions: "x", steps: ["同一患者同日同科已挂号1次", "再次挂号"], expected_result: "拒绝重复挂号", priority: "P1" },
+    ];
+    const out = dedupCases(cases);
+    expect(out).toHaveLength(2);
+  });
+
+  it("keeps tests that target different constraints", () => {
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001 挂号约束", title: "挂号",
+        preconditions: "x", steps: ["医生挂号达50次"], expected_result: "拒绝", priority: "P1" },
+      { id: "TC-B-002", type: "边界", target: "C002 处方约束", title: "处方药品数",
+        preconditions: "x", steps: ["开具含6种药品的处方"], expected_result: "拒绝", priority: "P1" },
+    ];
+    const out = dedupCases(cases);
+    expect(out).toHaveLength(2);
+  });
+
+  it("returns input unchanged for fewer than 2 cases", () => {
+    const cases = [
+      { id: "TC-B-001", type: "边界", target: "C001", title: "t",
+        preconditions: "x", steps: ["a"], expected_result: "r", priority: "P1" },
+    ];
+    expect(dedupCases(cases)).toHaveLength(1);
   });
 });

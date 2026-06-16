@@ -27,6 +27,8 @@
  * requirement) to avoid false positives from short terms like "权限".
  */
 
+import { jaccardSimilarity as jaccard } from "./testAlignment.js";
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -72,6 +74,14 @@ export const DEFAULT_GLOSSARY: string[][] = [
   ["context help", "上下文帮助", "help module", "在线帮助"],
   ["error message", "错误信息", "meaningful error", "actionable error", "有意义的错误"],
   ["persistent default", "持久化默认值", "saved preferences"],
+  // Medical / hospital domain equivalence groups
+  ["registration", "挂号", "预约挂号", "限号", "appointment"],
+  ["prescription", "处方", "开药", "药品", "medication", "drug"],
+  ["insurance", "医保", "保险", "退费", "refund", "billing"],
+  ["doctor", "医生", "医师", "physician"],
+  ["patient", "患者", "病人", "就诊人"],
+  ["inventory", "库存", "入库", "出库", "stock"],
+  ["schedule", "排班", "班次", "值班", "shift", "roster"],
   ["role based", "基于角色", "role specific", "角色特定"],
 ];
 
@@ -151,17 +161,6 @@ export function tokenize(text: string): string[] {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
-}
-
-/** Jaccard similarity between two sets. */
-export function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 0;
-  let inter = 0;
-  for (const x of a) {
-    if (b.has(x)) inter++;
-  }
-  const unionSize = new Set([...a, ...b]).size;
-  return unionSize > 0 ? inter / unionSize : 0;
 }
 
 // ---------------------------------------------------------------------------

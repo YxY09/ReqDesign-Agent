@@ -68,6 +68,89 @@ describe("MermaidValidator", () => {
     expect(r.message).toContain("class 定义");
   });
 
+  // ---------------------------------------------------------------------
+  // Regression (defect 1): relationship endpoint semantics.
+  // The old regex `/^(\w+)\s*([<|].*[>|])\s*(\w+)\s*:/` only matched
+  // inheritance arrows and never matched `-->` associations, so dangling
+  // association classes (e.g. `"1" --> "*"`) slipped through.
+  // ---------------------------------------------------------------------
+
+  it("flags association endpoints (`\"1\" --> \"*\"`) referenced but never defined", () => {
+    // Hospital-style: Patient/Doctor defined, Insurance/PrescriptionItem only referenced.
+    const content = `classDiagram
+    class Patient {
+        -String id
+    }
+    class Doctor {
+        -String id
+    }
+    Patient "1" --> "*" Doctor : visits
+    Patient "1" --> "*" Insurance : uses
+    Doctor "1" --> "*" PrescriptionItem : writes`;
+    const r = validator.validate(content, "classDiagram");
+    expect(r.valid).toBe(false);
+    expect(r.message).toContain("未定义的类");
+    expect(r.message).toContain("Insurance");
+    expect(r.message).toContain("PrescriptionItem");
+  });
+
+  it("accepts association lines when both endpoints are defined (no false positive)", () => {
+    const content = `classDiagram
+    class Patient {
+        -String id
+    }
+    class Doctor {
+        -String id
+    }
+    Patient "1" --> "*" Doctor : visits`;
+    const r = validator.validate(content, "classDiagram");
+    expect(r.valid).toBe(true);
+  });
+
+  it("correctly handles mermaid `\"*\"` cardinality (planner regex `\"\\d*\"` would miss it)", () => {
+    // The planner's original `"\d*"` pattern matches "1" but the broadened
+    // design.ts-style pattern must still capture "*" cardinality endpoints.
+    const content = `classDiagram
+    class Order {
+        -int id
+    }
+    Order "1" --> "*" OrderItem : contains`;
+    const r = validator.validate(content, "classDiagram");
+    // OrderItem is undefined → must be flagged (proves "*" endpoint was captured).
+    expect(r.valid).toBe(false);
+    expect(r.message).toContain("OrderItem");
+  });
+
+  it("flags dangling inheritance endpoints (<|-- and --|>)", () => {
+    const content = `classDiagram
+    class Dog {
+        -String name
+    }
+    Dog --|> Animal
+    Cat <|-- Feline`;
+    const r = validator.validate(content, "classDiagram");
+    expect(r.valid).toBe(false);
+    expect(r.message).toContain("Animal");
+  });
+
+  // Regression (Warning 1): leftward association arrow `A <-- B`. The
+  // shared relation regex must treat `<--` (the `<?--` alternative, optional
+  // `<`) as a relationship line so its endpoints are validated. An earlier
+  // revision used the escaped form `<\?--` (a literal `?`), which failed to
+  // match `A <-- B`, leaving endpoint B unchecked and falsely reporting VALID.
+  it("flags dangling endpoint on leftward association arrow (A <-- B)", () => {
+    const content = `classDiagram
+    class A {
+        -int id
+    }
+    A <-- B`;
+    const r = validator.validate(content, "classDiagram");
+    // B is referenced but never defined → must be flagged INVALID.
+    expect(r.valid).toBe(false);
+    expect(r.message).toContain("未定义的类");
+    expect(r.message).toContain("B");
+  });
+
   it("accepts a valid flowchart", () => {
     const content = `flowchart TD
     A([开始]) --> B[处理请求]
@@ -119,6 +202,9 @@ describe("MermaidValidator", () => {
     const content = `classDiagram
     class User {
         +login()
+    }
+    class Book {
+        +title()
     }
     User --> Book`;
     const report = validator.validateAndReport(content, "类图");

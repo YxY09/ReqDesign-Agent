@@ -214,7 +214,22 @@ export class DiagramGenerator extends BaseGenerator<string> {
       const hasExplicit = classNames && classNames.length > 0;
 
       if (shouldExtract || hasExplicit) {
-        const names = hasExplicit ? classNames! : DiagramGenerator._extractDesignClassNames(designText);
+        let names: string[];
+        if (hasExplicit) {
+          names = classNames!;
+        } else {
+          // Allow-list = requirement entities ∪ design-text core classes so
+          // legitimate data entities are always part of the forced class set.
+          const entityNames = Array.isArray(requirementJson?.["entities"])
+            ? (requirementJson!["entities"] as Array<Record<string, unknown>>)
+                .map((e) => String(e["name"] ?? "").trim())
+                .filter((n) => n && !/[\u4e00-\u9fff]/.test(n))
+            : [];
+          const designNames = diagramType === "class_diagram" || diagramType === "state_diagram"
+            ? DiagramGenerator._extractDesignClassNames(designText)
+            : [];
+          names = [...new Set([...entityNames, ...designNames])];
+        }
         if (names.length > 0) {
           const nameList = names.join(", ");
           if (diagramType === "class_diagram") {
@@ -223,6 +238,7 @@ export class DiagramGenerator extends BaseGenerator<string> {
 ## 强制类名清单（最高优先级）
 设计文档中定义了以下核心类，类图必须使用这些精确名称，禁止改名或新增：
 ${nameList}
+此外，关系两端（... --> ...）出现的每个类名必须有对应的 \`class X {}\` 定义块。如果某个类名既不在实体清单也不在上述设计类清单中，生成器必须为它补充 \`class X {}\` 定义块，或删除引用该类的关系行。
 输出前逐一核对上述清单中的每个类名是否在类图中出现且拼写完全一致。`;
           } else if (diagramType === "state_diagram") {
             prompt += `

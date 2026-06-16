@@ -206,7 +206,13 @@ export function formatTaskGroupForPrompt(group: TaskGroup): string {
     }
     lines.push(`- 必须覆盖:`);
     for (const mc of task.mustCover) {
-      lines.push(`  - ${mc}`);
+      // Mark constraint lines as the test content baseline so the LLM knows
+      // steps/expected_result must not drift away from these rules.
+      if (/^约束\s/.test(mc)) {
+        lines.push(`  - ${mc}（测试内容基线，禁止偏离）`);
+      } else {
+        lines.push(`  - ${mc}`);
+      }
     }
     lines.push("");
   }

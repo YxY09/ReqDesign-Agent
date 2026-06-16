@@ -17,6 +17,8 @@ import { MermaidValidator } from "../generators/mermaid.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { appendMemorySafely } from "../memory/promptMemory.js";
+import { extractRelationEndpoints, isRelationLine } from "../shared/mermaidRelations.js";
+import { extractDesignClassDefinitions } from "../shared/designClassExtractor.js";
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
@@ -190,11 +192,21 @@ export class GenerationTool extends BaseTool {
       const method = methodMap[diagramKind];
       if (!method) throw createToolError("GEN_UNKNOWN_DIAGRAM", `未知图表类型: ${diagramKind}`, { recoverable: false });
       const result = await this.llm.runWithStreamTagContext("[Generator:diagrams]", "", method);
-      return { [diagramKind]: result };
+      // Deterministic class-patch: synthesize any relationship endpoint
+      // that has no `class {}` block from entities / design definitions.
+      const patched = diagramKind === "class_diagram"
+        ? GenerationTool._patchMissingClassDefinitions(result, reqJson, designText)
+        : result;
+      return { [diagramKind]: patched };
     }
-    return this.llm.runWithStreamTagContext("[Generator:diagrams]", "", () =>
+    const all = await this.llm.runWithStreamTagContext("[Generator:diagrams]", "", () =>
       generator.generateAll(reqJson, designText, systemPrompt, "")
     );
+    // Apply the same deterministic class-patch to the bundled class_diagram.
+    if (all.class_diagram) {
+      all.class_diagram = GenerationTool._patchMissingClassDefinitions(all.class_diagram, reqJson, designText);
+    }
+    return all;
   }
 
   private async _generateTests(
@@ -206,6 +218,77 @@ export class GenerationTool extends BaseTool {
     return this.llm.runWithStreamTagContext("[Generator:tests]", "", () =>
       this._getTestGen().generate({ requirementJson: reqJson, designText, systemPrompt, requirementText: "" })
     );
+  }
+
+  /**
+   * Deterministic post-generation patch for class diagrams: inject a
+   * `class X {}` block for any relationship endpoint that the LLM referenced
+   * but never defined. Sources (in priority order):
+   *   1. requirement_json.entities (attributes used to build the block)
+   *   2. design_text 核心类 table (responsibility/attributes/methods)
+   * If a referenced class is found in neither source it is left untouched —
+   * generation-time _ruleCheck / evaluation will flag it, and the repair
+   * safety net can retry. This mirrors RepairTool._fixMissingClassDiagramEntities
+   * so generation output is already correct before evaluation runs.
+   */
+  static _patchMissingClassDefinitions(
+    mermaid: string,
+    requirementJson: Record<string, unknown>,
+    designText: string,
+  ): string {
+    if (!mermaid || !mermaid.includes("classDiagram")) return mermaid;
+
+    const defined = new Set<string>();
+    const classRe = /class\s+(\w+)\s*\{/g;
+    let m: RegExpExecArray | null;
+    while ((m = classRe.exec(mermaid)) !== null) defined.add(m[1]);
+
+    const dangling = extractRelationEndpoints(mermaid).filter((n) => !defined.has(n));
+    if (dangling.length === 0) return mermaid;
+
+    // Source 1: requirement entities
+    const entityMap = new Map<string, Record<string, unknown>>();
+    const reqEntities = requirementJson.entities;
+    if (Array.isArray(reqEntities)) {
+      for (const ent of reqEntities) {
+        if (ent && typeof ent === "object") {
+          const name = String((ent as Record<string, unknown>).name ?? "").trim();
+          if (name) entityMap.set(name, ent as Record<string, unknown>);
+        }
+      }
+    }
+
+    // Source 2: design_text core class table
+    const designClassMap = extractDesignClassDefinitions(designText);
+
+    const newClasses: string[] = [];
+    for (const name of dangling) {
+      const entity = entityMap.get(name);
+      if (entity) {
+        const attrs = Array.isArray(entity.attributes)
+          ? (entity.attributes as Array<Record<string, unknown>>).slice(0, 3).map(
+              (a) => `        -String ${(a as Record<string, unknown>).name ?? "id"}`,
+            ).join("\n")
+          : `        -Long id`;
+        newClasses.push(`    class ${name} {\n${attrs}\n    }`);
+        continue;
+      }
+      const designDef = designClassMap.get(name);
+      if (designDef) {
+        newClasses.push(designDef);
+      }
+      // If neither source resolves the name, leave it to downstream checks.
+    }
+
+    if (newClasses.length === 0) return mermaid;
+
+    const lines = mermaid.split("\n");
+    const firstRelIdx = lines.findIndex((l) => isRelationLine(l));
+    if (firstRelIdx === -1) {
+      return mermaid + "\n" + newClasses.join("\n");
+    }
+    lines.splice(firstRelIdx, 0, ...newClasses);
+    return lines.join("\n");
   }
 
   // ------------------------------------------------------------------

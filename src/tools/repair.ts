@@ -12,6 +12,8 @@ import { ArtifactPatcher, type PatchOp, type Section, type JsonPatchOp } from ".
 import { isDesignModel, type Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
 import { isTemplateLike } from "../generators/testQualityValidator.js";
+import { isRelationLine } from "../shared/mermaidRelations.js";
+import { extractDesignClassDefinitions } from "../shared/designClassExtractor.js";
 
 export class RepairTool extends BaseTool {
   constructor(llm: LLMClient) {
@@ -367,6 +369,20 @@ export class RepairTool extends BaseTool {
         }
       }
 
+      // Sub-pattern 2e: "类图关系引用了未定义的类: X, Y" (dangling relationship
+      // endpoints emitted by evaluation._checkClassDiagramEntities). Route
+      // to the same synthesizer that builds missing classes from entities /
+      // design definitions.
+      if (entityNames.length === 0) {
+        const danglingMatch = description.match(/类图关系引用了未定义的类:\s*(.+)/);
+        if (danglingMatch) {
+          entityNames = danglingMatch[1]
+            .split(/,\s*/)
+            .map((s) => s.trim())
+            .filter((s) => /^[A-Z][A-Za-z0-9_]*$/.test(s));
+        }
+      }
+
       if (entityNames.length > 0) {
         return this._fixMissingClassDiagramEntities(task, currentContent, entityNames, context);
       }
@@ -468,7 +484,7 @@ export class RepairTool extends BaseTool {
 
     // Source 2: design_text core class table (service classes like Calculator, OrderService)
     const designText = String(context.design_text ?? "");
-    const designClassMap = this._extractDesignClassDefinitions(designText);
+    const designClassMap = extractDesignClassDefinitions(designText);
 
     const newClasses: string[] = [];
     for (const name of entityNames) {
@@ -503,9 +519,12 @@ export class RepairTool extends BaseTool {
       return null;
     }
 
-    // Insert before the first relationship line
+    // Insert before the first relationship line. The broadened pattern
+    // covers associations (-->), inheritance (<|-- / --|>), composition
+    // (*--), aggregation (o--) and dependency (..>), so newly-added
+    // dangling-association classes land before their first reference.
     const lines = classDiagram.split("\n");
-    const firstRelIdx = lines.findIndex((l) => /"\d*"\s*-->/.test(l));
+    const firstRelIdx = lines.findIndex((l) => isRelationLine(l));
     if (firstRelIdx === -1) {
       const fixed = classDiagram + "\n" + newClasses.join("\n");
       return { ...obj, class_diagram: fixed };
@@ -513,52 +532,6 @@ export class RepairTool extends BaseTool {
     lines.splice(firstRelIdx, 0, ...newClasses);
     this.logger.info(`deterministic: added ${newClasses.length} class(es) to class_diagram`);
     return { ...obj, class_diagram: lines.join("\n") };
-  }
-
-  /**
-   * Extract class definitions from design_text's "核心类/接口设计" section.
-   * Returns a map of className -> full Mermaid class block string.
-   */
-  private _extractDesignClassDefinitions(designText: string): Map<string, string> {
-    const result = new Map<string, string>();
-    if (!designText) return result;
-
-    const sectionMatch = designText.match(/核心类[^\n]*设计[\s\S]*?(?=\n##\s[^#]|\n##[^#]|$)/);
-    if (!sectionMatch) return result;
-    const section = sectionMatch[0];
-
-    // Parse table rows: | ClassName | 职责 | 关键属性 | 关键方法 |
-    const rows = section.split("\n");
-    for (const row of rows) {
-      const trimmed = row.trim();
-      if (!trimmed.startsWith("|")) continue;
-      if (trimmed.includes("---")) continue;
-      if (/^\|\s*类名/.test(trimmed)) continue;
-      const cells = trimmed.split("|").map(c => c.trim()).filter(Boolean);
-      if (cells.length < 4) continue;
-      const className = cells[0];
-      if (!/^[A-Z][a-zA-Z0-9]+$/.test(className)) continue;
-
-      // Parse attributes: "attr1 (Type), attr2 (Type)"
-      const attrText = cells[2] || "";
-      const attrMatches = [...attrText.matchAll(/(\w+)\s*\((\w+)\)/g)];
-      const attrLines = attrMatches.length > 0
-        ? attrMatches.map(m => `        -${m[2]} ${m[1]}`).join("\n")
-        : "";
-
-      // Parse methods: "method1(), method2(Param)"
-      const methodText = cells[3] || "";
-      const methodMatches = [...methodText.matchAll(/(\w+\([^)]*\))/g)];
-      const methodLines = methodMatches.length > 0
-        ? methodMatches.map(m => `        +${m[1]}`).join("\n")
-        : "";
-
-      if (!attrLines && !methodLines) continue;
-      const block = `    class ${className} {\n${attrLines}${methodLines ? "\n" + methodLines : ""}\n    }`;
-      result.set(className, block);
-    }
-
-    return result;
   }
 
   /**
@@ -1054,7 +1027,7 @@ export class RepairTool extends BaseTool {
 
     // Find insertion point: before first relationship line, or append
     const lines = patchedClass.content.split("\n");
-    const relIdx = lines.findIndex(l => /"\d*"\s*-->|-->\s*"\d*"/.test(l));
+    const relIdx = lines.findIndex((l) => isRelationLine(l));
     if (relIdx >= 0) {
       lines.splice(relIdx, 0, ...lostBlocks);
     } else {

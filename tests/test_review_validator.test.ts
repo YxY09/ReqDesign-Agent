@@ -209,9 +209,10 @@ describe("validateReview", () => {
     expect(checkNames).toContain("引用完整性");
     expect(checkNames).toContain("自编 ID 检测");
     expect(checkNames).toContain("空步骤/空预期检测");
+    expect(checkNames).toContain("测试目标/内容对齐检测");
     expect(checkNames).not.toContain("覆盖率");
     expect(checkNames).not.toContain("约束设计覆盖");
     expect(checkNames).not.toContain("约束测试覆盖");
-    expect(result.checks).toHaveLength(4);
+    expect(result.checks).toHaveLength(5);
   });
 });
