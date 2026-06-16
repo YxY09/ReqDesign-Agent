@@ -429,14 +429,51 @@ function linkFunctions(
 ): CanonicalConstraint["relatedFunctions"] {
   if (existingFunctions.length === 0) return [];
 
+  // Build lookup of known function identifiers (id, displayId, name) so we can
+  // resolve candidate strings to canonical function IDs regardless of which
+  // form the upstream analysis emitted.
+  const byKey = new Map<string, { id: string; fn: { id: string; displayId: string; name: string } }>();
+  for (const fn of existingFunctions) {
+    for (const key of [fn.id, fn.displayId, fn.name]) {
+      const k = String(key ?? "").trim().toLowerCase();
+      if (k && !byKey.has(k)) byKey.set(k, { id: fn.id, fn });
+    }
+  }
+
+  const links: CanonicalConstraint["relatedFunctions"] = [];
+  const seen = new Set<string>();
+
+  // --- Phase 1: Consume explicit analysis-provided links first. ---
+  // relatedFunctionCandidates are authoritative hints (e.g. from the planner /
+  // constraint extractor), so they get a higher confidence than keyword
+  // matching and a distinct relation. De-dup by resolved canonical functionId.
+  if (group.relatedFunctionCandidates && group.relatedFunctionCandidates.length > 0) {
+    for (const candidate of group.relatedFunctionCandidates) {
+      const key = String(candidate ?? "").trim().toLowerCase();
+      if (!key) continue;
+      const hit = byKey.get(key);
+      if (!hit) continue;
+      if (seen.has(hit.id)) continue;
+      seen.add(hit.id);
+      links.push({
+        functionId: hit.id,
+        relation: "explicit_link",
+        confidence: 0.9,
+      });
+    }
+  }
+
+  // --- Phase 2: Keyword matching against sourceText/description. ---
   const searchTexts = [
     group.description,
     ...group.sourceTexts.map((s) => s.sourceText),
   ].filter(Boolean);
 
-  const links: CanonicalConstraint["relatedFunctions"] = [];
-
   for (const fn of existingFunctions) {
+    // Skip functions already linked via explicit candidates so the keyword
+    // pass (lower confidence) does not overwrite the explicit relation.
+    if (seen.has(fn.id)) continue;
+
     const nameLower = fn.name.toLowerCase();
     // Also derive English-searchable keywords from the PascalCase name
     // e.g. "SearchCase" → ["search", "case"]
@@ -454,13 +491,12 @@ function linkFunctions(
           (part) => part.length > 3 && textLower.includes(part),
         );
       if (matches) {
-        if (!links.some((l) => l.functionId === fn.id)) {
-          links.push({
-            functionId: fn.id,
-            relation: "mentioned_in_source",
-            confidence: 0.7,
-          });
-        }
+        seen.add(fn.id);
+        links.push({
+          functionId: fn.id,
+          relation: "mentioned_in_source",
+          confidence: 0.7,
+        });
         break;
       }
     }

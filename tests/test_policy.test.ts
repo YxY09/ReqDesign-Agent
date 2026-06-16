@@ -471,3 +471,79 @@ describe("DeterministicPolicy", () => {
     expect(result!.strategy).toBe("pause_for_user");
   });
 });
+
+// ---------------------------------------------------------------------------
+// convergenceStalled — severity gate + round-exhaustion termination
+// ---------------------------------------------------------------------------
+
+describe("convergenceStalled severity gate (0 blockers)", () => {
+  it("does NOT auto-finish when a blocker is present, even with few issues and decreasing trend", () => {
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      convergenceStalled: true,
+      convergenceRoundCount: 4,
+      convergenceTrend: "decreasing",
+      latestIssues: [
+        { severity: "blocker", description: "unfixable blocker" },
+        { severity: "minor", description: "trivial" },
+      ],
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    // Blocker present → must NOT finish; should pause instead.
+    expect(result!.strategy).not.toBe("finish");
+    expect(result!.strategy).toBe("pause_for_user");
+  });
+
+  it("does NOT auto-finish when a blocker is present in the flat-trend accept branch", () => {
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      convergenceStalled: true,
+      convergenceRoundCount: 4,
+      convergenceTrend: "flat",
+      latestIssues: [
+        { severity: "blocker", description: "unfixable blocker" },
+      ],
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    expect(result!.strategy).not.toBe("finish");
+    expect(result!.strategy).toBe("pause_for_user");
+  });
+});
+
+describe("convergenceStalled round-exhaustion termination", () => {
+  it("pauses once convergence rounds reach the max cap, regardless of low issue count", () => {
+    // Default maxConvergenceRounds = 6. Use roundCount = 6 to force exhaustion.
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      convergenceStalled: true,
+      convergenceRoundCount: 6,
+      convergenceTrend: "decreasing",
+      latestIssues: [
+        { severity: "minor", description: "low priority" },
+      ],
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    // Round cap short-circuits the accept branches even though the issue set
+    // would otherwise qualify for auto-finish (0 blockers, 1 issue, decreasing).
+    expect(result!.strategy).toBe("pause_for_user");
+    expect(result!.reason).toContain("exhausted");
+  });
+
+  it("still auto-finishes just below the round cap when there are no blockers", () => {
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      convergenceStalled: true,
+      convergenceRoundCount: 5, // < default cap 6
+      convergenceTrend: "decreasing",
+      latestIssues: [
+        { severity: "minor", description: "low priority" },
+      ],
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
+    expect(result!.strategy).toBe("finish");
+  });
+});

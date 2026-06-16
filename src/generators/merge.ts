@@ -68,6 +68,14 @@ export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>)
       ((c as unknown) as Record<string, unknown>).id = c.canonicalId;
       ((c as unknown) as Record<string, unknown>).source_text = c.sourceText;
       ((c as unknown) as Record<string, unknown>).description = c.descriptionZh;
+      // Write related_functions in snake_case so downstream consumers that read
+      // con["related_functions"] (e.g. testPlanBuilder.findConstraintsForFunction,
+      // deriveModuleFromConstraint) can resolve the links. The canonical object
+      // stores links as relatedFunctions (camelCase array of objects); we project
+      // to a snake_case array of functionId strings for compatibility.
+      ((c as unknown) as Record<string, unknown>).related_functions = c.relatedFunctions.map(
+        (r) => r.functionId,
+      );
     }
 
     merged["constraints"] = canonical;
@@ -445,8 +453,14 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       const repaired = await this.repairMissingSourceText(merged, requirementText, systemPrompt);
       if (repaired) {
         try {
-          canonicalizeConstraintsPipeline(repaired);
+          // NOTE: do NOT re-run canonicalizeConstraintsPipeline here.
+          // The constraints were already canonicalized in the main path above
+          // (canonicalizeConstraintsPipeline(merged)). Re-canonicalizing the
+          // repaired object would re-derive displayId/sourceText and overwrite
+          // the freshly LLM-repaired source_text, and could reassign displayIds.
+          // We only re-evaluate quality + verify the repaired source refs.
           const reChecked = checkAnalysisQuality(repaired, requirementText);
+          AnalyzeMerger._verifySourceRefs(repaired, requirementText);
           // Only adopt the repair if it improved the source_text situation.
           if (!AnalyzeMerger.hasMissingSourceText(repaired, requirementText)) {
             Object.assign(merged, repaired);

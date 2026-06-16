@@ -228,6 +228,65 @@ describe("canonicalizeConstraints", () => {
   });
 
   // ----------------------------------------------------------------
+  // 5b. relatedFunctions: explicit relatedFunctionCandidates consumed first
+  // ----------------------------------------------------------------
+  it("links constraints to functions via relatedFunctionCandidates (explicit_link, confidence 0.9)", () => {
+    const candidates: ConstraintCandidate[] = [
+      {
+        description: "Rate limiter caps requests per second",
+        sourceText: "限流器每秒最多处理 100 个请求",
+        // Explicit candidate hint — no keyword overlap with function names.
+        relatedFunctionCandidates: ["FUN_RATE_LIMIT"],
+      },
+    ];
+    const functions = [
+      { id: "FUN_RATE_LIMIT", displayId: "F010", name: "Throttle" },
+      { id: "FUN_SEARCH_CASE", displayId: "F001", name: "SearchCase" },
+    ];
+
+    const results = canonicalizeConstraints(candidates, functions);
+
+    const explicit = results[0].relatedFunctions.find(
+      (rf) => rf.functionId === "FUN_RATE_LIMIT",
+    );
+    expect(explicit).toBeDefined();
+    expect(explicit!.relation).toBe("explicit_link");
+    expect(explicit!.confidence).toBe(0.9);
+
+    // The keyword pass must not add a lower-confidence link for the same fn,
+    // and unrelated functions must not be linked.
+    const rateLinks = results[0].relatedFunctions.filter(
+      (rf) => rf.functionId === "FUN_RATE_LIMIT",
+    );
+    expect(rateLinks).toHaveLength(1);
+    expect(
+      results[0].relatedFunctions.some((rf) => rf.functionId === "FUN_SEARCH_CASE"),
+    ).toBe(false);
+  });
+
+  it("resolves relatedFunctionCandidates that reference displayId or name, not just canonical id", () => {
+    const candidates: ConstraintCandidate[] = [
+      {
+        description: "Export must be logged",
+        sourceText: "导出操作必须记录日志",
+        relatedFunctionCandidates: ["F099", "ReportExport"],
+      },
+    ];
+    const functions = [
+      { id: "FUN_REPORT_EXPORT", displayId: "F099", name: "ReportExport" },
+    ];
+
+    const results = canonicalizeConstraints(candidates, functions);
+    // Both candidate strings resolve to the same function → de-duped to one link.
+    const links = results[0].relatedFunctions.filter(
+      (rf) => rf.functionId === "FUN_REPORT_EXPORT",
+    );
+    expect(links).toHaveLength(1);
+    expect(links[0].relation).toBe("explicit_link");
+    expect(links[0].confidence).toBe(0.9);
+  });
+
+  // ----------------------------------------------------------------
   // 6. Empty input
   // ----------------------------------------------------------------
   it("returns empty array for empty candidates", () => {

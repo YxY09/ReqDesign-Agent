@@ -329,3 +329,57 @@ describe("Phase 2.5: RequirementAnalyzer {available_constraints} substitution", 
     expect(capturedPrompt3).toContain("{available_constraints}");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. canonicalizeConstraintsPipeline writes related_functions (snake_case)
+//    so downstream consumers (testPlanBuilder.findConstraintsForFunction,
+//    deriveModuleFromConstraint) reading con["related_functions"] can resolve.
+// ---------------------------------------------------------------------------
+
+describe("Phase 2.5: canonicalizeConstraintsPipeline writes related_functions snake_case", () => {
+  it("projects relatedFunctions to a snake_case string[] on each constraint", () => {
+    const merged: Record<string, unknown> = {
+      functions: [
+        { id: "FUN_SEARCH_CASE", displayId: "F001", name: "SearchCase" },
+      ],
+      constraints: [
+        {
+          description: "Search must exclude unauthorized records",
+          source_text: "搜索功能必须排除未授权的记录",
+          related_functions: ["FUN_SEARCH_CASE"], // candidate hint
+        },
+      ],
+      // no missingConstraintCandidates
+    };
+
+    canonicalizeConstraintsPipeline(merged);
+
+    const constraints = merged["constraints"] as Array<Record<string, unknown>>;
+    expect(constraints).toHaveLength(1);
+    const con = constraints[0];
+    // snake_case compatibility write present and contains the functionId string
+    expect(con["related_functions"]).toBeDefined();
+    expect(Array.isArray(con["related_functions"])).toBe(true);
+    expect(con["related_functions"]).toContain("FUN_SEARCH_CASE");
+  });
+
+  it("produces empty related_functions when no candidate/keyword matches", () => {
+    const merged: Record<string, unknown> = {
+      functions: [
+        { id: "FUN_UNRELATED", displayId: "F002", name: "UnrelatedThing" },
+      ],
+      constraints: [
+        {
+          description: "Data must be encrypted at rest",
+          source_text: "数据在存储时必须加密",
+        },
+      ],
+    };
+
+    canonicalizeConstraintsPipeline(merged);
+
+    const constraints = merged["constraints"] as Array<Record<string, unknown>>;
+    const con = constraints[0];
+    expect(con["related_functions"]).toEqual([]);
+  });
+});

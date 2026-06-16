@@ -126,23 +126,45 @@ function convergenceStalled(
 ): StrategyDecision | null {
   if (!snapshot.convergenceStalled || snapshot.convergenceRoundCount < 3) return null;
 
+  // --- Step 7: Termination guarantee. ---
+  // If convergence rounds are exhausted, force a pause regardless of issue
+  // count or trend so the orchestrator cannot loop forever. This runs before
+  // the accept branches so a low blocker-free issue count cannot keep us
+  // from stopping. The 3 independent runtime exits
+  // (runtimeExhausted / decisionExhausted / consecutiveNoAction) remain intact.
+  if (policy.budget.convergenceRoundsExhausted(snapshot.convergenceRoundCount)) {
+    return createStrategyDecision({
+      strategy: "pause_for_user",
+      reason: `convergence rounds exhausted: reached max ${policy.budget.maxConvergenceRounds} rounds`,
+    });
+  }
+
   const trend = snapshot.convergenceTrend ?? "flat";
+  // --- Step 5: Severity gate. ---
+  // Only auto-accept convergence when there are no blocker-severity issues in
+  // the latest round; otherwise fall through to the pause path even if the
+  // issue count is low and the trend is tolerable.
+  const hasBlocker = snapshot.latestIssues.some(
+    (issue) => issue["severity"] === "blocker",
+  );
   if (
+    !hasBlocker &&
     trend === "decreasing" &&
     snapshot.latestIssues.length <= policy.budget.convergenceAcceptMaxIssuesDecreasing
   ) {
     return createStrategyDecision({
       strategy: "finish",
-      reason: `convergence accepted despite stall: ${snapshot.latestIssues.length} issues, trend decreasing`,
+      reason: `convergence accepted despite stall: 0 blockers, ${snapshot.latestIssues.length} issues, trend decreasing`,
     });
   }
   if (
+    !hasBlocker &&
     trend !== "increasing" &&
     snapshot.latestIssues.length <= policy.budget.convergenceAcceptMaxIssuesFlat
   ) {
     return createStrategyDecision({
       strategy: "finish",
-      reason: `convergence accepted: ${snapshot.latestIssues.length} issues, trend ${trend}, low enough`,
+      reason: `convergence accepted: 0 blockers, ${snapshot.latestIssues.length} issues, trend ${trend}, low enough`,
     });
   }
   return createStrategyDecision({

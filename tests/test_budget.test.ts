@@ -313,6 +313,39 @@ describe("BudgetManager decisionExhausted", () => {
 });
 
 // -----------------------------------------------------------------------
+// BudgetManager — convergenceRoundsExhausted / maxConvergenceRounds
+// -----------------------------------------------------------------------
+
+describe("BudgetManager convergenceRoundsExhausted / maxConvergenceRounds", () => {
+  it("default maxConvergenceRounds is 6", () => {
+    expect(new BudgetManager().maxConvergenceRounds).toBe(6);
+    expect(new OrchestrationConfig().maxConvergenceRounds).toBe(6);
+  });
+
+  it("convergenceRoundsExhausted returns false strictly below the cap", () => {
+    const bm = new BudgetManager(); // cap = 6
+    expect(bm.convergenceRoundsExhausted(0)).toBe(false);
+    expect(bm.convergenceRoundsExhausted(5)).toBe(false);
+  });
+
+  it("convergenceRoundsExhausted returns true at or above the cap", () => {
+    const bm = new BudgetManager(); // cap = 6
+    expect(bm.convergenceRoundsExhausted(6)).toBe(true);
+    expect(bm.convergenceRoundsExhausted(7)).toBe(true);
+    expect(bm.convergenceRoundsExhausted(100)).toBe(true);
+  });
+
+  it("fromRaw propagates max_convergence_rounds override", () => {
+    const cfg = OrchestrationConfig.fromRaw({ max_convergence_rounds: 4 });
+    expect(cfg.maxConvergenceRounds).toBe(4);
+    const bm = new BudgetManager(cfg);
+    expect(bm.maxConvergenceRounds).toBe(4);
+    expect(bm.convergenceRoundsExhausted(3)).toBe(false);
+    expect(bm.convergenceRoundsExhausted(4)).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------
 // BudgetManager — 从快照获取任务计数
 // -----------------------------------------------------------------------
 

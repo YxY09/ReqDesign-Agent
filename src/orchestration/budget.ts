@@ -24,6 +24,7 @@ export interface OrchestrationConfigRaw {
   max_concurrency?: number;
   convergence_accept_max_issues_decreasing?: number;
   convergence_accept_max_issues_flat?: number;
+  max_convergence_rounds?: number;
 }
 
 export class OrchestrationConfig {
@@ -50,10 +51,12 @@ export class OrchestrationConfig {
   heartbeatIntervalSeconds = 0.25;
   /** worker 最大并发数（环境变量 MAX_CONCURRENCY 优先）。 */
   maxConcurrency = 5;
-  /** 收敛卡死但问题数下降时，强制接受的问题数上限。 */
+  /** 收敛卡死且问题数下降时，强制接受的问题数上限。 */
   convergenceAcceptMaxIssuesDecreasing = 8;
   /** 收敛卡死且趋势非上升时，强制接受的问题数上限。 */
   convergenceAcceptMaxIssuesFlat = 10;
+  /** 收敛检测的最大轮数；达到该轮数后强制 pause_for_user 以保证终止。 */
+  maxConvergenceRounds = 6;
 
   /** snake_case raw key → camelCase config key pairs. */
   private static readonly RAW_TO_CFG: ReadonlyArray<
@@ -80,6 +83,7 @@ export class OrchestrationConfig {
     ["max_concurrency", "maxConcurrency"],
     ["convergence_accept_max_issues_decreasing", "convergenceAcceptMaxIssuesDecreasing"],
     ["convergence_accept_max_issues_flat", "convergenceAcceptMaxIssuesFlat"],
+    ["max_convergence_rounds", "maxConvergenceRounds"],
   ];
 
   static fromRaw(raw: OrchestrationConfigRaw): OrchestrationConfig {
@@ -123,6 +127,7 @@ export class BudgetManager {
   maxConcurrency: number;
   convergenceAcceptMaxIssuesDecreasing: number;
   convergenceAcceptMaxIssuesFlat: number;
+  maxConvergenceRounds: number;
 
   constructor(config?: OrchestrationConfig) {
     const c = config ?? new OrchestrationConfig();
@@ -147,6 +152,7 @@ export class BudgetManager {
     this.maxConcurrency = c.maxConcurrency;
     this.convergenceAcceptMaxIssuesDecreasing = c.convergenceAcceptMaxIssuesDecreasing;
     this.convergenceAcceptMaxIssuesFlat = c.convergenceAcceptMaxIssuesFlat;
+    this.maxConvergenceRounds = c.maxConvergenceRounds;
   }
 
   runtimeDeadline(startTime: number): number {
@@ -186,6 +192,11 @@ export class BudgetManager {
 
   decisionExhausted(decisionCount: number): boolean {
     return decisionCount >= this.maxDecisionCount;
+  }
+
+  /** 收敛轮数是否已耗尽，保证收敛路径必然终止。 */
+  convergenceRoundsExhausted(roundCount: number): boolean {
+    return roundCount >= this.maxConvergenceRounds;
   }
 
   repairCount(snapshot: OrchestratorSnapshot, taskId: string): number {

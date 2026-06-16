@@ -287,9 +287,12 @@ function deriveModuleFromConstraint(
   con: Record<string, unknown>,
   existingTasks: TestTask[],
 ): string {
-  // If constraint has related_functions, inherit module from first related function
-  const raw = con["related_functions"];
-  const related = extractFunctionIds(raw);
+  // If constraint has related_functions, inherit module from first related function.
+  // Support both snake_case (related_functions) and camelCase (relatedFunctions);
+  // extractFunctionIds handles both Array<{functionId}> and string[] shapes.
+  const related = extractFunctionIds(con["related_functions"]) .length > 0
+    ? extractFunctionIds(con["related_functions"])
+    : extractFunctionIds(con["relatedFunctions"]);
   if (related.length > 0) {
     for (const relFn of related) {
       const match = existingTasks.find(
@@ -324,10 +327,12 @@ function findConstraintsForFunction(
 ): Array<Record<string, unknown>> {
   const result: Array<Record<string, unknown>> = [];
   for (const con of constraints) {
-    const raw = con["related_functions"];
-    // related_functions is Array<{functionId, relation, confidence}> from
-    // constraintCanonicalizer, or string[] from older analysis artifacts.
-    const related = extractFunctionIds(raw);
+    // Support both snake_case (related_functions) and camelCase (relatedFunctions).
+    // extractFunctionIds handles both Array<{functionId, relation, confidence}>
+    // (from constraintCanonicalizer) and string[] (from older analysis artifacts).
+    const related = extractFunctionIds(con["related_functions"]).length > 0
+      ? extractFunctionIds(con["related_functions"])
+      : extractFunctionIds(con["relatedFunctions"]);
     if (
       related.includes(funcDisplayId) ||
       related.includes(funcCanonicalId)
