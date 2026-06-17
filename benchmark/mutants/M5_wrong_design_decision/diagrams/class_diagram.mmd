@@ -1,0 +1,176 @@
+classDiagram
+    class Patient {
+        -String patientId
+        -String idCard
+        -String name
+        -String gender
+        -DateTime birthDate
+        -String phone
+        -String address
+        -String allergies
+        -String medicalHistory
+        -String insuranceNo
+        -DateTime createdAt
+        +register()
+        +bindInsurance()
+    }
+    class Registration {
+        -String regId
+        -String patientId
+        -String doctorId
+        -String scheduleId
+        -DateTime regTime
+        -String regType
+        -Decimal fee
+        -String status
+        -String queueNo
+        +cancel()
+        +checkStatus()
+    }
+    class Schedule {
+        -String scheduleId
+        -String doctorId
+        -String department
+        -DateTime date
+        -String timeSlot
+        -Integer maxPatients
+        -Integer bookedCount
+        -String status
+        +checkConflict()
+        +updateStatus()
+    }
+    class Queue {
+        -String queueId
+        -String currentNo
+        -Integer waitingCount
+        +addPatient()
+        +callNext()
+    }
+    class MedicalRecord {
+        -String recordId
+        -String regId
+        -String doctorId
+        -String chiefComplaint
+        -String presentIllness
+        -String physicalExam
+        -String diagnosis
+        -String treatmentPlan
+        -DateTime createdAt
+        +write()
+        +update()
+    }
+    class Prescription {
+        -String prescriptionId
+        -String recordId
+        -String type
+        -String status
+        -Decimal totalPrice
+        -String doctorId
+        -String pharmacistId
+        -DateTime createdAt
+        +prescribe()
+        +review()
+    }
+    class ExamOrder {
+        -String orderId
+        -String recordId
+        -String examType
+        -String examName
+        -String status
+        -String result
+        -String reportDoctorId
+        -DateTime appointmentTime
+        -DateTime completedTime
+        +order()
+        +generateReport()
+    }
+    class Payment {
+        -String paymentId
+        -String regId
+        -JSON items
+        -Decimal totalAmount
+        -Decimal insuranceAmount
+        -Decimal selfPayAmount
+        -String payMethod
+        -String status
+        -String operatorId
+        -DateTime createdAt
+        +calculate()
+        +refund()
+    }
+    class Drug {
+        -String drugId
+        -String name
+        -String spec
+        -String manufacturer
+        -String category
+        -String unit
+        -Decimal price
+        -Integer stock
+        -Integer safetyStock
+        -DateTime expiryDate
+        +checkInventory()
+        +updatePrice()
+    }
+    class Inventory {
+        -String inventoryId
+        -String drugId
+        -Integer quantity
+        -String batchNo
+        -DateTime expiryDate
+        -DateTime lastUpdated
+        +checkExpiry()
+        +updateStock()
+    }
+    class MedicalReport {
+        -String reportId
+        -String orderId
+        -String content
+        -String abnormalValues
+        -DateTime createdAt
+        -DateTime reviewedAt
+        +generate()
+        +review()
+    }
+    class AuditLog {
+        -String logId
+        -String action
+        -String operatorId
+        -String targetType
+        -String targetId
+        -DateTime timestamp
+        -String details
+        +log()
+        +query()
+    }
+    class PrescriptionReview {
+        -Long reviewId
+        -String status
+        -String comment
+        +review()
+        +updateStatus()
+    }
+    class RefundApplication {
+        -Long applicationId
+        -String status
+        -String reason
+        +apply()
+        +approve()
+    }
+    Patient "1" --> "*" Registration : has
+    Patient "1" --> "1" Insurance : has
+    Doctor "1" --> "*" Schedule : has
+    Doctor "1" --> "*" MedicalRecord : writes
+    Schedule "1" --> "*" Registration : contains
+    Registration "1" --> "1" MedicalRecord : generates
+    Registration "1" --> "*" Payment : relates
+    Queue "1" --> "*" Registration : manages
+    MedicalRecord "1" --> "*" ExamOrder : contains
+    MedicalRecord "1" --> "*" Prescription : contains
+    Prescription "1" --> "*" PrescriptionItem : has
+    Prescription "1" --> "1" PrescriptionReview : reviewed_by
+    PrescriptionItem "*" --> "1" Drug : refers
+    ExamOrder "1" --> "1" MedicalReport : generates
+    Drug "1" --> "1" Inventory : has
+    Payment "1" --> "*" AuditLog : generates
+    RefundApplication "*" --> "1" Payment : refunds

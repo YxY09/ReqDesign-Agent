@@ -22,16 +22,20 @@
  * @module benchmark/benchmarkRunner
  */
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AgentConfig } from "../config.js";
+import { LLMClient } from "../llmClient.js";
 import { setupLogger } from "../logger.js";
 import type { WorkflowEvent, WorkflowEventSink } from "../workflowEvents.js";
 import { createWorkflowEvent } from "../workflowEvents.js";
 
 // Reuse the runtime contract from the legacy runner (no modification to it).
 import type { RuntimeFactory, RuntimeLike } from "./runBenchmark.js";
+
+import { loadGoldContract } from "./goldObligation.js";
+import { judgeAgainstGold } from "./qualityJudge.js";
 
 import {
   buildMetadata,
@@ -360,11 +364,22 @@ export class BenchmarkRunnerV2 {
       persisted: Boolean(raw.persisted),
     };
 
-    // --- quality (Phase-1 placeholder) ----------------------------------
-    // TODO(Phase2): implement judge — evidence extraction + rubric → the four
-    // sub-scores (gold obligation, traceability truthfulness, test
-    // effectiveness via mutants, design depth). Until then quality is null.
-    const quality: QualityScores = { ...NULL_QUALITY };
+    // --- quality (Phase-2 evidence-based judge) -------------------------
+    // When the sanity gate passed AND a Phase-2 gold contract exists for this
+    // case, run the evidence-based judge over the on-disk design+tests and
+    // derive the four sub-scores. Wrapped in try/catch so ANY judge failure
+    // (missing gold, LLM error, malformed output) falls back to NULL_QUALITY
+    // — preserving Phase-1 stability for cases without a hand-curated gold.
+    let quality: QualityScores = { ...NULL_QUALITY };
+    if (sanity.passed) {
+      try {
+        quality = await this.judgeQuality(caseId, caseOutputDir);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`judge failed for ${caseId}/run_${runId}, falling back to null quality: ${msg}`);
+        quality = { ...NULL_QUALITY };
+      }
+    }
 
     const majorMisses: string[] = [];
     if (!sanity.passed) majorMisses.push("sanity gate failed");
@@ -390,6 +405,54 @@ export class BenchmarkRunnerV2 {
       data: { caseId, runId, status, sanityPassed: sanity.passed },
     });
     return result;
+  }
+
+  // -----------------------------------------------------------------------
+  // Quality judge (Phase 2)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Resolve the Phase-2 gold contract path for a case. Sibling of the cases
+   * dir: `<casesDir>/../gold_contracts/<caseId>.json`. Returns `null` when no
+   * contract exists or it is malformed (Phase-1 cases have no Phase-2 gold).
+   */
+  private resolveGoldContract(caseId: string) {
+    const goldContractPath = join(this.casesDir, "..", "gold_contracts", `${caseId}.json`);
+    return loadGoldContract(goldContractPath);
+  }
+
+  /**
+   * Run the evidence-based judge for one (already-produced) run.
+   *
+   * Returns {@link NULL_QUALITY} when no Phase-2 gold contract exists for the
+   * case (the common Phase-1 path) so the runner stays a no-op for cases
+   * without a hand-curated contract. Reads design+tests from the run's output
+   * dir and the case source from the cases dir.
+   */
+  private async judgeQuality(caseId: string, caseOutputDir: string): Promise<QualityScores> {
+    const gold = this.resolveGoldContract(caseId);
+    if (!gold) {
+      // No Phase-2 gold contract → keep the Phase-1 placeholder.
+      return { ...NULL_QUALITY };
+    }
+    const requirementSource = (() => {
+      try {
+        return readFileSync(join(this.casesDir, `${caseId}.md`), "utf8");
+      } catch {
+        return "";
+      }
+    })();
+    const judge = new LLMClient(this.config) as unknown as import("./scorer.js").JudgeClient;
+    const { quality } = await judgeAgainstGold(judge, gold, {
+      requirement_source: requirementSource,
+      designPath: join(caseOutputDir, "design", "system_design.md"),
+      testsPath: join(caseOutputDir, "tests", "test_cases.json"),
+      // Phase 2.5: feed the traceability matrix to the judge so it can verify
+      // chain truthfulness (weakness 2). The matrix is optional; absent ⇒ the
+      // judge falls back to has_test_alignment.
+      matrixPath: join(caseOutputDir, "traces", "traceability_matrix.json"),
+    });
+    return quality;
   }
 
   // -----------------------------------------------------------------------

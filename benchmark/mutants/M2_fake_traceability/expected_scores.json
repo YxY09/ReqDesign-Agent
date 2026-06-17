@@ -1,0 +1,19 @@
+{
+  "mutant_id": "M2_fake_traceability",
+  "description": "design+tests still contain real rules, but a fake traceability table claims every constraint→test is covered while the cited tests assert unrelated behavior. Judge must catch the semantic mismatch (design rule exists but test does not truly align).",
+  "expected_per_obligation": {
+    "C-001": { "max_score": 2, "rationale": "design 规则仍在，但被引用的测试(TC-N-004)未真正断言限号边界" },
+    "C-002": { "max_score": 2, "rationale": "design 规则仍在，但被引用的测试(TC-N-028)测的是状态流转而非5种/抗生素" },
+    "C-003": { "max_score": 2, "rationale": "design 规则仍在，但被引用的测试(TC-N-018)测的是新增药品" },
+    "C-004": { "max_score": 2, "rationale": "design 规则仍在，但被引用的测试断言不匹配" },
+    "X-002": { "max_score": 2, "rationale": "design 规则仍在，但被引用的测试(TC-N-002)测的是审计日志而非过敏拦截" },
+    "X-005": { "max_score": 2, "rationale": "design 规则仍在，但被引用的测试(TC-N-012)测的是正常医保结算" }
+  },
+  "expected_quality_direction": {
+    "gold_obligation_coverage": "medium",
+    "design_depth": "high",
+    "test_effectiveness": "low",
+    "traceability_truthfulness": "low",
+    "primary_drop": "traceability_truthfulness"
+  }
+}

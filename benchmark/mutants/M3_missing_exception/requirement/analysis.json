@@ -1,0 +1,2247 @@
+{
+  "project_name": "HospitalOutpatientSystem",
+  "project_overview": "面向三甲医院的门诊管理信息系统，覆盖患者挂号、医生排班、电子病历、处方管理、收费结算、药品库存等核心业务",
+  "actors": [
+    {
+      "actorRef": "A_PATIENT",
+      "name": "Patient",
+      "description": "患者"
+    },
+    {
+      "actorRef": "A_DOCTOR",
+      "name": "Doctor",
+      "description": "医生"
+    },
+    {
+      "actorRef": "A_NURSE",
+      "name": "Nurse",
+      "description": "护士"
+    },
+    {
+      "actorRef": "A_CASHIER",
+      "name": "Cashier",
+      "description": "收费员"
+    },
+    {
+      "actorRef": "A_PHARMACIST",
+      "name": "Pharmacist",
+      "description": "药房人员"
+    },
+    {
+      "actorRef": "A_ADMIN",
+      "name": "Admin",
+      "description": "系统管理员"
+    }
+  ],
+  "functions": [
+    {
+      "id": "FUN_ANONYMIZE_DATA",
+      "name": "AnonymizeData",
+      "description": "数据脱敏",
+      "sub_capabilities": [
+        "患者敏感信息加密存储"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "low",
+      "preconditions": "无",
+      "displayId": "F001"
+    },
+    {
+      "id": "FUN_AUDIT_LOG",
+      "name": "AuditLog",
+      "description": "操作日志审计",
+      "sub_capabilities": [
+        "关键操作全程留痕"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "low",
+      "preconditions": "无",
+      "displayId": "F002"
+    },
+    {
+      "id": "FUN_BACKUP_DATA",
+      "name": "BackupData",
+      "description": "数据备份",
+      "sub_capabilities": [
+        "每日增量",
+        "每周全量"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "low",
+      "preconditions": "无",
+      "displayId": "F003"
+    },
+    {
+      "id": "FUN_BOOK_APPOINTMENT",
+      "name": "BookAppointment",
+      "description": "在线预约挂号",
+      "sub_capabilities": [
+        "按科室/医生/日期查询号源",
+        "选择就诊时段（上午/下午，精确到30分钟）",
+        "取消预约（就诊前2小时可取消）",
+        "支持当日挂号（余号实时更新）",
+        "选择就诊时段",
+        "取消预约",
+        "当日挂号"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_PATIENT"
+      ],
+      "priority": "high",
+      "preconditions": "患者已注册",
+      "displayId": "F004"
+    },
+    {
+      "id": "FUN_CANCEL_APPOINTMENT",
+      "name": "CancelAppointment",
+      "description": "取消预约",
+      "sub_capabilities": [],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_PATIENT"
+      ],
+      "priority": "medium",
+      "preconditions": "患者已有预约记录",
+      "displayId": "F005"
+    },
+    {
+      "id": "FUN_GENERATE_REPORT",
+      "name": "GenerateReport",
+      "description": "数据统计与报表",
+      "sub_capabilities": [
+        "门诊量统计",
+        "处方统计",
+        "收入统计",
+        "患者满意度分析"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "low",
+      "preconditions": "有统计数据",
+      "displayId": "F006"
+    },
+    {
+      "id": "FUN_MANAGE_INVENTORY",
+      "name": "ManageInventory",
+      "description": "药品库存管理",
+      "sub_capabilities": [
+        "药品信息管理",
+        "入库管理",
+        "库存预警",
+        "近效期药品预警",
+        "药品盘点"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_PHARMACIST"
+      ],
+      "priority": "medium",
+      "preconditions": "无",
+      "displayId": "F007"
+    },
+    {
+      "id": "FUN_MANAGE_PERMISSION",
+      "name": "ManagePermission",
+      "description": "RBAC权限管理",
+      "sub_capabilities": [
+        "医生不可查看收费明细",
+        "收费员不可修改病历"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_ADMIN"
+      ],
+      "priority": "medium",
+      "preconditions": "管理员权限",
+      "displayId": "F008"
+    },
+    {
+      "id": "FUN_MANAGE_SCHEDULE",
+      "name": "ManageSchedule",
+      "description": "医生排班管理",
+      "sub_capabilities": [
+        "科室主任设置排班规则（轮班、固定班、替班）",
+        "排班冲突检测",
+        "临时调班申请（需审批）",
+        "排班表按周/月视图展示",
+        "设置排班规则",
+        "临时调班申请",
+        "排班表展示"
+      ],
+      "acceptance_criteria": [
+        "排班冲突检测（同一医生不可同时排两个科室）",
+        "排班表可正确展示"
+      ],
+      "related_actors": [
+        "A_DOCTOR",
+        "A_ADMIN"
+      ],
+      "priority": "high",
+      "preconditions": "医生信息已录入系统",
+      "displayId": "F009"
+    },
+    {
+      "id": "FUN_ORDER_EXAM",
+      "name": "OrderExam",
+      "description": "检查检验",
+      "sub_capabilities": [
+        "开具检查单（血常规、CT、MRI、B超等）",
+        "检查预约和排队",
+        "报告录入和审核",
+        "患者查看报告（异常值标红提示）",
+        "开具检查单",
+        "患者查看报告"
+      ],
+      "acceptance_criteria": [
+        "检查单可正确开具",
+        "报告可被患者查看"
+      ],
+      "related_actors": [
+        "A_DOCTOR"
+      ],
+      "priority": "medium",
+      "preconditions": "患者已完成就诊",
+      "displayId": "F010"
+    },
+    {
+      "id": "FUN_PRESCRIBE_MEDICATION",
+      "name": "PrescribeMedication",
+      "description": "处方管理",
+      "sub_capabilities": [
+        "西药处方（药品、剂量、用法、频次、天数）",
+        "中药处方（药材、剂量、煎法、服法）",
+        "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+        "处方状态流转（开立→审核→收费→发药）",
+        "退药流程（已发药需医生确认后退回）",
+        "西药处方",
+        "中药处方",
+        "处方审核",
+        "处方状态流转",
+        "退药流程"
+      ],
+      "acceptance_criteria": [
+        "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+        "处方状态流转正确"
+      ],
+      "related_actors": [
+        "A_DOCTOR",
+        "A_PHARMACIST"
+      ],
+      "priority": "high",
+      "preconditions": "患者已完成就诊",
+      "displayId": "F011"
+    },
+    {
+      "id": "FUN_PROCESS_PAYMENT",
+      "name": "ProcessPayment",
+      "description": "收费结算",
+      "sub_capabilities": [
+        "挂号费、诊查费、检查费、药品费分项计算",
+        "医保结算",
+        "自费结算",
+        "日结对账"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CASHIER"
+      ],
+      "priority": "high",
+      "preconditions": "有需缴费项目",
+      "displayId": "F012"
+    },
+    {
+      "id": "FUN_QUEUE_MANAGEMENT",
+      "name": "QueueManagement",
+      "description": "排队叫号",
+      "sub_capabilities": [
+        "患者签到后自动进入队列",
+        "按预约时间+签到时间排序",
+        "大屏显示当前叫号、等待人数",
+        "支持过号重排（自动排到当前号后第3位）",
+        "患者签到",
+        "队列排序",
+        "大屏显示",
+        "过号重排"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_PATIENT",
+        "A_DOCTOR"
+      ],
+      "priority": "high",
+      "preconditions": "患者已完成挂号",
+      "displayId": "F013"
+    },
+    {
+      "id": "FUN_REFUND_PAYMENT",
+      "name": "RefundPayment",
+      "description": "退费处理",
+      "sub_capabilities": [
+        "部分退费",
+        "全额退费"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_CASHIER"
+      ],
+      "priority": "medium",
+      "preconditions": "有需退费项目",
+      "displayId": "F014"
+    },
+    {
+      "id": "FUN_REGISTER_PATIENT",
+      "name": "RegisterPatient",
+      "description": "患者注册与档案",
+      "sub_capabilities": [
+        "身份证号注册",
+        "建立健康档案（过敏史、既往病史、家族病史）",
+        "支持医保卡绑定",
+        "就诊卡管理（挂失、补办）",
+        "医保卡绑定",
+        "就诊卡管理"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_PATIENT"
+      ],
+      "priority": "high",
+      "preconditions": "无",
+      "displayId": "F015"
+    },
+    {
+      "id": "FUN_SEND_NOTIFICATION",
+      "name": "SendNotification",
+      "description": "消息通知",
+      "sub_capabilities": [
+        "就诊提醒（挂号成功、就诊前1天、叫号提醒）",
+        "报告通知（检查报告出结果后推送）",
+        "缴费提醒（待缴费项目通知）",
+        "就诊提醒",
+        "报告通知",
+        "缴费提醒"
+      ],
+      "acceptance_criteria": [],
+      "related_actors": [
+        "A_PATIENT"
+      ],
+      "priority": "medium",
+      "preconditions": "患者已注册",
+      "displayId": "F016"
+    },
+    {
+      "id": "FUN_WRITE_MEDICAL_RECORD",
+      "name": "WriteMedicalRecord",
+      "description": "书写电子病历",
+      "sub_capabilities": [
+        "书写主诉、现病史、体格检查、诊断、治疗方案",
+        "支持ICD-10编码诊断",
+        "处方关联（中药/西药/检查单）",
+        "病历模板（按科室预设常用模板）",
+        "病历修改留痕",
+        "ICD-10编码诊断",
+        "处方关联",
+        "病历模板"
+      ],
+      "acceptance_criteria": [
+        "病历修改留痕（修改原因、修改时间、修改人）",
+        "诊断可关联ICD-10编码"
+      ],
+      "related_actors": [
+        "A_DOCTOR"
+      ],
+      "priority": "high",
+      "preconditions": "患者已完成挂号",
+      "displayId": "F017"
+    }
+  ],
+  "entities": [
+    {
+      "entityRef": "E_PATIENT",
+      "name": "Patient",
+      "entityKind": "core",
+      "description": "患者",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "patientId",
+          "type": "String",
+          "description": "患者ID"
+        },
+        {
+          "name": "idCard",
+          "type": "String",
+          "description": "身份证号"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "姓名"
+        },
+        {
+          "name": "gender",
+          "type": "String",
+          "description": "性别"
+        },
+        {
+          "name": "birthDate",
+          "type": "DateTime",
+          "description": "出生日期"
+        },
+        {
+          "name": "phone",
+          "type": "String",
+          "description": "电话"
+        },
+        {
+          "name": "address",
+          "type": "String",
+          "description": "地址"
+        },
+        {
+          "name": "allergies",
+          "type": "String",
+          "description": "过敏史"
+        },
+        {
+          "name": "medicalHistory",
+          "type": "String",
+          "description": "既往病史"
+        },
+        {
+          "name": "insuranceNo",
+          "type": "String",
+          "description": "医保卡号"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_MEDICAL_RECORD",
+          "type": "one-to-many",
+          "description": "患者可有多份病历"
+        }
+      ],
+      "id": "E_PATIENT",
+      "canonicalName": "Patient",
+      "displayName": "Patient"
+    },
+    {
+      "entityRef": "E_REGISTRATION",
+      "name": "Registration",
+      "entityKind": "process_record",
+      "description": "挂号记录",
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "BookAppointment",
+        "endpoints": [
+          "Patient",
+          "Doctor"
+        ],
+        "evidence": [
+          "has_identifier",
+          "has_timestamp",
+          "has_status"
+        ]
+      },
+      "attributes": [
+        {
+          "name": "regId",
+          "type": "String",
+          "description": "挂号ID"
+        },
+        {
+          "name": "patientId",
+          "type": "String",
+          "description": "患者ID"
+        },
+        {
+          "name": "doctorId",
+          "type": "String",
+          "description": "医生ID"
+        },
+        {
+          "name": "scheduleId",
+          "type": "String",
+          "description": "排班ID"
+        },
+        {
+          "name": "regTime",
+          "type": "DateTime",
+          "description": "挂号时间"
+        },
+        {
+          "name": "regType",
+          "type": "String",
+          "description": "挂号类型"
+        },
+        {
+          "name": "fee",
+          "type": "Decimal",
+          "description": "挂号费"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "状态"
+        },
+        {
+          "name": "queueNo",
+          "type": "String",
+          "description": "排队号"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "A_PATIENT",
+          "type": "many-to-one",
+          "description": "挂号记录关联患者"
+        },
+        {
+          "target": "A_DOCTOR",
+          "type": "many-to-one",
+          "description": "挂号记录关联医生"
+        },
+        {
+          "target": "E_MEDICAL_RECORD",
+          "type": "one-to-one",
+          "description": "每次挂号对应一份病历"
+        }
+      ],
+      "id": "E_REGISTRATION",
+      "canonicalName": "Registration",
+      "displayName": "Registration"
+    },
+    {
+      "entityRef": "E_QUEUE",
+      "name": "Queue",
+      "entityKind": "process_record",
+      "description": "排队队列",
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "QueueManagement",
+        "endpoints": [
+          "Patient",
+          "Registration"
+        ],
+        "evidence": [
+          "has_identifier",
+          "has_status"
+        ]
+      },
+      "attributes": [
+        {
+          "name": "queueId",
+          "type": "String",
+          "description": "队列ID"
+        },
+        {
+          "name": "currentNo",
+          "type": "String",
+          "description": "当前叫号"
+        },
+        {
+          "name": "waitingCount",
+          "type": "Integer",
+          "description": "等待人数"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_REGISTRATION",
+          "type": "one-to-many",
+          "description": "队列包含多个挂号记录"
+        }
+      ],
+      "id": "E_QUEUE",
+      "canonicalName": "Queue",
+      "displayName": "Queue"
+    },
+    {
+      "entityRef": "E_INSURANCE",
+      "name": "Insurance",
+      "entityKind": "core",
+      "description": "医保",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "insuranceNo",
+          "type": "String",
+          "description": "医保卡号"
+        },
+        {
+          "name": "patientId",
+          "type": "String",
+          "description": "患者ID"
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "description": "医保类型"
+        },
+        {
+          "name": "validFrom",
+          "type": "DateTime",
+          "description": "有效期起"
+        },
+        {
+          "name": "validTo",
+          "type": "DateTime",
+          "description": "有效期止"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "A_PATIENT",
+          "type": "one-to-one",
+          "description": "医保关联患者"
+        }
+      ],
+      "id": "E_INSURANCE",
+      "canonicalName": "Insurance",
+      "displayName": "Insurance"
+    },
+    {
+      "entityRef": "E_DOCTOR",
+      "name": "Doctor",
+      "entityKind": "core",
+      "description": "医生",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "doctorId",
+          "type": "String",
+          "description": "医生ID"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "姓名"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "职称"
+        },
+        {
+          "name": "department",
+          "type": "String",
+          "description": "科室"
+        },
+        {
+          "name": "specialty",
+          "type": "String",
+          "description": "专业"
+        },
+        {
+          "name": "licenseNo",
+          "type": "String",
+          "description": "执业证号"
+        },
+        {
+          "name": "schedule",
+          "type": "Object",
+          "description": "排班信息"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_SCHEDULE",
+          "type": "one-to-many",
+          "description": "医生排班"
+        },
+        {
+          "target": "E_MEDICAL_RECORD",
+          "type": "one-to-many",
+          "description": "医生可书写多份病历"
+        }
+      ],
+      "id": "E_DOCTOR",
+      "canonicalName": "Doctor",
+      "displayName": "Doctor"
+    },
+    {
+      "entityRef": "E_SCHEDULE",
+      "name": "Schedule",
+      "entityKind": "core",
+      "description": "排班",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "scheduleId",
+          "type": "String",
+          "description": "排班ID"
+        },
+        {
+          "name": "doctorId",
+          "type": "String",
+          "description": "医生ID"
+        },
+        {
+          "name": "department",
+          "type": "String",
+          "description": "科室"
+        },
+        {
+          "name": "date",
+          "type": "DateTime",
+          "description": "日期"
+        },
+        {
+          "name": "timeSlot",
+          "type": "String",
+          "description": "时间段"
+        },
+        {
+          "name": "maxPatients",
+          "type": "Integer",
+          "description": "最大患者数"
+        },
+        {
+          "name": "bookedCount",
+          "type": "Integer",
+          "description": "已预约数"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "状态"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "A_DOCTOR",
+          "type": "many-to-one",
+          "description": "所属医生"
+        }
+      ],
+      "id": "E_SCHEDULE",
+      "canonicalName": "Schedule",
+      "displayName": "Schedule"
+    },
+    {
+      "entityRef": "E_MEDICAL_RECORD",
+      "name": "MedicalRecord",
+      "entityKind": "core",
+      "description": "病历",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "recordId",
+          "type": "String",
+          "description": "病历ID"
+        },
+        {
+          "name": "regId",
+          "type": "String",
+          "description": "挂号记录ID"
+        },
+        {
+          "name": "doctorId",
+          "type": "String",
+          "description": "医生ID"
+        },
+        {
+          "name": "chiefComplaint",
+          "type": "String",
+          "description": "主诉"
+        },
+        {
+          "name": "presentIllness",
+          "type": "String",
+          "description": "现病史"
+        },
+        {
+          "name": "physicalExam",
+          "type": "String",
+          "description": "体格检查"
+        },
+        {
+          "name": "diagnosis",
+          "type": "String",
+          "description": "诊断(ICD-10)"
+        },
+        {
+          "name": "treatmentPlan",
+          "type": "String",
+          "description": "治疗方案"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_EXAM_ORDER",
+          "type": "one-to-many",
+          "description": "关联检查单"
+        },
+        {
+          "target": "E_MEDICAL_RECORD_ITEM",
+          "type": "one-to-many",
+          "description": "一个MedicalRecord包含多条处方明细"
+        }
+      ],
+      "id": "E_MEDICAL_RECORD",
+      "canonicalName": "MedicalRecord",
+      "displayName": "MedicalRecord"
+    },
+    {
+      "entityRef": "E_PRESCRIPTION",
+      "name": "Prescription",
+      "entityKind": "core",
+      "description": "处方",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "prescriptionId",
+          "type": "String",
+          "description": "处方ID"
+        },
+        {
+          "name": "recordId",
+          "type": "String",
+          "description": "病历ID"
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "description": "类型(西药/中药)"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "状态"
+        },
+        {
+          "name": "totalPrice",
+          "type": "Decimal",
+          "description": "总价"
+        },
+        {
+          "name": "doctorId",
+          "type": "String",
+          "description": "医生ID"
+        },
+        {
+          "name": "pharmacistId",
+          "type": "String",
+          "description": "药剂师ID"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_MEDICAL_RECORD",
+          "type": "many-to-one",
+          "description": "所属病历"
+        },
+        {
+          "target": "E_PRESCRIPTION_ITEM",
+          "type": "one-to-many",
+          "description": "处方明细"
+        },
+        {
+          "target": "E_MEDICAL_RECORD_ITEM",
+          "type": "one-to-many",
+          "description": "一个Prescription可出现在多条MedicalRecordItem中"
+        },
+        {
+          "target": "E_PAYMENT",
+          "type": "one-to-many",
+          "description": "处方可对应多次收费（分项收费）"
+        }
+      ],
+      "id": "E_PRESCRIPTION",
+      "canonicalName": "Prescription",
+      "displayName": "Prescription"
+    },
+    {
+      "entityRef": "E_PRESCRIPTION_ITEM",
+      "name": "PrescriptionItem",
+      "entityKind": "line_item",
+      "description": "处方项",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "itemId",
+          "type": "String",
+          "description": "明细ID"
+        },
+        {
+          "name": "prescriptionId",
+          "type": "String",
+          "description": "处方ID"
+        },
+        {
+          "name": "drugId",
+          "type": "String",
+          "description": "药品ID"
+        },
+        {
+          "name": "dosage",
+          "type": "String",
+          "description": "剂量"
+        },
+        {
+          "name": "frequency",
+          "type": "String",
+          "description": "频次"
+        },
+        {
+          "name": "route",
+          "type": "String",
+          "description": "用法"
+        },
+        {
+          "name": "days",
+          "type": "Integer",
+          "description": "天数"
+        },
+        {
+          "name": "quantity",
+          "type": "Integer",
+          "description": "数量"
+        },
+        {
+          "name": "price",
+          "type": "Decimal",
+          "description": "单价"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_PRESCRIPTION",
+          "type": "many-to-one",
+          "description": "所属处方"
+        },
+        {
+          "target": "E_DRUG",
+          "type": "many-to-one",
+          "description": "关联药品"
+        }
+      ],
+      "id": "E_PRESCRIPTION_ITEM",
+      "canonicalName": "PrescriptionItem",
+      "displayName": "PrescriptionItem"
+    },
+    {
+      "entityRef": "E_EXAM_ORDER",
+      "name": "ExamOrder",
+      "entityKind": "core",
+      "description": "检查单",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "orderId",
+          "type": "String",
+          "description": "检查单ID"
+        },
+        {
+          "name": "recordId",
+          "type": "String",
+          "description": "病历ID"
+        },
+        {
+          "name": "examType",
+          "type": "String",
+          "description": "检查类型"
+        },
+        {
+          "name": "examName",
+          "type": "String",
+          "description": "检查名称"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "状态"
+        },
+        {
+          "name": "result",
+          "type": "String",
+          "description": "结果"
+        },
+        {
+          "name": "reportDoctorId",
+          "type": "String",
+          "description": "报告医生ID"
+        },
+        {
+          "name": "appointmentTime",
+          "type": "DateTime",
+          "description": "预约时间"
+        },
+        {
+          "name": "completedTime",
+          "type": "DateTime",
+          "description": "完成时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_MEDICAL_RECORD",
+          "type": "many-to-one",
+          "description": "所属病历"
+        },
+        {
+          "target": "E_MEDICAL_REPORT",
+          "type": "one-to-one",
+          "description": "检查单对应一份检查报告"
+        },
+        {
+          "target": "E_PAYMENT",
+          "type": "one-to-many",
+          "description": "检查单可对应多次收费（分项收费）"
+        }
+      ],
+      "id": "E_EXAM_ORDER",
+      "canonicalName": "ExamOrder",
+      "displayName": "ExamOrder"
+    },
+    {
+      "entityRef": "E_DRUG",
+      "name": "Drug",
+      "entityKind": "core",
+      "description": "药品",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "drugId",
+          "type": "String",
+          "description": "药品ID"
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "description": "名称"
+        },
+        {
+          "name": "spec",
+          "type": "String",
+          "description": "规格"
+        },
+        {
+          "name": "manufacturer",
+          "type": "String",
+          "description": "厂家"
+        },
+        {
+          "name": "category",
+          "type": "String",
+          "description": "类别"
+        },
+        {
+          "name": "unit",
+          "type": "String",
+          "description": "单位"
+        },
+        {
+          "name": "price",
+          "type": "Decimal",
+          "description": "价格"
+        },
+        {
+          "name": "stock",
+          "type": "Integer",
+          "description": "库存"
+        },
+        {
+          "name": "safetyStock",
+          "type": "Integer",
+          "description": "安全库存"
+        },
+        {
+          "name": "expiryDate",
+          "type": "DateTime",
+          "description": "有效期"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_PRESCRIPTION_ITEM",
+          "type": "one-to-many",
+          "description": "处方明细"
+        },
+        {
+          "target": "E_INVENTORY",
+          "type": "one-to-one",
+          "description": "药品与库存一一对应"
+        }
+      ],
+      "id": "E_DRUG",
+      "canonicalName": "Drug",
+      "displayName": "Drug"
+    },
+    {
+      "entityRef": "E_PAYMENT",
+      "name": "Payment",
+      "entityKind": "core",
+      "description": "收费记录",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "paymentId",
+          "type": "String",
+          "description": "收费ID"
+        },
+        {
+          "name": "regId",
+          "type": "String",
+          "description": "挂号ID"
+        },
+        {
+          "name": "items",
+          "type": "JSON",
+          "description": "收费项目"
+        },
+        {
+          "name": "totalAmount",
+          "type": "Decimal",
+          "description": "总金额"
+        },
+        {
+          "name": "insuranceAmount",
+          "type": "Decimal",
+          "description": "医保支付"
+        },
+        {
+          "name": "selfPayAmount",
+          "type": "Decimal",
+          "description": "自费金额"
+        },
+        {
+          "name": "payMethod",
+          "type": "String",
+          "description": "支付方式"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "状态"
+        },
+        {
+          "name": "operatorId",
+          "type": "String",
+          "description": "操作员ID"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_AUDIT_LOG",
+          "type": "one-to-many",
+          "description": "收费记录生成审计日志"
+        }
+      ],
+      "id": "E_PAYMENT",
+      "canonicalName": "Payment",
+      "displayName": "Payment"
+    },
+    {
+      "entityRef": "E_INVENTORY",
+      "name": "Inventory",
+      "entityKind": "core",
+      "description": "库存",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "inventoryId",
+          "type": "String",
+          "description": "库存ID"
+        },
+        {
+          "name": "drugId",
+          "type": "String",
+          "description": "药品ID"
+        },
+        {
+          "name": "quantity",
+          "type": "Integer",
+          "description": "数量"
+        },
+        {
+          "name": "batchNo",
+          "type": "String",
+          "description": "批号"
+        },
+        {
+          "name": "expiryDate",
+          "type": "DateTime",
+          "description": "有效期"
+        },
+        {
+          "name": "lastUpdated",
+          "type": "DateTime",
+          "description": "最后更新时间"
+        }
+      ],
+      "relationships": [],
+      "id": "E_INVENTORY",
+      "canonicalName": "Inventory",
+      "displayName": "Inventory"
+    },
+    {
+      "entityRef": "E_MEDICAL_REPORT",
+      "name": "MedicalReport",
+      "entityKind": "core",
+      "description": "检查报告",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "reportId",
+          "type": "String",
+          "description": "报告ID"
+        },
+        {
+          "name": "orderId",
+          "type": "String",
+          "description": "检查单ID"
+        },
+        {
+          "name": "content",
+          "type": "String",
+          "description": "内容"
+        },
+        {
+          "name": "abnormalValues",
+          "type": "String",
+          "description": "异常值"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "description": "创建时间"
+        },
+        {
+          "name": "reviewedAt",
+          "type": "DateTime",
+          "description": "审核时间"
+        }
+      ],
+      "relationships": [],
+      "id": "E_MEDICAL_REPORT",
+      "canonicalName": "MedicalReport",
+      "displayName": "MedicalReport"
+    },
+    {
+      "entityRef": "E_AUDIT_LOG",
+      "name": "AuditLog",
+      "entityKind": "log",
+      "description": "审计日志",
+      "reifies": null,
+      "attributes": [
+        {
+          "name": "logId",
+          "type": "String",
+          "description": "日志ID"
+        },
+        {
+          "name": "action",
+          "type": "String",
+          "description": "操作"
+        },
+        {
+          "name": "operatorId",
+          "type": "String",
+          "description": "操作员ID"
+        },
+        {
+          "name": "targetType",
+          "type": "String",
+          "description": "目标类型"
+        },
+        {
+          "name": "targetId",
+          "type": "String",
+          "description": "目标ID"
+        },
+        {
+          "name": "timestamp",
+          "type": "DateTime",
+          "description": "时间戳"
+        },
+        {
+          "name": "details",
+          "type": "String",
+          "description": "详情"
+        }
+      ],
+      "relationships": [],
+      "id": "E_AUDIT_LOG",
+      "canonicalName": "AuditLog",
+      "displayName": "AuditLog"
+    },
+    {
+      "name": "MedicalRecordItem",
+      "description": "MedicalRecord中的处方明细行,记录数量和关联信息",
+      "attributes": [
+        {
+          "name": "medicalRecordItemId",
+          "type": "Long",
+          "description": "MedicalRecordItem唯一标识"
+        },
+        {
+          "name": "medicalRecordId",
+          "type": "Long",
+          "description": "所属MedicalRecordID"
+        },
+        {
+          "name": "prescriptionId",
+          "type": "Long",
+          "description": "PrescriptionID"
+        },
+        {
+          "name": "quantity",
+          "type": "Integer",
+          "description": "数量"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_MEDICAL_RECORD",
+          "type": "many-to-one",
+          "description": "MedicalRecordItem属于一个MedicalRecord"
+        },
+        {
+          "target": "E_PRESCRIPTION",
+          "type": "many-to-one",
+          "description": "MedicalRecordItem引用一个Prescription"
+        }
+      ],
+      "id": "E_MEDICAL_RECORD_ITEM",
+      "entityRef": "E_MEDICAL_RECORD_ITEM",
+      "canonicalName": "MedicalRecordItem",
+      "displayName": "MedicalRecordItem"
+    },
+    {
+      "name": "PrescriptionReview",
+      "entityKind": "process_record",
+      "description": "处方审核记录",
+      "attributes": [
+        {
+          "name": "reviewId",
+          "type": "Long",
+          "description": "审核记录ID"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "审核状态（通过/驳回）"
+        },
+        {
+          "name": "comment",
+          "type": "String",
+          "description": "审核意见"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_PRESCRIPTION",
+          "type": "many-to-one",
+          "description": "关联处方"
+        },
+        {
+          "target": "A_PHARMACIST",
+          "type": "many-to-one",
+          "description": "关联审核药师"
+        }
+      ],
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "PrescriptionReview",
+        "endpoints": [
+          "Prescription"
+        ],
+        "evidence": [
+          "has_identifier",
+          "has_status"
+        ]
+      },
+      "id": "E_PRESCRIPTION_REVIEW",
+      "entityRef": "E_PRESCRIPTION_REVIEW",
+      "canonicalName": "PrescriptionReview",
+      "displayName": "PrescriptionReview"
+    },
+    {
+      "name": "RefundApplication",
+      "entityKind": "process_record",
+      "description": "退费申请记录",
+      "attributes": [
+        {
+          "name": "applicationId",
+          "type": "Long",
+          "description": "申请ID"
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "description": "审批状态"
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "description": "退费原因"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "E_PAYMENT",
+          "type": "many-to-one",
+          "description": "关联原收费记录"
+        },
+        {
+          "target": "Approver",
+          "type": "many-to-one",
+          "description": "关联审批人"
+        }
+      ],
+      "reifies": {
+        "source": "business_process",
+        "sourceName": "RefundProcess",
+        "endpoints": [
+          "Payment"
+        ],
+        "evidence": [
+          "has_identifier",
+          "has_status"
+        ]
+      },
+      "id": "E_REFUND_APPLICATION",
+      "entityRef": "E_REFUND_APPLICATION",
+      "canonicalName": "RefundApplication",
+      "displayName": "RefundApplication"
+    }
+  ],
+  "constraints": [
+    {
+      "constraintUid": "ct_1XPI2A00",
+      "displayId": "C001",
+      "canonicalId": "CON_FUNC_1XPI2A00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "检查报告需经医生审核后才能发布",
+      "canonicalRuleEn": "检查报告需经医生审核后才能发布",
+      "sourceText": "报告录入和审核",
+      "normalizedRule": {
+        "subject": "检查报告需经医生审核后才能发布",
+        "modality": "must",
+        "action": "检查报告需经医生审核后才能发布"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "报告录入和审核"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_1XPI2A00",
+      "source_text": "报告录入和审核",
+      "description": "检查报告需经医生审核后才能发布"
+    },
+    {
+      "constraintUid": "ct_2BXAU800",
+      "displayId": "C002",
+      "canonicalId": "CON_FUNC_2BXAU800",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "病历修改留痕（修改原因、修改时间、修改人）",
+      "canonicalRuleEn": "病历修改留痕（修改原因、修改时间、修改人）",
+      "sourceText": "病历修改留痕（修改原因、修改时间、修改人）",
+      "normalizedRule": {
+        "subject": "病历修改留痕（修改原因、修改时间、修改人）",
+        "modality": "must",
+        "action": "病历修改留痕（修改原因、修改时间、修改人）"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "病历修改留痕（修改原因、修改时间、修改人）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_2BXAU800",
+      "source_text": "病历修改留痕（修改原因、修改时间、修改人）",
+      "description": "病历修改留痕（修改原因、修改时间、修改人）"
+    },
+    {
+      "constraintUid": "ct_2O863600",
+      "displayId": "C003",
+      "canonicalId": "CON_FUNC_2O863600",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "护士执行医嘱需核对患者身份",
+      "canonicalRuleEn": "护士执行医嘱需核对患者身份",
+      "sourceText": "执行医嘱",
+      "normalizedRule": {
+        "subject": "护士执行医嘱需核对患者身份",
+        "modality": "must",
+        "action": "护士执行医嘱需核对患者身份"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "执行医嘱"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_2O863600",
+      "source_text": "执行医嘱",
+      "description": "护士执行医嘱需核对患者身份"
+    },
+    {
+      "constraintUid": "ct_6GG8FK00",
+      "displayId": "C004",
+      "canonicalId": "CON_FUNC_6GG8FK00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "退药需医生确认后退回库存",
+      "canonicalRuleEn": "退药需医生确认后退回库存",
+      "sourceText": "退药流程（已发药需医生确认后退回）",
+      "normalizedRule": {
+        "subject": "退药需医生确认后退回库存",
+        "modality": "must",
+        "action": "退药需医生确认后退回库存"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "退药流程（已发药需医生确认后退回）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_6GG8FK00",
+      "source_text": "退药流程（已发药需医生确认后退回）",
+      "description": "退药需医生确认后退回库存"
+    },
+    {
+      "constraintUid": "ct_8AYEEO00",
+      "displayId": "C005",
+      "canonicalId": "CON_FUNC_8AYEEO00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "检查已做不可退费",
+      "canonicalRuleEn": "检查已做不可退费",
+      "sourceText": "检查已做不可退费",
+      "normalizedRule": {
+        "subject": "检查已做不可退费",
+        "modality": "must",
+        "action": "检查已做不可退费"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "检查已做不可退费"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_8AYEEO00",
+      "source_text": "检查已做不可退费",
+      "description": "检查已做不可退费"
+    },
+    {
+      "constraintUid": "ct_8DR1ZU00",
+      "displayId": "C006",
+      "canonicalId": "CON_FUNC_8DR1ZU00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "连续夜班不超过3天",
+      "canonicalRuleEn": "连续夜班不超过3天",
+      "sourceText": "连续夜班不超过 3 天",
+      "normalizedRule": {
+        "subject": "连续夜班不超过3天",
+        "modality": "must",
+        "action": "连续夜班不超过3天"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "连续夜班不超过 3 天"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_8DR1ZU00",
+      "source_text": "连续夜班不超过 3 天",
+      "description": "连续夜班不超过3天"
+    },
+    {
+      "constraintUid": "ct_ANAPF400",
+      "displayId": "C007",
+      "canonicalId": "CON_FUNC_ANAPF400",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "过期药品不可发出",
+      "canonicalRuleEn": "过期药品不可发出",
+      "sourceText": "药品约束 - 过期药品不可发出，库存不足不可开方，麻醉药品需双签",
+      "normalizedRule": {
+        "subject": "过期药品不可发出",
+        "modality": "must",
+        "action": "过期药品不可发出"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "药品约束 - 过期药品不可发出，库存不足不可开方，麻醉药品需双签"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_ANAPF400",
+      "source_text": "药品约束 - 过期药品不可发出，库存不足不可开方，麻醉药品需双签",
+      "description": "过期药品不可发出"
+    },
+    {
+      "constraintUid": "ct_DJ0G2K00",
+      "displayId": "C008",
+      "canonicalId": "CON_FUNC_DJ0G2K00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "已发药品不可退费（特殊审批除外）",
+      "canonicalRuleEn": "已发药品不可退费（特殊审批除外）",
+      "sourceText": "已发药品不可退费（特殊审批除外）",
+      "normalizedRule": {
+        "subject": "已发药品不可退费（特殊审批除外）",
+        "modality": "must",
+        "action": "已发药品不可退费（特殊审批除外）"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "已发药品不可退费（特殊审批除外）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_DJ0G2K00",
+      "source_text": "已发药品不可退费（特殊审批除外）",
+      "description": "已发药品不可退费（特殊审批除外）"
+    },
+    {
+      "constraintUid": "ct_EFK8XS00",
+      "displayId": "C009",
+      "canonicalId": "CON_FUNC_EFK8XS00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "近效期药品预警（有效期 < 3 个月）",
+      "canonicalRuleEn": "近效期药品预警（有效期 < 3 个月）",
+      "sourceText": "近效期药品预警（有效期 < 3 个月）",
+      "normalizedRule": {
+        "subject": "近效期药品预警（有效期 < 3 个月）",
+        "modality": "must",
+        "action": "近效期药品预警（有效期 < 3 个月）"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "近效期药品预警（有效期 < 3 个月）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_EFK8XS00",
+      "source_text": "近效期药品预警（有效期 < 3 个月）",
+      "description": "近效期药品预警（有效期 < 3 个月）"
+    },
+    {
+      "constraintUid": "ct_ESMQCU00",
+      "displayId": "C010",
+      "canonicalId": "CON_FUNC_ESMQCU00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "关键操作全程留痕",
+      "canonicalRuleEn": "关键操作全程留痕",
+      "sourceText": "关键操作全程留痕",
+      "normalizedRule": {
+        "subject": "关键操作全程留痕",
+        "modality": "must",
+        "action": "关键操作全程留痕"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "关键操作全程留痕"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_ESMQCU00",
+      "source_text": "关键操作全程留痕",
+      "description": "关键操作全程留痕"
+    },
+    {
+      "constraintUid": "ct_G7QA2J00",
+      "displayId": "C011",
+      "canonicalId": "CON_FUNC_G7QA2J00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "单张处方药品种类不超过5种",
+      "canonicalRuleEn": "单张处方药品种类不超过5种",
+      "sourceText": "处方约束 - 单张处方药品种类不超过 5 种，抗生素需主任医师审核",
+      "normalizedRule": {
+        "subject": "单张处方药品种类不超过5种",
+        "modality": "must",
+        "action": "单张处方药品种类不超过5种"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "处方约束 - 单张处方药品种类不超过 5 种，抗生素需主任医师审核"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_G7QA2J00",
+      "source_text": "处方约束 - 单张处方药品种类不超过 5 种，抗生素需主任医师审核",
+      "description": "单张处方药品种类不超过5种"
+    },
+    {
+      "constraintUid": "ct_HOQSD200",
+      "displayId": "C012",
+      "canonicalId": "CON_FUNC_HOQSD200",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "医生每周工作不超过5天",
+      "canonicalRuleEn": "医生每周工作不超过5天",
+      "sourceText": "医生每周工作不超过 5 天",
+      "normalizedRule": {
+        "subject": "医生每周工作不超过5天",
+        "modality": "must",
+        "action": "医生每周工作不超过5天"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "医生每周工作不超过 5 天"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_HOQSD200",
+      "source_text": "医生每周工作不超过 5 天",
+      "description": "医生每周工作不超过5天"
+    },
+    {
+      "constraintUid": "ct_NLK5YG00",
+      "displayId": "C013",
+      "canonicalId": "CON_FUNC_NLK5YG00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "处方状态必须按顺序流转（开立 → 审核 → 收费 → 发药）",
+      "canonicalRuleEn": "处方状态必须按顺序流转（开立 → 审核 → 收费 → 发药）",
+      "sourceText": "处方状态流转（开立 → 审核 → 收费 → 发药）",
+      "normalizedRule": {
+        "subject": "处方状态必须按顺序流转（开立 → 审核 → 收费 → 发药）",
+        "modality": "must",
+        "action": "处方状态必须按顺序流转（开立 → 审核 → 收费 → 发药）"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "处方状态流转（开立 → 审核 → 收费 → 发药）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_NLK5YG00",
+      "source_text": "处方状态流转（开立 → 审核 → 收费 → 发药）",
+      "description": "处方状态必须按顺序流转（开立 → 审核 → 收费 → 发药）"
+    },
+    {
+      "constraintUid": "ct_OTGDRM00",
+      "displayId": "C014",
+      "canonicalId": "CON_FUNC_OTGDRM00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "每位医生每日限号50个",
+      "canonicalRuleEn": "每位医生每日限号50个",
+      "sourceText": "号源限制（每位医生每日限号50个）",
+      "normalizedRule": {
+        "subject": "每位医生每日限号50个",
+        "modality": "must",
+        "action": "每位医生每日限号50个"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "号源限制（每位医生每日限号50个）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_OTGDRM00",
+      "source_text": "号源限制（每位医生每日限号50个）",
+      "description": "每位医生每日限号50个"
+    },
+    {
+      "constraintUid": "ct_R2229A00",
+      "displayId": "C015",
+      "canonicalId": "CON_FUNC_R2229A00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "同一医生不可同时排两个科室",
+      "canonicalRuleEn": "同一医生不可同时排两个科室",
+      "sourceText": "排班冲突检测（同一医生不可同时排两个科室）",
+      "normalizedRule": {
+        "subject": "同一医生不可同时排两个科室",
+        "modality": "must",
+        "action": "同一医生不可同时排两个科室"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "排班冲突检测（同一医生不可同时排两个科室）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_R2229A00",
+      "source_text": "排班冲突检测（同一医生不可同时排两个科室）",
+      "description": "同一医生不可同时排两个科室"
+    },
+    {
+      "constraintUid": "ct_RWLWLQ00",
+      "displayId": "C016",
+      "canonicalId": "CON_FUNC_RWLWLQ00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "医生不可查看收费明细",
+      "canonicalRuleEn": "医生不可查看收费明细",
+      "sourceText": "医生不可查看收费明细",
+      "normalizedRule": {
+        "subject": "医生不可查看收费明细",
+        "modality": "must",
+        "action": "医生不可查看收费明细"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "医生不可查看收费明细"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_RWLWLQ00",
+      "source_text": "医生不可查看收费明细",
+      "description": "医生不可查看收费明细"
+    },
+    {
+      "constraintUid": "ct_UU96SS00",
+      "displayId": "C017",
+      "canonicalId": "CON_FUNC_UU96SS00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "同一患者同日同科限挂1次",
+      "canonicalRuleEn": "同一患者同日同科限挂1次",
+      "sourceText": "同一患者同日同科限挂1次",
+      "normalizedRule": {
+        "subject": "同一患者同日同科限挂1次",
+        "modality": "must",
+        "action": "同一患者同日同科限挂1次"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "同一患者同日同科限挂1次"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_UU96SS00",
+      "source_text": "同一患者同日同科限挂1次",
+      "description": "同一患者同日同科限挂1次"
+    },
+    {
+      "constraintUid": "ct_V12RWY00",
+      "displayId": "C018",
+      "canonicalId": "CON_FUNC_V12RWY00",
+      "type": "functional",
+      "subtype": "general",
+      "descriptionZh": "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+      "canonicalRuleEn": "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+      "sourceText": "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+      "normalizedRule": {
+        "subject": "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+        "modality": "must",
+        "action": "处方审核规则（配伍禁忌、过敏检查、用量上限）"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "处方审核规则（配伍禁忌、过敏检查、用量上限）"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "functional_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_FUNC_V12RWY00",
+      "source_text": "处方审核规则（配伍禁忌、过敏检查、用量上限）",
+      "description": "处方审核规则（配伍禁忌、过敏检查、用量上限）"
+    },
+    {
+      "constraintUid": "ct_11R4W000",
+      "displayId": "C019",
+      "canonicalId": "CON_SEC_11R4W000",
+      "type": "security",
+      "subtype": "audit",
+      "descriptionZh": "收费员不可修改病历",
+      "canonicalRuleEn": "收费员不可修改病历",
+      "sourceText": "收费员不可修改病历",
+      "normalizedRule": {
+        "subject": "收费员不可修改病历",
+        "modality": "must",
+        "action": "收费员不可修改病历"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "收费员不可修改病历"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_11R4W000",
+      "source_text": "收费员不可修改病历",
+      "description": "收费员不可修改病历"
+    },
+    {
+      "constraintUid": "ct_278NRO00",
+      "displayId": "C020",
+      "canonicalId": "CON_SEC_278NRO00",
+      "type": "security",
+      "subtype": "access_control",
+      "descriptionZh": "患者敏感信息加密存储",
+      "canonicalRuleEn": "患者敏感信息加密存储",
+      "sourceText": "患者敏感信息加密存储",
+      "normalizedRule": {
+        "subject": "患者敏感信息加密存储",
+        "modality": "must",
+        "action": "患者敏感信息加密存储"
+      },
+      "relatedFunctions": [],
+      "evidence": [
+        {
+          "sourceText": "患者敏感信息加密存储"
+        }
+      ],
+      "verification": {
+        "testability": "testable",
+        "recommendedType": "security_integration_test",
+        "acceptanceCriteria": []
+      },
+      "id": "CON_SEC_278NRO00",
+      "source_text": "患者敏感信息加密存储",
+      "description": "患者敏感信息加密存储"
+    }
+  ],
+  "exceptions": [
+    {
+      "id": "EXC_I55RS100",
+      "description": "挂号并发冲突",
+      "trigger": "多人抢同一号源",
+      "handling": "保证不超发",
+      "displayId": "X001"
+    },
+    {
+      "id": "EXC_IK6SC300",
+      "description": "过敏检测",
+      "trigger": "患者对某药品过敏",
+      "handling": "开方时自动拦截提醒",
+      "displayId": "X002"
+    },
+    {
+      "id": "EXC_JTEW0R00",
+      "description": "检查设备故障",
+      "trigger": "预约的检查设备临时故障",
+      "handling": "自动改约并通知患者",
+      "displayId": "X004"
+    },
+    {
+      "id": "EXC_KEZQTE00",
+      "description": "收费系统故障",
+      "trigger": "收费系统故障",
+      "handling": "缓存交易记录，故障恢复后批量同步",
+      "displayId": "X005"
+    },
+    {
+      "id": "EXC_EY2AKD00",
+      "description": "药品配伍禁忌",
+      "trigger": "开方时检测到禁忌组合",
+      "handling": "弹窗警告并阻止提交",
+      "displayId": "X006"
+    },
+    {
+      "id": "EXC_MFI8HE00",
+      "description": "处方审核不通过",
+      "trigger": "药师审核发现配伍禁忌或超量",
+      "handling": "退回修改并通知医生",
+      "originalId": "E006",
+      "displayId": "X007"
+    },
+    {
+      "id": "EXC_OGMI1200",
+      "description": "医保结算失败",
+      "trigger": "医保系统连接超时或账户异常",
+      "handling": "转为自费并提示患者后续报销",
+      "originalId": "E007",
+      "displayId": "X008"
+    },
+    {
+      "id": "EXC_BW46RT00",
+      "description": "药品库存实时变化导致发药失败",
+      "trigger": "处方审核通过后库存不足",
+      "handling": "通知医生更换药品并记录缺货",
+      "originalId": "E008",
+      "displayId": "X009"
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "category": "性能",
+      "description": "支持日均5000+门诊量"
+    },
+    {
+      "category": "安全",
+      "description": "符合HIPAA等隐私保护要求"
+    }
+  ],
+  "business_processes": [
+    {
+      "name": "挂号流程",
+      "steps": [
+        "查询号源",
+        "选择医生和时段",
+        "提交挂号",
+        "生成挂号记录",
+        "进入排队队列"
+      ],
+      "actors": [
+        "A_PATIENT"
+      ]
+    },
+    {
+      "name": "排队叫号流程",
+      "steps": [
+        "患者签到",
+        "系统分配队列位置",
+        "大屏显示当前叫号",
+        "医生叫号",
+        "过号处理"
+      ],
+      "actors": [
+        "A_PATIENT",
+        "A_DOCTOR"
+      ]
+    },
+    {
+      "name": "医生排班流程",
+      "steps": [
+        "设置排班规则",
+        "排班冲突检测",
+        "临时调班申请",
+        "排班表展示"
+      ],
+      "actors": [
+        "A_DOCTOR",
+        "A_ADMIN"
+      ]
+    },
+    {
+      "name": "处方管理流程",
+      "steps": [
+        "开具处方",
+        "处方审核",
+        "处方收费",
+        "处方发药"
+      ],
+      "actors": [
+        "A_DOCTOR",
+        "A_PHARMACIST"
+      ]
+    },
+    {
+      "name": "就诊流程",
+      "steps": [
+        "患者签到",
+        "排队叫号",
+        "医生接诊",
+        "书写病历",
+        "开具处方/检查单"
+      ],
+      "actors": [
+        "A_PATIENT",
+        "A_DOCTOR"
+      ]
+    },
+    {
+      "name": "收费流程",
+      "steps": [
+        "查询待缴费项目",
+        "计算费用",
+        "医保结算",
+        "自费支付",
+        "生成收费记录"
+      ],
+      "actors": [
+        "A_CASHIER"
+      ]
+    },
+    {
+      "name": "发药流程",
+      "steps": [
+        "审核处方",
+        "检查库存",
+        "配药",
+        "发药",
+        "更新库存"
+      ],
+      "actors": [
+        "A_PHARMACIST"
+      ]
+    }
+  ],
+  "proposeNewEntities": [],
+  "proposeNewFunctions": [],
+  "__qualityGate": {
+    "passed": true,
+    "score": 0.8888888888888888,
+    "checks": [
+      {
+        "name": "required_fields_non_empty",
+        "passed": true,
+        "detail": "actors=6, functions=17, entities=18"
+      },
+      {
+        "name": "entity_attribute_coverage",
+        "passed": true,
+        "detail": "18/18 entities have attributes (100%)"
+      },
+      {
+        "name": "function_description_coverage",
+        "passed": true,
+        "detail": "17/17 functions have description (100%)"
+      },
+      {
+        "name": "constraints_non_empty",
+        "passed": true,
+        "detail": "20 constraints, 8 exceptions"
+      },
+      {
+        "name": "id_format",
+        "passed": true,
+        "detail": "All 63 IDs valid"
+      },
+      {
+        "name": "cross_reference_integrity",
+        "passed": false,
+        "detail": "6 broken relationship target(s)"
+      },
+      {
+        "name": "relationship_entity_coverage",
+        "passed": true,
+        "detail": "No missing reified relationship/process entities detected"
+      },
+      {
+        "name": "source_ref_coverage",
+        "passed": true,
+        "detail": "20/20 constraints have source_text (100%)"
+      },
+      {
+        "name": "no_unverified_constraints",
+        "passed": true,
+        "detail": "All source_text references verified"
+      }
+    ]
+  }
+}

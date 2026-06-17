@@ -1,0 +1,27 @@
+{
+  "_comment": "M2 fake_traceability mutant: this matrix LIES. Every constraint→design→test chain entry exists, but each cited test asserts an UNRELATED behavior (e.g. allergy-detection constraint → audit-log test; 50-registration-limit constraint → basic booking test). The Phase 2.5 trace-chain judge must read this and flag chain_truthful=false, dropping traceability_truthfulness. constraintDescriptions carry readable text so the judge can match gold obligations by SEMANTICS (gold uses C-001..C-004, the mutant cover-matrix uses C014/C016/etc — no direct id mapping).",
+  "constraintToDesign": {
+    "C001": ["AppointmentService.bookAppointment"],
+    "C002": ["PrescriptionService.prescribe"],
+    "C003": ["Inventory.checkStock"],
+    "C004": ["Payment.refund"],
+    "X002": ["PrescriptionService.prescribe"],
+    "X005": ["PaymentService.processPayment"]
+  },
+  "constraintToTests": {
+    "C001": ["TC-N-004"],
+    "C002": ["TC-N-028"],
+    "C003": ["TC-N-018"],
+    "C004": ["TC-N-014"],
+    "X002": ["TC-N-002"],
+    "X005": ["TC-N-012"]
+  },
+  "constraintDescriptions": {
+    "C001": "每位医生每日限号50个，同一患者同日同科限挂1次（挂号约束）",
+    "C002": "单张处方药品种类不超过5种，抗生素需主任医师审核（处方约束）",
+    "C003": "过期药品不可发出，库存不足不可开方，麻醉药品需双签（药品约束）",
+    "C004": "已发药品不可退费（特殊审批除外），检查已做不可退费（退费约束）",
+    "X002": "开方时自动拦截过敏药品（过敏检测）",
+    "X005": "收费系统故障时缓存交易记录并恢复后同步（收费系统故障）"
+  }
+}

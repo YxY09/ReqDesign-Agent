@@ -1,0 +1,20 @@
+{
+  "mutant_id": "M5_wrong_design_decision",
+  "description": "design has a CONCRETE rule for C-002 (antibiotics / 5-drug-limit) but the rule is the OPPOSITE of the obligation (allows unlimited drugs, antibiotics skip chief-physician review). A test (TC-N-099) is aligned with the REVERSED rule (asserts antibiotics can be directly approved), so has_test_alignment would be true — yet the rule contradicts gold C-002. Must be scored LOW via the Phase 2.5 contradiction check (code-side clamp ≤1), not by test alignment.",  "expected_per_obligation": {
+    "C-001": { "max_score": 3, "rationale": "挂号约束未受影响" },
+    "C-002": { "max_score": 1, "rationale": "design 明确与 gold 相反(允许任意数量/抗生素跳过审核)且配了 TC-N-099 对齐反向规则→靠 contradiction check 代码侧强制 clamp ≤1，而非靠 test alignment" },
+    "C-003": { "max_score": 3, "rationale": "药品约束未受影响" },
+    "C-004": { "max_score": 3, "rationale": "退费约束未受影响" },
+    "F-006": { "max_score": 3, "rationale": "处方主流程未受影响（其他审核规则仍在）" },
+    "F-002": { "max_score": 3, "rationale": "挂号主流程未受影响" },
+    "X-002": { "max_score": 3, "rationale": "过敏拦截未受影响" },
+    "X-005": { "max_score": 3, "rationale": "故障恢复未受影响" }
+  },
+  "expected_quality_direction": {
+    "gold_obligation_coverage": "medium",
+    "design_depth": "high",
+    "test_effectiveness": "medium",
+    "traceability_truthfulness": "high",
+    "primary_drop": "gold_obligation_coverage"
+  }
+}
