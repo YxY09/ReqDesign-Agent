@@ -1,398 +1,341 @@
 import { describe, it, expect, vi } from "vitest";
-import { ArtifactPatcher } from "../src/tools/artifactPatcher.js";
 import { RepairTool } from "../src/tools/repair.js";
-import { createTask } from "../src/shared/types.js";
+import { createTask, isDesignModel } from "../src/shared/types.js";
 
-// ---------------------------------------------------------------------------
-// applyJsonOps — unit tests on ArtifactPatcher
-// ---------------------------------------------------------------------------
-
-describe("ArtifactPatcher.applyJsonOps", () => {
-  const baseJson = JSON.stringify(
-    {
-      test_cases: [
-        { id: "TC-001", name: "Login", steps: "step1", expected: "ok" },
-        { id: "TC-002", name: "Logout", steps: "step2", expected: "ok" },
-      ],
-    },
-    null,
-    2,
-  );
-
-  it("appends items to an array path", () => {
-    const result = ArtifactPatcher.applyJsonOps(baseJson, [
-      {
-        action: "append",
-        path: "test_cases",
-        items: [{ id: "TC-003", name: "Register", steps: "step3", expected: "ok" }],
-      },
-    ]);
-    const parsed = JSON.parse(result);
-    expect(parsed.test_cases).toHaveLength(3);
-    expect(parsed.test_cases[2].id).toBe("TC-003");
-  });
-
-  it("replaces an item by match field", () => {
-    const result = ArtifactPatcher.applyJsonOps(baseJson, [
-      {
-        action: "replace",
-        path: "test_cases",
-        match: { field: "id", value: "TC-001" },
-        value: { id: "TC-001", name: "Login V2", steps: "step1v2", expected: "ok2" },
-      },
-    ]);
-    const parsed = JSON.parse(result);
-    expect(parsed.test_cases).toHaveLength(2);
-    expect(parsed.test_cases[0].name).toBe("Login V2");
-    expect(parsed.test_cases[1].name).toBe("Logout"); // unchanged
-  });
-
-  it("deletes an item by match field", () => {
-    const result = ArtifactPatcher.applyJsonOps(baseJson, [
-      {
-        action: "delete",
-        path: "test_cases",
-        match: { field: "id", value: "TC-002" },
-      },
-    ]);
-    const parsed = JSON.parse(result);
-    expect(parsed.test_cases).toHaveLength(1);
-    expect(parsed.test_cases[0].id).toBe("TC-001");
-  });
-
-  it("skips op when path is not an array", () => {
-    const json = JSON.stringify({ test_cases: [1, 2], metadata: "hello" });
-    const result = ArtifactPatcher.applyJsonOps(json, [
-      { action: "append", path: "metadata", items: [3] } as any,
-    ]);
-    const parsed = JSON.parse(result);
-    expect(parsed.metadata).toBe("hello"); // unchanged
-    expect(parsed.test_cases).toHaveLength(2);
-  });
-
-  it("skips replace when match not found", () => {
-    const result = ArtifactPatcher.applyJsonOps(baseJson, [
-      {
-        action: "replace",
-        path: "test_cases",
-        match: { field: "id", value: "TC-999" },
-        value: { id: "TC-999", name: "Ghost" },
-      },
-    ]);
-    const parsed = JSON.parse(result);
-    expect(parsed.test_cases).toHaveLength(2);
-    expect(parsed.test_cases[0].name).toBe("Login");
-  });
-
-  it("applies multiple ops in sequence", () => {
-    const result = ArtifactPatcher.applyJsonOps(baseJson, [
-      {
-        action: "replace",
-        path: "test_cases",
-        match: { field: "id", value: "TC-001" },
-        value: { id: "TC-001", name: "Login Fixed", steps: "step1f", expected: "ok" },
-      },
-      {
-        action: "append",
-        path: "test_cases",
-        items: [{ id: "TC-003", name: "New", steps: "s3", expected: "ok" }],
-      },
-    ]);
-    const parsed = JSON.parse(result);
-    expect(parsed.test_cases).toHaveLength(3);
-    expect(parsed.test_cases[0].name).toBe("Login Fixed");
-    expect(parsed.test_cases[2].id).toBe("TC-003");
-  });
-
-  it("returns pretty-printed JSON", () => {
-    const result = ArtifactPatcher.applyJsonOps(baseJson, []);
-    // Pretty-printed JSON should have newlines and indentation
-    expect(result).toContain("\n");
-    expect(result).toContain("  ");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// _applyPatchResponse routing — ops and full_replace
-// ---------------------------------------------------------------------------
-
-function makeLlm(text: string) {
+function makeTextLlm(text: string) {
   return {
     generateText: vi.fn().mockResolvedValue(text),
     generateJson: vi.fn(),
   } as any;
 }
 
-describe("RepairTool._applyPatchResponse routing", () => {
-  it("routes ops to applyJsonOps for object currentContent (tests task)", async () => {
-    // For tests tasks, currentContent can be a parsed JSON object,
-    // not a string. The ops branch must still be routed in that case.
-    const originalObj = {
+function makeJsonLlm(response: Record<string, unknown>) {
+  return {
+    generateText: vi.fn(),
+    generateJson: vi.fn().mockResolvedValue(response),
+  } as any;
+}
+
+describe("RepairTool full-artifact repair routing", () => {
+  it("accepts complete JSON repair for object test content", async () => {
+    const llm = makeTextLlm(JSON.stringify({
       test_cases: [
-        { id: "TC-001", name: "Login", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
+        { id: "TC-N-001", title: "Login Fixed", type: "正常", target: "F001", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页", priority: "P1" },
       ],
-    };
-
-    // LLM returns ops format
-    const llm = makeLlm(
-      JSON.stringify({
-        ops: [
-          {
-            action: "replace",
-            path: "test_cases",
-            match: { field: "id", value: "TC-001" },
-            value: { id: "TC-001", name: "Login Fixed", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
-          },
-        ],
-      }),
-    );
-
-    const agent = new RepairTool(llm);
-    const task = createTask({
-      id: "tests-1",
-      type: "tests",
-      description: "repair tests",
-    });
-
-    const result = await agent.repair(task, originalObj as unknown as string, [
-      { severity: "major", description: "TC-001 broken", suggestion: "fix" },
-    ], {});
-
-    expect(result).not.toBeNull();
-    const parsed = JSON.parse(result as string);
-    expect(parsed.test_cases[0].name).toBe("Login Fixed");
-  });
-
-  it("routes ops to applyJsonOps for JSON content", async () => {
-    const originalJson = JSON.stringify(
-      {
-        test_cases: [
-          { id: "TC-001", name: "Login", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
-        ],
-      },
-      null,
-      2,
-    );
-
-    // LLM returns ops format
-    const llm = makeLlm(
-      JSON.stringify({
-        ops: [
-          {
-            action: "replace",
-            path: "test_cases",
-            match: { field: "id", value: "TC-001" },
-            value: { id: "TC-001", name: "Login Fixed", steps: ["输入用户名和密码", "点击登录按钮"], expected_result: "登录成功并跳转到首页" },
-          },
-        ],
-      }),
-    );
-
-    const agent = new RepairTool(llm);
-    const task = createTask({
-      id: "tests-1",
-      type: "tests",
-      description: "repair tests",
-    });
-
-    const result = await agent.repair(task, originalJson, [
-      { severity: "major", description: "TC-001 broken", suggestion: "fix" },
-    ], {});
-
-    expect(result).not.toBeNull();
-    const parsed = JSON.parse(result as string);
-    expect(parsed.test_cases[0].name).toBe("Login Fixed");
-  });
-
-  it("normalizes invalid structured test IDs after ops repair", async () => {
-    const originalJson = JSON.stringify(
-      {
-        test_cases: [
-          {
-            id: "TC-N-001",
-            title: "已有正常测试",
-            type: "正常",
-            target: "F010",
-            preconditions: "ready",
-            steps: ["准备测试环境", "执行正常操作"],
-            expected_result: "操作成功完成",
-            priority: "P1",
-          },
-        ],
-      },
-      null,
-      2,
-    );
-
-    const llm = makeLlm(
-      JSON.stringify({
-        ops: [
-          {
-            action: "append",
-            path: "test_cases",
-            items: [
-              {
-                id: "TC-F010-001",
-                title: "帮助功能正常测试",
-                type: "正常",
-                target: "F010",
-                preconditions: "ready",
-                steps: ["导航到帮助页面", "查看帮助内容"],
-                expected_result: "帮助内容正确显示",
-                priority: "P1",
-              },
-              {
-                id: "TC-X002-001",
-                title: "权限异常测试",
-                type: "异常",
-                target: "X002",
-                preconditions: "denied",
-                steps: ["以无权限用户登录", "访问受限资源"],
-                expected_result: "系统拒绝访问并提示权限不足",
-                priority: "P0",
-              },
-              {
-                id: "TC-CON-001",
-                title: "审计约束测试",
-                type: "边界",
-                target: "C001",
-                preconditions: "audit enabled",
-                steps: ["获取审计日志记录", "尝试篡改审计日志内容"],
-                expected_result: "系统阻止篡改并记录安全事件",
-                priority: "P0",
-              },
-            ],
-          },
-        ],
-      }),
-    );
-
+    }));
     const agent = new RepairTool(llm);
     const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
 
-    const result = await agent.repair(task, originalJson, [
-      { severity: "major", description: "missing coverage", suggestion: "add tests" },
-    ], {
-      requirement_json: {
-        functions: [{ id: "F010", name: "Help" }],
-        exceptions: [{ id: "X002", description: "Denied" }],
-        constraints: [{ id: "C001", description: "Audit cannot be altered" }],
-      },
-    });
+    const result = await agent.repair(
+      task,
+      { test_cases: [{ id: "TC-N-001", title: "Login", target: "F001" }] },
+      [{ severity: "major", description: "TC-N-001 broken", suggestion: "fix" }],
+      {},
+    );
 
     expect(result).not.toBeNull();
-    const parsed = JSON.parse(result as string);
-    // First appended test (target F010, type "正常") gets converted from
-    // append→replace because existing TC-N-001 also targets F010.
-    // Result: 3 tests (original replaced + 2 new appended).
-    expect(parsed.test_cases.map((tc: Record<string, unknown>) => tc.id)).toEqual([
+    expect(JSON.parse(result as string).test_cases[0].title).toBe("Login Fixed");
+  });
+
+  it("rejects ops patch protocol for test repair", async () => {
+    const llm = makeTextLlm(JSON.stringify({
+      ops: [
+        {
+          action: "replace",
+          path: "test_cases",
+          match: { field: "id", value: "TC-N-001" },
+          value: { id: "TC-N-001", target: "F001" },
+        },
+      ],
+    }));
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
+
+    const result = await agent.repair(
+      task,
+      JSON.stringify({ test_cases: [{ id: "TC-N-001", target: "F001" }] }),
+      [{ severity: "major", description: "TC-N-001 broken", suggestion: "fix" }],
+      {},
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("normalizes invalid structured test IDs after full JSON repair", async () => {
+    const llm = makeTextLlm(JSON.stringify({
+      test_cases: [
+        { id: "TC-F010-001", title: "帮助功能正常测试", type: "正常", target: "F010", preconditions: "ready", steps: ["导航到帮助页面", "查看帮助内容"], expected_result: "帮助内容正确显示", priority: "P1" },
+        { id: "TC-X002-001", title: "权限异常测试", type: "异常", target: "X002", preconditions: "denied", steps: ["以无权限用户登录", "访问受限资源"], expected_result: "系统拒绝访问并提示权限不足", priority: "P0" },
+        { id: "TC-CON-001", title: "审计约束测试", type: "边界", target: "C001", preconditions: "audit enabled", steps: ["获取审计日志记录", "尝试篡改审计日志内容"], expected_result: "系统阻止篡改并记录安全事件", priority: "P0" },
+      ],
+    }));
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
+
+    const result = await agent.repair(
+      task,
+      JSON.stringify({ test_cases: [] }),
+      [{ severity: "major", description: "missing coverage", suggestion: "add tests" }],
+      {
+        requirement_json: {
+          functions: [{ id: "F010", name: "Help" }],
+          exceptions: [{ id: "X002", description: "Denied" }],
+          constraints: [{ id: "C001", description: "Audit cannot be altered" }],
+        },
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(JSON.parse(result as string).test_cases.map((tc: Record<string, unknown>) => tc.id)).toEqual([
       "TC-N-001",
       "TC-E-001",
       "TC-B-001",
     ]);
   });
 
-  it("routes full_replace for markdown content", async () => {
-    const originalMd = "## Design\n\nOld content\n\n## Modules\n\nModule A";
-
-    const llm = makeLlm(
-      JSON.stringify({
-        action: "full_replace",
-        content: "## Design\n\nNew content\n\n## Modules\n\nModule A",
-      }),
-    );
-
+  it("keeps existing tests when a full repair response omits unrelated cases", async () => {
+    const llm = makeTextLlm(JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-B-001",
+          title: "库存不足不可下单边界测试",
+          type: "边界",
+          target: "C001 库存不足时不可下单",
+          preconditions: "商品SKU-1库存为0",
+          steps: ["用户选择SKU-1并提交订单", "系统调用InventoryService校验库存"],
+          expected_result: "订单创建失败并提示库存不足",
+          priority: "P0",
+        },
+      ],
+    }));
     const agent = new RepairTool(llm);
-    const task = createTask({
-      id: "design-1",
-      type: "design",
-      description: "repair design",
-    });
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
 
-    const result = await agent.repair(task, originalMd, [
-      { severity: "major", description: "Design content wrong", suggestion: "fix" },
-    ], {});
-
-    expect(result).not.toBeNull();
-    expect(result).toContain("New content");
-    expect(result).toContain("Module A");
-  });
-
-  it("falls back to section-based patches when no ops or full_replace", async () => {
-    // Existing behavior: LLM returns patches array, content is markdown
-    const llm = makeLlm(
+    const result = await agent.repair(
+      task,
       JSON.stringify({
-        patches: [
+        test_cases: [
           {
-            op: "replace_section",
-            section: "Design",
-            content: "## Design\n\nFixed content",
+            id: "TC-N-001",
+            title: "订单创建正常流程",
+            type: "正常",
+            target: "F001 创建订单",
+            preconditions: "用户已登录且SKU-2库存为5件",
+            steps: ["用户选择SKU-2数量1", "提交订单"],
+            expected_result: "订单创建成功并锁定SKU-2库存",
+            priority: "P0",
+          },
+          {
+            id: "TC-B-001",
+            title: "库存约束模板测试",
+            type: "边界",
+            target: "C001 库存不足时不可下单",
+            preconditions: "库存不足",
+            steps: ["检查是否满足约束", "返回结果"],
+            expected_result: "符合预期",
+            priority: "P1",
           },
         ],
       }),
+      [{ severity: "major", description: "TC-B-001 too generic", suggestion: "rewrite TC-B-001" }],
+      {
+        requirement_json: {
+          functions: [{ id: "F001", displayId: "F001", name: "创建订单" }],
+          constraints: [{ id: "C001", displayId: "C001", source_text: "库存不足时不可下单" }],
+          exceptions: [],
+        },
+      },
     );
 
+    expect(result).not.toBeNull();
+    const cases = JSON.parse(result as string).test_cases as Array<Record<string, unknown>>;
+    expect(cases.map((tc) => tc.id)).toEqual(["TC-N-001", "TC-B-001"]);
+    expect(cases[0].title).toBe("订单创建正常流程");
+    expect(cases[1].title).toBe("库存不足不可下单边界测试");
+  });
+
+  it("keeps usable tests when a subset of repaired cases is still low quality", async () => {
+    const llm = makeTextLlm(JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-N-001",
+          title: "订单创建正常流程",
+          type: "正常",
+          target: "F001 创建订单",
+          preconditions: "用户已登录且购物车包含商品SKU-1",
+          steps: ["选择收货地址ADDR-1并提交订单", "系统校验库存并创建订单"],
+          expected_result: "订单创建成功，返回订单号并锁定SKU-1库存",
+          priority: "P1",
+        },
+        {
+          id: "TC-B-001",
+          title: "库存约束模板测试",
+          type: "边界",
+          target: "C001 库存不足时不可下单",
+          preconditions: "库存不足",
+          steps: ["检查是否满足约束"],
+          expected_result: "符合预期",
+          priority: "P1",
+        },
+      ],
+    }));
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
+
+    const result = await agent.repair(
+      task,
+      JSON.stringify({ test_cases: [] }),
+      [{ severity: "major", description: "fix low quality tests", suggestion: "rewrite tests" }],
+      {
+        requirement_json: {
+          functions: [{ id: "F001", displayId: "F001", name: "创建订单" }],
+          constraints: [{ id: "C001", displayId: "C001", source_text: "库存不足时不可下单" }],
+          exceptions: [],
+        },
+      },
+    );
+
+    expect(result).not.toBeNull();
+    const cases = JSON.parse(result as string).test_cases as Array<Record<string, unknown>>;
+    expect(cases.map((tc) => tc.id)).toEqual(["TC-N-001"]);
+  });
+
+  it("rejects full_replace protocol for design repair", async () => {
+    const llm = makeJsonLlm({
+      action: "full_replace",
+      content: "# 泛化系统设计\n\n## 模块划分\n\n只有泛化模块",
+    });
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "design-1", type: "design", description: "repair design" });
+
+    const result = await agent.repair(
+      task,
+      baseDesignModel(),
+      [{ severity: "major", description: "设计缺少约束实现", suggestion: "补充约束实现" }],
+      {},
+    );
+
+    expect(result).toBeNull();
+    const prompt = llm.generateJson.mock.calls[0][0] as string;
+    expect(prompt).toContain("完整 DesignModel JSON");
+    expect(prompt).not.toContain("ops");
+    expect(prompt).not.toContain("patches");
+    expect(prompt).not.toContain("full_replace");
+  });
+
+  it("accepts complete DesignModel repair without degrading to markdown", async () => {
+    const repairedModel = {
+      ...baseDesignModel(),
+      constraintImplementations: [
+        {
+          constraintId: "C001",
+          sourceTextVerbatim: "库存不足时不可下单",
+          implementationMechanism: "OrderService 调用 InventoryService 校验库存不足时不可下单",
+          parametersPreserved: [],
+          trigger: "提交订单时",
+          handling: "库存不足则拒绝下单",
+          affectedModuleIds: ["MOD_ORDER"],
+          affectedClassNames: ["OrderService"],
+        },
+      ],
+    };
+
+    const llm = makeJsonLlm(repairedModel);
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "design-1", type: "design", description: "repair design" });
+
+    const result = await agent.repair(
+      task,
+      baseDesignModel(),
+      [{ severity: "major", description: "设计缺少约束 C001", suggestion: "补充 C001" }],
+      {
+        requirement_json: {
+          functions: [{ id: "FUN_CREATE_ORDER", displayId: "F001", name: "CreateOrder" }],
+          constraints: [{ id: "CON_STOCK", displayId: "C001", description: "库存不足时不可下单", source_text: "库存不足时不可下单" }],
+          exceptions: [],
+          entities: [],
+        },
+      },
+    );
+
+    expect(isDesignModel(result)).toBe(true);
+    expect(JSON.stringify(result)).toContain("constraintImplementations");
+  });
+
+  it("rejects section patches protocol", async () => {
+    const llm = makeTextLlm(JSON.stringify({
+      patches: [
+        { op: "replace_section", section: "TC-N-001", content: "## TC-N-001\nfixed" },
+      ],
+    }));
+    const agent = new RepairTool(llm);
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
+
+    const result = await agent.repair(
+      task,
+      JSON.stringify({ test_cases: [{ id: "TC-N-001", target: "F001" }] }),
+      [{ severity: "major", description: "Test broken", suggestion: "fix" }],
+      {},
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("accepts complete diagram JSON repair", async () => {
+    const llm = makeTextLlm(JSON.stringify({
+      class_diagram: "classDiagram\n    class OrderService {\n        +createOrder()\n    }",
+    }));
     const agent = new RepairTool(llm);
     const task = createTask({
-      id: "design-1",
-      type: "design",
-      description: "repair design",
+      id: "diagrams-class",
+      type: "diagrams",
+      description: "repair class diagram",
+      contextHints: { diagram_kind: "class_diagram" },
     });
 
     const result = await agent.repair(
       task,
-      "## Design\n\nOld content\n\n## Modules\n\nModule A",
-      [{ severity: "major", description: "Design broken", suggestion: "fix" }],
+      { class_diagram: "classDiagram\n    class OrderService" },
+      [{ severity: "major", description: "class diagram broken", suggestion: "fix" }],
       {},
-    );
+    ) as Record<string, string> | null;
 
     expect(result).not.toBeNull();
-    expect(result).toContain("Fixed content");
-    expect(result).toContain("Module A");
+    expect(result?.class_diagram).toContain("createOrder");
   });
-});
 
-// ---------------------------------------------------------------------------
-// False-success log gating
-// ---------------------------------------------------------------------------
-
-describe("RepairTool false-success log", () => {
-  it("does not log success when patches had no effect", async () => {
+  it("does not log success when patch protocol is rejected", async () => {
     const logs: string[] = [];
-    const llm = makeLlm(
-      JSON.stringify({
-        patches: [
-          { op: "replace_section", section: "nonexistent", content: "won't apply" },
-        ],
-      }),
-    );
-
-    // Override logger to capture messages
+    const llm = makeTextLlm(JSON.stringify({
+      patches: [{ op: "replace_section", section: "nonexistent", content: "won't apply" }],
+    }));
     const agent = new RepairTool(llm);
     const origInfo = agent.logger.info.bind(agent.logger);
     agent.logger.info = (msg: string) => {
       logs.push(msg);
       origInfo(msg);
     };
-
-    const task = createTask({
-      id: "design-1",
-      type: "design",
-      description: "repair design",
-    });
+    const task = createTask({ id: "tests-1", type: "tests", description: "repair tests" });
 
     await agent.repair(
       task,
-      "## Section A\n\nContent A",
+      JSON.stringify({ test_cases: [{ id: "TC-N-001", target: "F001" }] }),
       [{ severity: "major", description: "issue", suggestion: "fix" }],
       {},
     );
 
-    // The old false-success log "成功应用 X 个patches" should NOT appear
-    // when patches had no effect
-    const falseSuccess = logs.find(
-      (l) => l.includes("成功应用") && l.includes("1 个patches"),
-    );
-    expect(falseSuccess).toBeUndefined();
+    expect(logs.find((line) => line.includes("修复成功"))).toBeUndefined();
   });
 });
+
+function baseDesignModel() {
+  return {
+    constraintImplementations: [],
+    exceptionImplementations: [],
+    modules: [{ id: "MOD_ORDER", name: "订单模块", responsibility: "订单处理", functionIds: ["F001"] }],
+    classes: [{ name: "OrderService", kind: "helper", responsibility: "订单服务" }],
+    dataFlows: [{ name: "下单流程", steps: ["OrderService"], relatedFunctionIds: ["F001"] }],
+    coverageMatrix: [],
+    supplementaryClasses: [],
+  };
+}

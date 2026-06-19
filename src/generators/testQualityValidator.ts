@@ -12,7 +12,7 @@ import {
 
 export interface QualityIssue {
   testId: string;
-  issue: "template_like" | "missing_input" | "vague_expected" | "too_few_steps" | "wrong_target" | "target_content_alignment" | "canonical_only_target";
+  issue: "template_like" | "missing_input" | "vague_expected" | "too_few_steps" | "wrong_target" | "target_content_alignment" | "canonical_only_target" | "fabricated_canonical_id";
   severity: "reject" | "warning";
   detail: string;
 }
@@ -91,6 +91,23 @@ export function validateTestCases(
       });
     }
 
+    // Check 4c: fabricated canonical id (any CON_/FUN_/EXC_ token in
+    // target/steps/expected_result that is NOT in the analysis's real
+    // canonical id set). The LLM in pure_keepass invented hash tokens like
+    // CON_FUNC_E3K31F00 and treated them as product code names — they get
+    // through hasCanonicalOnlyTarget because the LLM paired them with a real
+    // displayId like "C002 | CON_FUNC_E3K31F00". This check rejects any test
+    // whose body references a hash that the analysis never produced.
+    const fabricated = collectFabricatedCanonicalIds(tc, knownIds);
+    if (fabricated.length > 0) {
+      issues.push({
+        testId,
+        issue: "fabricated_canonical_id",
+        severity: "reject",
+        detail: `测试用例 ${testId} 引用了 analysis 中不存在的 canonicalId: ${fabricated.join(", ")}`,
+      });
+    }
+
     // Check 5: target-content alignment (valid ID, fabricated content)
     const alignment = evaluateTargetAlignment({
       target: String(tc.target ?? ""),
@@ -122,18 +139,22 @@ export function validateTestCases(
  * 检测模板化测试用例。
  */
 export function isTemplateLike(tc: Record<string, unknown>): boolean {
-  const text = [
+  const segments = [
     tc.title,
     ...(Array.isArray(tc.steps) ? tc.steps.map(String) : []),
     tc.expected_result ?? "",
   ]
     .map((v) => String(v ?? ""))
-    .join(" ");
+    .flatMap((v) => v.split(/[。！？!?；;\n\r]+/))
+    .map((v) => v.trim())
+    .filter(Boolean);
 
   return (
-    /违反\s*(C|CON_|约束)/i.test(text) ||
-    /检查.*是否满足/.test(text) ||
-    /尝试.*约束/.test(text) ||
+    segments.some((text) =>
+      /违反\s*(C|CON_|约束)/i.test(text) ||
+      /检查.*是否满足/.test(text) ||
+      /尝试.*约束/.test(text),
+    ) ||
     (Array.isArray(tc.steps) ? tc.steps.length : 0) < 2
   );
 }
@@ -141,7 +162,7 @@ export function isTemplateLike(tc: Record<string, unknown>): boolean {
 /**
  * 检测缺失具体输入。
  */
-export function hasMissingInput(tc: Record<string, unknown>): boolean {
+function hasMissingInput(tc: Record<string, unknown>): boolean {
   const steps = Array.isArray(tc.steps) ? tc.steps.map(String) : [];
   if (steps.length === 0) return true;
 
@@ -158,7 +179,7 @@ export function hasMissingInput(tc: Record<string, unknown>): boolean {
 /**
  * 检测模糊预期结果。
  */
-export function hasVagueExpected(tc: Record<string, unknown>): boolean {
+function hasVagueExpected(tc: Record<string, unknown>): boolean {
   const expected = String(tc.expected_result ?? "").trim();
   if (!expected) return true;
 
@@ -178,7 +199,7 @@ export function hasVagueExpected(tc: Record<string, unknown>): boolean {
 /**
  * 检测错误目标引用。
  */
-export function hasWrongTarget(
+function hasWrongTarget(
   tc: Record<string, unknown>,
   knownIds: Set<string>,
 ): boolean {
@@ -199,7 +220,7 @@ export function hasWrongTarget(
  * 这种目标指向一个裸 canonicalId，通常意味着 LLM 凭空编造了一个约束/
  * 功能/异常，而不是引用真实的、带 displayId 的需求项。
  */
-export function hasCanonicalOnlyTarget(tc: Record<string, unknown>): boolean {
+function hasCanonicalOnlyTarget(tc: Record<string, unknown>): boolean {
   const target = String(tc.target ?? "").trim();
   if (!target) return false;
 
@@ -212,6 +233,40 @@ export function hasCanonicalOnlyTarget(tc: Record<string, unknown>): boolean {
   // Has at least one canonicalId but no displayId at all
   return (canonicalMatches !== null && canonicalMatches.length > 0)
     && (displayMatches === null || displayMatches.length === 0);
+}
+
+/**
+ * Collect canonicalId-shaped tokens (CON_/FUN_/EXC_ followed by alnum chars)
+ * appearing anywhere in `tc.target`, `tc.steps`, or `tc.expected_result`
+ * that are NOT in the analysis's real canonicalId set.
+ *
+ * The hospital_mgmt / pure_keepass failure mode: the LLM saw real displayIds
+ * (C001, F001) and then invented its own hash-like product codes
+ * ("CON_FUNC_E3K31F00", "CON_FUNC_KDB_K28M") and folded them into the test
+ * body as if they were canonical references. Since the displayId is real,
+ * hasWrongTarget and hasCanonicalOnlyTarget both let the test through. This
+ * function is the deterministic anchor: any CON_/FUN_/EXC_ token must
+ * exactly match a value the analysis really emitted.
+ */
+export function collectFabricatedCanonicalIds(
+  tc: Record<string, unknown>,
+  knownIds: Set<string>,
+): string[] {
+  const haystack = [
+    tc.target,
+    ...(Array.isArray(tc.steps) ? tc.steps.map(String) : []),
+    tc.expected_result,
+  ]
+    .map((v) => String(v ?? ""))
+    .join(" ");
+  if (!haystack) return [];
+
+  const canonicalRe = /\b(?:FUN|CON|EXC)_[A-Z0-9][A-Za-z0-9_]{3,}\b/g;
+  const found = haystack.match(canonicalRe);
+  if (!found) return [];
+
+  const fabricated = [...new Set(found.filter((token) => !knownIds.has(token)))];
+  return fabricated;
 }
 
 // ---------------------------------------------------------------------------

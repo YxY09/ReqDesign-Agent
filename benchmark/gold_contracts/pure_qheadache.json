@@ -1,0 +1,220 @@
+{
+  "case_id": "pure_qheadache",
+  "source_language": "en",
+  "canonical_language": "en",
+  "obligations": [
+    {
+      "id": "C-001",
+      "type": "constraint",
+      "severity": "major",
+      "source_span": "F005: During \"Block movement\" state, the selected block follows the mouse without overlapping other blocks or exiting the game zone, keeping at least 0.05x clearance from other blocks.",
+      "expected_design_evidence": [
+        "Per-frame collision rule: the dragged block cannot overlap any other block and cannot exit the 4x×5x game zone",
+        "Minimum 0.05x (of side x) clearance enforced between the dragged block and every other block at all times during the movement"
+      ],
+      "expected_test_evidence": [
+        "Verify dragging a block toward another block stops at ≥0.05x clearance (never overlaps)",
+        "Verify dragging a block toward the game-zone edge stops at the zone boundary (never exits)"
+      ],
+      "anti_patterns": [
+        "Only mention 'collision detection' without the 0.05x clearance number",
+        "Allow overlap as long as blocks eventually separate",
+        "Enforce the zone boundary but omit the inter-block 0.05x clearance"
+      ]
+    },
+    {
+      "id": "C-002",
+      "type": "constraint",
+      "severity": "major",
+      "source_span": "F013: The player statistics (name, movement count, time) are saved to the statistics file. If 10 records already exist, the one with the highest movement count is replaced.",
+      "expected_design_evidence": [
+        "Statistics file schema storing exactly name, movement count, time per record",
+        "Overflow rule: when the file already holds 10 records, the record with the highest movement count is replaced (not appended) before saving the new record"
+      ],
+      "expected_test_evidence": [
+        "Verify saving when fewer than 10 records exist appends (file grows to ≤10)",
+        "Verify saving a new record when 10 records already exist evicts the record with the highest movement count (file stays at 10)"
+      ],
+      "anti_patterns": [
+        "Only mention 'statistics persistence' without the 10-record cap and eviction rule",
+        "Evict the oldest record instead of the one with the highest movement count",
+        "Append an 11th record instead of replacing"
+      ]
+    },
+    {
+      "id": "C-003",
+      "type": "constraint",
+      "severity": "minor",
+      "source_span": "F017: The user can save the current game. If never saved before, a \"Save As\" dialog opens. Otherwise, the file is overwritten with current block positions, last 10000 previous positions, movement count, and elapsed time.",
+      "expected_design_evidence": [
+        "Save file content: current block positions, the last 10000 previous positions, movement count, and elapsed time",
+        "Save-vs-Save-As behavior: first save opens a \"Save As\" dialog; subsequent saves overwrite the existing file"
+      ],
+      "expected_test_evidence": [
+        "Verify the save file stores block positions, up to the last 10000 previous positions, movement count, and elapsed time",
+        "Verify a first save opens a \"Save As\" dialog and a subsequent save overwrites without prompting"
+      ],
+      "anti_patterns": [
+        "Only mention 'save game' without specifying the 10000-position cap and the four persisted fields",
+        "Persist an unbounded previous-positions list instead of the last 10000",
+        "Always open \"Save As\" even after the first save"
+      ]
+    },
+    {
+      "id": "C-004",
+      "type": "constraint",
+      "severity": "minor",
+      "source_span": "F020: The user must be able to undo and redo up to the last 1000 actions.",
+      "expected_design_evidence": [
+        "Undo/redo history bounded at 1000 actions (oldest entries dropped beyond 1000)",
+        "Both undo and redo respect the same 1000-action limit"
+      ],
+      "expected_test_evidence": [
+        "Verify undo works for the 1000th previous action and is unavailable beyond it",
+        "Verify redo works up to the 1000th redone action and is unavailable beyond it"
+      ],
+      "anti_patterns": [
+        "Only mention 'undo/redo' without the 1000-action bound",
+        "Enforce the 1000 limit for undo but not redo (or vice versa)",
+        "Store an unbounded history with no cap"
+      ]
+    },
+    {
+      "id": "F-005",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F006: The user can undo their last action via menu. Undo is unavailable if there was no previous movement. The undo action itself is considered a movement.",
+      "expected_design_evidence": [
+        "Menu-driven undo of the last action (movement)",
+        "Undo disabled when there is no previous movement",
+        "Undo counts as a movement (it updates the movement count and can itself be undone/redone)"
+      ],
+      "expected_test_evidence": [
+        "Verify undo reverts the last movement",
+        "Verify undo is disabled when no previous movement exists",
+        "Verify performing an undo increments/treats the action as a movement"
+      ],
+      "anti_patterns": [
+        "Provide undo without the 'no previous movement' disabled state",
+        "Implement undo but do not treat it as a movement",
+        "Only list 'undo' in the menu without the reversal behavior"
+      ]
+    },
+    {
+      "id": "F-006",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F010: The game ends when the large 2x2 square block reaches the bottom of the board. All player statistics are frozen at that point.",
+      "expected_design_evidence": [
+        "Win/end condition: the large 2x2 square block reaching the bottom of the board",
+        "On end, all player statistics (movement count, time) are frozen (no further changes)"
+      ],
+      "expected_test_evidence": [
+        "Verify moving the 2x2 block to the bottom ends the game",
+        "Verify movement count and elapsed time stop changing after the game ends"
+      ],
+      "anti_patterns": [
+        "Only mention 'game ends' without tying it to the 2x2 block at the bottom",
+        "End the game but allow statistics to keep updating afterward"
+      ]
+    },
+    {
+      "id": "X-001",
+      "type": "exception",
+      "severity": "major",
+      "source_span": "F007: The user can redo a canceled action via menu. Redo is unavailable if the previous action was not an undo. The redo action itself is considered a movement.",
+      "expected_design_evidence": [
+        "Menu-driven redo of a previously undone action",
+        "Redo disabled guard: redo is unavailable when the previous action was not an undo",
+        "Redo counts as a movement (it updates the movement count and can itself be undone)"
+      ],
+      "expected_test_evidence": [
+        "Verify redo reapplies the last undone action",
+        "Verify redo is disabled when the previous action was not an undo (guard path)",
+        "Verify performing a redo is treated as a movement"
+      ],
+      "anti_patterns": [
+        "Provide redo without the 'previous action was not an undo' disabled guard",
+        "Implement redo but do not treat it as a movement",
+        "Allow redo unconditionally, ignoring the guard"
+      ]
+    },
+    {
+      "id": "F-001",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F001: The main window shall provide a board (rectangular zone 4x wide by 5x tall, x between 50–100 pixels) and a menu bar.",
+      "expected_design_evidence": [
+        "Main window provides a board that is a rectangular zone 4x wide by 5x tall",
+        "Board unit x is between 50–100 pixels",
+        "Main window also provides a menu bar"
+      ],
+      "expected_test_evidence": [
+        "Verify the board dimensions are 4x wide by 5x tall (4:5 aspect rectangle)",
+        "Verify the unit x is constrained to the 50–100 pixel range"
+      ],
+      "anti_patterns": [
+        "Only mention 'board/window' without the 4x-wide-by-5x-tall dimensions",
+        "Omit the 50–100 pixel constraint on the unit x",
+        "Describe a square or arbitrary-size board instead of the 4x×5x rectangle"
+      ]
+    },
+    {
+      "id": "F-002",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F002: The board contains 4 square blocks (side x), 4 rectangular blocks (2x height, x width), 1 horizontal block (x height, 2x width), and 1 large square block (side 2x). Blocks are yellow on a black board, separated by 0.1x margin.",
+      "expected_design_evidence": [
+        "Board composition: exactly 4 square blocks (side x), 4 rectangular blocks (2x height, x width), 1 horizontal block (x height, 2x width), and 1 large square block (side 2x)",
+        "Blocks are yellow on a black board, separated by a 0.1x margin"
+      ],
+      "expected_test_evidence": [
+        "Verify the board contains the exact block counts/types (4 square, 4 rectangular, 1 horizontal, 1 large 2x square)",
+        "Verify blocks render yellow on a black board with 0.1x margin spacing"
+      ],
+      "anti_patterns": [
+        "Only mention 'blocks' without the exact counts/types (4/4/1/1) and dimensions",
+        "Omit the yellow-on-black color and 0.1x margin rules",
+        "List block types but get the counts/dimensions wrong (e.g. wrong number of rectangular blocks)"
+      ]
+    },
+    {
+      "id": "F-007",
+      "type": "functional",
+      "severity": "minor",
+      "source_span": "F011: If the player's movement count is lower than the highest score in the statistics file, the \"Finish Window with Statistics\" is displayed prompting the player to enter their name (up to 20 characters) and click OK to save their score.",
+      "expected_design_evidence": [
+        "When the player's movement count is lower than the highest score in the statistics file, a \"Finish Window with Statistics\" is displayed",
+        "The window prompts the player to enter their name (up to 20 characters) and click OK to save their score"
+      ],
+      "expected_test_evidence": [
+        "Verify a movement count lower than the highest score opens the \"Finish Window with Statistics\"",
+        "Verify the name field is capped at 20 characters and OK saves the score"
+      ],
+      "anti_patterns": [
+        "Only mention 'finish window' without the lower-than-highest-score trigger condition",
+        "Omit the 20-character name cap",
+        "Show the statistics window unconditionally regardless of whether the score is a record"
+      ]
+    },
+    {
+      "id": "F-008",
+      "type": "functional",
+      "severity": "minor",
+      "source_span": "F019: On exit, if the game is unsaved, a dialog asks whether to save. \"Yes\" triggers Save then closes; \"No\" closes immediately.",
+      "expected_design_evidence": [
+        "On exit, if the game is unsaved, a dialog asks whether to save",
+        "\"Yes\" triggers Save then closes; \"No\" closes immediately (distinct Yes/No behaviors)"
+      ],
+      "expected_test_evidence": [
+        "Verify exiting an unsaved game shows the save-confirmation dialog",
+        "Verify \"Yes\" saves then closes and \"No\" closes immediately without saving"
+      ],
+      "anti_patterns": [
+        "Only mention 'exit' without the unsaved-game save-confirmation dialog",
+        "Treat Yes/No identically (e.g. both close without saving, or both force-save)",
+        "Skip the dialog and close immediately even when the game is unsaved"
+      ]
+    }
+  ]
+}

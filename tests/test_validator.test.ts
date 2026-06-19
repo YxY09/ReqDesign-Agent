@@ -36,6 +36,17 @@ describe("PostGenerationValidator", () => {
     expect(result).toBeNull();
   });
 
+  it("accepts display IDs when analysis stores canonical function IDs", () => {
+    const analysis = {
+      functions: [{ id: "FUN_LOGIN", displayId: "F001", name: "Login" }],
+    };
+
+    expect(PostGenerationValidator.validate(analysis, "design", "| Auth | F001 |")).toBeNull();
+
+    const cleaned = PostGenerationValidator.validate(analysis, "design", "| Ghost | F999 |") as string;
+    expect(cleaned).not.toContain("F999");
+  });
+
   // ------------------------------------------------------------------
   // Diagrams — extra classes
   // ------------------------------------------------------------------

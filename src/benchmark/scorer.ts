@@ -340,7 +340,7 @@ export function computeOverall(s: Omit<Scores, "overall">): number {
   return round1(overall);
 }
 
-export function isPassing(overall: number): boolean {
+function isPassing(overall: number): boolean {
   return overall >= PASS_THRESHOLD;
 }
 

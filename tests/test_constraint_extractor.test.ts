@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ConstraintExtractor } from "../src/generators/constraintExtractor.js";
+import { ConstraintExtractor, dropContainerConstraints } from "../src/generators/constraintExtractor.js";
 import type { ConstraintCandidate } from "../src/shared/constraintCanonicalizer.js";
 
 /**
@@ -306,5 +306,121 @@ describe("ConstraintExtractor", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].description).toBe("测试约束");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dropContainerConstraints — atomic-vs-container de-duplication
+// ---------------------------------------------------------------------------
+
+describe("dropContainerConstraints", () => {
+  it("drops a container sentence in favor of its atomic sub-clauses", () => {
+    // N008-style: LLM emitted the full compound sentence AND each half.
+    // The container ("...the .kdb extension. Databases must have unique...")
+    // should be dropped in favor of the two atomic shorter ones.
+    const items: ConstraintCandidate[] = [
+      {
+        description: "数据库文件使用.kdb扩展名且必须具有唯一名称",
+        sourceText: "Database files use the .kdb extension. Databases must have unique names to avoid overwriting.",
+        canonicalRuleEn: "Database files use .kdb and must be unique",
+        type: "data",
+        subtype: "general",
+        sectionId: "N008",
+        relatedFunctionCandidates: [],
+      },
+      {
+        description: "数据库文件使用.kdb扩展名",
+        sourceText: "Database files use the .kdb extension",
+        canonicalRuleEn: "Database files use .kdb",
+        type: "data",
+        subtype: "general",
+        sectionId: "N008",
+        relatedFunctionCandidates: [],
+      },
+      {
+        description: "数据库必须具有唯一名称以避免覆盖",
+        sourceText: "Databases must have unique names to avoid overwriting",
+        canonicalRuleEn: "Databases must have unique names",
+        type: "data",
+        subtype: "general",
+        sectionId: "N008",
+        relatedFunctionCandidates: [],
+      },
+    ];
+    const result = dropContainerConstraints(items);
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.sourceText)).toEqual([
+      "Database files use the .kdb extension",
+      "Databases must have unique names to avoid overwriting",
+    ]);
+  });
+
+  it("drops duplicate identical sourceText (keeps first occurrence)", () => {
+    const items: ConstraintCandidate[] = [
+      {
+        description: "a",
+        sourceText: "Use AES/Rijndael 256-bit key",
+        canonicalRuleEn: "AES 256-bit",
+        type: "security",
+        subtype: "general",
+        sectionId: "N001",
+        relatedFunctionCandidates: [],
+      },
+      {
+        description: "a2",
+        sourceText: "Use AES/Rijndael 256-bit key",
+        canonicalRuleEn: "AES 256-bit",
+        type: "security",
+        subtype: "general",
+        sectionId: "N001",
+        relatedFunctionCandidates: [],
+      },
+    ];
+    const result = dropContainerConstraints(items);
+    expect(result).toHaveLength(1);
+    expect(result[0].description).toBe("a");
+  });
+
+  it("preserves all items when none contain another", () => {
+    const items: ConstraintCandidate[] = [
+      {
+        description: "AES 加密",
+        sourceText: "Use AES/Rijndael (256-bit key)",
+        canonicalRuleEn: "AES",
+        type: "security",
+        subtype: "general",
+        sectionId: "N001a",
+        relatedFunctionCandidates: [],
+      },
+      {
+        description: "Twofish 加密",
+        sourceText: "Use Twofish (256-bit key)",
+        canonicalRuleEn: "Twofish",
+        type: "security",
+        subtype: "general",
+        sectionId: "N001b",
+        relatedFunctionCandidates: [],
+      },
+      {
+        description: "随机 IV",
+        sourceText: "A random 128-bit IV is generated on each save",
+        canonicalRuleEn: "Random 128-bit IV per save",
+        type: "security",
+        subtype: "general",
+        sectionId: "N001c",
+        relatedFunctionCandidates: [],
+      },
+    ];
+    expect(dropContainerConstraints(items)).toHaveLength(3);
+  });
+
+  it("ignores items whose sourceText is too short to dedupe meaningfully", () => {
+    // < 6 normalized chars escapes the loop on both sides, so identical
+    // very-short sourceText is preserved (cleanup happens elsewhere).
+    const items: ConstraintCandidate[] = [
+      { description: "a", sourceText: "ok", canonicalRuleEn: "", type: "data", subtype: "general", sectionId: undefined, relatedFunctionCandidates: [] },
+      { description: "b", sourceText: "ok", canonicalRuleEn: "", type: "data", subtype: "general", sectionId: undefined, relatedFunctionCandidates: [] },
+    ];
+    expect(dropContainerConstraints(items)).toHaveLength(2);
   });
 });

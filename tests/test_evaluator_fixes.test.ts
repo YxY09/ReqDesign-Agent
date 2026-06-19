@@ -338,6 +338,66 @@ describe("EvaluationTool evaluate — scoped snapshots", () => {
     });
   });
 
+  it("renders structured DesignModel snapshots for LLM review", async () => {
+    const llm = noopLlm();
+    const evaluator = new EvaluationTool(llm);
+    const designModel = {
+      constraintImplementations: [
+        {
+          constraintId: "C001",
+          sourceTextVerbatim: "单笔订单商品数量不超过99件",
+          implementationMechanism: "OrderValidator 校验单笔订单商品数量不超过99件",
+          parametersPreserved: ["99件"],
+          trigger: "提交订单时",
+          handling: "超过99件则拒绝下单",
+          affectedModuleIds: ["MOD_ORDER"],
+          affectedClassNames: ["OrderValidator"],
+        },
+      ],
+      exceptionImplementations: [],
+      modules: [{ id: "MOD_ORDER", name: "订单模块", responsibility: "订单处理", functionIds: ["F001"] }],
+      classes: [{ name: "OrderValidator", kind: "helper", responsibility: "订单校验" }],
+      dataFlows: [{ name: "下单流程", steps: ["OrderService -> OrderValidator"], relatedFunctionIds: ["F001"] }],
+      supplementaryClasses: [],
+      coverageMatrix: [
+        {
+          refId: "C001",
+          refKind: "constraint",
+          originalDescription: "单笔订单商品数量不超过99件",
+          designDecision: "见 constraintImplementations[C001]",
+          affectedModuleIds: ["MOD_ORDER"],
+          affectedClassNames: ["OrderValidator"],
+          testImplication: "边界测试99件/100件",
+        },
+      ],
+    };
+
+    await evaluator.evaluate(
+      "simple requirement",
+      {},
+      "",
+      {},
+      "",
+      { "design-1": { type: "design", revision: 1 } },
+      {
+        "design-1": {
+          task_id: "design-1",
+          type: "design",
+          revision: 1,
+          content: designModel,
+        },
+      },
+      "design",
+      false,
+      ["design-1"],
+    );
+
+    const prompt = llm.generateJson.mock.calls[0][0] as string;
+    expect(prompt).not.toContain("[object Object]");
+    expect(prompt).toContain("## 约束实现");
+    expect(prompt).toContain("constraintImplementations[C001]");
+  });
+
   it("rule-checks refund flow and C001 coverage in activity diagrams", async () => {
     const evaluator = new EvaluationTool(noopLlm());
     const requirementJson = {
@@ -949,6 +1009,168 @@ describe("target-content alignment", () => {
     const check = verdict.checks.find((c) => c.name === "测试目标/内容对齐检测");
     expect(check).toBeDefined();
     expect(check!.passed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: _checkFunctionIdConsistency — whitelist must accept FUN_ form
+// (RequirementIndex allowedIds holds both F001 displayId and FUN_xxx canonicalId;
+// the evaluator whitelist + extractor previously only kept F\d+, causing
+// FUN_xxx canonical IDs to be mishandled as ghost references.)
+// ---------------------------------------------------------------------------
+
+describe("EvaluationTool._checkFunctionIdConsistency — FUN_ canonical form", () => {
+  function checkConsistency(
+    snapshots: Record<string, Record<string, unknown>>,
+    requirementJson: Record<string, unknown>,
+  ) {
+    const tool = new EvaluationTool(noopLlm());
+    return (tool as unknown as {
+      _checkFunctionIdConsistency(
+        snapshots: Record<string, Record<string, unknown>>,
+        requirementJson: Record<string, unknown>,
+      ): Issue[];
+    })._checkFunctionIdConsistency(snapshots, requirementJson);
+  }
+
+  it("does NOT flag a valid FUN_xxx reference (displayId F001 + canonicalId FUN_xxx)", () => {
+    // RequirementIndex adds both displayId and canonicalId to allowedIds;
+    // the evaluator whitelist must likewise accept both.
+    const issues = checkConsistency(
+      {
+        "design-1": {
+          type: "design",
+          content: "模块实现 F001 (FUN_LOGIN) 的登录流程。",
+        },
+      },
+      {
+        functions: [
+          { id: "FUN_LOGIN", displayId: "F001", name: "用户登录" },
+        ],
+      },
+    );
+    expect(issues).toHaveLength(0);
+  });
+
+  it("does NOT flag a bare FUN_xxx reference (no F001 displayId in text)", () => {
+    const issues = checkConsistency(
+      {
+        "design-1": {
+          type: "design",
+          content: "本设计覆盖 FUN_LOGIN 的鉴权逻辑。",
+        },
+      },
+      {
+        functions: [
+          { id: "FUN_LOGIN", displayId: "F001", name: "用户登录" },
+        ],
+      },
+    );
+    expect(issues).toHaveLength(0);
+  });
+
+  it("flags an undefined FUN_xxx reference as a ghost", () => {
+    // The extractor must capture FUN_xxx tokens so a referenced-but-undefined
+    // canonical ID is still caught as inconsistent (this fails on the
+    // pre-fix F\d+-only extractor, validating the fix actually takes effect).
+    const issues = checkConsistency(
+      {
+        "design-1": {
+          type: "design",
+          content: "本设计实现 FUN_GHOST 功能。",
+        },
+      },
+      {
+        functions: [
+          { id: "FUN_LOGIN", displayId: "F001", name: "用户登录" },
+        ],
+      },
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].description).toContain("FUN_GHOST");
+  });
+
+  it("still flags an undefined Fxxx reference", () => {
+    const issues = checkConsistency(
+      {
+        "tests-1": {
+          type: "tests",
+          content: "用例覆盖 F999。",
+        },
+      },
+      {
+        functions: [
+          { id: "FUN_LOGIN", displayId: "F001", name: "用户登录" },
+        ],
+      },
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0].description).toContain("F999");
+  });
+
+  it("returns no issues when no function IDs are defined", () => {
+    const issues = checkConsistency(
+      {
+        "design-1": {
+          type: "design",
+          content: "本设计实现 F001。",
+        },
+      },
+      { functions: [] },
+    );
+    expect(issues).toHaveLength(0);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Pillar A: defect vs advisory classification (control flow keys off this,
+// NOT the LLM's severity label)
+// -----------------------------------------------------------------------
+
+describe("EvaluationTool issue-kind classification", () => {
+  it("classifies coverage/completeness opinions as advisory even at major severity", () => {
+    for (const description of [
+      "功能 F010 未被测试用例覆盖",
+      "4 个约束未被测试用例覆盖: C001, C009",
+      "测试用例覆盖不完整，缺少边界测试",
+      "部分类缺少明确的需求原文依据",
+    ]) {
+      const issue = createIssue({ severity: "major", description });
+      expect(EvaluationTool._classifyIssueKind(issue)).toBe("advisory");
+    }
+  });
+
+  it("classifies verifiable defects as defect", () => {
+    for (const description of [
+      "测试用例 TC-N-010 引用了不存在的功能 ID 'F003'",
+      "多个类的方法显示为 '[object Object]' 而不是具体的方法签名",
+      "功能 F005 映射错误，设计将其映射为'日志与审计'模块",
+      "引用了未定义的需求 ID C999",
+      "class_diagram 缺少正确的 Mermaid 头部",
+    ]) {
+      const issue = createIssue({ severity: "major", description });
+      expect(EvaluationTool._classifyIssueKind(issue)).toBe("defect");
+    }
+  });
+
+  it("treats any blocker as a defect regardless of wording", () => {
+    const issue = createIssue({ severity: "blocker", description: "系统设计文档为空" });
+    expect(EvaluationTool._classifyIssueKind(issue)).toBe("defect");
+  });
+
+  it("promotes an LLM advisory to defect when a rule-check flagged the same field", () => {
+    const llmIssue = createIssue({
+      severity: "major",
+      targetTaskId: "design-1",
+      targetField: "design_text",
+      description: "设计的支付流程描述不清晰", // no defect signature on its own
+    });
+    // No corroboration → advisory.
+    expect(EvaluationTool._classifyLlmIssueKind(llmIssue, new Set())).toBe("advisory");
+    // A rule-check defect on the same field corroborates it → defect.
+    expect(
+      EvaluationTool._classifyLlmIssueKind(llmIssue, new Set(["design-1::design_text"])),
+    ).toBe("defect");
   });
 });
 

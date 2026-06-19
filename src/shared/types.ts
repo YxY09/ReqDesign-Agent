@@ -28,7 +28,17 @@ export type ActionType =
   | "replan";
 
 /** Issue severity levels used by the evaluator. */
-export type Severity = "blocker" | "major" | "minor";
+type Severity = "blocker" | "major" | "minor";
+
+/**
+ * Whether an issue is a verifiable defect (the artifact is WRONG — hallucinated
+ * IDs, broken syntax, contradictions) or an advisory (completeness/quality
+ * opinion). Only defects drive control flow (repair / accept / escalate);
+ * advisories are recorded into known-limitations and never gate or trigger
+ * repair. This is derived deterministically, NOT taken from the LLM's severity
+ * label, so the pipeline is robust to weak evaluator models.
+ */
+export type IssueKind = "defect" | "advisory";
 
 /** Scope classification for issues. */
 export type Scope = "local" | "upstream" | "systemic" | "";
@@ -38,7 +48,7 @@ export type Scope = "local" | "upstream" | "systemic" | "";
 // ---------------------------------------------------------------------------
 
 /** A core entity in the global entity registry. */
-export interface RegistryEntity {
+interface RegistryEntity {
   id: string;            // "E_CASE"
   canonicalName: string; // "Case"
   displayName: string;   // "案件"
@@ -46,7 +56,7 @@ export interface RegistryEntity {
 }
 
 /** An actor in the global entity registry. */
-export interface RegistryActor {
+interface RegistryActor {
   id: string;            // "A_ADMIN"
   canonicalName: string; // "Admin"
   displayName: string;   // "管理员"
@@ -54,7 +64,7 @@ export interface RegistryActor {
 }
 
 /** A function in the global entity registry. */
-export interface RegistryFunction {
+interface RegistryFunction {
   id: string;         // "FUN_REGISTER_CASE"
   name: string;       // "RegisterCase"
   aliases: string[];  // ["注册案件", "initiate case"]
@@ -136,6 +146,13 @@ export interface Issue {
   description: string;
   suggestion: string;
   scope: Scope;
+  /**
+   * Defect vs advisory. Drives control flow: only `defect` issues trigger
+   * repair / block acceptance / count as "no progress". Defaults to `defect`
+   * so an unclassified issue stays conservatively in the loop; the evaluator
+   * downgrades completeness/coverage opinions to `advisory`.
+   */
+  kind: IssueKind;
 }
 
 /** EvaluationTool output — issues and fixes, no scores. */
@@ -222,6 +239,7 @@ export function createIssue(overrides: Partial<Issue> = {}): Issue {
     description: "",
     suggestion: "",
     scope: "",
+    kind: "defect",
     ...overrides,
   };
 }
@@ -269,14 +287,14 @@ export function createRuntimeAction(
 // DesignModel — structured design artifact (Phase A)
 // ---------------------------------------------------------------------------
 
-export interface DesignModuleEntry {
+interface DesignModuleEntry {
   id: string;
   name: string;
   responsibility: string;
   functionIds: string[];
 }
 
-export interface DesignClassEntry {
+interface DesignClassEntry {
   name: string;
   kind: "domain" | "helper";
   responsibility: string;
@@ -285,7 +303,7 @@ export interface DesignClassEntry {
   entityRef?: string;
 }
 
-export interface DesignDataFlow {
+interface DesignDataFlow {
   name: string;
   steps: string[];
   relatedFunctionIds: string[];
@@ -301,15 +319,73 @@ export interface DesignCoverageEntry {
   testImplication: string;
 }
 
-export interface DesignSupplementaryClass {
+interface DesignSupplementaryClass {
   name: string;
   justification: string;
+}
+
+/**
+ * First-class implementation block for ONE constraint. The verbatim source
+ * span plus the explicit `parametersPreserved` list make this the deterministic
+ * anchor that downstream stages (tests, judge) read from. Skip the contract-
+ * style "designDecision" one-liner: that compression is what made the design
+ * lose "256-bit key" / "10 seconds" in earlier runs.
+ */
+export interface DesignConstraintImplementation {
+  /** Constraint displayId (e.g. C001), used to cross-ref with analysis. */
+  constraintId: string;
+  /** The constraint's source_text copied verbatim — judge anchors on this. */
+  sourceTextVerbatim: string;
+  /** How the constraint is realized (algorithm/mechanism/data path). */
+  implementationMechanism: string;
+  /**
+   * Every numeric/unit/algorithm parameter from sourceTextVerbatim that MUST
+   * appear in implementationMechanism+handling. The design checker enforces
+   * presence verbatim and flags gaps when one is missing.
+   */
+  parametersPreserved: string[];
+  /** When/under what condition the rule fires (empty string if N/A). */
+  trigger: string;
+  /** Concrete observable behavior when the rule fires. */
+  handling: string;
+  /** Modules/classes that realize this constraint (cross-ref only). */
+  affectedModuleIds: string[];
+  affectedClassNames: string[];
+}
+
+/**
+ * First-class implementation block for ONE exception. Same shape as the
+ * constraint block but explicitly carries trigger+handling (which is what an
+ * exception fundamentally is). `parametersPreserved` is still required even
+ * when usually empty, so the schema check is uniform.
+ */
+export interface DesignExceptionImplementation {
+  /** Exception displayId (e.g. X001). */
+  exceptionId: string;
+  /** Source text describing the failure scenario, verbatim. */
+  sourceTextVerbatim: string;
+  /** What triggers this exception in the implementation. */
+  trigger: string;
+  /** Concrete handling/recovery behavior. */
+  handling: string;
+  /** Numeric / verbatim anchors that must be preserved (often empty). */
+  parametersPreserved: string[];
+  affectedModuleIds: string[];
+  affectedClassNames: string[];
 }
 
 export interface DesignModel {
   modules: DesignModuleEntry[];
   classes: DesignClassEntry[];
   dataFlows: DesignDataFlow[];
+  /**
+   * First-class implementation blocks per constraint. The design judge reads
+   * these for verbatim parameter retention; coverageMatrix is a secondary
+   * cross-reference index that may compress for brevity.
+   */
+  constraintImplementations: DesignConstraintImplementation[];
+  /** First-class implementation blocks per exception (same role as above). */
+  exceptionImplementations: DesignExceptionImplementation[];
   coverageMatrix: DesignCoverageEntry[];
   supplementaryClasses?: DesignSupplementaryClass[];
 }
@@ -319,5 +395,9 @@ export function isDesignModel(content: unknown): content is DesignModel {
   if (!content || typeof content !== "object" || Array.isArray(content)) return false;
   const c = content as Record<string, unknown>;
   return Array.isArray(c.modules) && Array.isArray(c.classes) &&
-    Array.isArray(c.dataFlows) && Array.isArray(c.coverageMatrix);
+    Array.isArray(c.dataFlows) && Array.isArray(c.coverageMatrix) &&
+    // The two new first-class arrays are required; older models that lack them
+    // are normalized to [] in SystemDesigner.parseDesignModel before this gate
+    // is reached, so failing here means a truly malformed input.
+    Array.isArray(c.constraintImplementations) && Array.isArray(c.exceptionImplementations);
 }

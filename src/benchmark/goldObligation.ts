@@ -25,10 +25,10 @@ import { existsSync, readFileSync } from "node:fs";
 // ---------------------------------------------------------------------------
 
 /** Obligation category. Maps onto the source requirement's three buckets. */
-export type ObligationType = "constraint" | "functional" | "exception";
+type ObligationType = "constraint" | "functional" | "exception";
 
 /** Severity used for reporting weighting (not score capping). */
-export type ObligationSeverity = "major" | "minor";
+type ObligationSeverity = "major" | "minor";
 
 /**
  * One verifiable obligation extracted from the source requirement.

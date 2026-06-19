@@ -11,7 +11,7 @@
 export const MEMORY_DIR_NAME = ".reqdesign-memory";
 export const MEMORY_INDEX_NAME = "MEMORY.md";
 
-export const MEMORY_TYPES = ["user", "feedback", "project", "reference"] as const;
+const MEMORY_TYPES = ["user", "feedback", "project", "reference"] as const;
 export type MemoryType = (typeof MEMORY_TYPES)[number];
 
 export const MEMORY_TYPE_LABELS: Record<MemoryType, string> = {
@@ -26,7 +26,6 @@ export const MAX_INDEX_BYTES = 25_000;
 export const MAX_RELEVANT_MEMORIES = 5;
 export const FRONTMATTER_SCAN_LINES = 30;
 export const MAX_MEMORY_FILES = 200;
-export const MAX_TOPIC_BYTES = 12_000;
 export const MAX_MEMORY_AGE_DAYS = 90;
 
 /** 时效性平局决胜器的分母：mtime / SCALE 确保时效性仅作 tiebreaker。 */
@@ -47,12 +46,6 @@ export const AGENT_TYPE_PREFIXES: Record<string, readonly string[]> = {
   evaluator: ["evaluator_"],
   coordinator: ["coordinator_", "planner_"],
 };
-
-export const MEMORY_AGENT_TYPES = {
-  COORDINATOR: "coordinator",
-  GENERATOR: "generator",
-  EVALUATOR: "evaluator",
-} as const;
 
 /** 合法的 Agent 类型集合（记忆检索时用于类型校验与遍历）。 */
 export const AGENT_TYPES: ReadonlySet<string> = new Set([

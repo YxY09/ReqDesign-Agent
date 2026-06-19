@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMatrix } from "../src/shared/traceabilityMatrix.js";
+import { buildMatrix, parseDesignModuleTable } from "../src/shared/traceabilityMatrix.js";
 import type { TraceabilityMatrix } from "../src/shared/traceabilityMatrix.js";
 
 describe("buildMatrix", () => {
@@ -396,5 +396,119 @@ describe("buildMatrix", () => {
     expect(matrix.functionToTests["F001"]).toBeDefined();
     // C002 is not mentioned → uncovered.
     expect(matrix.uncoveredConstraints).toContain("C002");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 9: parseDesignModuleTable — tolerates varying header languages/orders
+  // ---------------------------------------------------------------------------
+  describe("parseDesignModuleTable — markdown module table parsing", () => {
+    it("parses an agent-style table (模块ID/模块名称/职责/包含功能ID)", () => {
+      const md = [
+        "## 模块划分",
+        "",
+        "| 模块ID | 模块名称 | 职责 | 包含功能ID |",
+        "|--------|----------|------|------------|",
+        "| M1 | AuthService | 认证 | F001, F002 |",
+        "| M2 | AuditService | 审计 | F003 |",
+        "",
+      ].join("\n");
+      const map = parseDesignModuleTable(md);
+      expect(map.get("F001")).toEqual(["AuthService"]);
+      expect(map.get("F002")).toEqual(["AuthService"]);
+      expect(map.get("F003")).toEqual(["AuditService"]);
+    });
+
+    it("parses a renderDesignMarkdown-style table (模块名称/职责描述/对应功能)", () => {
+      const md = [
+        "| 模块名称 | 职责描述 | 对应功能 |",
+        "|----------|----------|----------|",
+        "| UserService | 用户 | F001 |",
+      ].join("\n");
+      const map = parseDesignModuleTable(md);
+      expect(map.get("F001")).toEqual(["UserService"]);
+    });
+
+    it("returns an empty map when there is no module table", () => {
+      const md = "# Design\nSome prose about F001 with no table.";
+      expect(parseDesignModuleTable(md).size).toBe(0);
+      expect(parseDesignModuleTable("").size).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 10: markdown fallback populates constraintToDesign/functionToDesign
+  // when NO designModel is supplied (the agent's markdown-persisted-design case
+  // and the baseline case). Mirrors the root cause of fix 2: designModel=null
+  // used to yield an all-empty constraintToDesign because the only fallback was
+  // a \bC\d{3}\b presence check the markdown did not satisfy.
+  // ---------------------------------------------------------------------------
+  it("derives constraintToDesign/functionToDesign from a markdown module table when no designModel is given", () => {
+    const json = makeRequirementJson();
+    const designMd = [
+      "## 模块划分",
+      "",
+      "| 模块ID | 模块名称 | 职责 | 包含功能ID |",
+      "|--------|----------|------|------------|",
+      "| M1 | UserModule | 用户 | F001 |",
+      "| M2 | LoginModule | 登录 | F002 |",
+      "",
+    ].join("\n");
+
+    // No designModel (5th arg) — exercises tier 2 (markdown table).
+    const matrix = buildMatrix(json, designMd, undefined);
+
+    // functionToDesign carries real module names parsed from the table.
+    expect(matrix.functionToDesign["F001"]).toEqual(["UserModule"]);
+    expect(matrix.functionToDesign["F002"]).toEqual(["LoginModule"]);
+
+    // constraintToDesign derived via constraint → related_functions → modules.
+    // C001 relates to FUN_USER_REGISTER (→F001) → UserModule.
+    expect(matrix.constraintToDesign["C001"]).toEqual(["UserModule"]);
+    // C002 relates to FUN_USER_LOGIN (→F002) → LoginModule.
+    expect(matrix.constraintToDesign["C002"]).toEqual(["LoginModule"]);
+
+    // Both constraints are now designed → not uncovered.
+    expect(matrix.uncoveredConstraints).not.toContain("C001");
+    expect(matrix.uncoveredConstraints).not.toContain("C002");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Test 11: coverageMatrix + markdown table are additive (tier 1 not
+  // clobbered, tier 2 contributes new functions).
+  // ---------------------------------------------------------------------------
+  it("merges coverageMatrix and markdown module table results additively", () => {
+    const json = makeRequirementJson();
+    const designModel = {
+      modules: [],
+      classes: [],
+      dataFlows: [],
+      coverageMatrix: [
+        {
+          refId: "C001",
+          refKind: "constraint",
+          originalDescription: "audit",
+          designDecision: "audit module",
+          affectedModuleIds: ["MOD_AUDIT"],
+          affectedClassNames: ["AuditService"],
+          testImplication: "t",
+        },
+      ],
+    };
+    const designMd = [
+      "| 模块名称 | 职责描述 | 对应功能 |",
+      "|----------|----------|----------|",
+      "| LoginModule | 登录 | F002 |",
+    ].join("\n");
+
+    const matrix = buildMatrix(json, designMd, undefined, undefined, designModel);
+
+    // Tier 1 result preserved (not overwritten).
+    expect(matrix.constraintToDesign["C001"]).toEqual(
+      expect.arrayContaining(["MOD_AUDIT", "AuditService"]),
+    );
+    // Tier 2 contributes functionToDesign from the markdown table.
+    expect(matrix.functionToDesign["F002"]).toEqual(["LoginModule"]);
+    // C002 (related to F002) now also designed via the table.
+    expect(matrix.constraintToDesign["C002"]).toEqual(["LoginModule"]);
   });
 });

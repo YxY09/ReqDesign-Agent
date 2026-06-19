@@ -27,11 +27,28 @@
 - 判断这些行为/关系是否需要实体化：如果某个行为或关系有自己的编号、时间、状态、结果、报告、证据链、成绩、token、IP、金额、生命周期，或后续流程会引用"这一次操作/关系"，必须把它作为独立实体提取。示例：选课记录、案件注册、调查记录、起诉记录、支付订单、访问会话。
 
 ### 第三步：规则扫描
-从文档中识别所有业务规则、约束和异常：
-- 包含"必须/不得/只有/如果...则/超过...时/禁止/要求"的句子
+从文档中识别所有业务规则、约束和异常。约束有**两种**等价的表达方式，**两者都必须识别**：
+
+**A. 义务动词句**：包含"必须/不得/只有/如果...则/超过...时/禁止/要求/must/shall/should/cannot"的句子
+
+**B. 陈述性规格句（关键，最容易遗漏）**：声明系统属性、参数、机制、算法的陈述句。**只要原文给出了可被验证的具体属性、参数或行为，就是约束**。例：
+- "The database is encrypted using AES/Rijndael (128-bit block, 256-bit key)" → 约束
+- "A random 128-bit initialization vector is generated on each save" → 约束
+- "There is no recovery password or back door" → 约束
+- "A copied password is automatically cleared from the clipboard after 10 seconds" → 约束
+- "Database files use the .kdb extension" → 约束
+
+**必读章节**（这些章节内的每一条都必须作为约束提取，无论是否为义务句）：
+- Non-Functional Requirements / 非功能需求 / NFR（每个 N###/NFR-### 编号都对应一条约束）
+- Security / 安全（加密算法、密钥长度、IV、内存保护规格）
+- Performance / 性能（响应时间、吞吐量数值）
+- Data / 数据（文件格式、扩展名、唯一性）
+- Portability / Availability / Usability（平台/依赖/可用性）
+
+**保真参数原则**：约束描述必须**逐字保留**原文的算法名、数值、单位、限制值。禁止泛化为"加密""超时清除""有限制"等。
+
 - 数据完整性约束（唯一性、必填、格式要求）
 - 业务流程中的异常路径和错误处理
-- 安全和权限规则
 - 每条规则必须关联到它约束的实体或功能
 
 ### 第四步：交叉校验
@@ -54,19 +71,18 @@
 - 如果某个 constraintRef 与你负责分析的章节无关，直接跳过，不要在输出中列出
 - 不要把所有可用的 constraintRef 都回显到输出中——只保留真正适用于你分析范围的约束
 
-约束 ID 由系统统一分配，不要自己编号 C001/C002。
+约束 ID 由系统在 plan 阶段统一分配为 C001/C002/C003... 格式，**不要自己编号**。
 
 如果提示中提供了 `{available_constraints}` 列表：
-- 列表中已有的约束，用其中的 `constraintRef` 引用（例如 `"constraintRef": "C_RULE_001"`）
+- 列表中已有的约束，用其中的 `constraintRef` 引用（例如 `"constraintRef": "C001"`）
 - 不要修改已有约束的描述或 source_text，直接引用即可
 
 如果发现不在 available_constraints 列表中的新约束：
 - 放入 `missingConstraintCandidates` 数组
 - 每项包含 `description` 和 `source_text`
-- **不要自己编号 C001/C002**
 - 不要把新约束放入 `constraints` 数组
 
-如果没有提供 available_constraints 列表，按正常方式提取约束（放入 constraints 数组，使用自增 id）。
+如果没有提供 available_constraints 列表，按正常方式提取约束（放入 constraints 数组，使用 C001/C002... 自增 id）。
 
 ## 输出语言规则（必须遵守）
 
@@ -131,7 +147,7 @@
   ],
   "constraints": [
     {
-      "constraintRef": "C_RULE_001",
+      "constraintRef": "C001",
       "description": "约束描述",
       "related_functions": ["相关功能"],
       "source_text": "文档原文片段"
@@ -191,7 +207,7 @@
 注意：
 1. 只输出JSON，不要输出其他内容
 2. 如果需求文档中没有提到某个字段的内容，使用空数组[]
-3. 如果原始需求已经给出功能/约束/异常 ID（如 F021、C003、E006），必须原样保留，禁止重新编号；只有原文没有 ID 的新增条目才按顺序补充 ID
+3. **ID 分配规则**：约束 ID（C001/C002...）由系统在 plan 阶段统一分配，直接引用 available_constraints 中提供的 constraintRef，不要自己重新编号；功能用 F001/F002...、异常用 X001/X002... 按文档出现顺序自增编号。
 4. **精准提取**：只提取需求文档中**明确出现**的实体、功能和角色，不要凭借推测或行业惯例补充文档未提及的内容。对于1000-5000字的典型需求文档，实体数量通常在5-12个，约束数量通常在5-15个；如果你的提取超出这一范围，先做一轮压缩自检——是否存在过度拆分、重复提取、或把纯步骤当成实体的情况？精准优先于数量，遗漏文档中明确列出的内容是错误，但引入文档未提及的内容同样是错误。
 5. **功能提取注意事项**：
    - 需求文档中提到的每个独立功能点应单独列出，不要合并（如"注册"和"登录"应分开）

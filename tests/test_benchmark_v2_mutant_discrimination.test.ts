@@ -253,7 +253,8 @@ describe("M4 hallucinated_test", () => {
       GOLD,
       { requirement_source: "r", designPath: "__missing__", testsPath: "__missing__" },
     );
-    // test_effectiveness: 7 of 8 fully align → 87.5, X-002 does not.
+    // test_effectiveness: 11 of 12 fully align (only X-002 misaligned),
+    // X-002 does not.
     expect(quality.test_effectiveness!).toBeLessThan(100);
     expect(quality.test_effectiveness!).toBeGreaterThanOrEqual(80);
     // design_depth unaffected (rule still present).

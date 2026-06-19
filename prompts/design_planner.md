@@ -1,8 +1,8 @@
-你是一个资深的系统架构师。请根据以下结构化需求分析结果，生成系统设计方案。
+你是一个资深的系统架构师。请根据以下 DesignBrief（设计输入合同），生成系统设计方案。
 
 **禁止输出任何对话性开头**（如"好的"、"我来"、"作为一名"等）。直接输出 JSON，不要有任何前导文字。
 
-## 需求分析结果
+## DesignBrief（设计输入合同）
 
 ```json
 {requirement_json}
@@ -10,14 +10,55 @@
 
 {requirement_text}
 
+DesignBrief 是设计阶段唯一输入源：
+- `designContract.allowedFunctionIds` / `allowedConstraintIds` / `allowedExceptionIds` 是唯一合法的功能、约束、异常 ID。
+- 输出中只能使用 `F001` / `C001` / `X001` 这种 display ID，禁止输出 `FUN_*`、`CON_*`、`EXC_*` 内部 ID，也禁止自行重新编号。
+- `coverageSkeleton` 是权威覆盖义务清单（功能/约束/异常）。**你不需要输出 coverageMatrix——它由系统从你的 implementation 段落和模块映射自动生成。** 你要做的是**逐条**确保覆盖完整：每条**约束**有 constraintImplementation、每条**异常**有 exceptionImplementation、每个**功能 ID** 都出现在某个 module 的 `functionIds` 里。skeleton 里任何一项没被这样覆盖，就会被判为遗漏。
+- `constraints[].anchors` / `exceptions[].anchors` 是必须保留的可验证参数。若 anchors 非空，必须出现在对应 implementation 的 `parametersPreserved`，并且逐字出现在 `implementationMechanism` / `trigger` / `handling` 中。
+- `entities[].sourceFunctions` / `sourceConstraints` 是规范化后的来源链接，用它们决定领域类、服务类和模块边界，不要从原始大 JSON 中猜。
+
+## 设计哲学（必读）
+
+DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 traceability 表格的附属项。你的输出 schema 把它们放在最前——必须为每条约束、每条异常**独立写完整的实现段落**，不能压缩成一行决策。
+
+约束的 `sourceText` 和 `anchors` 里出现的**每一个数值、单位、算法名、限制值都必须 verbatim 出现在你的设计里**。例如：
+- 约束 source_text = "AES/Rijndael (128-bit block, 256-bit key) and Twofish (128-bit block, 256-bit key). A random 128-bit IV is generated on each save."
+- 设计里**必须**逐字出现：`AES/Rijndael`、`Twofish`、`128-bit block`、`256-bit key`（出现两次）、`128-bit IV`
+- 把这些参数列入 `parametersPreserved`，机制说明（`implementationMechanism`）里也必须逐字出现
+
+**禁止泛化**：禁止写"使用加密算法"、"采用某种格式"、"在合理时间内清除"——这些都丢了关键参数。
+
 ## 输出要求
 
 **输出格式：合法 JSON 根对象，禁止输出 Markdown、代码围栏或解释文本。**
 
-根对象字段：
+根对象字段（按这个顺序输出，**约束/异常实现先于模块/类**）：
 
 ```json
 {
+  "constraintImplementations": [
+    {
+      "constraintId": "C001",
+      "sourceTextVerbatim": "The database is encrypted using AES/Rijndael (128-bit block, 256-bit key) and Twofish (128-bit block, 256-bit key). A random 128-bit IV is generated on each save.",
+      "implementationMechanism": "EncryptionEngine 在 Database.save() 中调用 AES/Rijndael (128-bit block, 256-bit key) 或 Twofish (128-bit block, 256-bit key) 对数据库内容加密；每次 save() 调用前生成一个新的随机 128-bit IV 作为加密参数。",
+      "parametersPreserved": ["AES/Rijndael", "Twofish", "128-bit block", "256-bit key", "128-bit IV"],
+      "trigger": "用户调用 Database.save() 或 saveAs() 时",
+      "handling": "EncryptionEngine 用上述算法+随机 IV 加密 Database 字节流，写入 .kdb 文件；旧 IV 丢弃不复用。",
+      "affectedModuleIds": ["MOD_SECURITY", "MOD_DATABASE"],
+      "affectedClassNames": ["EncryptionEngine", "Database"]
+    }
+  ],
+  "exceptionImplementations": [
+    {
+      "exceptionId": "X001",
+      "sourceTextVerbatim": "If the Master Password is lost, the database cannot be opened.",
+      "trigger": "用户输入 Master Password 但 Database.open() 时密钥派生失败 / 解密失败",
+      "handling": "Database.open() 返回 OpenError；UI 显示\"密码错误，数据库无法打开\"；不允许任何 recovery / back-door 路径。",
+      "parametersPreserved": [],
+      "affectedModuleIds": ["MOD_DATABASE", "MOD_SECURITY"],
+      "affectedClassNames": ["Database", "MasterKey"]
+    }
+  ],
   "modules": [
     {
       "id": "MOD_USER",
@@ -51,40 +92,43 @@
       "relatedFunctionIds": ["F001"]
     }
   ],
-  "coverageMatrix": [
-    {
-      "refId": "F001",
-      "refKind": "function",
-      "originalDescription": "用户通过用户名和密码登录系统",
-      "designDecision": "用户提交用户名和密码，系统验证凭证有效性后签发JWT令牌",
-      "affectedModuleIds": ["MOD_USER"],
-      "affectedClassNames": ["UserService", "User"],
-      "testImplication": "正常登录、错误密码、账号不存在三种场景"
-    },
-    {
-      "refId": "C001",
-      "refKind": "constraint",
-      "originalDescription": "密码长度不少于8位",
-      "designDecision": "在用户注册或修改密码时强制校验密码不少于8位字符，不满足则拒绝操作并提示",
-      "affectedModuleIds": ["MOD_USER"],
-      "affectedClassNames": ["UserService"],
-      "testImplication": "边界：7位拒绝、8位通过"
-    }
-  ],
   "supplementaryClasses": []
 }
 ```
 
 ### 字段说明
 
-- **modules**: 每条映射一个功能模块。`functionIds` 必须包含该模块负责的全部功能 ID（来自合同清单）。每个功能 ID 只映射到语义最匹配的一个模块。
-- **classes**: 核心类和服务类。`kind=domain` 表示业务实体类（须与允许的核心领域类对应，entityRef 填实体名称），`kind=helper` 表示服务/仓储/控制器等辅助类（entityRef 为 null）。
-- **dataFlows**: 主要业务流程的步骤序列，每步描述服务调用或数据传递。`relatedFunctionIds` 引用该流程覆盖的功能 ID。
-- **coverageMatrix**: 设计覆盖矩阵，**必须为每个功能 ID、约束 ID、异常 ID 各写一条**（逐条覆盖，不得遗漏）。`refKind` 为 `function`/`constraint`/`exception`。`originalDescription` 保留需求原始语义，不能改写。`designDecision` 必须描述完整的业务规则或设计方案，**严禁使用方法名**（如 `XxxService.method()`），应说明具体做了什么、在什么条件下执行、结果如何。
-- **supplementaryClasses**: 如需补充未在实体清单中的核心类，在此列出并提供需求原文依据；否则为空数组。
+- **constraintImplementations**（必填，关键）：每条约束一个独立段落。
+  - `constraintId`：必须来自 DesignBrief 的 `designContract.allowedConstraintIds`（如 C001/C003）。
+  - `sourceTextVerbatim`：**完整复制** DesignBrief 里该约束的 `sourceText`，不能改写、缩写、翻译。
+  - `implementationMechanism`：用具体设计语言说明这条规则怎么实现——涉及哪个模块/类/方法/算法/数据路径。**source_text 中所有的算法名、数值、单位都必须 verbatim 出现在这里**。
+  - `parametersPreserved`：至少包含 DesignBrief 对应约束的全部 `anchors`，并补充从 sourceTextVerbatim 中提取的所有可验证参数（算法名 / 数值+单位 / 限制值 / 文件扩展名 / 关键词组）。例如 `["AES/Rijndael", "Twofish", "256-bit key", "128-bit IV", ".kdb", "10 seconds", "single instance"]`。**漏掉一个就会被设计检查器拒绝**。
+  - `trigger` / `handling`：规则在系统中何时被触发、触发后发生什么具体行为。
+  - 即便约束很短（如"组必须有名称"），也必须独立出一段，至少说明在哪个类/方法里校验、违反时如何响应。
+
+- **exceptionImplementations**（必填）：每条异常一个独立段落，同上要求。`exceptionId` 必须来自 `designContract.allowedExceptionIds`。`parametersPreserved` 通常为空数组，但若 DesignBrief `anchors` 非空或 `sourceText` 含数值（如"3 次失败后锁定"）则必填。
+
+- **modules**：每条映射一个功能模块。`functionIds` 必须包含该模块负责的全部功能 ID（来自 `designContract.allowedFunctionIds`）。每个功能 ID 只映射到语义最匹配的一个模块。
+
+- **classes**：核心类和服务类。`kind=domain` 表示业务实体类（须与 `designContract.allowedEntityNames` 对应，entityRef 填实体名称），`kind=helper` 表示服务/仓储/控制器等辅助类（entityRef 为 null）。
+
+- **dataFlows**：主要业务流程的步骤序列，每步描述服务调用或数据传递。`relatedFunctionIds` 引用该流程覆盖的功能 ID。
+
+- **coverageMatrix**：**不要输出。** 系统会从你的 constraintImplementations / exceptionImplementations（约束、异常）和 modules 的 functionIds（功能）自动派生这张 traceability 索引表。你只要保证三件事：每条约束有 implementation 段落、每条异常有 implementation 段落、每个功能 ID 都被某个 module 的 functionIds 收纳。
+
+- **supplementaryClasses**：如需补充未在实体清单中的核心类，在此列出并提供需求原文依据；否则为空数组。
 
 ### 复杂度匹配要求
 
 - 简单无状态需求应采用轻量设计，modules 数量 2-3 个，classes 数量 3-6 个，不引入数据库、消息队列、分布式组件，除非需求明确要求。
 - 中大型系统根据需求中的性能、并发、技术约束设计。
 - dataFlows 应覆盖最关键的 2-4 个业务主流程，不需要穷举所有操作。
+
+### 自检（输出前必做）
+
+1. DesignBrief `coverageSkeleton` 给出的**每一个约束 ID** 是否都在 constraintImplementations 中？少一个就重写。
+2. DesignBrief `coverageSkeleton` 给出的**每一个异常 ID** 是否都在 exceptionImplementations 中？少一个就重写。
+3. 每条 constraintImplementation 的 `sourceTextVerbatim` 是否和 DesignBrief 对应约束的 sourceText **一字不差**？不一样就重写。
+4. `parametersPreserved` 列出的每个参数是否都**逐字**出现在 `implementationMechanism` 或 `handling` 中？少一个就补全。
+5. `implementationMechanism` 是否回答了"哪个类/方法/算法+具体参数实现这条规则"？只写"系统会处理"等空话就是没回答。
+6. 输出 JSON 中是否出现 `FUN_`、`CON_`、`EXC_`？出现就重写为 DesignBrief 的 display ID。

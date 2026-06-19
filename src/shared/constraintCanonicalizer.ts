@@ -13,11 +13,18 @@
  * - LLM mode (future): semantic normalization via LLM
  */
 
+import {
+  displayIdFromRecord,
+  formatDisplayId,
+  isDisplayId,
+  nextDisplayIdCounter,
+} from "./idPolicy.js";
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
-export interface NormalizedRule {
+interface NormalizedRule {
   condition?: string;
   subject: string;
   modality: string;
@@ -26,6 +33,7 @@ export interface NormalizedRule {
 }
 
 export interface ConstraintCandidate {
+  displayId?: string;
   description?: string;
   sourceText?: string;
   canonicalRuleEn?: string;
@@ -198,7 +206,20 @@ interface MergedGroup {
   canonicalRuleEn?: string;
   candidateType?: string;
   candidateSubtype?: string;
+  preferredDisplayId?: string;
   relatedFunctionCandidates?: string[];
+}
+
+function constraintDisplayId(candidate: ConstraintCandidate): string {
+  return displayIdFromRecord(candidate, "C");
+}
+
+function firstConstraintDisplayId(candidates: ConstraintCandidate[]): string {
+  for (const candidate of candidates) {
+    const displayId = constraintDisplayId(candidate);
+    if (displayId) return displayId;
+  }
+  return "";
 }
 
 import {
@@ -281,6 +302,7 @@ export function canonicalizeConstraints(
       canonicalRuleEn: primary.canonicalRuleEn,
       candidateType: primary.type,
       candidateSubtype: primary.subtype,
+      preferredDisplayId: firstConstraintDisplayId(allItems),
       relatedFunctionCandidates: relatedFunctions.length > 0 ? relatedFunctions : undefined,
     });
   }
@@ -302,6 +324,7 @@ export function canonicalizeConstraints(
       canonicalRuleEn: item.canonicalRuleEn,
       candidateType: item.type,
       candidateSubtype: item.subtype,
+      preferredDisplayId: constraintDisplayId(item),
       relatedFunctionCandidates: item.relatedFunctionCandidates,
     });
   }
@@ -350,7 +373,7 @@ export function canonicalizeConstraints(
 
     return {
       constraintUid,
-      displayId: "", // assigned later
+      displayId: group.preferredDisplayId ?? "", // assigned below if absent or duplicated
       canonicalId,
       type,
       subtype,
@@ -368,10 +391,7 @@ export function canonicalizeConstraints(
     };
   });
 
-  // --- Step 3: Sort by canonicalId for deterministic displayId assignment ---
-  results.sort((a, b) => a.canonicalId.localeCompare(b.canonicalId));
-
-  // --- Step 4: Resolve canonicalId collisions ---
+  // --- Step 3: Resolve canonicalId collisions ---
   const usedCanonicalIds = new Set<string>();
   for (const r of results) {
     let cid = r.canonicalId;
@@ -384,10 +404,25 @@ export function canonicalizeConstraints(
     usedCanonicalIds.add(cid);
   }
 
-  // --- Step 5: Assign sequential displayIds ---
-  let counter = 1;
+  // --- Step 4: Preserve source C### display IDs when present; assign only missing/conflicting IDs. ---
+  const preferredDisplayIds = results
+    .map((r) => r.displayId)
+    .filter((id) => isDisplayId(id, "C"));
+  const usedDisplayIds = new Set<string>();
+  let counter = nextDisplayIdCounter(preferredDisplayIds, 1);
+
+
   for (const r of results) {
-    r.displayId = `C${String(counter++).padStart(3, "0")}`;
+    if (isDisplayId(r.displayId, "C") && !usedDisplayIds.has(r.displayId)) {
+      usedDisplayIds.add(r.displayId);
+      continue;
+    }
+    let displayId = formatDisplayId("C", counter++);
+    while (usedDisplayIds.has(displayId)) {
+      displayId = formatDisplayId("C", counter++);
+    }
+    r.displayId = displayId;
+    usedDisplayIds.add(displayId);
   }
 
   return results;

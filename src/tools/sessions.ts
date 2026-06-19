@@ -18,6 +18,8 @@ function normalizeFixInstructions(value: unknown): Array<Record<string, unknown>
 function isStrictSelfCheckFailure(artifact: Artifact): boolean {
   if (artifact.selfCheckPassed) return false;
   if (artifact.type === "tests") return false;
+  if (artifact.type === "design") return false;
+  if (artifact.type === "diagrams") return false;
   if (artifact.type === "analyze") return true;
 
   const strictPatterns = [
@@ -287,7 +289,13 @@ export class EvaluationSession extends WorkerSession {
 
     const suggestions = verdict.fixes.map((fix) => {
       const targetTaskId = fix.dependsOn[0] ?? fix.id;
-      const matching = verdict.issues.filter((issue) => issue.targetTaskId === targetTaskId);
+      // Repair only verifiable DEFECTS. Feeding advisories (coverage/completeness
+      // opinions) into the repair makes the LLM fabricate content — e.g. inventing
+      // test cases for "uncovered" functions, which introduces NEW hallucinated-ID
+      // defects. Advisories are recorded into known-limitations, never repaired.
+      const matching = verdict.issues.filter(
+        (issue) => issue.targetTaskId === targetTaskId && issue.kind === "defect",
+      );
       const severity = matching[0]?.severity ?? "major";
       const targetFields = matching
         .map((issue) => issue.targetField)
@@ -406,6 +414,7 @@ export class PlanningSession extends WorkerSession {
         description: String(item.description ?? ""),
         suggestion: String(item.suggestion ?? ""),
         scope: String(item.scope ?? "") as "" | "local" | "upstream" | "systemic",
+        kind: (String(item.kind ?? "defect") === "advisory" ? "advisory" : "defect") as "defect" | "advisory",
       }))
       : [];
     const mutation = await this.agent.replan(
@@ -491,7 +500,14 @@ export class RepairSession extends WorkerSession {
       });
     }
 
-    const issues = GenerationTool._ruleCheck(task, repaired, ctx);
+    let issues: string[] = [];
+    try {
+      issues = GenerationTool._ruleCheck(task, repaired, ctx);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`run: task=${this.context.taskId} repair self-check failed after content returned: ${msg}`);
+      issues = [`repair self-check failed: ${msg}`];
+    }
     const elapsed = (performance.now() - started) / 1000;
 
     const artifact = createArtifact({

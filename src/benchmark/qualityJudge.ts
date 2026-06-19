@@ -132,10 +132,10 @@ export function buildJudgePrompt(params: {
   lines.push(indent(truncate(requirement_source, 4000), "    "));
   lines.push("");
   lines.push("## DESIGN artifact (excerpt verbatim evidence from HERE)");
-  lines.push(indent(truncate(design, 6000), "    "));
+  lines.push(indent(extractDesignSliceForObligation(design, ob), "    "));
   lines.push("");
   lines.push("## TESTS artifact (excerpt verbatim evidence from HERE)");
-  lines.push(indent(truncate(tests, 6000), "    "));
+  lines.push(indent(extractTestsSliceForObligation(tests, ob), "    "));
   lines.push("");
   lines.push("## Rubric (HARD RULES — violating them is an invalid judgment)");
   lines.push("- Score 0: NO relevant verbatim evidence found in design OR tests.");
@@ -187,6 +187,170 @@ function truncate(text: string, max: number): string {
   if (s.length <= max) return s;
   const head = Math.floor(max * 0.6);
   return `${s.slice(0, head)}\n...[truncated ${s.length - max} chars]...\n${s.slice(-Math.floor(max * 0.3))}`;
+}
+
+/**
+ * The window (±N lines) extracted around each matched needle when slicing an
+ * artifact (design or tests) for one obligation.
+ */
+const SLICE_WINDOW = 10;
+
+/**
+ * Shared core of {@link extractDesignSliceForObligation} /
+ * {@link extractTestsSliceForObligation}.
+ *
+ * Unlike {@link truncate} (head+tail), this locates the obligation's anchors
+ * — its id (and dash-stripped / generated-matrix variants like `C_RULE_001`),
+ * its `source_span`, and every entry of the chosen `evidenceField` — inside
+ * `artifactText` and lifts a ±{@link SLICE_WINDOW}-line window around each
+ * hit. Windows are merged/deduped so overlapping regions appear once. Returns
+ * `""` when nothing matches (an empty DESIGN/TESTS section ⇒ the judge scores
+ * it low, which is the desired honest signal for a missing rule).
+ *
+ * Needles are normalized the same way as {@link textOverlaps} (lower-cased,
+ * non letter/digit runs collapsed) so spacing/punctuation differences do not
+ * hide a match; distinctive substrings (CJK + digit runs like "30分钟", "99件",
+ * "50") are pulled out of longer evidence strings to avoid losing a match
+ * when only part of the evidence is quoted verbatim in the artifact.
+ *
+ * @param artifactText  the full artifact text (design or tests)
+ * @param obligation    the obligation to slice for
+ * @param evidenceField which evidence list to use as anchors
+ * @param label         window boundary label ("design" / "tests")
+ * @returns the merged slice, or `""` when no anchor matched
+ */
+function extractSliceForObligation(
+  artifactText: string,
+  obligation: GoldObligation,
+  evidenceField: "expected_design_evidence" | "expected_test_evidence",
+  label: "design" | "tests",
+): string {
+  const text = String(artifactText ?? "");
+  if (!text) return "";
+  const lines = text.split("\n");
+  if (lines.length === 0) return "";
+
+  // Normalize the same way as textOverlaps: lowercase + drop non letter/digit
+  // runs. Matching is done against the normalized artifact so spacing/case do
+  // not hide a verbatim quote.
+  const norm = (s: string): string =>
+    String(s ?? "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, "");
+  const normLines = lines.map(norm);
+
+  // Collect distinctive needles from the obligation. A needle must be at least
+  // 3 chars after normalization (filters out noise like single digits / "id").
+  const minNeedle = 3;
+  const needles = new Set<string>();
+  const addNeedle = (raw: string): void => {
+    const n = norm(raw);
+    if (n.length >= minNeedle) needles.add(n);
+  };
+
+  // (a) Obligation id + variants. Gold ids look like "C-001" / "F-NNN" /
+  // "X-001"; generated matrices use dash-less ("C001") or rule-style
+  // ("C_RULE_001"). Generate all of these forms.
+  const id = String(obligation.id ?? "");
+  if (id) {
+    addNeedle(id); // "C-001"
+    addNeedle(id.replace(/-/g, "")); // "C001"
+    // "C001" -> "C_RULE_001" / "C-001" -> "C_RULE_001"
+    const digits = id.match(/\d+/)?.[0];
+    const letter = id.match(/^[A-Za-z]+/)?.[0];
+    if (digits && letter) addNeedle(`${letter}_RULE_${digits}`);
+  }
+
+  // (b) source_span (verbatim requirement excerpt — the strongest anchor).
+  addNeedle(obligation.source_span);
+
+  // (c) Each entry of the chosen evidence list. These may be longer than what
+  // the artifact quotes verbatim, so also extract their distinctive substrings
+  // (runs of CJK letters and/or digits like "30分钟", "99件", "50") so a
+  // partial verbatim quote still anchors a window.
+  const distinctive = (raw: string): string[] => {
+    return String(raw ?? "")
+      .match(/[\p{L}]*\p{Script=Han}[\p{L}]*|\d+/gu) ?? [];
+  };
+  for (const ev of obligation[evidenceField]) {
+    addNeedle(ev);
+    for (const frag of distinctive(ev)) addNeedle(frag);
+  }
+
+  if (needles.size === 0) return "";
+
+  // Locate each needle inside the (normalized) artifact lines and record the
+  // ±WINDOW window around every hit. A needle may match multiple lines.
+  const windows: Array<[number, number]> = [];
+  for (const needle of needles) {
+    for (let i = 0; i < normLines.length; i++) {
+      if (normLines[i].includes(needle)) {
+        const start = Math.max(0, i - SLICE_WINDOW);
+        const end = Math.min(lines.length - 1, i + SLICE_WINDOW);
+        windows.push([start, end]);
+      }
+    }
+  }
+
+  if (windows.length === 0) return "";
+
+  // Merge overlapping/adjacent windows (sort by start, then coalesce).
+  windows.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of windows) {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1] + 1) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
+    }
+  }
+
+  // Emit each merged window with a clear boundary marker (so the judge can
+  // still tell it is an excerpt, not the whole artifact). Joined with blanks.
+  const slices: string[] = [];
+  for (const [start, end] of merged) {
+    slices.push(
+      `...[${label} lines ${start + 1}-${end + 1}]...\n${lines.slice(start, end + 1).join("\n")}`,
+    );
+  }
+  return slices.join("\n\n");
+}
+
+/**
+ * Extract the slice of `designText` that is relevant to ONE obligation.
+ * Delegates to {@link extractSliceForObligation} with the design evidence
+ * anchors. See that helper for the windowing/normalization details.
+ */
+export function extractDesignSliceForObligation(
+  designText: string,
+  obligation: GoldObligation,
+): string {
+  return extractSliceForObligation(designText, obligation, "expected_design_evidence", "design");
+}
+
+/**
+ * Extract the slice of `testsText` that is relevant to ONE obligation.
+ *
+ * Mirrors {@link extractDesignSliceForObligation} but anchors on
+ * `expected_test_evidence` (plus the obligation id variants and source_span).
+ * This replaces the old `truncate(tests, 6000)` head+tail cut in
+ * {@link buildJudgePrompt}: a long test-cases file (e.g. 16k+ chars, 37
+ * cases) used to be chopped to its head+tail so the middle cases — often the
+ * ones relevant to this obligation — were dropped, capping
+ * `has_test_alignment`. Slicing lifts ±{@link SLICE_WINDOW}-line windows
+ * around each anchor so the relevant test cases survive regardless of where
+ * they sit in the file. Returns `""` when nothing matches.
+ *
+ * @param testsText   the full tests artifact text
+ * @param obligation  the obligation to slice for
+ * @returns the merged tests slice, or `""` when no anchor matched
+ */
+export function extractTestsSliceForObligation(
+  testsText: string,
+  obligation: GoldObligation,
+): string {
+  return extractSliceForObligation(testsText, obligation, "expected_test_evidence", "tests");
 }
 
 function indent(text: string, prefix: string): string {
@@ -760,12 +924,22 @@ function readArtifactJson(path: string): Record<string, unknown> | null {
 /**
  * Extract {@link TraceChain}s for one obligation from a traceability matrix.
  *
- * The matrix may use either gold obligation ids (C-001) OR generated display
- * ids (C014). We match by BOTH: an obligation's chains come from any matrix
- * entry whose key (display or canonical form) maps to this obligation id, AND
- * whose constraint text semantically relates to the obligation's source_span.
- * Matching is intentionally loose on ids (they may differ between gold and
- * generated matrices) and relies on the LLM judge to verify semantic truth.
+ * The matrix may use either gold obligation ids (C-001/F-005/X-001) OR
+ * generated display ids (C014/F005/X001). We match by BOTH: an obligation's
+ * chains come from any matrix entry whose key (display or canonical form)
+ * maps to this obligation id, AND whose constraint text semantically relates
+ * to the obligation's source_span. Matching is intentionally loose on ids
+ * (they may differ between gold and generated matrices) and relies on the
+ * LLM judge to verify semantic truth.
+ *
+ * The matrix carries THREE parallel bucket pairs — constraint/function/
+ * exception `*ToDesign` + `*ToTests`. Which pair a given obligation reads is
+ * decided by its `type` (constraint→constraint maps, functional→function maps,
+ * exception→exception maps), so functional/exception obligations no longer get
+ * empty chains (and thus zero traceability). Only `constraintDescriptions` is
+ * populated by the matrix builder today; function/exception chains fall back
+ * to `obligation.source_span` for the human description (same fallback the
+ * constraint path already used).
  */
 export function extractChainsForObligation(
   obligation: GoldObligation,
@@ -774,13 +948,33 @@ export function extractChainsForObligation(
   if (!matrix) return [];
   const chains: TraceChain[] = [];
 
-  // The matrix may carry several map shapes (TraceabilityMatrix + the fake
-  // mutant variant). Pull candidate (constraint → design → test) triples from
-  // whichever maps are present.
+  // Select the bucket-appropriate (ToDesign, ToTests) maps for THIS
+  // obligation type. constraintToDesign/constraintToTests also accept the
+  // legacy `constraint_design`/`constraint_tests` aliases (carried by the
+  // mutant's fake matrix).
   const constraintToDesign = (matrix.constraintToDesign ?? matrix.constraint_design ?? {}) as Record<string, string[]>;
   const constraintToTests = (matrix.constraintToTests ?? matrix.constraint_tests ?? {}) as Record<string, string[]>;
+  const functionToDesign = (matrix.functionToDesign ?? {}) as Record<string, string[]>;
+  const functionToTests = (matrix.functionToTests ?? {}) as Record<string, string[]>;
+  const exceptionToDesign = (matrix.exceptionToDesign ?? {}) as Record<string, string[]>;
+  const exceptionToTests = (matrix.exceptionToTests ?? {}) as Record<string, string[]>;
+
+  let toDesign: Record<string, string[]>;
+  let toTests: Record<string, string[]>;
+  if (obligation.type === "functional") {
+    toDesign = functionToDesign;
+    toTests = functionToTests;
+  } else if (obligation.type === "exception") {
+    toDesign = exceptionToDesign;
+    toTests = exceptionToTests;
+  } else {
+    toDesign = constraintToDesign;
+    toTests = constraintToTests;
+  }
+
   // Optional text descriptions for semantic matching (carried by the mutant's
-  // fake matrix): constraintId → human description.
+  // fake matrix): constraintId → human description. Only the constraint bucket
+  // populates this today; function/exception use source_span as the fallback.
   const constraintDescriptions = (matrix.constraintDescriptions ?? {}) as Record<string, string>;
 
   // Build the set of keys that map to THIS obligation. Gold obligations use
@@ -797,8 +991,8 @@ export function extractChainsForObligation(
   }
 
   for (const key of candidateKeys) {
-    const designElements = constraintToDesign[key];
-    const testIds = constraintToTests[key];
+    const designElements = toDesign[key];
+    const testIds = toTests[key];
     const description = constraintDescriptions[key] ?? obligation.source_span;
     const designElement = Array.isArray(designElements) ? designElements.join(", ") : "";
     const testId = Array.isArray(testIds) ? testIds.join(", ") : "";

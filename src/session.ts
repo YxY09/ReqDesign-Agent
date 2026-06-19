@@ -105,6 +105,7 @@ function restoreIssue(value: unknown): Issue | null {
     description: String(value.description ?? ""),
     suggestion: String(value.suggestion ?? ""),
     scope: String(value.scope ?? "") as Issue["scope"],
+    kind: String(value.kind ?? "defect") === "advisory" ? "advisory" : "defect",
   };
 }
 
@@ -246,6 +247,7 @@ function restoreVerdict(value: unknown): Verdict | null {
       description: String(item.description ?? ""),
       suggestion: String(item.suggestion ?? ""),
       scope: String(item.scope ?? "") as Verdict["issues"][number]["scope"],
+      kind: (String(item.kind ?? "defect") === "advisory" ? "advisory" : "defect") as Verdict["issues"][number]["kind"],
     }));
   return createVerdict({
     passed: Boolean(value.passed),

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/benchmark/compareRunner.ts",
+    "src/benchmark/baselineRunner.ts",
+    "tests/**/*.test.ts"
+  ],
+  "project": ["src/**/*.ts"],
+  "ignoreBinaries": ["powershell.exe"],
+  "ignoreDependencies": []
+}

@@ -322,6 +322,26 @@ describe("applyDeterministicMerges", () => {
     expect(result.merged).toHaveLength(0);
   });
 
+  it("does not drop items when caller-provided IDs collide", () => {
+    const items: TestItem[] = [
+      { id: "dup", text: "退款原路返回72小时到账", source: "C001" },
+      { id: "dup", text: "库存不足时不可下单", source: "C004" },
+    ];
+    const config = makeConfig(items);
+    const candidates = findDuplicateCandidates(config);
+    const result = applyDeterministicMerges(items, candidates, config);
+
+    const output = [...result.kept, ...result.merged.flatMap((group) => [
+      ...group.survivors,
+      ...group.absorbed,
+    ])];
+    expect(output).toHaveLength(2);
+    expect(output.map((item) => item.text)).toEqual([
+      "退款原路返回72小时到账",
+      "库存不足时不可下单",
+    ]);
+  });
+
   it("glossary_equiv alone does not trigger deterministic merge (score 0.75 < 0.8)", () => {
     // SSL and HTTPS hit the same glossary group with 2 unique terms (ssl, https),
     // but glossary_equiv score is 0.75 — below deterministic merge threshold.

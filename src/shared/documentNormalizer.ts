@@ -24,7 +24,7 @@ export interface DocumentSection {
   paragraphs: DocumentParagraph[];
 }
 
-export interface DocumentParagraph {
+interface DocumentParagraph {
   paragraphId: string;
   sentences: Array<{ sentenceId: string; text: string }>;
 }

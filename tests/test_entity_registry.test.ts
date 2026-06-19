@@ -13,10 +13,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 describe("Entity Registry types", () => {
   it("RegistryEntity has required fields", async () => {
-    const { EntityRegistry } =
-      await import("../src/shared/types.js");
-
-    const entity: import("../src/shared/types.js").RegistryEntity = {
+    type EntityRegistry = import("../src/shared/types.js").EntityRegistry;
+    const entity: EntityRegistry["entities"][number] = {
       id: "E_CASE",
       canonicalName: "Case",
       displayName: "案件",
@@ -494,7 +492,8 @@ describe("AnalyzeMerger._getWords camelCase splitting", () => {
 
 describe("RegistryActor type", () => {
   it("RegistryActor has required fields", async () => {
-    const actor: import("../src/shared/types.js").RegistryActor = {
+    type EntityRegistry = import("../src/shared/types.js").EntityRegistry;
+    const actor: NonNullable<EntityRegistry["actors"]>[number] = {
       id: "A_ADMIN",
       canonicalName: "Admin",
       displayName: "管理员",
@@ -645,7 +644,8 @@ describe("RegistryExtractor with actors", () => {
 
 describe("RegistryFunction type", () => {
   it("RegistryFunction has required fields", async () => {
-    const fn: import("../src/shared/types.js").RegistryFunction = {
+    type EntityRegistry = import("../src/shared/types.js").EntityRegistry;
+    const fn: NonNullable<EntityRegistry["functions"]>[number] = {
       id: "FUN_REGISTER_CASE",
       name: "RegisterCase",
       aliases: ["注册案件", "initiate case"],

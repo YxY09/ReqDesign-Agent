@@ -17,13 +17,16 @@ export class ReviewManager {
 
   /** Record a verdict. */
   addVerdict(verdict: Verdict): void {
+    // Control flow keys off verifiable DEFECTS, not the LLM's severity label.
+    // Advisories (completeness/coverage opinions) never block acceptance or
+    // mark a task as needing repair.
     const blockerTaskIds = new Set<string>();
     const majorTaskIds = new Set<string>();
     for (const issue of verdict.issues) {
-      if (issue.severity === "blocker" && issue.targetTaskId) {
+      if (issue.kind !== "defect" || !issue.targetTaskId) continue;
+      if (issue.severity === "blocker") {
         blockerTaskIds.add(issue.targetTaskId);
-      }
-      if (issue.severity === "major" && issue.targetTaskId) {
+      } else if (issue.severity === "major") {
         majorTaskIds.add(issue.targetTaskId);
       }
     }
@@ -59,18 +62,17 @@ export class ReviewManager {
         this._state.majorPendingTaskIds.add(taskId);
       }
     }
-    if (this._state.majorPendingTaskIds.size > 0) {
-      // Reset major repair tracking in progress (mirrors Python's _counters)
-      this._state.progress.recordNoProgress();
-    }
 
     this._state.verdicts.push(verdict);
 
-    // Update convergence tracker with latest evaluation issues
-    if (verdict.issues.length > 0) {
+    // Update convergence tracker with latest evaluation DEFECTS only.
+    // Advisories must not inflate the round/issue counts that drive the
+    // convergence accept thresholds and hard cap.
+    const defectIssues = verdict.issues.filter((issue) => issue.kind === "defect");
+    if (defectIssues.length > 0) {
       this._state.convergence.addRound({
-        issues: verdict.issues.map((issue) => ({
-          fingerprint: ConvergenceTracker.fingerprint(issue.description),
+        issues: defectIssues.map((issue) => ({
+          fingerprint: ConvergenceTracker.fingerprint(issue),
           severity: issue.severity,
         })),
       });
@@ -98,18 +100,6 @@ export class ReviewManager {
       this._state.finalReviewPassed = cleanPassed;
       this._state.finalReviewRevisions = { ...verdict.evaluatedRevisions };
       this._state.qualityStatus = cleanPassed ? "passed" : "rejected";
-    }
-
-    // Track evaluator activity
-    if (cleanPassed) {
-      this._state.progress.recordScore(1.0);
-      for (const taskId of Object.keys(
-        this._state.progress.rejectionStreakByTask,
-      )) {
-        this._state.progress.recordAcceptance(taskId);
-      }
-    } else {
-      this._state.progress.recordScore(0.0);
     }
   }
 

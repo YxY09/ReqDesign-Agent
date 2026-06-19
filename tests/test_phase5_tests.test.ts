@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { TestCaseGenerator } from "../src/generators/tests.js";
-import { validateTestCases } from "../src/generators/testQualityValidator.js";
+import {
+  validateTestCases,
+  collectFabricatedCanonicalIds,
+  isTemplateLike,
+} from "../src/generators/testQualityValidator.js";
 
 describe("TestCaseGenerator.validateTestCases", () => {
   it("normalizes structured test case IDs generated from requirement IDs", () => {
@@ -54,6 +58,47 @@ describe("TestCaseGenerator.validateTestCases", () => {
       constraints: [{ id: "C001", description: "Audit cannot be altered" }],
     });
     expect(warnings.some((warning) => warning.includes("编号不合法"))).toBe(false);
+  });
+
+  it("renumbers duplicate IDs after merging multiple generated groups", () => {
+    const groupA = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-B-001",
+          title: "退款72小时到账",
+          type: "边界",
+          target: "C001 退款原路返回（72小时内到账）",
+          preconditions: "退款已审核通过",
+          steps: ["记录退款申请时间", "等待资金原路返回"],
+          expected_result: "退款在72小时内原路到账",
+          priority: "P0",
+        },
+      ],
+    });
+    const groupB = JSON.stringify({
+      test_cases: [
+        {
+          id: "TC-B-001",
+          title: "库存不足不可下单",
+          type: "边界",
+          target: "C004 库存不足时不可下单",
+          preconditions: "商品库存为5件",
+          steps: ["用户下单购买6件", "系统校验库存"],
+          expected_result: "订单创建失败并提示库存不足",
+          priority: "P0",
+        },
+      ],
+    });
+
+    const merged = (TestCaseGenerator as unknown as {
+      mergeGroupResults: (rawResults: string[]) => Array<Record<string, unknown>>;
+    }).mergeGroupResults([groupA, groupB]);
+
+    expect(merged.map((tc) => tc.id)).toEqual(["TC-B-001", "TC-B-002"]);
+    expect(merged.map((tc) => tc.target)).toEqual([
+      "C001 退款原路返回（72小时内到账）",
+      "C004 库存不足时不可下单",
+    ]);
   });
 
   it("normalizes structured target display/canonical pairs to requirement IDs", () => {
@@ -327,6 +372,44 @@ describe("validateTestCases (testQualityValidator) — canonical_only_target", (
     ];
     const issues = validateTestCases(cases, analysis);
     expect(issues.some((i) => i.issue === "canonical_only_target")).toBe(false);
+  });
+});
+
+describe("isTemplateLike", () => {
+  it("does not match 尝试 in a step with 约束 only in the title", () => {
+    const tc = {
+      id: "TC-B-001",
+      title: "手机号唯一约束边界测试",
+      type: "边界",
+      target: "C011 手机号需唯一",
+      preconditions: "手机号13800138000已注册",
+      steps: [
+        "用户尝试使用手机号13800138000再次注册",
+        "系统查询手机号唯一索引",
+      ],
+      expected_result: "系统拒绝注册并提示手机号已存在",
+      priority: "P0",
+    };
+
+    expect(isTemplateLike(tc)).toBe(false);
+  });
+
+  it("still detects template wording within one sentence", () => {
+    const tc = {
+      id: "TC-B-001",
+      title: "模板化约束测试",
+      type: "边界",
+      target: "C001 库存不足时不可下单",
+      preconditions: "库存不足",
+      steps: [
+        "用户尝试验证约束是否生效",
+        "系统返回结果",
+      ],
+      expected_result: "系统拒绝",
+      priority: "P1",
+    };
+
+    expect(isTemplateLike(tc)).toBe(true);
   });
 });
 
@@ -645,5 +728,59 @@ describe("TestCaseGenerator.validateStructuredTestCases — Bug A: target triple
     const warnings = TestCaseGenerator.validateTestCases(testCases, req);
 
     expect(warnings.some((w) => w.includes("target ID 配对不一致") && w.includes("X001"))).toBe(true);
+  });
+});
+
+describe("collectFabricatedCanonicalIds", () => {
+  const knownIds = new Set<string>(["C001", "C002", "CON_FUNC_REAL"]);
+
+  it("flags a CON_/FUN_/EXC_ token in target that is not in the analysis set", () => {
+    const tc = {
+      id: "TC-B-001",
+      target: "C002 | CON_FUNC_E3K31F00 KeePass supports E3K31 encryption",
+      steps: ["s1"],
+      expected_result: "ok",
+    };
+    expect(collectFabricatedCanonicalIds(tc, knownIds)).toEqual(["CON_FUNC_E3K31F00"]);
+  });
+
+  it("flags fabricated hash inside steps", () => {
+    const tc = {
+      id: "TC-B-002",
+      target: "C001",
+      steps: ["use FUN_FAKE123 to do something"],
+      expected_result: "ok",
+    };
+    expect(collectFabricatedCanonicalIds(tc, knownIds)).toEqual(["FUN_FAKE123"]);
+  });
+
+  it("does NOT flag canonical ids that the analysis really produced", () => {
+    const tc = {
+      id: "TC-B-003",
+      target: "C002 | CON_FUNC_REAL",
+      steps: ["valid"],
+      expected_result: "ok",
+    };
+    expect(collectFabricatedCanonicalIds(tc, knownIds)).toEqual([]);
+  });
+
+  it("returns empty when the test body has no CON_/FUN_/EXC_ tokens", () => {
+    const tc = {
+      id: "TC-N-001",
+      target: "F001 Login",
+      steps: ["login"],
+      expected_result: "ok",
+    };
+    expect(collectFabricatedCanonicalIds(tc, knownIds)).toEqual([]);
+  });
+
+  it("de-duplicates repeated fabricated tokens", () => {
+    const tc = {
+      id: "TC-B-004",
+      target: "C001 | CON_FAB_ABC",
+      steps: ["CON_FAB_ABC", "again CON_FAB_ABC"],
+      expected_result: "still CON_FAB_ABC",
+    };
+    expect(collectFabricatedCanonicalIds(tc, knownIds)).toEqual(["CON_FAB_ABC"]);
   });
 });

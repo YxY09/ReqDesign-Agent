@@ -67,6 +67,37 @@ describe("ConvergenceTracker", () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it("uses structural identity — same task/field/severity matches despite reworded description", () => {
+    const fp1 = ConvergenceTracker.fingerprint({
+      targetTaskId: "design-1",
+      targetField: "design_text",
+      severity: "major",
+      description: "missing response format for cancel flow",
+    });
+    const fp2 = ConvergenceTracker.fingerprint({
+      targetTaskId: "design-1",
+      targetField: "design_text",
+      severity: "major",
+      description: "the cancellation path does not specify a response shape",
+    });
+    // Same location + severity → same fingerprint even though wording differs.
+    expect(fp1).toBe(fp2);
+  });
+
+  it("separates structural fingerprints when severity changes (major→minor is progress)", () => {
+    const major = ConvergenceTracker.fingerprint({
+      targetTaskId: "design-1",
+      targetField: "design_text",
+      severity: "major",
+    });
+    const minor = ConvergenceTracker.fingerprint({
+      targetTaskId: "design-1",
+      targetField: "design_text",
+      severity: "minor",
+    });
+    expect(major).not.toBe(minor);
+  });
+
   it("reports decreasing trend correctly", () => {
     const tracker = new ConvergenceTracker(3);
     tracker.addRound({

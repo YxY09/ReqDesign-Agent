@@ -139,3 +139,39 @@ describe("actionSaveIfQualityGatePassed", () => {
     expect(state.persisted).toBe(true);
   });
 });
+
+describe("PersistenceService.containsStubPlaceholders", () => {
+  it("flags '(原有 XX 保持不变)' as a stub", () => {
+    const text = "## 设计\n\n### 接口定义\n（原有接口定义保持不变，此处省略）";
+    expect(PersistenceService.containsStubPlaceholders(text)).toBe(true);
+  });
+
+  it("flags '(此处省略)' as a stub", () => {
+    const text = "## 数据流\n\n（此处省略）";
+    expect(PersistenceService.containsStubPlaceholders(text)).toBe(true);
+  });
+
+  it("flags '(omitted)' / '(unchanged)' English variants", () => {
+    expect(PersistenceService.containsStubPlaceholders("## X\n(omitted)")).toBe(true);
+    expect(PersistenceService.containsStubPlaceholders("## Y\n(unchanged)")).toBe(true);
+    expect(PersistenceService.containsStubPlaceholders("text ... unchanged ...")).toBe(true);
+  });
+
+  it("flags '保留原有内容' variant", () => {
+    expect(PersistenceService.containsStubPlaceholders("## X\n（保留原有内容）")).toBe(true);
+  });
+
+  it("does NOT flag a complete design that legitimately uses the word 省略 inside content", () => {
+    const text =
+      "## 模块划分\n\n本系统包含完整的5个模块。\n" +
+      "## 核心类设计\n\nclass Foo { method bar(): void; }\n" +
+      "## 数据流\n\n用户提交 → 系统验证 → 返回结果\n" +
+      "## 设计覆盖矩阵\n\n| ID | 决策 | ...";
+    expect(PersistenceService.containsStubPlaceholders(text)).toBe(false);
+  });
+
+  it("does NOT trip on the literal word '不变' outside a placeholder pattern", () => {
+    const text = "## 接口\n\n本接口契约一旦发布即保持向后兼容，URL 路径不变。";
+    expect(PersistenceService.containsStubPlaceholders(text)).toBe(false);
+  });
+});

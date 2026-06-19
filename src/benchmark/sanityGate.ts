@@ -87,14 +87,7 @@ export interface SanityGateInput {
  *   - diagrams    : diagrams/ with at least one non-empty *.mmd
  *   - tests       : tests/test_cases.{md,json} (generated test cases)
  */
-export const REQUIRED_ARTIFACTS = ["requirement", "design", "diagrams", "tests"] as const;
-
-/** Canonical diagram keys a valid run should contain. */
-export const EXPECTED_DIAGRAM_KEYS = [
-  "class_diagram",
-  "activity_diagram",
-  "state_diagram",
-] as const;
+const REQUIRED_ARTIFACTS = ["requirement", "design", "diagrams", "tests"] as const;
 
 // ---------------------------------------------------------------------------
 // Gate

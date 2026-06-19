@@ -23,6 +23,7 @@ export interface TraceabilityMatrix {
   constraintToEvidence: Record<string, string[]>;     // constraintId → sentenceId[]
   functionToTests: Record<string, string[]>;
   exceptionToTests: Record<string, string[]>;
+  constraintDescriptions: Record<string, string>;
   uncoveredConstraints: string[];
   uncoveredFunctions: string[];
   uncoveredExceptions: string[];
@@ -36,6 +37,87 @@ export interface TraceabilityMatrix {
 function asArrayOfStrings(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
   return val.map((v) => String(v ?? "").trim()).filter(Boolean);
+}
+
+/**
+ * Parse markdown module tables out of a design document into a map of
+ * function displayId (F001) → module names. Tolerates varying headers and
+ * column orders: any table whose header row carries a module column
+ * (模块 / module) AND a function column (功能 / function) is parsed.
+ *
+ * Returns an empty Map when no suitable table is present (never throws). Used
+ * as a non-self-referential fallback for functionToDesign / constraintToDesign
+ * when no structured {@link DesignModel}.coverageMatrix is available — e.g. the
+ * baseline's single-turn markdown design, or an agent run whose design was
+ * persisted as a markdown string rather than a DesignModel.
+ */
+export function parseDesignModuleTable(designText: string): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  if (!designText) return result;
+
+  const lines = designText.split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length) {
+    const header = lines[i];
+    const separator = i + 1 < lines.length ? lines[i + 1] : "";
+    if (!header.includes("|") || !isMarkdownTableSeparator(separator)) {
+      i++;
+      continue;
+    }
+
+    const headerCells = splitTableRow(header);
+    // Fuzzy, language-agnostic column detection.
+    let moduleNameIdx = -1;
+    let fnIdx = -1;
+    for (let c = 0; c < headerCells.length; c++) {
+      const h = headerCells[c].toLowerCase();
+      if (fnIdx === -1 && /功能|function|func/.test(h)) fnIdx = c;
+      if (/模块|module/.test(h)) {
+        // Prefer a 名称/name-bearing module column when both 模块ID and
+        // 模块名称 exist (the name is the better design target).
+        if (/名称|name/.test(h) || moduleNameIdx === -1) moduleNameIdx = c;
+      }
+    }
+
+    if (moduleNameIdx >= 0 && fnIdx >= 0) {
+      // Consume this table's data rows.
+      let j = i + 2;
+      while (j < lines.length && lines[j].includes("|") && !isMarkdownTableSeparator(lines[j])) {
+        const cells = splitTableRow(lines[j]);
+        const moduleName = (cells[moduleNameIdx] ?? "").trim();
+        const fnField = (cells[fnIdx] ?? "").trim();
+        const fids = [...fnField.matchAll(/\bF\d{3}\b/g)].map((m) => m[0]);
+        for (const fid of new Set(fids)) {
+          if (!result.has(fid)) result.set(fid, []);
+          if (moduleName && !(result.get(fid) as string[]).includes(moduleName)) {
+            (result.get(fid) as string[]).push(moduleName);
+          }
+        }
+        j++;
+      }
+      i = j;
+    } else {
+      // Not a module table — skip past its data rows.
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && !isMarkdownTableSeparator(lines[i])) i++;
+    }
+  }
+  return result;
+}
+
+/** True when a markdown row is a table separator (`|---|:--:|`). */
+function isMarkdownTableSeparator(line: string): boolean {
+  const cells = splitTableRow(line);
+  if (cells.length < 2) return false;
+  return cells.every((c) => /^:?-{1,}:?$/.test(c.trim()));
+}
+
+/** Split a markdown table row into trimmed cells (edge pipes stripped). */
+function splitTableRow(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
 }
 
 /**
@@ -142,23 +224,42 @@ function resolveSentenceIds(
 }
 
 // ---------------------------------------------------------------------------
-// ID extraction helpers (displayId only — canonicalIds are normalized away)
+// ID extraction helpers. Display IDs are returned as-is; canonical IDs are
+// resolved to their current display IDs before entering matrix keys.
 // ---------------------------------------------------------------------------
 
-const RE_DISPLAY_CONSTRAINT = /\bC\d{3}\b/g;
-const RE_DISPLAY_FUNCTION = /\bF\d{3}\b/g;
-const RE_DISPLAY_EXCEPTION = /\bX\d{3}\b/g;
+const RE_DISPLAY_CONSTRAINT = /\bC\d{3,4}\b/g;
+const RE_DISPLAY_FUNCTION = /\bF\d{3,4}\b/g;
+const RE_DISPLAY_EXCEPTION = /\bX\d{3,4}\b/g;
+const RE_CANONICAL_CONSTRAINT = /\bCON_[A-Za-z0-9_]+\b/g;
+const RE_CANONICAL_FUNCTION = /\bFUN_[A-Za-z0-9_]+\b/g;
+const RE_CANONICAL_EXCEPTION = /\bEXC_[A-Za-z0-9_]+\b/g;
 
-function extractConstraintRefs(text: string): string[] {
-  return [...new Set(text.match(RE_DISPLAY_CONSTRAINT) ?? [])];
+function extractRequirementRefs(
+  text: string,
+  displayRe: RegExp,
+  canonicalRe: RegExp,
+  canonicalToDisplay: Map<string, string> = new Map(),
+): string[] {
+  const refs = new Set<string>();
+  for (const id of text.match(displayRe) ?? []) refs.add(id);
+  for (const id of text.match(canonicalRe) ?? []) {
+    const displayId = canonicalToDisplay.get(id);
+    if (displayId) refs.add(displayId);
+  }
+  return [...refs];
 }
 
-function extractFunctionRefs(text: string): string[] {
-  return [...new Set(text.match(RE_DISPLAY_FUNCTION) ?? [])];
+function extractConstraintRefs(text: string, canonicalToDisplay?: Map<string, string>): string[] {
+  return extractRequirementRefs(text, RE_DISPLAY_CONSTRAINT, RE_CANONICAL_CONSTRAINT, canonicalToDisplay);
 }
 
-function extractExceptionRefs(text: string): string[] {
-  return [...new Set(text.match(RE_DISPLAY_EXCEPTION) ?? [])];
+function extractFunctionRefs(text: string, canonicalToDisplay?: Map<string, string>): string[] {
+  return extractRequirementRefs(text, RE_DISPLAY_FUNCTION, RE_CANONICAL_FUNCTION, canonicalToDisplay);
+}
+
+function extractExceptionRefs(text: string, canonicalToDisplay?: Map<string, string>): string[] {
+  return extractRequirementRefs(text, RE_DISPLAY_EXCEPTION, RE_CANONICAL_EXCEPTION, canonicalToDisplay);
 }
 
 /**
@@ -272,6 +373,15 @@ export function buildMatrix(
   const spans = spanEntries(spanMap);
 
   const funcIds = buildIdSet(functions);
+  const conIds = buildIdSet(constraints);
+  const excIds = buildIdSet(exceptions);
+  const constraintDescriptions: Record<string, string> = {};
+  for (const c of constraints) {
+    const did = String(c.displayId ?? "").trim();
+    if (!did) continue;
+    const desc = String(c.source_text ?? c.sourceText ?? c.description ?? "").trim();
+    if (desc) constraintDescriptions[did] = desc;
+  }
 
   // design coverage is sourced from designModel.coverageMatrix when available;
   // otherwise fall back to a non-self-referential presence check against the
@@ -340,24 +450,31 @@ export function buildMatrix(
   }
 
   // --- constraintToDesign / functionToDesign / exceptionToDesign ---
-  // Prefer the structured DesignModel.coverageMatrix when available (it carries
-  // real module/class names). Otherwise fall back to the design text. Keys are
-  // displayIds only; refId may be a displayId or a canonicalId, so normalize via
-  // lookup maps built from the requirement collections.
+  // Three-tier and ADDITIVE so the agent (coverageMatrix) and the baseline /
+  // markdown-persisted design (text tiers) run on the SAME strict branch of
+  // buildMatrix — keeping traceability comparable across sides:
+  //   1. structured DesignModel.coverageMatrix (real module/class names)
+  //   2. markdown module table fallback (function F-id → module names), which
+  //      derives functionToDesign and, via constraintToFunctions /
+  //      exception.related_functions, also constraintToDesign / exceptionToDesign
+  //   3. constraint displayId presence in the design text (last resort)
+  // Tiers 2/3 only run when designText is available and MERGE into whatever
+  // tier 1 produced (they never overwrite a real coverageMatrix mapping).
   const constraintToDesign: Record<string, string[]> = {};
   const functionToDesign: Record<string, string[]> = {};
   const exceptionToDesign: Record<string, string[]> = {};
 
+  // Tier 1: structured DesignModel.coverageMatrix (carries real module/class
+  // names). refId may be a displayId or a canonicalId, so normalize via lookup
+  // maps built from the requirement collections.
   if (designModel && Array.isArray(designModel.coverageMatrix)) {
-    const conLookup = buildIdSet(constraints);
-    const excLookup = buildIdSet(exceptions);
     const lookup: RefIdLookup = {
       funcDisplay: funcIds.display,
       funcMap: funcIds.canonicalToDisplay,
-      conDisplay: conLookup.display,
-      conMap: conLookup.canonicalToDisplay,
-      excDisplay: excLookup.display,
-      excMap: excLookup.canonicalToDisplay,
+      conDisplay: conIds.display,
+      conMap: conIds.canonicalToDisplay,
+      excDisplay: excIds.display,
+      excMap: excIds.canonicalToDisplay,
     };
     for (const entry of designModel.coverageMatrix) {
       const rawRefId = String(entry.refId ?? "").trim();
@@ -380,13 +497,55 @@ export function buildMatrix(
       if (!bucket[displayId]) bucket[displayId] = [];
       pushUnique(bucket[displayId], designTargets);
     }
-  } else if (designText) {
-    // Non-self-referential fallback: a constraint is "designed" when its
-    // displayId is mentioned in the design text.
-    const designRefs = new Set(extractConstraintRefs(designText));
+  }
+
+  // Tiers 2 & 3: markdown design text fallback.
+  if (designText) {
+    // Tier 2 — parse module tables → function displayId → module names.
+    const fnToModules = parseDesignModuleTable(designText);
+
+    // functionToDesign directly from the module table.
+    for (const [fid, modules] of fnToModules) {
+      if (!functionToDesign[fid]) functionToDesign[fid] = [];
+      pushUnique(functionToDesign[fid], modules);
+    }
+
+    // constraintToDesign via constraint → its functions → their modules.
+    for (const [cid, fids] of Object.entries(constraintToFunctions)) {
+      const modules: string[] = [];
+      for (const fid of fids) pushUnique(modules, fnToModules.get(fid) ?? []);
+      if (modules.length > 0) {
+        if (!constraintToDesign[cid]) constraintToDesign[cid] = [];
+        pushUnique(constraintToDesign[cid], modules);
+      }
+    }
+
+    // exceptionToDesign via exception.related_functions → their modules.
+    for (const x of exceptions) {
+      const xid = String(x.displayId ?? "").trim();
+      if (!xid) continue;
+      const related = asArray(x["related_functions"] ?? x["relatedFunctions"]);
+      const modules: string[] = [];
+      for (const rel of related) {
+        const rawFid = typeof rel === "object" && rel !== null
+          ? String((rel as Record<string, unknown>).functionId ?? "").trim()
+          : String(rel).trim();
+        const fid = resolveDisplayFunctionId(rawFid, funcIds.display, funcIds.canonicalToDisplay);
+        pushUnique(modules, fnToModules.get(fid) ?? []);
+      }
+      if (modules.length > 0) {
+        if (!exceptionToDesign[xid]) exceptionToDesign[xid] = [];
+        pushUnique(exceptionToDesign[xid], modules);
+      }
+    }
+
+    // Tier 3 — constraint displayId presence (last resort, non-overwriting).
+    // A constraint is "designed" when its displayId is mentioned in the design
+    // text. Only fills entries tiers 1/2 did not already populate.
+    const designConRefs = new Set(extractConstraintRefs(designText, conIds.canonicalToDisplay));
     for (const c of constraints) {
       const did = String(c.displayId ?? "").trim();
-      if (did && designRefs.has(did)) {
+      if (did && designConRefs.has(did) && !constraintToDesign[did]) {
         constraintToDesign[did] = ["design"];
       }
     }
@@ -406,24 +565,24 @@ export function buildMatrix(
     const parsedTests = parseTestCaseTargets(testsStr);
     if (parsedTests.length > 0) {
       for (const { id, target } of parsedTests) {
-        for (const ref of extractConstraintRefs(target)) {
+        for (const ref of extractConstraintRefs(target, conIds.canonicalToDisplay)) {
           if (!constraintToTests[ref]) constraintToTests[ref] = [];
           if (!constraintToTests[ref].includes(id)) constraintToTests[ref].push(id);
         }
-        for (const ref of extractFunctionRefs(target)) {
+        for (const ref of extractFunctionRefs(target, funcIds.canonicalToDisplay)) {
           if (!functionToTests[ref]) functionToTests[ref] = [];
           if (!functionToTests[ref].includes(id)) functionToTests[ref].push(id);
         }
-        for (const ref of extractExceptionRefs(target)) {
+        for (const ref of extractExceptionRefs(target, excIds.canonicalToDisplay)) {
           if (!exceptionToTests[ref]) exceptionToTests[ref] = [];
           if (!exceptionToTests[ref].includes(id)) exceptionToTests[ref].push(id);
         }
       }
     } else {
       // Plain-text fallback: no TC ids to map to — record presence only.
-      for (const ref of extractConstraintRefs(testsStr)) constraintToTests[ref] = [ref];
-      for (const ref of extractFunctionRefs(testsStr)) functionToTests[ref] = [ref];
-      for (const ref of extractExceptionRefs(testsStr)) exceptionToTests[ref] = [ref];
+      for (const ref of extractConstraintRefs(testsStr, conIds.canonicalToDisplay)) constraintToTests[ref] = [ref];
+      for (const ref of extractFunctionRefs(testsStr, funcIds.canonicalToDisplay)) functionToTests[ref] = [ref];
+      for (const ref of extractExceptionRefs(testsStr, excIds.canonicalToDisplay)) exceptionToTests[ref] = [ref];
     }
   }
 
@@ -469,6 +628,7 @@ export function buildMatrix(
     constraintToEvidence,
     functionToTests,
     exceptionToTests,
+    constraintDescriptions,
     uncoveredConstraints,
     uncoveredFunctions,
     uncoveredExceptions,

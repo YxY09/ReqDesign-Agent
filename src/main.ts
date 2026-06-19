@@ -5,7 +5,8 @@ import { existsSync } from "node:fs";
 import { AgentConfig, VALID_PROVIDERS } from "./config.js";
 import { setConsoleLoggingEnabled, setupLogger, closeSharedLog, writeToSharedLog } from "./logger.js";
 import { MultiAgentRuntime } from "./runtime.js";
-import { BenchmarkRunner } from "./benchmark/runBenchmark.js";
+import { BenchmarkRunnerV2 } from "./benchmark/benchmarkRunner.js";
+import { DEFAULT_RESULTS_BASE_DIR } from "./benchmark/resultStore.js";
 import { TerminalChatApp } from "./tui/chatApp.js";
 import { ConsoleWorkflowStreamer } from "./workflowEvents.js";
 
@@ -13,7 +14,6 @@ interface CommonCliArgs {
   config: string;
   model?: string;
   provider?: string;
-  maxRetry?: string;
   logLevel: string;
 }
 
@@ -31,7 +31,6 @@ function loadConfig(args: CommonCliArgs): { config: AgentConfig; logger: ReturnT
     }
     config.llm.provider = args.provider as (typeof VALID_PROVIDERS)[number];
   }
-  if (args.maxRetry) config.retry.maxRetries = Number(args.maxRetry);
 
   const errors = config.validate();
   if (errors.length > 0) {
@@ -55,16 +54,13 @@ async function runChat(argv: string[]): Promise<void> {
     .option("-c, --config <path>", "Config file path", "config.yaml")
     .option("-m, --model <model>", "Override model from config")
     .option("-p, --provider <provider>", "Override LLM provider from config")
-    .option("--max-retry <count>", "Override max retry count from config")
-    .option("--log-level <level>", "Log level", "INFO")
-    .option("--execution-backend <backend>", "Execution backend: thread", "thread");
+    .option("--log-level <level>", "Log level", "INFO");
   program.parse(["node", "reqdesign-chat", ...argv]);
-  const args = program.opts<CommonCliArgs & { executionBackend: string }>();
+  const args = program.opts<CommonCliArgs>();
   const { config } = loadConfig(args);
   setConsoleLoggingEnabled(false);
   const app = new TerminalChatApp({
     config,
-    executionBackend: args.executionBackend,
   });
   await app.start();
 }
@@ -86,10 +82,16 @@ async function main(): Promise<void> {
     .option("-c, --config <path>", "Config file path", "config.yaml")
     .option("-m, --model <model>", "Override model from config")
     .option("-p, --provider <provider>", "Override LLM provider from config")
-    .option("--max-retry <count>", "Override max retry count from config")
     .option("--log-level <level>", "Log level", "INFO")
     .option("--benchmark", "Run benchmark evaluation", false)
-    .option("--execution-backend <backend>", "Execution backend: thread", "thread");
+    .option("--mode <mode>", "Benchmark v2 mode: dev or eval", "dev")
+    .option("--n <count>", "Benchmark v2 runs per case in eval mode", "1")
+    .option("--resume", "Resume an existing benchmark v2 run", false)
+    .option("--case <id>", "Run one benchmark case id")
+    .option("--only-failed", "When resuming, run only failed cases", false)
+    .option("--label <label>", "Append a label to the benchmark id")
+    .option("--benchmark-id <id>", "Benchmark id to resume, or 'latest'")
+    .option("--gold-dir <path>", "Gold contract directory", "benchmark/gold_contracts");
 
   program.parse(process.argv);
   const args = program.opts<{
@@ -99,10 +101,16 @@ async function main(): Promise<void> {
     config: string;
     model?: string;
     provider?: string;
-    maxRetry?: string;
     logLevel: string;
     benchmark: boolean;
-    executionBackend: string;
+    mode: "dev" | "eval";
+    n: string;
+    resume: boolean;
+    case?: string;
+    onlyFailed: boolean;
+    label?: string;
+    benchmarkId?: string;
+    goldDir: string;
   } & CommonCliArgs>();
 
   if (args.goal !== "design") {
@@ -114,21 +122,40 @@ async function main(): Promise<void> {
 
   if (args.benchmark) {
     const streamer = new ConsoleWorkflowStreamer();
-    const runner = new BenchmarkRunner(
+    const resultsBaseDir = args.output ?? DEFAULT_RESULTS_BASE_DIR;
+    const numRuns = Number(args.n);
+    if (args.mode !== "dev" && args.mode !== "eval") {
+      throw new Error(`--mode must be dev or eval, received: ${args.mode}`);
+    }
+    if (!Number.isInteger(numRuns) || numRuns < 1) {
+      throw new Error(`--n must be a positive integer, received: ${args.n}`);
+    }
+    const runner = new BenchmarkRunnerV2(
       config,
       args.input,
-      "benchmark/gold_labels",
-      output,
+      args.goldDir,
+      (c) => new MultiAgentRuntime(c),
     );
-    const report = await runner.runAll({
+    const report = await runner.run({
+      mode: args.mode,
+      numRuns,
+      resume: args.resume,
+      caseId: args.case,
+      onlyFailed: args.onlyFailed,
+      label: args.label,
+      benchmarkId: args.benchmarkId,
+      resultsBaseDir,
       onEvent: (event) => streamer.push(event),
     });
     streamer.close();
-    const summary = (report.summary as Record<string, unknown> | undefined) ?? {};
+    const summary = report.summary;
+    const total = summary.entries.length;
+    const valid = summary.entries.filter((entry) => entry.status === "valid").length;
     const benchLines = [
-      `Benchmark complete. Output directory: ${output}`,
-      `Passed: ${String(summary.passed ?? 0)} / ${String(report.total_cases ?? 0)}`,
-      `Average overall: ${String((summary.avg_scores as Record<string, unknown> | undefined)?.overall ?? 0)}`,
+      `Benchmark v2 complete. Output directory: ${resultsBaseDir}`,
+      `Benchmark id: ${report.metadata.benchmark_id}`,
+      `Valid runs: ${valid} / ${total}`,
+      `Final score mean: ${String(summary.aggregates?.final_score_mean ?? "n/a")}`,
     ];
     for (const line of benchLines) {
       process.stdout.write(line + "\n");
@@ -138,7 +165,7 @@ async function main(): Promise<void> {
   }
 
   const streamer = new ConsoleWorkflowStreamer();
-  const runtime = new MultiAgentRuntime(config, args.executionBackend);
+  const runtime = new MultiAgentRuntime(config);
   const state = await runtime.run(args.goal, args.input, output, {
     onEvent: (event) => streamer.push(event),
   });
@@ -146,7 +173,6 @@ async function main(): Promise<void> {
 
   const summaryLines = [
     `Run ended. Output directory: ${output}`,
-    `  backend: ${runtime.executionBackendName}`,
     `  artifacts: ${String(state.totalArtifacts)}`,
     `  finished: ${state.finished ? "yes" : "no"}`,
     `  run status: ${state.runStatus}`,

@@ -1,17 +1,17 @@
 /**
- * Benchmark v2 — Phase 1 orchestrator.
+ * Benchmark v2 — orchestrator.
  *
- * New framework layered on top of the four Phase-1 modules (metadata,
- * resultStore, sanityGate, resume). It does NOT modify the legacy
- * `runBenchmark.ts` / `scorer.ts`; instead it imports `RuntimeLike` /
- * `RuntimeFactory` to reuse the runtime contract and mirrors the per-case
- * timeout-race pattern from `BenchmarkRunner.runCase`.
+ * New framework layered on top of the four base modules (metadata,
+ * resultStore, sanityGate, resume). It uses the shared RuntimeLike /
+ * RuntimeFactory contract used by the production CLI path.
  *
- * Phase-1 boundaries (deliberate placeholders, tagged `// TODO(Phase2)`):
- *   - judge / evidence extraction / rubric        → quality stays all-null
- *   - gold_obligations                             → Phase 2
- *   - mutant verification (test effectiveness)     → Phase 2
- *   - PROMISE Spanish case                         → Phase 3
+ * Scoring: when a case has a hand-curated gold contract
+ * (`benchmark/gold_contracts/<id>.json`) and the sanity gate passed, the
+ * evidence-based judge (`qualityJudge.ts`) runs over the on-disk design+tests
+ * and derives the four quality sub-scores. Cases without a gold contract, or
+ * runs where the judge throws, fall back to all-null quality. Mutant-based
+ * test effectiveness and the `repair_success_rate` /
+ * `traceability_false_positive_rate` aggregates are not yet implemented.
  *
  * The review gate is recorded (review.json) but NOT folded into the quality
  * rubric — it is an independent signal in the v2 contract.
@@ -31,8 +31,7 @@ import { setupLogger } from "../logger.js";
 import type { WorkflowEvent, WorkflowEventSink } from "../workflowEvents.js";
 import { createWorkflowEvent } from "../workflowEvents.js";
 
-// Reuse the runtime contract from the legacy runner (no modification to it).
-import type { RuntimeFactory, RuntimeLike } from "./runBenchmark.js";
+import type { RuntimeFactory, RuntimeLike } from "./runtimeContract.js";
 
 import { loadGoldContract } from "./goldObligation.js";
 import { judgeAgainstGold } from "./qualityJudge.js";
@@ -255,8 +254,7 @@ export class BenchmarkRunnerV2 {
    *   pipeline (runtime.run, with timeout race) → sanity gate → quality
    *   placeholder → atomic write → return canonical result.
    *
-   * Mirrors `BenchmarkRunner.runCase`'s timeout pattern but writes the v2
-   * result layout and never calls the LLM judge (Phase-2 TODO).
+   * Applies the benchmark timeout policy and writes the v2 result layout.
    */
   private async executeCase(
     caseId: string,
@@ -358,18 +356,18 @@ export class BenchmarkRunnerV2 {
     const openMajor = raw.getMajorPendingTaskIds().length;
     const review: ReviewGateRecord = {
       passed: Boolean(raw.finalReviewPassed),
-      score: null, // TODO(Phase2): review has no numeric score in v2 contract
+      score: null, // review gate has no numeric score in the v2 contract
       open_major_issues: openMajor,
       quality_status: String(raw.qualityStatus ?? "unknown"),
       persisted: Boolean(raw.persisted),
     };
 
-    // --- quality (Phase-2 evidence-based judge) -------------------------
-    // When the sanity gate passed AND a Phase-2 gold contract exists for this
-    // case, run the evidence-based judge over the on-disk design+tests and
-    // derive the four sub-scores. Wrapped in try/catch so ANY judge failure
-    // (missing gold, LLM error, malformed output) falls back to NULL_QUALITY
-    // — preserving Phase-1 stability for cases without a hand-curated gold.
+    // --- quality (evidence-based judge) -------------------------------
+    // When the sanity gate passed AND a gold contract exists for this case,
+    // run the evidence-based judge over the on-disk design+tests and derive
+    // the four sub-scores. Wrapped in try/catch so ANY judge failure (missing
+    // gold, LLM error, malformed output) falls back to NULL_QUALITY — keeping
+    // runs stable for cases without a hand-curated gold.
     let quality: QualityScores = { ...NULL_QUALITY };
     if (sanity.passed) {
       try {
@@ -408,13 +406,13 @@ export class BenchmarkRunnerV2 {
   }
 
   // -----------------------------------------------------------------------
-  // Quality judge (Phase 2)
+  // Quality judge
   // -----------------------------------------------------------------------
 
   /**
-   * Resolve the Phase-2 gold contract path for a case. Sibling of the cases
-   * dir: `<casesDir>/../gold_contracts/<caseId>.json`. Returns `null` when no
-   * contract exists or it is malformed (Phase-1 cases have no Phase-2 gold).
+   * Resolve the gold contract path for a case. Sibling of the cases dir:
+   * `<casesDir>/../gold_contracts/<caseId>.json`. Returns `null` when no
+   * contract exists or it is malformed.
    */
   private resolveGoldContract(caseId: string) {
     const goldContractPath = join(this.casesDir, "..", "gold_contracts", `${caseId}.json`);
@@ -424,15 +422,15 @@ export class BenchmarkRunnerV2 {
   /**
    * Run the evidence-based judge for one (already-produced) run.
    *
-   * Returns {@link NULL_QUALITY} when no Phase-2 gold contract exists for the
-   * case (the common Phase-1 path) so the runner stays a no-op for cases
-   * without a hand-curated contract. Reads design+tests from the run's output
-   * dir and the case source from the cases dir.
+   * Returns {@link NULL_QUALITY} when no gold contract exists for the case so
+   * the runner stays a no-op for cases without a hand-curated contract. Reads
+   * design+tests from the run's output dir and the case source from the cases
+   * dir.
    */
   private async judgeQuality(caseId: string, caseOutputDir: string): Promise<QualityScores> {
     const gold = this.resolveGoldContract(caseId);
     if (!gold) {
-      // No Phase-2 gold contract → keep the Phase-1 placeholder.
+      // No gold contract → keep all-null quality.
       return { ...NULL_QUALITY };
     }
     const requirementSource = (() => {
@@ -447,9 +445,9 @@ export class BenchmarkRunnerV2 {
       requirement_source: requirementSource,
       designPath: join(caseOutputDir, "design", "system_design.md"),
       testsPath: join(caseOutputDir, "tests", "test_cases.json"),
-      // Phase 2.5: feed the traceability matrix to the judge so it can verify
-      // chain truthfulness (weakness 2). The matrix is optional; absent ⇒ the
-      // judge falls back to has_test_alignment.
+      // Feed the traceability matrix to the judge so it can verify
+      // chain truthfulness. The matrix is optional; absent ⇒ the judge falls
+      // back to has_test_alignment.
       matrixPath: join(caseOutputDir, "traces", "traceability_matrix.json"),
     });
     return quality;
@@ -529,8 +527,8 @@ function appendEntry(summary: SummaryDocument, result: BenchmarkResult): Summary
 }
 
 /**
- * Eval-mode aggregates over all entries. Means/stds ignore null scores
- * (Phase-1 placeholder). Rates are computed over all runs.
+ * Eval-mode aggregates over all entries. Means/stds ignore null scores.
+ * Rates are computed over all runs.
  */
 function computeAggregates(entries: SummaryEntry[]): SummaryAggregates {
   const total = entries.length;
@@ -546,8 +544,7 @@ function computeAggregates(entries: SummaryEntry[]): SummaryAggregates {
   const validRuns = entries.filter((e) => e.status === "valid").length;
   const reviewPassed = entries.filter((e) => e.review_passed).length;
   const majorMissed = entries.filter(
-    // A run "missed a major obligation" in Phase-1 terms when it was invalid
-    // (sanity failed) — Phase 2 will refine this against gold obligations.
+    // A run "missed a major obligation" when it was invalid (sanity failed).
     (e) => e.status === "invalid",
   ).length;
 
@@ -556,7 +553,8 @@ function computeAggregates(entries: SummaryEntry[]): SummaryAggregates {
     final_score_std: std === null ? null : round1(std),
     valid_run_rate: total ? round1((validRuns / total) * 100) : 0,
     review_pass_rate: total ? round1((reviewPassed / total) * 100) : 0,
-    // TODO(Phase2): repair / mutant-driven rates need Phase-2 signals.
+    // Not yet implemented: repair_success_rate / traceability_false_positive_rate
+    // need mutant-driven / trace-chain signals that are not computed today.
     repair_success_rate: null,
     major_obligation_miss_rate: total ? round1((majorMissed / total) * 100) : 0,
     traceability_false_positive_rate: null,

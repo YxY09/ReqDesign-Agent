@@ -5,7 +5,7 @@ describe("canonicalizeAndLink", () => {
   // ----------------------------------------------------------------
   // 1. Functions canonicalization
   // ----------------------------------------------------------------
-  it("assigns FUN_UPPER_SNAKE canonicalId and F001 displayId to functions sorted by name", () => {
+  it("assigns FUN_UPPER_SNAKE canonicalId while preserving source order for new displayIds", () => {
     const merged: Record<string, unknown> = {
       functions: [
         { id: "temp_2", name: "SearchCase", description: "Search for cases" },
@@ -15,11 +15,10 @@ describe("canonicalizeAndLink", () => {
 
     const maps = canonicalizeAndLink(merged);
 
-    // Sorted by name: RegisterComplaint < SearchCase
     const fns = merged.functions as Array<Record<string, unknown>>;
-    expect(fns[0].id).toBe("FUN_REGISTER_COMPLAINT");
+    expect(fns[0].id).toBe("FUN_SEARCH_CASE");
     expect(fns[0].displayId).toBe("F001");
-    expect(fns[1].id).toBe("FUN_SEARCH_CASE");
+    expect(fns[1].id).toBe("FUN_REGISTER_COMPLAINT");
     expect(fns[1].displayId).toBe("F002");
 
     // Maps should have oldId → canonicalId and name → canonicalId
@@ -27,6 +26,31 @@ describe("canonicalizeAndLink", () => {
     expect(maps.functionMap.get("temp_2")).toBe("FUN_SEARCH_CASE");
     expect(maps.functionMap.get("SearchCase")).toBe("FUN_SEARCH_CASE");
     expect(maps.functionMap.get("RegisterComplaint")).toBe("FUN_REGISTER_COMPLAINT");
+  });
+
+  it("preserves explicit source function display IDs instead of re-sorting and renumbering", () => {
+    const merged: Record<string, unknown> = {
+      functions: [
+        { id: "F001", name: "UserRegistrationLogin", description: "用户注册与登录" },
+        { id: "F007", name: "ApplyRefundReturn", description: "申请退款/退货" },
+        { id: "F002", name: "BrowseProducts", description: "商品浏览" },
+      ],
+    };
+
+    canonicalizeAndLink(merged);
+
+    const fns = merged.functions as Array<Record<string, unknown>>;
+    expect(fns.map((f) => f.displayId)).toEqual(["F001", "F007", "F002"]);
+    expect(fns[0]).toMatchObject({
+      id: "FUN_USER_REGISTRATION_LOGIN",
+      displayId: "F001",
+      description: "用户注册与登录",
+    });
+    expect(fns[1]).toMatchObject({
+      id: "FUN_APPLY_REFUND_RETURN",
+      displayId: "F007",
+      description: "申请退款/退货",
+    });
   });
 
   // ----------------------------------------------------------------
@@ -54,6 +78,20 @@ describe("canonicalizeAndLink", () => {
     expect(maps.constraintMap.get("c_old_2")).toBe(constraints[1].id);
   });
 
+  it("preserves explicit source constraint display IDs", () => {
+    const merged: Record<string, unknown> = {
+      constraints: [
+        { id: "C013", description: "库存预警值为10件" },
+        { id: "C002", description: "支付超时自动取消订单" },
+      ],
+    };
+
+    canonicalizeAndLink(merged);
+
+    const constraints = merged.constraints as Array<Record<string, unknown>>;
+    expect(constraints.map((c) => c.displayId)).toEqual(["C013", "C002"]);
+  });
+
   // ----------------------------------------------------------------
   // 3. Exceptions canonicalization
   // ----------------------------------------------------------------
@@ -76,6 +114,20 @@ describe("canonicalizeAndLink", () => {
 
     expect(maps.exceptionMap.get("x_old_1")).toBe(exceptions[0].id);
     expect(maps.exceptionMap.get("x_old_2")).toBe(exceptions[1].id);
+  });
+
+  it("preserves explicit source exception display IDs", () => {
+    const merged: Record<string, unknown> = {
+      exceptions: [
+        { id: "X006", description: "支付失败" },
+        { id: "X001", description: "并发超卖" },
+      ],
+    };
+
+    canonicalizeAndLink(merged);
+
+    const exceptions = merged.exceptions as Array<Record<string, unknown>>;
+    expect(exceptions.map((x) => x.displayId)).toEqual(["X006", "X001"]);
   });
 
   // ----------------------------------------------------------------

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { AgentConfig } from "../src/config.js";
-import type { RuntimeFactory } from "../src/benchmark/runBenchmark.js";
+import type { RuntimeFactory } from "../src/benchmark/runtimeContract.js";
 import { BenchmarkRunnerV2, parseBenchmarkCliArgs } from "../src/benchmark/benchmarkRunner.js";
 
 let root: string;

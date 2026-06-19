@@ -60,7 +60,7 @@ function buildConstraintCandidateSummary(
   const rows = filtered.map((candidate) => {
     const originalIndex = candidates.indexOf(candidate);
     const row: Record<string, unknown> = {
-      constraintRef: `C_RULE_${String(originalIndex + 1).padStart(3, "0")}`,
+      constraintRef: `C${String(originalIndex + 1).padStart(3, "0")}`,
       description: candidate.description ?? "",
       sourceText: candidate.sourceText ?? "",
     };
@@ -90,19 +90,24 @@ export class PlanningTool extends BaseTool {
   // 公开 API
   // ------------------------------------------------------------------
 
+  /** Set to "llm" to use the LLM planner instead of deterministic (experimental). */
+  plannerMode: "deterministic" | "llm" = "deterministic";
+
   async plan(requirementText: string, goal = "design", sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>): Promise<ExecutionPlan> {
     if (!requirementText?.trim()) {
       this.logger.warn("plan: 需求文本为空，返回空计划");
       return createExecutionPlan({ tasks: [], goal, reasoning: "需求文本为空" });
     }
 
-    this.logger.info(`plan: 开始规划，目标=${goal}，需求长度=${requirementText.length}`);
+    this.logger.info(`plan: 开始规划，目标=${goal}，需求长度=${requirementText.length}，mode=${this.plannerMode}`);
 
     // Extract entity registry before building prompt
     let registry: EntityRegistry | undefined;
     try {
       const extractor = new RegistryExtractor(this.llm);
-      registry = await extractor.extract(requirementText);
+      registry = await this._withStreamTag("[Planner:registry]", () =>
+        extractor.extract(requirementText)
+      );
       this.logger.info(`plan: registry 提取完成，entities=${registry.entities.length}`);
     } catch (e) {
       this.logger.warn(`plan: registry 提取失败，继续无 registry 规划: ${e instanceof Error ? e.message : String(e)}`);
@@ -113,10 +118,13 @@ export class PlanningTool extends BaseTool {
     if (registry && registry.entities.length > 0) {
       try {
         const extractor = new ConstraintExtractor(this.llm);
-        constraintCandidates = await extractor.extractCandidates(
-          requirementText,
-          registry.entities.map((e) => ({ id: e.id, canonicalName: e.canonicalName, aliases: e.aliases })),
-          (registry.functions ?? []).map((f) => ({ id: f.id, displayId: f.id, name: f.name })),
+        constraintCandidates = await this._withStreamTag(
+          "[Planner:constraints]",
+          () => extractor.extractCandidates(
+            requirementText,
+            registry.entities.map((e) => ({ id: e.id, canonicalName: e.canonicalName, aliases: e.aliases })),
+            (registry.functions ?? []).map((f) => ({ id: f.id, displayId: f.id, name: f.name })),
+          ),
         );
         this.logger.info(`plan: constraint candidates 提取完成，count=${constraintCandidates.length}`);
       } catch (e) {
@@ -124,21 +132,28 @@ export class PlanningTool extends BaseTool {
       }
     }
 
-    const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
-    const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex, registry, constraintCandidates);
-
     let plan: ExecutionPlan;
-    try {
-      this.llm.streamTag = "[Planner]";
-      const response = await this.llm.generateJson(userPrompt, system);
-      plan = this._parseResponse(response as Record<string, unknown>, goal);
-      this.logger.info(`plan: 规划完成，共 ${plan.tasks.length} 个任务，reasoning=${plan.reasoning?.slice(0, 80)}`);
-    } catch (e) {
-      this.logger.warn(`plan: LLM 规划失败，使用 fallback: ${e instanceof Error ? e.message : String(e)}`);
-      plan = PlanningTool._fallbackPlan(requirementText, goal);
-    }
 
-    plan = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+    if (this.plannerMode === "llm") {
+      // Experimental: LLM-based planning (kept for non-standard workflows)
+      const system = await this._getSystemPrompt("planner.md", "", requirementText.slice(0, 200));
+      const userPrompt = PlanningTool._buildUserPrompt(requirementText, goal, sectionIndex, registry, constraintCandidates);
+      try {
+        const response = await this._withStreamTag("[Planner:plan]", () =>
+          this.llm.generateJson(userPrompt, system)
+        );
+        plan = this._parseResponse(response as Record<string, unknown>, goal);
+        this.logger.info(`plan: LLM 规划完成，共 ${plan.tasks.length} 个任务`);
+      } catch (e) {
+        this.logger.warn(`plan: LLM 规划失败，降级 deterministic: ${e instanceof Error ? e.message : String(e)}`);
+        plan = PlanningTool.buildDeterministicPlan(goal, sectionIndex);
+      }
+      plan = PlanningTool._ensureSectionCoverage(plan, sectionIndex);
+      plan = PlanningTool._capAnalyzeShards(plan, requirementText, sectionIndex);
+    } else {
+      plan = PlanningTool.buildDeterministicPlan(goal, sectionIndex);
+      PlanningTool._logShardMapping(plan, this.logger);
+    }
 
     // Inject availableConstraints into analyze tasks (section-filtered, capped)
     const MAX_CONSTRAINTS_PER_TASK = 30;
@@ -182,7 +197,7 @@ export class PlanningTool extends BaseTool {
           task.contextHints.availableConstraints = filtered.map((c) => {
             const originalIndex = candidateIndex.get(c) ?? -1;
             return {
-              constraintRef: `C_RULE_${String(originalIndex + 1).padStart(3, "0")}`,
+              constraintRef: `C${String(originalIndex + 1).padStart(3, "0")}`,
               description: c.description ?? "",
               sourceText: c.sourceText ?? "",
             };
@@ -216,8 +231,9 @@ export class PlanningTool extends BaseTool {
 
     let mutation: PlanMutation;
     try {
-      this.llm.streamTag = "[Planner:replan]";
-      const response = await this.llm.generateJson(userPrompt, system);
+      const response = await this._withStreamTag("[Planner:replan]", () =>
+        this.llm.generateJson(userPrompt, system)
+      );
       mutation = this._parseReplanResponse(response as Record<string, unknown>);
       this.logger.info(`replan: 重新规划完成，add=${mutation.addTasks?.length ?? 0}，update=${mutation.updateTasks?.length ?? 0}，drop=${mutation.dropTaskIds?.length ?? 0}`);
     } catch (e) {
@@ -428,30 +444,129 @@ export class PlanningTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // 降级策略
+  // 确定性 Planner（主路径）
   // ------------------------------------------------------------------
 
-  static _fallbackPlan(_requirementText: string, goal: string): ExecutionPlan {
+  static buildDeterministicPlan(
+    goal: string,
+    sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
+  ): ExecutionPlan {
+    const shards = PlanningTool._allocateAnalyzeShards(sectionIndex);
+    const analyzeTasks = shards.length === 0
+      ? [createTask({ id: "analyze-1", type: "analyze", description: "提取角色、功能、实体、约束等结构化信息" })]
+      : shards.map((sectionIds, i) => createTask({
+          id: `analyze-${i + 1}`,
+          type: "analyze",
+          description: `提取结构化信息 (shard ${i + 1}/${shards.length})`,
+          contextHints: { assignedSections: sectionIds },
+        }));
+
     if (goal.toLowerCase().includes("analyze")) {
       return createExecutionPlan({
-        tasks: [createTask({ id: "analyze-1", type: "analyze", description: "提取角色、功能、实体、约束等结构化信息" })],
+        tasks: analyzeTasks,
         goal,
-        reasoning: "fallback: analyze only",
+        reasoning: `deterministic: ${analyzeTasks.length} analyze shard(s), analyze-only`,
       });
     }
 
+    const analyzeIds = analyzeTasks.map((t) => t.id);
     return createExecutionPlan({
       tasks: [
-        createTask({ id: "analyze-1", type: "analyze", description: "提取角色、功能、实体、约束等结构化信息" }),
-        createTask({ id: "design-1", type: "design", description: "生成模块划分、核心类、接口与数据流", dependsOn: ["analyze-1"] }),
+        ...analyzeTasks,
+        createTask({ id: "design-1", type: "design", description: "生成模块划分、核心类、接口与数据流", dependsOn: analyzeIds }),
         createTask({ id: "diagrams-class", type: "diagrams", description: "生成 Mermaid 类图", dependsOn: ["design-1"], contextHints: { diagram_kind: "class_diagram" } }),
         createTask({ id: "diagrams-activity", type: "diagrams", description: "生成 Mermaid 活动图", dependsOn: ["design-1"], contextHints: { diagram_kind: "activity_diagram" } }),
         createTask({ id: "diagrams-state", type: "diagrams", description: "生成 Mermaid 状态图", dependsOn: ["design-1"], contextHints: { diagram_kind: "state_diagram" } }),
         createTask({ id: "tests-1", type: "tests", description: "生成正常/异常/边界测试用例", dependsOn: ["design-1"] }),
       ],
       goal,
-      reasoning: "fallback: 标准流程，diagrams 拆分为 3 个独立任务",
+      reasoning: `deterministic: ${analyzeTasks.length} analyze shard(s)`,
     });
+  }
+
+  /**
+   * Allocate leaf sections to analyze shards.
+   *
+   * Returns `[]` when the doc is simple enough for a single analyze pass.
+   * `buildDeterministicPlan` treats `[]` as "create 1 analyze task with NO
+   * assignedSections" — the worker receives the full requirement text without
+   * slicing. This is intentional: sliceBySections is unnecessary overhead for
+   * a single shard, and full-text avoids losing content between sections.
+   *
+   * Strategy: contiguous splitting with parent-boundary snapping.
+   * Ideal cut points are snapped to the nearest parent (##) boundary within
+   * ±SNAP_RADIUS positions, keeping same-parent sections together when possible.
+   */
+  static _allocateAnalyzeShards(
+    sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
+  ): string[][] {
+    if (!sectionIndex || sectionIndex.length === 0) return [];
+
+    // Collect leaf sections and track which parent each belongs to
+    const leafIds: string[] = [];
+    const leafParents: string[] = [];
+    let currentParent = "";
+    for (const s of sectionIndex) {
+      if (s.depth <= 1) { currentParent = s.id; continue; }
+      leafIds.push(s.id);
+      leafParents.push(currentParent);
+    }
+
+    if (leafIds.length <= PlanningTool.SINGLE_SHARD_SECTION_LIMIT) return [];
+
+    const shardCount = Math.max(2, Math.ceil(leafIds.length / PlanningTool.SECTIONS_PER_SHARD));
+
+    // Parent boundary = index where the parent heading changes
+    const boundarySet = new Set<number>();
+    boundarySet.add(0);
+    for (let i = 1; i < leafParents.length; i++) {
+      if (leafParents[i] !== leafParents[i - 1]) boundarySet.add(i);
+    }
+    boundarySet.add(leafIds.length);
+
+    // Build cut points, snapping to nearest parent boundary
+    const SNAP_RADIUS = 3;
+    const cuts: number[] = [0];
+    for (let s = 1; s < shardCount; s++) {
+      const ideal = Math.round(s * leafIds.length / shardCount);
+      let best = ideal;
+      for (let r = 0; r <= SNAP_RADIUS; r++) {
+        if (boundarySet.has(ideal + r) && ideal + r < leafIds.length) { best = ideal + r; break; }
+        if (r > 0 && boundarySet.has(ideal - r) && ideal - r > cuts[cuts.length - 1]) { best = ideal - r; break; }
+      }
+      if (best <= cuts[cuts.length - 1]) best = cuts[cuts.length - 1] + 1;
+      if (best >= leafIds.length) break;
+      cuts.push(best);
+    }
+    cuts.push(leafIds.length);
+
+    const shards: string[][] = [];
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const shard = leafIds.slice(cuts[i], cuts[i + 1]);
+      if (shard.length > 0) shards.push(shard);
+    }
+    return shards;
+  }
+
+  private static _logShardMapping(
+    plan: ExecutionPlan,
+    logger: { info(msg: string): void },
+  ): void {
+    const analyzeTasks = plan.tasks.filter((t) => t.type === "analyze");
+    const lines = analyzeTasks.map((t) => {
+      const sections = t.contextHints?.assignedSections as string[] | undefined;
+      if (!sections || sections.length === 0) return `  ${t.id}: full-text`;
+      return `  ${t.id}: ${sections[0]}..${sections[sections.length - 1]} (${sections.length} sections)`;
+    });
+    logger.info(`plan: shard mapping (${analyzeTasks.length} shard(s)):\n${lines.join("\n")}`);
+  }
+
+  // ------------------------------------------------------------------
+  // 降级策略（仅用于 LLM planner 模式的 fallback）
+  // ------------------------------------------------------------------
+
+  static _fallbackPlan(_requirementText: string, goal: string): ExecutionPlan {
+    return PlanningTool.buildDeterministicPlan(goal);
   }
 
   static _fallbackReplan(
@@ -663,6 +778,94 @@ export class PlanningTool extends BaseTool {
       }
     }
     return tasks;
+  }
+
+  /** Docs with ≤ this many leaf sections collapse to a single analyze shard. */
+  static readonly SINGLE_SHARD_SECTION_LIMIT = 20;
+  /** Each shard handles roughly this many leaf sections; used to cap excessive shards. */
+  static readonly SECTIONS_PER_SHARD = 20;
+
+  /**
+   * Smart shard capping based on document structure, not raw byte size.
+   *
+   * - ≤ SINGLE_SHARD_SECTION_LIMIT leaf sections → collapse to 1 shard
+   *   (single-pass avoids merge noise for simple docs)
+   * - Above that → keep multi-shard, but cap at ceil(leafSections / SECTIONS_PER_SHARD)
+   *   to prevent over-fragmentation on moderately complex docs
+   */
+  static _capAnalyzeShards(
+    plan: ExecutionPlan,
+    requirementText: string,
+    sectionIndex?: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }>,
+  ): ExecutionPlan {
+    const analyzeTasks = plan.tasks.filter((t) => t.type === "analyze");
+    if (analyzeTasks.length <= 1) return plan;
+
+    const leafSections = sectionIndex && sectionIndex.length > 0
+      ? sectionIndex.filter((s) => s.depth >= 2).length
+      : (requirementText.match(/^###\s/gm) ?? []).length;
+
+    if (leafSections <= PlanningTool.SINGLE_SHARD_SECTION_LIMIT) {
+      return PlanningTool._collapseToOneAnalyze(plan, analyzeTasks);
+    }
+
+    const maxShards = Math.max(2, Math.ceil(leafSections / PlanningTool.SECTIONS_PER_SHARD));
+    if (analyzeTasks.length <= maxShards) return plan;
+
+    return PlanningTool._trimAnalyzeShards(plan, analyzeTasks, maxShards);
+  }
+
+  private static _collapseToOneAnalyze(plan: ExecutionPlan, analyzeTasks: Task[]): ExecutionPlan {
+    const keepId = analyzeTasks[0].id;
+    const removed = new Set(analyzeTasks.slice(1).map((t) => t.id));
+
+    const tasks: Task[] = [];
+    for (const t of plan.tasks) {
+      if (removed.has(t.id)) continue;
+      if (t.id === keepId) {
+        const hints = { ...(t.contextHints ?? {}) } as Record<string, unknown>;
+        delete hints.assignedSections;
+        tasks.push({ ...t, contextHints: hints });
+        continue;
+      }
+      if (Array.isArray(t.dependsOn) && t.dependsOn.some((d) => removed.has(d))) {
+        const deps = [...new Set(t.dependsOn.map((d) => (removed.has(d) ? keepId : d)))];
+        tasks.push({ ...t, dependsOn: deps });
+        continue;
+      }
+      tasks.push(t);
+    }
+    return { ...plan, tasks };
+  }
+
+  private static _trimAnalyzeShards(plan: ExecutionPlan, analyzeTasks: Task[], maxShards: number): ExecutionPlan {
+    const kept = analyzeTasks.slice(0, maxShards);
+    const removed = new Set(analyzeTasks.slice(maxShards).map((t) => t.id));
+    const lastKeptId = kept[kept.length - 1].id;
+
+    const tasks: Task[] = [];
+    for (const t of plan.tasks) {
+      if (removed.has(t.id)) {
+        // Merge removed shard's sections into the last kept shard
+        const lastKept = tasks.find((k) => k.id === lastKeptId);
+        if (lastKept) {
+          const existingSections = (lastKept.contextHints?.assignedSections as string[] | undefined) ?? [];
+          const extraSections = (t.contextHints?.assignedSections as string[] | undefined) ?? [];
+          if (extraSections.length > 0) {
+            (lastKept.contextHints as Record<string, unknown>).assignedSections =
+              [...new Set([...existingSections, ...extraSections])];
+          }
+        }
+        continue;
+      }
+      if (Array.isArray(t.dependsOn) && t.dependsOn.some((d) => removed.has(d))) {
+        const deps = [...new Set(t.dependsOn.map((d) => (removed.has(d) ? lastKeptId : d)))];
+        tasks.push({ ...t, dependsOn: deps });
+        continue;
+      }
+      tasks.push(t);
+    }
+    return { ...plan, tasks };
   }
 
   /**

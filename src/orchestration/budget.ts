@@ -2,6 +2,9 @@
  * 编排配置 + BudgetManager — 运行时可调的限制。
  */
 
+import { parseOrchestrationConfig, type OrchestrationConfig as ParsedOrchestrationConfig } from "../config.js";
+import type { OrchestratorSnapshot } from "./snapshot.js";
+
 export interface OrchestrationConfigRaw {
   max_repair_per_task?: number;
   diagram_repair_before_regenerate?: number;
@@ -27,80 +30,42 @@ export interface OrchestrationConfigRaw {
   max_convergence_rounds?: number;
 }
 
-export class OrchestrationConfig {
-  maxRepairPerTask = 4;
-  diagramRepairBeforeRegenerate = 2;
-  designRepairBeforeRegenerate = 2;
-  maxRegeneratePerTask = 1;
-  maxReplanCount = 2;
-  maxRuntimeSeconds = 1800;
-  maxDecisionCount = 500;
-  maxPlannerFailures = 3;
-  maxEvaluatorTimeouts = 3;
-  maxSaveFailures = 3;
-  maxFinalMajorIssues = 3;
-  maxFinalMajorRepairPerTask = 3;
-  maxConcurrentEvaluators = 2;
-  minRuntimeRemainingForNewWorkSeconds = 120;
-  skipEvaluation = false;
-  /** 单个 worker 会话的执行超时（秒）。 */
-  workerTimeoutSeconds = 900;
-  /** 主循环空转时的轮询间隔（毫秒）。 */
-  pollIntervalMs = 20;
-  /** 会话心跳间隔（秒）。 */
-  heartbeatIntervalSeconds = 0.25;
-  /** worker 最大并发数（环境变量 MAX_CONCURRENCY 优先）。 */
-  maxConcurrency = 5;
-  /** 收敛卡死且问题数下降时，强制接受的问题数上限。 */
-  convergenceAcceptMaxIssuesDecreasing = 8;
-  /** 收敛卡死且趋势非上升时，强制接受的问题数上限。 */
-  convergenceAcceptMaxIssuesFlat = 10;
-  /** 收敛检测的最大轮数；达到该轮数后强制 pause_for_user 以保证终止。 */
-  maxConvergenceRounds = 6;
+export class OrchestrationConfig implements ParsedOrchestrationConfig {
+  maxRepairPerTask!: number;
+  diagramRepairBeforeRegenerate!: number;
+  designRepairBeforeRegenerate!: number;
+  maxRegeneratePerTask!: number;
+  maxReplanCount!: number;
+  maxRuntimeSeconds!: number;
+  maxDecisionCount!: number;
+  maxPlannerFailures!: number;
+  maxEvaluatorTimeouts!: number;
+  maxSaveFailures!: number;
+  maxFinalMajorIssues!: number;
+  maxFinalMajorRepairPerTask!: number;
+  maxConcurrentEvaluators!: number;
+  minRuntimeRemainingForNewWorkSeconds!: number;
+  skipEvaluation!: boolean;
+  workerTimeoutSeconds!: number;
+  pollIntervalMs!: number;
+  heartbeatIntervalSeconds!: number;
+  maxConcurrency!: number;
+  convergenceAcceptMaxIssuesDecreasing!: number;
+  convergenceAcceptMaxIssuesFlat!: number;
+  maxConvergenceRounds!: number;
 
-  /** snake_case raw key → camelCase config key pairs. */
-  private static readonly RAW_TO_CFG: ReadonlyArray<
-    [keyof OrchestrationConfigRaw, keyof OrchestrationConfig]
-  > = [
-    ["max_repair_per_task", "maxRepairPerTask"],
-    ["diagram_repair_before_regenerate", "diagramRepairBeforeRegenerate"],
-    ["design_repair_before_regenerate", "designRepairBeforeRegenerate"],
-    ["max_regenerate_per_task", "maxRegeneratePerTask"],
-    ["max_replan_count", "maxReplanCount"],
-    ["max_runtime_seconds", "maxRuntimeSeconds"],
-    ["max_decision_count", "maxDecisionCount"],
-    ["max_planner_failures", "maxPlannerFailures"],
-    ["max_evaluator_timeouts", "maxEvaluatorTimeouts"],
-    ["max_save_failures", "maxSaveFailures"],
-    ["max_final_major_issues", "maxFinalMajorIssues"],
-    ["max_final_major_repair_per_task", "maxFinalMajorRepairPerTask"],
-    ["max_concurrent_evaluators", "maxConcurrentEvaluators"],
-    ["min_runtime_remaining_for_new_work_seconds", "minRuntimeRemainingForNewWorkSeconds"],
-    ["skip_evaluation", "skipEvaluation"],
-    ["worker_timeout_seconds", "workerTimeoutSeconds"],
-    ["poll_interval_ms", "pollIntervalMs"],
-    ["heartbeat_interval_seconds", "heartbeatIntervalSeconds"],
-    ["max_concurrency", "maxConcurrency"],
-    ["convergence_accept_max_issues_decreasing", "convergenceAcceptMaxIssuesDecreasing"],
-    ["convergence_accept_max_issues_flat", "convergenceAcceptMaxIssuesFlat"],
-    ["max_convergence_rounds", "maxConvergenceRounds"],
-  ];
+  constructor(init?: Partial<ParsedOrchestrationConfig>) {
+    Object.assign(this, parseOrchestrationConfig(init ?? {}));
+  }
 
-  static fromRaw(raw: OrchestrationConfigRaw): OrchestrationConfig {
-    const cfg = new OrchestrationConfig();
-    for (const [rawKey, cfgKey] of OrchestrationConfig.RAW_TO_CFG) {
-      const v = raw[rawKey];
-      if (v !== undefined) (cfg as unknown as Record<string, unknown>)[cfgKey] = v;
-    }
-    return cfg;
+  static fromRaw(raw: OrchestrationConfigRaw | Record<string, unknown>): OrchestrationConfig {
+    return new OrchestrationConfig(parseOrchestrationConfig(raw));
   }
 }
 
 // ---------------------------------------------------------------------------
 // BudgetManager
 // ---------------------------------------------------------------------------
-
-import type { OrchestratorSnapshot } from "./snapshot.js";
 
 // ---------------------------------------------------------------------------
 // BudgetManager
@@ -119,6 +84,7 @@ export class BudgetManager {
   maxSaveFailures: number;
   maxFinalMajorIssues: number;
   maxFinalMajorRepairPerTask: number;
+  maxConcurrentEvaluators: number;
   minRuntimeRemainingForNewWorkSeconds: number;
   skipEvaluation: boolean;
   workerTimeoutSeconds: number;
@@ -143,6 +109,7 @@ export class BudgetManager {
     this.maxSaveFailures = c.maxSaveFailures;
     this.maxFinalMajorIssues = c.maxFinalMajorIssues;
     this.maxFinalMajorRepairPerTask = c.maxFinalMajorRepairPerTask;
+    this.maxConcurrentEvaluators = c.maxConcurrentEvaluators;
     this.minRuntimeRemainingForNewWorkSeconds =
       c.minRuntimeRemainingForNewWorkSeconds;
     this.skipEvaluation = c.skipEvaluation;

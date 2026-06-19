@@ -46,7 +46,6 @@ function populatedState(): WorkflowState {
   state.evaluatedRevisionsByTask["tests-1"] = 1;
   state.reviewStatusByTask["tests-1"] = "rejected";
   state.majorPendingTaskIds.add("tests-1");
-  state.progress.stalledTaskIds.add("design-1");
   state.verdicts.push(
     createVerdict({
       issues: [
@@ -68,7 +67,6 @@ describe("OrchestratorSnapshot is a non-aliasing projection", () => {
     expect(snap.runningTasks).toEqual(["design-1"]);
     expect(snap.rejectedArtifacts).toEqual(["tests-1"]);
     expect(snap.majorPendingTaskIds).toEqual(["tests-1"]);
-    expect(snap.stalledTaskIds).toEqual(["design-1"]);
     expect(snap.latestIssues).toHaveLength(1);
     expect(snap.readyTasks).toContain("analyze-1");
   });
@@ -80,7 +78,6 @@ describe("OrchestratorSnapshot is a non-aliasing projection", () => {
     snap1.runningTasks.push("HACK");
     snap1.rejectedArtifacts.push("HACK");
     snap1.majorPendingTaskIds.push("HACK");
-    snap1.stalledTaskIds.push("HACK");
     snap1.readyTasks.push("HACK");
     snap1.latestIssues.push({ severity: "HACK" });
     snap1.latestIssues[0].severity = "TAMPERED";
@@ -89,7 +86,6 @@ describe("OrchestratorSnapshot is a non-aliasing projection", () => {
     expect(snap2.runningTasks).toEqual(["design-1"]);
     expect(snap2.rejectedArtifacts).toEqual(["tests-1"]);
     expect(snap2.majorPendingTaskIds).toEqual(["tests-1"]);
-    expect(snap2.stalledTaskIds).toEqual(["design-1"]);
     expect(snap2.readyTasks).not.toContain("HACK");
     expect(snap2.latestIssues).toHaveLength(1);
     expect(snap2.latestIssues[0].severity).toBe("major");
@@ -100,14 +96,11 @@ describe("OrchestratorSnapshot is a non-aliasing projection", () => {
     const snap = StateReader.fromState(state, new TaskMailbox());
 
     snap.majorPendingTaskIds.push("HACK");
-    snap.stalledTaskIds.push("HACK");
     snap.latestIssues[0].severity = "TAMPERED";
 
     // Backing Set is untouched.
     expect([...state.majorPendingTaskIds]).toEqual(["tests-1"]);
     expect(state.majorPendingTaskIds.has("HACK")).toBe(false);
-    // Backing progress set is untouched.
-    expect([...state.progress.stalledTaskIds]).toEqual(["design-1"]);
     // The real Issue object behind latestIssues is untouched.
     expect(state.verdicts[0].issues[0].severity).toBe("major");
   });

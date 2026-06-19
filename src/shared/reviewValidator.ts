@@ -14,7 +14,7 @@ import {
   collectConstraintSourceTexts,
 } from "./testAlignment.js";
 
-export interface ReviewValidationCheck {
+interface ReviewValidationCheck {
   name: string;
   passed: boolean;
   detail: string;

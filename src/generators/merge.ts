@@ -18,6 +18,7 @@ import {
 } from "../shared/constraintCanonicalizer.js";
 import type { EntityRegistry } from "../shared/types.js";
 import { resolveEntityRef, normalizeRelationType } from "../shared/referenceNormalizer.js";
+import { displayIdFromRecord, formatDisplayId, isDisplayId } from "../shared/idPolicy.js";
 
 /**
  * Convert merged constraints to ConstraintCandidate[], run the new
@@ -34,6 +35,7 @@ export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>)
   if (rawConstraints.length || rawMissing.length) {
     // Convert regular constraints to ConstraintCandidate[]
     const candidates: ConstraintCandidate[] = rawConstraints.map((c) => ({
+      displayId: displayIdFromRecord(c, "C"),
       description: String(c.description ?? "").trim(),
       sourceText: String(c.source_text ?? "").trim(),
       sectionId: c.sectionId as string | undefined,
@@ -44,6 +46,7 @@ export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>)
 
     // Convert missingConstraintCandidates to ConstraintCandidate[] and append
     const missingCandidates: ConstraintCandidate[] = rawMissing.map((c) => ({
+      displayId: displayIdFromRecord(c, "C"),
       description: String(c.description ?? "").trim(),
       sourceText: String(c.source_text ?? c.sourceText ?? "").trim(),
       sectionId: c.sectionId as string | undefined,
@@ -117,17 +120,16 @@ function canonicalizeAppendedExceptions(exceptions: Record<string, unknown>[]): 
     if (canonicalId && canonicalId.startsWith("EXC_")) {
       usedCanonicalIds.add(canonicalId);
     }
-    const displayId = String(exception.displayId ?? "").trim();
-    const match = displayId.match(/^X(\d{3,})$/);
-    if (match) {
-      maxDisplay = Math.max(maxDisplay, Number.parseInt(match[1], 10));
+    const displayId = displayIdFromRecord(exception, "X");
+    if (isDisplayId(displayId, "X")) {
+      maxDisplay = Math.max(maxDisplay, Number.parseInt(displayId.slice(1), 10));
     }
   }
 
   for (const exception of exceptions) {
-    const displayId = String(exception.displayId ?? "").trim();
+    const displayId = displayIdFromRecord(exception, "X");
     const canonicalId = String(exception.id ?? "").trim();
-    if (/^X\d{3,}$/.test(displayId) && canonicalId.startsWith("EXC_")) {
+    if (isDisplayId(displayId, "X") && canonicalId.startsWith("EXC_")) {
       continue;
     }
 
@@ -152,7 +154,7 @@ function canonicalizeAppendedExceptions(exceptions: Record<string, unknown>[]): 
       exception.originalId = canonicalId;
     }
     exception.id = nextCanonicalId;
-    exception.displayId = `X${String(maxDisplay).padStart(3, "0")}`;
+    exception.displayId = formatDisplayId("X", maxDisplay);
   }
 }
 
@@ -367,16 +369,12 @@ function asArray(val: unknown): Record<string, unknown>[] {
   return val as Record<string, unknown>[];
 }
 
+
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
-  private relationshipPromptTemplate: string;
   private postProcessPromptTemplate: string;
 
   constructor(llm: LLMClient) {
     super(llm);
-    this.relationshipPromptTemplate = loadPrompt(
-      "merge_relationships.md",
-      "",
-    );
     this.postProcessPromptTemplate = loadPrompt(
       "merge_post_process.md",
       "",
@@ -1125,97 +1123,6 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       }
     }
     return [...set];
-  }
-
-  /**
-   * 关系补全：传入合并后的实体列表和原始需求，LLM 仅输出关系补丁数组。
-   * 失败时返回空数组，不影响主流程。
-   * @deprecated 已合并至 _completeAll，保留供未来单独使用。
-   */
-  // @ts-expect-error TS6133 - preserved for future standalone use
-  private async _completeRelationships(
-    merged: Record<string, unknown>,
-    requirementText: string,
-  ): Promise<Array<{ entity: string; target: string; type: string; description: string }>> {
-    if (!this.relationshipPromptTemplate) {
-      return [];
-    }
-
-    const entities = merged.entities as Array<Record<string, unknown>> | undefined;
-    if (!entities || entities.length === 0) {
-      return [];
-    }
-
-    // 构造精简的实体摘要：只传实体名+描述，不传完整 JSON
-    const entitySummaries = entities.map((e) => {
-      const name = String(e.name ?? "").trim();
-      const desc = String(e.description ?? "").trim();
-      const existingRels = (e.relationships as Array<Record<string, unknown>> ?? [])
-        .map((r) => `${r.target}(${r.type})`)
-        .join(", ");
-      let summary = `- ${name}`;
-      if (desc) summary += `: ${desc}`;
-      if (existingRels) summary += ` [已有关系: ${existingRels}]`;
-      return summary;
-    }).join("\n");
-
-    const prompt = this.buildPrompt(this.relationshipPromptTemplate, {
-      merged_entities: entitySummaries,
-      requirement_text: requirementText,
-    });
-
-    try {
-      const result = await this.llm.generateJson(prompt, "");
-      const rawPatches = AnalyzeMerger._extractPatches(result);
-      if (!Array.isArray(rawPatches)) {
-        return [];
-      }
-      const patches: Array<{ entity: string; target: string; type: string; description: string }> = [];
-      for (const p of rawPatches) {
-        if (
-          typeof p === "object" &&
-          p !== null &&
-          "entity" in p &&
-          "target" in p &&
-          "type" in p &&
-          typeof (p as Record<string, unknown>).entity === "string" &&
-          typeof (p as Record<string, unknown>).target === "string" &&
-          typeof (p as Record<string, unknown>).type === "string"
-        ) {
-          patches.push({
-            entity: (p as Record<string, unknown>).entity as string,
-            target: (p as Record<string, unknown>).target as string,
-            type: (p as Record<string, unknown>).type as string,
-            description: String((p as Record<string, unknown>).description ?? ""),
-          });
-        }
-      }
-      return patches;
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * 从 LLM 返回结果中提取补丁数组。
-   * LLM 可能直接返回数组，也可能包裹在 {content: [...]} 中。
-   */
-  private static _extractPatches(
-    result: Record<string, unknown>,
-  ): Array<unknown> | null {
-    if (Array.isArray(result)) {
-      return result;
-    }
-    const content = result["content"];
-    if (Array.isArray(content)) {
-      return content;
-    }
-    // LLM 有时把数组放在 patches 字段里
-    const patches = result["patches"];
-    if (Array.isArray(patches)) {
-      return patches;
-    }
-    return null;
   }
 
   /**

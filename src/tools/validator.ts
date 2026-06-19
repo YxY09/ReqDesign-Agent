@@ -198,7 +198,10 @@ export class PostGenerationValidator {
     const fns = Array.isArray(analysis.functions)
       ? (analysis.functions as Array<Record<string, unknown>>)
       : [];
-    return fns.map(f => String(f.id ?? "").trim()).filter(id => /^F\d+$/.test(id));
+    return fns
+      .flatMap((f) => [f.displayId, f.id])
+      .map((id) => String(id ?? "").trim())
+      .filter((id) => /^F\d+$/.test(id));
   }
 
   private static _getEntityNames(analysis: Record<string, unknown>): string[] {

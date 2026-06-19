@@ -17,13 +17,13 @@ import type { AgentConfig } from "../config.js";
 // ---------------------------------------------------------------------------
 
 /** Bumped whenever the on-disk result/metadata layout changes. */
-export const RUNNER_VERSION = "benchmark-v2-phase1";
+export const RUNNER_VERSION = "benchmark-v2";
 
 /**
- * Identifies the scoring contract. Phase 1 returns null/placeholder quality
- * scores (all four sub-scores absent); Phase 2 will introduce the real
- * "quality-v1" rubric. Kept here so metadata records the intended contract
- * even while Phase 1 only emits placeholders.
+ * Identifies the scoring contract. The evidence-based quality judge
+ * (`qualityJudge.ts`) scores the four sub-scores against gold obligations;
+ * cases without a hand-curated gold contract fall back to all-null
+ * placeholders. Kept here so metadata records the scoring contract in use.
  */
 export const SCORING_VERSION = "quality-v1";
 
@@ -35,8 +35,8 @@ export const SCORING_VERSION = "quality-v1";
 export type BenchmarkMode = "dev" | "eval";
 
 /**
- * On-disk metadata.json shape. Mirrors the Phase-1 design spec exactly; new
- * fields should be additive and versioned via {@link RUNNER_VERSION}.
+ * On-disk metadata.json shape. New fields should be additive and versioned
+ * via {@link RUNNER_VERSION}.
  */
 export interface BenchmarkMetadata {
   benchmark_id: string;

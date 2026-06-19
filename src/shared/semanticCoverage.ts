@@ -43,10 +43,10 @@ export function tokenContains(text: string, token: string): boolean {
 }
 
 export function semanticItemId(item: Record<string, unknown>): string {
-  return String(item.displayId ?? item.id ?? "").trim();
+  return String(item.displayId ?? item.id ?? item.constraintRef ?? item.exceptionRef ?? "").trim();
 }
 
-export function semanticItemSource(
+function semanticItemSource(
   item: Record<string, unknown>,
   fields: string[],
 ): string {
@@ -68,10 +68,10 @@ export function semanticCoverageState(
   return windows.some((window) => semanticMatch(window, source)) ? "covered" : "drifted";
 }
 
-export function semanticWindowsForItem(text: string, item: Record<string, unknown>): string[] {
+function semanticWindowsForItem(text: string, item: Record<string, unknown>): string[] {
   const ids = [
-    String(item.displayId ?? "").trim(),
-    String(item.id ?? "").trim(),
+    String(item.displayId ?? item.constraintRef ?? item.exceptionRef ?? "").trim(),
+    String(item.id ?? item.constraintRef ?? item.exceptionRef ?? "").trim(),
   ].filter(Boolean);
   if (ids.length === 0) return [];
 
@@ -84,7 +84,7 @@ export function semanticWindowsForItem(text: string, item: Record<string, unknow
   return windows;
 }
 
-export function semanticMatch(window: string, source: string): boolean {
+function semanticMatch(window: string, source: string): boolean {
   const terms = semanticTerms(source);
   if (terms.length === 0) return true;
   const normalizedWindow = normalizeSemanticText(window);
@@ -115,7 +115,7 @@ export function semanticTerms(text: string): string[] {
   return [...terms];
 }
 
-export function normalizeSemanticText(text: string): string {
+function normalizeSemanticText(text: string): string {
   return String(text ?? "")
     .toLowerCase()
     .replace(/[\s`'"“”‘’（）()【】\[\]{}<>:：,，.。;；、|/\\_-]+/g, "");

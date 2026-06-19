@@ -46,6 +46,31 @@ describe("canonicalizeConstraints", () => {
     expect(c.verification.acceptanceCriteria).toEqual([]);
   });
 
+  it("preserves explicit source display IDs and only assigns IDs for missing/conflicting candidates", () => {
+    const candidates: ConstraintCandidate[] = [
+      {
+        displayId: "C013",
+        description: "库存预警值为10件",
+        sourceText: "库存预警（低于阈值通知）",
+      },
+      {
+        displayId: "C002",
+        description: "支付超时自动取消订单",
+        sourceText: "支付超时自动取消订单（30分钟）",
+      },
+      {
+        displayId: "C002",
+        description: "手机号需唯一",
+        sourceText: "手机号唯一",
+      },
+    ];
+
+    const results = canonicalizeConstraints(candidates, []);
+
+    expect(results.map((c) => c.displayId)).toEqual(["C013", "C002", "C014"]);
+    expect(results[0].descriptionZh).toBe("库存预警值为10件");
+  });
+
   // ----------------------------------------------------------------
   // 2. Deduplication: same sourceText merged into one constraint
   // ----------------------------------------------------------------

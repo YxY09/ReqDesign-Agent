@@ -19,7 +19,7 @@ export type PersistStatus = "not_saved" | "final_saved" | "partial_saved";
  * `WorkflowState` is held by the runtime; it contains only final products,
  * task index, notification history, and control metadata.
  *
- * `MultiAgentState` is kept as a backward-compatible alias.
+ * `WorkflowState` is the single runtime state type.
  */
 
 import {
@@ -47,8 +47,7 @@ import { WorkflowStores } from "./runtime/workflowStores.js";
 /**
  * Runtime state — lightweight, notification-driven.
  *
- * Replaces the old monolithic MultiAgentState. Differences from the Python
- * version are noted inline where applicable.
+ * Differences from the Python version are noted inline where applicable.
  */
 export class WorkflowState {
   // --- Goal / paths -------------------------------------------------------
@@ -370,12 +369,3 @@ export class WorkflowState {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Backward-compatible alias
-// ---------------------------------------------------------------------------
-
-/**
- * Backward-compatible alias.
- * Use `WorkflowState` for new code.
- */
-export type MultiAgentState = WorkflowState;

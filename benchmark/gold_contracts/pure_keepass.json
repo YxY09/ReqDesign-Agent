@@ -1,0 +1,192 @@
+{
+  "case_id": "pure_keepass",
+  "source_language": "en",
+  "canonical_language": "en",
+  "obligations": [
+    {
+      "id": "C-001",
+      "type": "constraint",
+      "severity": "major",
+      "source_span": "N001 [Security]: The database is encrypted using AES/Rijndael (128-bit block, 256-bit key) and Twofish (128-bit block, 256-bit key). A random 128-bit initialization vector is generated on each save.",
+      "expected_design_evidence": [
+        "Database encryption design specifying BOTH AES/Rijndael (128-bit block, 256-bit key) AND Twofish (128-bit block, 256-bit key) — both algorithms, each with 128-bit block and 256-bit key (not an 'and/or' choice)",
+        "A random 128-bit initialization vector generated on each save (fresh IV per save, not a fixed IV)"
+      ],
+      "expected_test_evidence": [
+        "Verify the design names both AES/Rijndael and Twofish, each with 128-bit block and 256-bit key",
+        "Verify a fresh random 128-bit IV is generated on each save (two saves yield different IVs)"
+      ],
+      "anti_patterns": [
+        "Only mention 'encryption' without naming BOTH AES/Rijndael and Twofish with their 128-bit block / 256-bit key parameters",
+        "Phrase the algorithm as an 'and/or' choice (e.g. 'AES and/or Twofish') instead of requiring both",
+        "Omit the per-save random 128-bit IV generation, or use a fixed/static IV"
+      ]
+    },
+    {
+      "id": "C-003",
+      "type": "constraint",
+      "severity": "major",
+      "source_span": "N003 [Security]: There is no recovery password or back door. If the Master Password is lost, the database cannot be opened.",
+      "expected_design_evidence": [
+        "Explicit no-recovery / no-back-door design: if the Master Password is lost, the database cannot be opened",
+        "Absence of any master/admin recovery path that bypasses the Master Password"
+      ],
+      "expected_test_evidence": [
+        "Verify that with a lost Master Password the database cannot be opened",
+        "Verify there is no back-door/recovery mechanism that opens the database"
+      ],
+      "anti_patterns": [
+        "Include any recovery password or back-door mechanism",
+        "Only mention 'security' without stating the no-recovery guarantee"
+      ]
+    },
+    {
+      "id": "C-004",
+      "type": "constraint",
+      "severity": "minor",
+      "source_span": "N004 [Security]: A copied password is automatically cleared from the clipboard after 10 seconds.",
+      "expected_design_evidence": [
+        "Rule that automatically clears a copied password from the clipboard after 10 seconds",
+        "Timer-based clipboard-clear behavior"
+      ],
+      "expected_test_evidence": [
+        "Verify a copied password is cleared from the clipboard after 10 seconds",
+        "Verify the clipboard is non-empty before the 10-second window"
+      ],
+      "anti_patterns": [
+        "Only mention 'clipboard' without the 10-second auto-clear rule",
+        "Leave the password in the clipboard indefinitely"
+      ]
+    },
+    {
+      "id": "C-007",
+      "type": "constraint",
+      "severity": "minor",
+      "source_span": "N007 [Constraint]: Only one instance of KeePass may run at a time (enforced via single-instance option).",
+      "expected_design_evidence": [
+        "Single-instance enforcement: only one KeePass instance may run at a time",
+        "Mechanism that detects and prevents a second instance"
+      ],
+      "expected_test_evidence": [
+        "Verify launching a second instance is prevented/redirected to the existing instance",
+        "Verify the first instance continues to run"
+      ],
+      "anti_patterns": [
+        "Allow multiple simultaneous instances",
+        "Only mention 'instance' without the single-instance enforcement"
+      ]
+    },
+    {
+      "id": "F-014",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F014: KeePass supports a Composite Master Key combining a password, key file, and/or Windows account details. All components used during creation are required to unlock the database.",
+      "expected_design_evidence": [
+        "Composite Master Key design combining password + key file + Windows account details",
+        "Rule that ALL components used during creation are required to unlock the database (no partial unlock)"
+      ],
+      "expected_test_evidence": [
+        "Verify unlocking requires ALL components used during creation",
+        "Verify unlocking with a missing component fails"
+      ],
+      "anti_patterns": [
+        "Allow unlocking with only one or a subset of the composite components used during creation (partial unlock)",
+        "Mention 'Composite Master Key' without stating that ALL components used during creation are required to unlock",
+        "Phrase the components as optional ('password and/or key file') so a single component suffices to unlock"
+      ]
+    },
+    {
+      "id": "F-002",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F002: The user can open an existing database by selecting it via file browser and entering the Master Password (and/or key file) to unlock it.",
+      "expected_design_evidence": [
+        "Open flow: select database file via file browser, then enter Master Password (and/or key file) to unlock",
+        "Verification of the Master Key against the database before granting access"
+      ],
+      "expected_test_evidence": [
+        "Verify opening with a correct Master Password unlocks the database",
+        "Verify opening with a wrong Master Password is rejected"
+      ],
+      "anti_patterns": [
+        "Only list the open operation without Master Password verification",
+        "Allow opening without verifying the Master Key"
+      ]
+    },
+    {
+      "id": "X-003",
+      "type": "exception",
+      "severity": "minor",
+      "source_span": "F002: The user can open an existing database by selecting it via file browser and entering the Master Password (and/or key file) to unlock it.",
+      "expected_design_evidence": [
+        "Detection of a wrong/invalid Master Password during unlock",
+        "Handling behavior: reject unlock and surface an error (do not open the database)"
+      ],
+      "expected_test_evidence": [
+        "Verify a wrong Master Password is detected and unlock is rejected",
+        "Verify an error is surfaced on an invalid Master Password"
+      ],
+      "anti_patterns": [
+        "Only describe the happy open path without handling a wrong Master Password",
+        "Open the database regardless of an invalid Master Password"
+      ]
+    },
+    {
+      "id": "C-002",
+      "type": "constraint",
+      "severity": "major",
+      "source_span": "N002 [Security]: All passwords are stored encrypted in process memory using ARC4 encryption with a random 12-byte key.",
+      "expected_design_evidence": [
+        "All passwords stored in process memory are encrypted with ARC4 encryption using a random 12-byte key (not stored in plaintext in memory)"
+      ],
+      "expected_test_evidence": [
+        "Verify passwords are not stored in plaintext in process memory (ARC4-encrypted with a random 12-byte key)",
+        "Verify the in-memory encryption uses a random 12-byte key per the design"
+      ],
+      "anti_patterns": [
+        "Only mention 'memory security' without specifying ARC4 + random 12-byte key",
+        "Store passwords in plaintext in process memory",
+        "Use a fixed/static key instead of a random 12-byte key for in-memory encryption"
+      ]
+    },
+    {
+      "id": "C-005",
+      "type": "constraint",
+      "severity": "minor",
+      "source_span": "N008 [Data]: Database files use the .kdb extension. Databases must have unique names to avoid overwriting.",
+      "expected_design_evidence": [
+        "Database files use the .kdb extension",
+        "Databases must have unique names to avoid overwriting (uniqueness enforced on name)"
+      ],
+      "expected_test_evidence": [
+        "Verify database files are created with the .kdb extension",
+        "Verify creating a database with a duplicate name is rejected/prevented to avoid overwriting"
+      ],
+      "anti_patterns": [
+        "Only mention 'database file' without the .kdb extension and unique-name rule",
+        "Allow duplicate database names that silently overwrite existing files",
+        "Use a different/no file extension for the database"
+      ]
+    },
+    {
+      "id": "F-017",
+      "type": "functional",
+      "severity": "major",
+      "source_span": "F017: The user can lock the workspace. The database locks automatically when minimized. Unlocking requires the Master Key again.",
+      "expected_design_evidence": [
+        "The user can manually lock the workspace",
+        "The database locks automatically when minimized (auto-lock on minimize)",
+        "Unlocking after a lock requires the Master Key again (no unlock without re-authentication)"
+      ],
+      "expected_test_evidence": [
+        "Verify a manual lock locks the workspace and unlocking requires the Master Key",
+        "Verify minimizing the window auto-locks the database and restoring requires the Master Key"
+      ],
+      "anti_patterns": [
+        "Only mention 'lock' without the auto-lock-on-minimize behavior",
+        "Allow restoring from a minimized/locked state without re-entering the Master Key",
+        "Provide manual lock but omit the automatic lock on minimize"
+      ]
+    }
+  ]
+}

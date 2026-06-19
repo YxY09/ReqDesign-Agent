@@ -20,7 +20,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** 可在 Agent 之间发送的消息类型。 */
-export type MessageType = "spawn" | "repair" | "stop" | "inspect" | "replan";
+type MessageType = "spawn" | "repair" | "stop" | "inspect" | "replan";
 
 /** 任务的生命周期状态。 */
 export type TaskStatus =
@@ -31,7 +31,7 @@ export type TaskStatus =
   | "cancelled";
 
 /** Agent 发出的通知事件类型。 */
-export type NotificationEvent =
+type NotificationEvent =
   | "started"
   | "heartbeat"
   | "resumed"
@@ -59,7 +59,7 @@ export const TERMINAL_EVENTS: ReadonlySet<string> = new Set([
 // ---------------------------------------------------------------------------
 
 /** {@link TaskNotification} 携带的标记联合结果。 */
-export type NotificationResult =
+type NotificationResult =
   | Artifact
   | Verdict
   | ExecutionPlan
@@ -195,132 +195,6 @@ export function createTaskNotification(
  */
 export function isTerminal(notif: TaskNotification): boolean {
   return notif.terminal || TERMINAL_EVENTS.has(notif.event);
-}
-
-// ---------------------------------------------------------------------------
-// Serialization helpers — tagged type pattern
-// ---------------------------------------------------------------------------
-
-/**
- * 序列化 {@link TaskNotification.result} 值时使用的形状，
- * 以便下游消费者能重建原始领域类型。
- */
-export interface SerializedResult {
-  /** 标识领域类型的判别器标签。 */
-  __type__: "artifact" | "verdict" | "execution_plan" | "plan_mutation" | "primitive";
-  /** 实际数据。 */
-  __data__: unknown;
-}
-
-/**
- * 为通知结果打标签以便 JSON 安全序列化。
- *
- * 原始值和 `null` 被包装为 `"primitive"`。领域对象
- * 根据其结构角色被打上标签。
- */
-function serializeResult(result: NotificationResult): SerializedResult {
-  if (result === null || typeof result === "string" || typeof result === "number" || typeof result === "boolean") {
-    return { __type__: "primitive", __data__: result };
-  }
-
-  // 通过结构类型识别领域类型。顺序很重要：更具体的
-  // 检查应放在更宽泛的检查之前。
-  const obj = result as unknown as Record<string, unknown>;
-
-  if (obj.dropTaskIds !== undefined) {
-    return { __type__: "plan_mutation", __data__: result };
-  }
-  if (obj.tasks !== undefined && obj.goal !== undefined) {
-    return { __type__: "execution_plan", __data__: result };
-  }
-  if (obj.passed !== undefined && obj.issues !== undefined) {
-    return { __type__: "verdict", __data__: result };
-  }
-  if (obj.taskId !== undefined && obj.revision !== undefined && obj.selfCheckPassed !== undefined) {
-    return { __type__: "artifact", __data__: result };
-  }
-
-  // 回退——作为通用原始容器处理
-  return { __type__: "primitive", __data__: result };
-}
-
-/**
- * 从序列化的标记形式重建通知结果。
- *
- * 对于 `"primitive"` 标签返回原值；否则返回
- * `__data__` 负载（消费者可转换为适当的领域类型）。
- */
-function deserializeResult(tagged: SerializedResult): NotificationResult {
-  if (tagged.__type__ === "primitive") {
-    return tagged.__data__ as NotificationResult;
-  }
-  return tagged.__data__ as NotificationResult;
-}
-
-/**
- * 将 {@link TaskNotification} 序列化为 JSON 安全的普通对象。
- */
-export function serializeNotification(notif: TaskNotification): Record<string, unknown> {
-  return {
-    ...notif,
-    result: serializeResult(notif.result),
-  };
-}
-
-/**
- * 将普通对象反序列化为 {@link TaskNotification}。
- */
-export function deserializeNotification(
-  data: Record<string, unknown>,
-): TaskNotification {
-  const { result: rawResult, ...rest } = data;
-  const result: NotificationResult =
-    rawResult !== undefined && rawResult !== null && typeof rawResult === "object" && "__type__" in (rawResult as SerializedResult)
-      ? deserializeResult(rawResult as SerializedResult)
-      : null;
-
-  return {
-    taskId: rest.taskId as string,
-    sessionId: rest.sessionId as string,
-    status: rest.status as TaskStatus,
-    event: (rest.event as NotificationEvent) ?? "result",
-    summary: (rest.summary as string) ?? "",
-    result,
-    usage: (rest.usage as Record<string, unknown>) ?? {},
-    error: (rest.error as string) ?? "",
-    suggestions: (rest.suggestions as ReadonlyArray<Record<string, unknown>>) ?? [],
-    sequence: (rest.sequence as number) ?? 0,
-    timestamp: (rest.timestamp as number) ?? Date.now() / 1000,
-    progressDelta: (rest.progressDelta as Record<string, unknown>) ?? {},
-    recommendedAction: (rest.recommendedAction as string) ?? "",
-    replanHint: (rest.replanHint as string) ?? "",
-    terminal: (rest.terminal as boolean) ?? false,
-  };
-}
-
-/**
- * 将 {@link TaskMessage} 序列化为 JSON 安全的普通对象。
- */
-export function serializeMessage(msg: TaskMessage): Record<string, unknown> {
-  return { ...msg };
-}
-
-/**
- * 将普通对象反序列化为 {@link TaskMessage}。
- */
-export function deserializeMessage(data: Record<string, unknown>): TaskMessage {
-  return {
-    type: data.type as MessageType,
-    taskId: data.taskId as string,
-    sessionId: (data.sessionId as string) ?? "",
-    payload: (data.payload as Record<string, unknown>) ?? {},
-    metadata: (data.metadata as Record<string, unknown>) ?? {},
-    priority: (data.priority as number) ?? 0,
-    cause: (data.cause as string) ?? "",
-    parentSessionId: (data.parentSessionId as string) ?? "",
-    replanContext: (data.replanContext as Record<string, unknown>) ?? {},
-    repairScope: (data.repairScope as string) ?? "",
-  };
 }
 
 // ---------------------------------------------------------------------------

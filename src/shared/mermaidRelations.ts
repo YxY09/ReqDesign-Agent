@@ -45,7 +45,7 @@
  * Do not inline copies elsewhere — import `isRelationLine` /
  * `matchRelationLine` / `extractRelationEndpoints` instead.
  */
-export const CLASS_DIAGRAM_RELATION_RE =
+const CLASS_DIAGRAM_RELATION_RE =
   /^\s*([A-Za-z_]\w*)\s+(?:"[^"]*"\s+)?(?:<?--|-->|--|<\|--|--\|>|o--|\*--|\.\.>)\s+(?:"[^"]*"\s+)?([A-Za-z_]\w*)/gm;
 
 /**

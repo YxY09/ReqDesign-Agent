@@ -62,6 +62,23 @@ export class PersistenceService {
           const rendered = SystemDesigner.renderDesignMarkdown(artifact.content);
           manager.saveSystemDesign(rendered);
         } else if (typeof artifact.content === "string" && artifact.content) {
+          // Defense: refuse to overwrite the saved system_design.md when the
+          // new content contains stub placeholders like "（原有...保持不变）"
+          // or "（此处省略）". These appear when the repair LLM only rewrites
+          // a subset of sections and "省略" the rest — clobbering a previously
+          // complete design with a fragmentary one.
+          if (PersistenceService.containsStubPlaceholders(artifact.content)) {
+            this.deps.logger.warn(
+              `incremental design save rejected for ${artifact.taskId}: content contains stub placeholders (e.g. "原有...保持不变" / "此处省略") — keeping previous complete design on disk`,
+            );
+            state.stores.execution.addError(
+              `incremental design save rejected (${artifact.taskId}): stub placeholders detected`,
+            );
+            // Still persist the by_task snapshot so audit retains the stub,
+            // but DO NOT overwrite the canonical design/system_design.md.
+            manager.saveArtifactByTask(artifact.taskId, artifact.type, artifact.content);
+            return;
+          }
           manager.saveSystemDesign(artifact.content);
         }
       } else if (artifact.type === "diagrams" && isRecord(artifact.content)) {
@@ -120,6 +137,22 @@ export class PersistenceService {
     const snapshot = OutputSnapshotBuilder.fromState(state);
     if (!snapshot.hasOutput) return false;
 
+    // Defense: if state.designText was mutated by a stub-bearing repair attempt,
+    // saveSnapshot would clobber the canonical design/system_design.md on disk
+    // with the stub. Drop the design from this final snapshot so the previously-
+    // written complete design (preserved by saveArtifactIncrementally's stub
+    // guard) remains the persisted version.
+    if (
+      typeof snapshot.designText === "string" &&
+      snapshot.designText &&
+      PersistenceService.containsStubPlaceholders(snapshot.designText)
+    ) {
+      this.deps.logger.warn(
+        "final snapshot contains stub placeholders in designText — keeping the previously-persisted complete design instead of overwriting with the fragmentary version",
+      );
+      snapshot.designText = "";
+    }
+
     manager.saveSnapshot(snapshot);
     state.persisted = true;
     state.stores.execution.setPersistStatus("final_saved");
@@ -157,43 +190,57 @@ export class PersistenceService {
     }
 
     const consistencyIssues = this.findOutputConsistencyIssues(state);
+    const deterministicIssues = consistencyIssues.length === 0
+      ? this.findDeterministicQualityGateIssues(state)
+      : [];
+
     if (consistencyIssues.length > 0) {
       for (const issue of consistencyIssues) {
         state.stores.execution.addError(`output consistency failed: ${issue}`);
       }
       state.stores.execution.setQualityStatus("rejected");
       state.finalReviewPassed = false;
-      return false;
-    }
-
-    const deterministicIssues = this.findDeterministicQualityGateIssues(state);
-    if (deterministicIssues.length > 0) {
+    } else if (deterministicIssues.length > 0) {
       for (const issue of deterministicIssues) {
         state.stores.execution.addError(`deterministic quality gate failed: ${issue}`);
       }
       this.deps.logger.warn(
-        `skip final persist after ${reason}: deterministic quality gate failed: ${deterministicIssues.join("; ")}`,
+        `quality gate failed after ${reason}: deterministic quality gate failed: ${deterministicIssues.join("; ")}`,
       );
       state.stores.execution.setQualityStatus("rejected");
       state.finalReviewPassed = false;
-      state.stores.execution.setPersistStatus("partial_saved");
-      return false;
     }
 
     const latestVerdict = state.latestVerdict;
     const terminalIssues = latestVerdict?.issues.filter(
       (issue) => issue.severity === "blocker" || issue.severity === "major",
     ) ?? [];
-    if (latestVerdict && (!latestVerdict.passed || terminalIssues.length > 0)) {
+    const reviewFailed =
+      latestVerdict !== null &&
+      latestVerdict !== undefined &&
+      (!latestVerdict.passed || terminalIssues.length > 0);
+    if (reviewFailed) {
       this.deps.logger.warn(
-        `skip final persist after ${reason}: final review still has ${terminalIssues.length} blocker/major issue(s)`,
+        `quality gate failed after ${reason}: final review still has ${terminalIssues.length} blocker/major issue(s)`,
       );
       state.stores.execution.setQualityStatus("rejected");
       state.finalReviewPassed = false;
+    }
+
+    // Always run actionSave: even when the quality gate failed, persisting the
+    // best-effort snapshot is preferable to leaving partial incremental writes
+    // unmerged (and summary_report.md / analysis.md unwritten). The persist
+    // status is corrected back to "partial_saved" below when the gate failed.
+    const saved = this.actionSave(state);
+    const gateFailed = consistencyIssues.length > 0 || deterministicIssues.length > 0 || reviewFailed;
+    if (gateFailed) {
+      // actionSave sets persist_status="final_saved" — downgrade to
+      // "partial_saved" so the run_summary still tells the truth: the
+      // artifacts on disk are best-effort, not gate-passed.
       state.stores.execution.setPersistStatus("partial_saved");
       return false;
     }
-    return this.actionSave(state);
+    return saved;
   }
 
   findDeterministicQualityGateIssues(state: WorkflowState): string[] {
@@ -312,5 +359,26 @@ export class PersistenceService {
         `trace export failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  /**
+   * Detect "stub placeholder" patterns that signal the LLM has only rewritten
+   * part of the design and elided the rest with phrases like
+   * "（原有 XX 保持不变）" / "（此处省略）" / "... unchanged ...".
+   *
+   * Any match is fatal — a design document with even one such placeholder is
+   * fragmentary and would clobber an earlier complete version on disk. The
+   * judge would then read the stub and score it as incomplete, which is
+   * exactly the failure mode hospital_mgmt hit in realcmp_20260617.
+   */
+  static containsStubPlaceholders(content: string): boolean {
+    const patterns: RegExp[] = [
+      /[（(](?:原有|以下|上述|前述)[^）)\n]{0,40}(?:保持不变|未变|不变|沿用|参见上文|详见上文|见上文|同上)[^）)\n]{0,20}[)）]/,
+      /[（(](?:此处|该处|本节)?\s*省略[^)）\n]{0,40}[)）]/,
+      /[（(]\s*(?:保留|沿用)\s*(?:原|原有)[^)）\n]{0,40}[)）]/,
+      /\(\s*(?:omitted|unchanged|same as above|see above|kept as is)\s*\)/i,
+      /\.{3,}\s*(?:unchanged|omitted)\s*\.{3,}/i,
+    ];
+    return patterns.some((re) => re.test(content));
   }
 }

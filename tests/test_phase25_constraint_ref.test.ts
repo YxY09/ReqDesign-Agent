@@ -70,7 +70,7 @@ describe("Phase 2.5: PlanningTool availableConstraints injection", () => {
     );
 
     expect(prompt).toContain("约束候选注册表");
-    expect(prompt).toContain("C_RULE_001");
+    expect(prompt).toContain("C001");
     expect(prompt).toContain("Users must be authenticated");
     expect(prompt).toContain("SEC_AUTH");
     expect(prompt).toContain("missingConstraintCandidates");
@@ -90,7 +90,7 @@ describe("Phase 2.5: PlanningTool availableConstraints injection", () => {
           context_hints: {
             assignedSections: ["s1"],
             availableConstraints: [
-              { constraintRef: "C_RULE_001", description: "Users must be authenticated", sourceText: "原文" },
+              { constraintRef: "C001", description: "Users must be authenticated", sourceText: "原文" },
             ],
           },
         },
@@ -103,7 +103,7 @@ describe("Phase 2.5: PlanningTool availableConstraints injection", () => {
     expect(task!.contextHints.availableConstraints).toBeDefined();
     const constraints = task!.contextHints.availableConstraints as Array<Record<string, unknown>>;
     expect(constraints).toHaveLength(1);
-    expect(constraints[0].constraintRef).toBe("C_RULE_001");
+    expect(constraints[0].constraintRef).toBe("C001");
   });
 });
 
@@ -262,15 +262,15 @@ describe("Phase 2.5: RequirementAnalyzer {available_constraints} substitution", 
 
     const analyzer = new RequirementAnalyzer(spyLlm, "requirement_analysis.md");
     const constraintsText = [
-      "- C_RULE_001: Users must be authenticated (source text 1)",
-      "- C_RULE_002: Password min 8 chars (source text 2)",
+      "- C001: Users must be authenticated (source text 1)",
+      "- C002: Password min 8 chars (source text 2)",
     ].join("\n");
 
     await analyzer.analyze("test requirement", 1, undefined, undefined, constraintsText);
 
     expect(capturedPrompt).not.toContain("{available_constraints}");
-    expect(capturedPrompt).toContain("- C_RULE_001: Users must be authenticated (source text 1)");
-    expect(capturedPrompt).toContain("- C_RULE_002: Password min 8 chars (source text 2)");
+    expect(capturedPrompt).toContain("- C001: Users must be authenticated (source text 1)");
+    expect(capturedPrompt).toContain("- C002: Password min 8 chars (source text 2)");
   });
 
   it("replaces {available_constraints} with fallback text when no constraints provided", async () => {
@@ -293,12 +293,12 @@ describe("Phase 2.5: RequirementAnalyzer {available_constraints} substitution", 
     } as any;
 
     const analyzer2 = new RequirementAnalyzer(spyLlm2, "requirement_analysis.md");
-    const fallbackText = "（系统尚未预提取约束，请自行提取并编号）";
+    const fallbackText = "（系统尚未预提取约束，请自行提取并按 C001/C002... 编号）";
 
     await analyzer2.analyze("test requirement", 1, undefined, undefined, fallbackText);
 
     expect(capturedPrompt2).not.toContain("{available_constraints}");
-    expect(capturedPrompt2).toContain("（系统尚未预提取约束，请自行提取并编号）");
+    expect(capturedPrompt2).toContain("（系统尚未预提取约束，请自行提取并按 C001/C002... 编号）");
   });
 
   it("leaves {available_constraints} unreplaced when no text is passed", async () => {

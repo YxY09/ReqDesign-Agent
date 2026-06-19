@@ -41,9 +41,8 @@ function snap(overrides: Partial<OrchestratorSnapshot> = {}): OrchestratorSnapsh
     planRevisionCount: 0,
     repairCountsByTask: {},
     regenerateCountsByTask: {},
-    stalledTaskIds: [],
+    repairFutileTaskIds: [],
     majorPendingTaskIds: [],
-    globallyStalled: false,
     recentErrors: [],
     convergenceStalled: false,
     convergenceStalledFingerprints: [],
@@ -66,7 +65,7 @@ describe("OrchestrationConfig", () => {
     expect(c.diagramRepairBeforeRegenerate).toBe(2);
     expect(c.designRepairBeforeRegenerate).toBe(2);
     expect(c.maxRegeneratePerTask).toBe(1);
-    expect(c.maxReplanCount).toBe(2);
+    expect(c.maxReplanCount).toBe(1);
     expect(c.maxRuntimeSeconds).toBe(1800);
     expect(c.maxDecisionCount).toBe(500);
     expect(c.maxPlannerFailures).toBe(3);
@@ -117,7 +116,7 @@ describe("OrchestrationConfig", () => {
     // 其他字段保持默认值
     expect(c.maxRuntimeSeconds).toBe(1800);
     expect(c.maxDecisionCount).toBe(500);
-    expect(c.maxReplanCount).toBe(2);
+    expect(c.maxReplanCount).toBe(1);
   });
 
   it("fromRaw with empty object returns all defaults", () => {
@@ -516,7 +515,11 @@ describe("BudgetManager shouldRegenerate", () => {
 // -----------------------------------------------------------------------
 
 describe("BudgetManager canReplan", () => {
-  const bm = new BudgetManager(); // maxPlannerFailures=3, maxReplanCount=2
+  // Explicit max_replan_count keeps these boundary tests decoupled from the
+  // config default (which changed to 1); these cases verify the <2 boundary.
+  const bm = new BudgetManager(
+    OrchestrationConfig.fromRaw({ max_replan_count: 2 }),
+  ); // maxPlannerFailures=3, maxReplanCount=2
 
   it("returns true when all conditions are met", () => {
     const s = snap({

@@ -1,3 +1,5 @@
+import { extractContentTerms, jaccardSimilarity } from "./testAlignment.js";
+
 export type RequirementRefKind = "function" | "constraint" | "exception";
 export type TestScenarioType = "正常" | "异常" | "边界";
 
@@ -5,6 +7,8 @@ export interface RequirementReference {
   kind: RequirementRefKind;
   displayId: string;
   canonicalId: string;
+  label: string;
+  sourceText: string;
   text: string;
 }
 
@@ -15,6 +19,7 @@ export interface RequirementTargetRef {
 
 const ID_RE = /\b(?:F\d{3,4}|C\d{3,4}|[EX]\d{3,4}|FUN_[A-Za-z0-9_]+|CON_[A-Za-z0-9_]+|EXC_[A-Za-z0-9_]+)\b/g;
 const TARGET_PAIR_RE = /\b([FCX]\d{3,4})\s*\|\s*((?:FUN|CON|EXC)_[A-Za-z0-9_]+)/g;
+const DISPLAY_ONLY_RE = /\b([FCX]\d{3,4})\b(?!\s*\|)/g;
 // A bare canonicalId not already part of a “displayId | canonicalId” pair.
 // The negative lookbehind avoids double-rewriting the canonicalId that sits
 // after a “|” in an existing pair.
@@ -45,8 +50,8 @@ function refKindFromCollection(kind: RequirementRefKind, items: unknown): Requir
   for (const item of items) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
     const rec = item as Record<string, unknown>;
-    let displayId = String(rec.displayId ?? "").trim();
-    let canonicalId = String(rec.id ?? "").trim();
+    let displayId = String(rec.displayId ?? rec.constraintRef ?? rec.exceptionRef ?? "").trim();
+    let canonicalId = String(rec.id ?? rec.constraintRef ?? rec.exceptionRef ?? "").trim();
     if (!displayId && /^[FCX]\d{3,4}$/.test(canonicalId)) {
       displayId = canonicalId;
     }
@@ -54,16 +59,22 @@ function refKindFromCollection(kind: RequirementRefKind, items: unknown): Requir
       canonicalId = displayId;
     }
     if (!displayId || !canonicalId) continue;
+    const label = String(rec.description ?? rec.name ?? rec.trigger ?? rec.source_text ?? rec.sourceText ?? "").trim();
+    const sourceText = String(rec.source_text ?? rec.sourceText ?? rec.description ?? rec.name ?? rec.trigger ?? "").trim();
+    const aliases = Array.isArray(rec.aliases) ? rec.aliases.map(String).join(" ") : "";
     const text = [
       displayId,
       canonicalId,
+      label,
+      sourceText,
       rec.name,
       rec.description,
       rec.source_text,
       rec.sourceText,
       rec.trigger,
+      aliases,
     ].map((value) => String(value ?? "")).join(" ").toLowerCase();
-    refs.push({ kind, displayId, canonicalId, text });
+    refs.push({ kind, displayId, canonicalId, label, sourceText, text });
   }
   return refs;
 }
@@ -76,6 +87,7 @@ export class RequirementIndex {
   readonly displayToCanonical = new Map<string, string>();
   readonly canonicalToDisplay = new Map<string, string>();
   readonly allowedIds = new Set<string>();
+  readonly idToRef = new Map<string, RequirementReference>();
 
   private constructor(refs: {
     functions: RequirementReference[];
@@ -91,6 +103,8 @@ export class RequirementIndex {
       this.canonicalToDisplay.set(ref.canonicalId, ref.displayId);
       this.allowedIds.add(ref.displayId);
       this.allowedIds.add(ref.canonicalId);
+      this.idToRef.set(ref.displayId, ref);
+      this.idToRef.set(ref.canonicalId, ref);
     }
   }
 
@@ -126,6 +140,10 @@ export class RequirementIndex {
     return this.exceptions;
   }
 
+  refForId(id: string): RequirementReference | undefined {
+    return this.idToRef.get(id.trim());
+  }
+
   extractIds(text: string): string[] {
     return text.match(ID_RE) ?? [];
   }
@@ -146,30 +164,53 @@ export class RequirementIndex {
   normalizeTargetReferences(target: string, testCase: Record<string, unknown>): string {
     const originalTarget = target.trim();
     // Pre-rewrite: a bare canonicalId (CON_/FUN_/EXC_) with no displayId is
-    // likely a fabricated target. When the canonicalId maps to a known
-    // displayId, rewrite it into the canonical “displayId | canonicalId”
-    // pair so the downstream TARGET_PAIR_RE pass validates it; otherwise it
-    // is left as-is and removeUnknownRefs drops it.
+    // often produced by repair prompts. Prefer the target's natural-language
+    // description when it points to a different current requirement; this
+    // prevents stale canonical IDs from being mechanically paired with the
+    // wrong displayId.
     const preRewritten = originalTarget.replace(
       BARE_CANONICAL_RE,
       (canonicalRaw) => {
         const canonicalId = canonicalRaw.trim();
-        const displayId = this.canonicalToDisplay.get(canonicalId);
-        return displayId ? `${displayId} | ${canonicalId}` : canonicalId;
+        const ref = this.refForId(canonicalId);
+        if (!ref) return canonicalId;
+        const semantic = this.bestSemanticRefForTarget(originalTarget, ref.kind, testCase);
+        return RequirementIndex.formatRef(semantic ?? ref) || canonicalId;
       },
     );
-    const normalized = preRewritten.replace(
+    const pairNormalized = preRewritten.replace(
       TARGET_PAIR_RE,
       (_match, displayRaw: string, canonicalRaw: string) => {
         const displayId = displayRaw.trim();
         const canonicalId = canonicalRaw.trim();
-        const expectedCanonical = this.displayToCanonical.get(displayId);
-        if (expectedCanonical) return `${displayId} | ${expectedCanonical}`;
-        const expectedDisplay = this.canonicalToDisplay.get(canonicalId);
-        if (expectedDisplay) return `${expectedDisplay} | ${canonicalId}`;
+        const displayRef = this.refForId(displayId);
+        const canonicalRef = this.refForId(canonicalId);
+        const pairConsistent = Boolean(
+          displayRef &&
+          canonicalRef &&
+          displayRef.displayId === canonicalRef.displayId &&
+          displayRef.canonicalId === canonicalRef.canonicalId,
+        );
+
+        if (displayRef) return RequirementIndex.formatRef(displayRef);
+
+        const semantic = canonicalRef
+          ? this.bestSemanticRefForTarget(originalTarget, canonicalRef.kind, testCase)
+          : undefined;
+        if (!pairConsistent && semantic) return RequirementIndex.formatRef(semantic);
+        if (canonicalRef) return RequirementIndex.formatRef(canonicalRef);
+        if (semantic) return RequirementIndex.formatRef(semantic);
         return "";
       },
     );
+    const idsInOriginalTarget = originalTarget.match(ID_RE) ?? [];
+    const normalized = idsInOriginalTarget.length === 1
+      ? pairNormalized.replace(DISPLAY_ONLY_RE, (displayRaw: string) => {
+          const displayRef = this.refForId(displayRaw.trim());
+          if (!displayRef) return displayRaw;
+          return displayRaw;
+        })
+      : pairNormalized;
 
     const cleaned = RequirementIndex.cleanupTargetText(this.removeUnknownRefs(normalized));
     if (cleaned) return cleaned;
@@ -182,6 +223,34 @@ export class RequirementIndex {
       Array.isArray(testCase.steps) ? testCase.steps.join(" ") : "",
     ].map((value) => String(value ?? "")).join(" ");
     return this.bestFallbackRef(haystack, type) || originalTarget;
+  }
+
+  private bestSemanticRefForTarget(
+    target: string,
+    kind: RequirementRefKind,
+    testCase?: Record<string, unknown>,
+  ): RequirementReference | undefined {
+    const naturalText = [
+      RequirementIndex.stripRequirementIds(target),
+      testCase?.title,
+      testCase?.preconditions,
+      Array.isArray(testCase?.steps) ? testCase.steps.join(" ") : "",
+      testCase?.expected_result,
+    ].map((value) => String(value ?? "").trim()).filter(Boolean).join(" ");
+    const targetTerms = extractContentTerms(naturalText);
+    if (targetTerms.size === 0) return undefined;
+
+    let best: RequirementReference | undefined;
+    let bestScore = 0;
+    for (const ref of this.refsFor(kind)) {
+      const refTerms = extractContentTerms([ref.label, ref.sourceText].join(" "));
+      const score = jaccardSimilarity(targetTerms, refTerms);
+      if (score > bestScore) {
+        best = ref;
+        bestScore = score;
+      }
+    }
+    return bestScore > 0 ? best : undefined;
   }
 
   bestFallbackRef(text: string, type: TestScenarioType): string {
@@ -249,6 +318,14 @@ export class RequirementIndex {
       .replace(/(^|,\s*)\|\s*/g, "$1")
       .replace(/\s*,\s*,+/g, ", ")
       .replace(/^\s*,\s*|\s*,\s*$/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  static stripRequirementIds(text: string): string {
+    return text
+      .replace(ID_RE, " ")
+      .replace(/[|,;:，；：（）()[\]{}]/g, " ")
       .replace(/\s{2,}/g, " ")
       .trim();
   }

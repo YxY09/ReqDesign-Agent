@@ -155,11 +155,40 @@ describe("minimizeForPrompt", () => {
       functions: [],
       constraints: [],
       traceability: { matrix: [{ from: "ENT_A", to: "FUN_A" }] },
+      __qualityGate: { passed: true },
+      proposeNewEntities: [],
+      proposeNewFunctions: [],
     };
 
     const result = minimizeForPrompt(analysis);
 
     expect(result.traceability).toBeUndefined();
+    expect(result.__qualityGate).toBeUndefined();
+    expect(result.proposeNewEntities).toBeUndefined();
+    expect(result.proposeNewFunctions).toBeUndefined();
+  });
+
+  it("strips duplicate constraint prompt fields", () => {
+    const analysis = {
+      constraints: [
+        {
+          displayId: "C001",
+          id: "CON_001",
+          canonicalId: "CON_001",
+          description: "Must validate",
+          source_text: "validate",
+          sourceText: "validate",
+        },
+      ],
+    };
+
+    const result = minimizeForPrompt(analysis);
+    const c = (result.constraints as Array<Record<string, unknown>>)[0];
+
+    expect(c.id).toBe("CON_001");
+    expect(c.canonicalId).toBeUndefined();
+    expect(c.source_text).toBe("validate");
+    expect(c.sourceText).toBeUndefined();
   });
 
   it("does not mutate the original input", () => {

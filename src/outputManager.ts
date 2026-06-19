@@ -576,6 +576,11 @@ export class OutputManager {
         }
       }
       lines.push("");
+
+      // 已知局限（accept-with-annotation）：交付时仍未解决的评审意见。
+      // 系统在自动修复预算内未能消除这些问题，但产物已在可接受质量下交付；
+      // 透明列出供人工复核，而不是反复修复或挂起等待人工介入。
+      this._appendKnownLimitations(lines, issues);
     }
 
     lines.push("## 输出目录结构\n");
@@ -609,5 +614,51 @@ export class OutputManager {
 
     this._writeFile("summary_report.md", lines.join("\n"));
     this._logger.info("汇总报告已保存 → summary_report.md");
+  }
+
+  /**
+   * Append a "known limitations" section listing unresolved review issues,
+   * ordered blocker → major → minor. This is the accept-with-annotation
+   * deliverable: when the workflow saves with residual issues, they are
+   * documented transparently rather than silently dropped or looped on.
+   */
+  private _appendKnownLimitations(lines: string[], issues: unknown[]): void {
+    const valid = issues.filter(
+      (i): i is Record<string, unknown> => typeof i === "object" && i !== null,
+    );
+    if (valid.length === 0) return;
+
+    const order: Record<string, number> = { blocker: 0, major: 1, minor: 2 };
+    const sorted = [...valid].sort(
+      (a, b) =>
+        (order[String(a["severity"] ?? "")] ?? 3) -
+        (order[String(b["severity"] ?? "")] ?? 3),
+    );
+
+    lines.push("## 已知局限（未解决的评审意见）\n");
+    lines.push(
+      "以下问题在最终评审中被识别，但在自动修复预算内未能解决。" +
+        "产物已在可接受质量下交付，这些点供人工复核：\n",
+    );
+
+    const MAX_LISTED = 20;
+    for (const issue of sorted.slice(0, MAX_LISTED)) {
+      const severity = String(issue["severity"] ?? "").trim() || "issue";
+      const target = String(issue["target"] ?? "").trim();
+      const targetType = String(issue["targetType"] ?? "").trim();
+      const description = String(issue["description"] ?? "").trim();
+      const suggestion = String(issue["suggestion"] ?? "").trim();
+      const where = target
+        ? ` ${target}${targetType ? `(${targetType})` : ""}`
+        : "";
+      lines.push(`- **[${severity}]**${where}：${description}`);
+      if (suggestion) {
+        lines.push(`  - 建议：${suggestion}`);
+      }
+    }
+    if (sorted.length > MAX_LISTED) {
+      lines.push(`- …其余 ${sorted.length - MAX_LISTED} 项详见 review/report.md`);
+    }
+    lines.push("");
   }
 }

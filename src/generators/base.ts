@@ -36,6 +36,27 @@ export abstract class BaseGenerator<TOutput> {
     return prompt;
   }
 
+  protected async withStreamTag<T>(tag: string, fn: () => Promise<T>): Promise<T> {
+    const runner = this.llm as LLMClient & {
+      runWithStreamTagContext?: (
+        initialTag: string,
+        suffix: string,
+        callback: () => Promise<T>,
+      ) => Promise<T>;
+      streamTag?: string;
+    };
+    if (typeof runner.runWithStreamTagContext === "function") {
+      return runner.runWithStreamTagContext(tag, "", fn);
+    }
+    const previous = runner.streamTag;
+    if ("streamTag" in runner) runner.streamTag = tag;
+    try {
+      return await fn();
+    } finally {
+      if ("streamTag" in runner) runner.streamTag = previous ?? "";
+    }
+  }
+
   /** 解除 LLM JSON 响应中 {content: {...}} 包装 */
   static unwrapContent(
     result: Record<string, unknown>,

@@ -3,36 +3,18 @@
  *
  * 源自 governance/trace_logger.py。
  *
- * 提供 TraceLogger 用于记录执行追踪，
- * TracingLLMClient 用于透明地包装 LLMClient 调用。
+ * 提供 TraceLogger 用于记录执行追踪。
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Logger, setupLogger } from "./logger.js";
 
-// ---------------------------------------------------------------------------
-// TraceEntry（追踪条目）
-// ---------------------------------------------------------------------------
-
 export interface TraceEntryData {
   timestamp: number;
   stage: string;
   eventType: string;
   data: Record<string, unknown>;
-}
-
-/** 带有默认值的 TraceEntry 工厂函数。 */
-export function createTraceEntry(
-  overrides: Partial<TraceEntryData> = {},
-): TraceEntryData {
-  return {
-    timestamp: 0,
-    stage: "",
-    eventType: "",
-    data: {},
-    ...overrides,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -255,172 +237,6 @@ export class TraceLogger {
   /** 清除所有追踪条目。 */
   clear(): void {
     this.entries.length = 0;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// TracingLLMClient（带追踪的LLM客户端）
-// ---------------------------------------------------------------------------
-
-/**
- * 透明包装 LLMClient 以记录所有调用的包装器。
- *
- * `_client` 必须具有：chat()、generateJson()、generateText()，
- * 以及属性：provider、model、temperature、maxTokens、streamTag。
- */
-export class TracingLLMClient {
-  private readonly _client: Record<string, unknown> & {
-    chat: (
-      messages: Record<string, unknown>[],
-      temperature?: number,
-      onChunk?: ((chunk: string) => void) | null,
-    ) => Promise<string> | string;
-    generateJson: (
-      prompt: string,
-      system?: string,
-      onChunk?: ((chunk: string) => void) | null,
-      temperature?: number,
-    ) => Promise<Record<string, unknown>> | Record<string, unknown>;
-    generateText: (
-      prompt: string,
-      system?: string,
-      onChunk?: ((chunk: string) => void) | null,
-    ) => Promise<string> | string;
-  };
-  private readonly _trace: TraceLogger;
-  private _stage: string;
-
-  constructor(
-    llmClient: Record<string, unknown>,
-    traceLogger: TraceLogger,
-    stage = "unknown",
-  ) {
-    this._client = llmClient as typeof this._client;
-    this._trace = traceLogger;
-    this._stage = stage;
-  }
-
-  /** 设置当前阶段名称。 */
-  setStage(stage: string): void {
-    this._stage = stage;
-  }
-
-  get provider(): unknown {
-    return this._client["provider"];
-  }
-
-  get model(): unknown {
-    return this._client["model"];
-  }
-
-  get temperature(): unknown {
-    return this._client["temperature"];
-  }
-
-  get maxTokens(): unknown {
-    return this._client["maxTokens"];
-  }
-
-  get streamTag(): string {
-    return (this._client as Record<string, unknown>)["streamTag"] as string ?? "";
-  }
-
-  set streamTag(value: string) {
-    (this._client as Record<string, unknown>)["streamTag"] = value;
-  }
-
-  /** 带追踪的 chat 调用。 */
-  async chat(
-    messages: Record<string, unknown>[],
-    temperature?: number,
-    onChunk?: ((chunk: string) => void) | null,
-  ): Promise<string> {
-    const start = Date.now() / 1000;
-    try {
-      const result = await this._client.chat(messages, temperature, onChunk ?? undefined);
-      const duration = Date.now() / 1000 - start;
-      this._trace.logLlmCall(this._stage, "chat", messages, result, duration);
-      return result;
-    } catch (e) {
-      const duration = Date.now() / 1000 - start;
-      this._trace.log(this._stage, "llm_error", {
-        method: "chat",
-        error: e instanceof Error ? e.message : String(e),
-        traceback: e instanceof Error ? e.stack ?? "" : "",
-        duration_seconds: Math.round(duration * 1000) / 1000,
-      });
-      throw e;
-    }
-  }
-
-  /** 带追踪的 generateJson 调用。 */
-  async generateJson(
-    prompt: string,
-    system = "",
-    _onChunk?: ((chunk: string) => void) | null,
-    temperature?: number,
-  ): Promise<Record<string, unknown>> {
-    const start = Date.now() / 1000;
-    try {
-      const result = await this._client.generateJson(prompt, system, undefined, temperature);
-      const duration = Date.now() / 1000 - start;
-
-      let resultStr: string;
-      try {
-        resultStr = result != null ? JSON.stringify(result) : "null";
-      } catch {
-        resultStr = String(result);
-      }
-
-      this._trace.logLlmCall(
-        this._stage,
-        "generate_json",
-        [{ role: "user", content: prompt }],
-        resultStr,
-        duration,
-      );
-      return result;
-    } catch (e) {
-      const duration = Date.now() / 1000 - start;
-      this._trace.log(this._stage, "llm_error", {
-        method: "generate_json",
-        error: e instanceof Error ? e.message : String(e),
-        traceback: e instanceof Error ? e.stack ?? "" : "",
-        duration_seconds: Math.round(duration * 1000) / 1000,
-      });
-      throw e;
-    }
-  }
-
-  /** 带追踪的 generateText 调用。 */
-  async generateText(
-    prompt: string,
-    system = "",
-    _onChunk?: ((chunk: string) => void) | null,
-  ): Promise<string> {
-    const start = Date.now() / 1000;
-    try {
-      const result = await this._client.generateText(prompt, system);
-      const duration = Date.now() / 1000 - start;
-
-      this._trace.logLlmCall(
-        this._stage,
-        "generate_text",
-        [{ role: "user", content: prompt }],
-        result ?? "",
-        duration,
-      );
-      return result;
-    } catch (e) {
-      const duration = Date.now() / 1000 - start;
-      this._trace.log(this._stage, "llm_error", {
-        method: "generate_text",
-        error: e instanceof Error ? e.message : String(e),
-        traceback: e instanceof Error ? e.stack ?? "" : "",
-        duration_seconds: Math.round(duration * 1000) / 1000,
-      });
-      throw e;
-    }
   }
 }
 

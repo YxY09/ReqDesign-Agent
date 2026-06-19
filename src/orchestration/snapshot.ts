@@ -41,9 +41,13 @@ export interface OrchestratorSnapshot {
   planRevisionCount: number;
   repairCountsByTask: Record<string, number>;
   regenerateCountsByTask: Record<string, number>;
-  stalledTaskIds: string[];
+  /**
+   * Tasks repaired at least once whose SAME structural issue fingerprint
+   * persists across the two most recent evaluations. Repairing them again is
+   * futile (the LLM cannot move the issue), so the ladder accepts instead.
+   */
+  repairFutileTaskIds: string[];
   majorPendingTaskIds: string[];
-  globallyStalled: boolean;
   recentErrors: string[];
 
   /** 计算得出：评估历史中的收敛状态。 */
@@ -80,6 +84,7 @@ export class StateReader {
       for (const issue of state.verdicts[state.verdicts.length - 1].issues) {
       latestIssues.push({
           severity: issue.severity,
+          kind: issue.kind,
           target_task_id: issue.targetTaskId,
           target_task_type: issue.targetTaskType,
           target_field: issue.targetField,
@@ -131,6 +136,40 @@ export class StateReader {
       }
     }
 
+    // Repair futility: a task already repaired at least once whose same
+    // structural issue fingerprint appears in BOTH of the two most recent
+    // evaluations. The intervening repair did not move the issue, so further
+    // repair is futile and the ladder should accept rather than loop.
+    const repairFutileTaskIds: string[] = [];
+    if (state.verdicts.length >= 2) {
+      const latest = state.verdicts[state.verdicts.length - 1];
+      const prev = state.verdicts[state.verdicts.length - 2];
+      const fingerprintsForTask = (
+        verdict: typeof latest,
+        taskId: string,
+      ): Set<string> =>
+        new Set(
+          verdict.issues
+            .filter((issue) => issue.kind === "defect" && issue.targetTaskId === taskId)
+            .map((issue) => ConvergenceTracker.fingerprint(issue)),
+        );
+      const candidateTaskIds = new Set(
+        latest.issues
+          .filter((issue) => issue.kind === "defect")
+          .map((issue) => issue.targetTaskId)
+          .filter((taskId) => taskId !== ""),
+      );
+      for (const taskId of candidateTaskIds) {
+        if ((repairCountsByTask[taskId] ?? 0) < 1) continue;
+        const latestFps = fingerprintsForTask(latest, taskId);
+        const prevFps = fingerprintsForTask(prev, taskId);
+        if ([...latestFps].some((fp) => prevFps.has(fp))) {
+          repairFutileTaskIds.push(taskId);
+        }
+      }
+      repairFutileTaskIds.sort();
+    }
+
     const planTaskIds = state.getPlanTaskIds();
     const completedPlanTasks = state.getCompletedPlanTaskIds();
 
@@ -167,9 +206,8 @@ export class StateReader {
       planRevisionCount: state.progress.planRevisionCount,
       repairCountsByTask,
       regenerateCountsByTask,
-      stalledTaskIds: [...state.progress.stalledTaskIds].sort(),
+      repairFutileTaskIds,
       majorPendingTaskIds: state.getMajorPendingTaskIds(),
-      globallyStalled: state.progress.isGloballyStalled(3),
       recentErrors: state.errors.slice(-5),
       convergenceStalled: state.convergence.isStalled(),
       convergenceStalledFingerprints: state.convergence.stalledFingerprints(),
@@ -207,9 +245,17 @@ export class StateReader {
 // ConvergenceTracker — detect stalled repair loops
 // ---------------------------------------------------------------------------
 
-export interface IssueFingerprint {
+interface IssueFingerprint {
   fingerprint: string;
   severity: string;
+}
+
+/** Minimal shape needed to compute a structural issue fingerprint. */
+export interface FingerprintableIssue {
+  targetTaskId?: string;
+  targetField?: string;
+  severity?: string;
+  description?: string;
 }
 
 export interface EvaluationRound {
@@ -227,8 +273,25 @@ export class ConvergenceTracker {
   addRound(round: EvaluationRound): void { this.rounds.push(round); }
   get roundCount(): number { return this.rounds.length; }
 
-  static fingerprint(description: string): string {
-    return description.trim().slice(0, 80).toLowerCase();
+  /**
+   * Identity of an issue for stall / futility detection.
+   *
+   * Prefers a STRUCTURAL identity — `taskId::field::severity` — so that the
+   * same defect reworded across rounds still matches (a reworded-but-identical
+   * issue is the signal that repair is not moving it). Falls back to the
+   * description prefix when no structural fields are present (e.g. a systemic
+   * issue with no target field, or a bare string passed by older callers).
+   */
+  static fingerprint(issue: FingerprintableIssue | string): string {
+    const obj: FingerprintableIssue =
+      typeof issue === "string" ? { description: issue } : issue;
+    const task = String(obj.targetTaskId ?? "").trim().toLowerCase();
+    const field = String(obj.targetField ?? "").trim().toLowerCase();
+    const severity = String(obj.severity ?? "").trim().toLowerCase();
+    if (task !== "" || field !== "") {
+      return `${task}::${field}::${severity}`;
+    }
+    return String(obj.description ?? "").trim().slice(0, 80).toLowerCase();
   }
 
   isStalled(): boolean {

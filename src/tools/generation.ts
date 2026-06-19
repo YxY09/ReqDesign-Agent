@@ -51,7 +51,14 @@ export class GenerationTool extends BaseTool {
       }
 
 
-      let issues = GenerationTool._ruleCheck(task, content, context);
+      let issues: string[] = [];
+      try {
+        issues = GenerationTool._ruleCheck(task, content, context);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`execute: task=${task.id} 规则自检异常，保留产物并交给 evaluator: ${msg}`);
+        issues = [`规则自检异常: ${msg}`];
+      }
       // 自检问题被记录但不会自动修复。下游 evaluator 会处理这些问题。
       const elapsed = (performance.now() - t0) / 1000;
       const passed = issues.length === 0;
@@ -134,10 +141,10 @@ export class GenerationTool extends BaseTool {
       Array<{ constraintRef?: string; description?: string; sourceText?: string }> | undefined;
     if (Array.isArray(availConstraints) && availConstraints.length > 0) {
       availableConstraintsText = availConstraints
-        .map((c) => `- ${c.constraintRef ?? "C_RULE_???"}: ${c.description ?? ""} (${c.sourceText ?? ""})`)
+        .map((c) => `- ${c.constraintRef ?? "C???"}: ${c.description ?? ""} (${c.sourceText ?? ""})`)
         .join("\n");
     } else {
-      availableConstraintsText = "（系统尚未预提取约束，请自行提取并编号）";
+      availableConstraintsText = "（系统尚未预提取约束，请自行提取并按 C001/C002... 编号）";
     }
 
     if (Array.isArray(hints.focus_areas) && hints.focus_areas.length > 0) {

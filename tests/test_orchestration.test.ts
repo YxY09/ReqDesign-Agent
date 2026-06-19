@@ -335,6 +335,47 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.taskId).toBe("design-2");
   });
 
+  it("does NOT repair when the only final-review major is an advisory (accepts instead)", async () => {
+    // Pillar A end-to-end: an advisory (completeness/coverage opinion) major must
+    // not drive repair or block acceptance, even though its severity is "major".
+    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
+    const state = new WorkflowState();
+    state.requirementText = "requirement";
+    state.plan = createExecutionPlan({
+      tasks: [
+        createTask({ id: "design-1", type: "design", description: "design" }),
+      ],
+    });
+    state.addArtifact(
+      createArtifact({ taskId: "design-1", type: "design", content: "design" }),
+    );
+    state.markTaskStatus("design-1", "completed");
+    state.addVerdict(
+      createVerdict({
+        passed: true,
+        issues: [
+          createIssue({
+            severity: "major",
+            kind: "advisory",
+            scope: "local",
+            targetTaskId: "design-1",
+            targetTaskType: "design",
+            targetField: "design_text",
+            description: "功能 F010 未被测试用例覆盖",
+            suggestion: "补充 F010 的测试",
+          }),
+        ],
+        evaluatedTaskIds: ["design-1"],
+        evaluatedRevisions: { "design-1": 1 },
+        isFinalReview: true,
+      }),
+    );
+
+    const decision = await coordinator.decide(state, makeMailbox());
+    expect(decision.action).not.toBe("repair");
+    expect(decision.action).not.toBe("replan");
+  });
+
   it("routes analyze upstream issues to replan, not repair", async () => {
     const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
@@ -378,7 +419,7 @@ describe("AgentOrchestrator decisions", () => {
     expect(decision.action).toBe("replan");
   });
 
-  it("escalates to replan after exhausting final review repair budget", async () => {
+  it("accepts output when local final review repair budget is exhausted with no blockers", async () => {
     const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.requirementText = "requirement";
@@ -416,7 +457,9 @@ describe("AgentOrchestrator decisions", () => {
     );
 
     const decision = await coordinator.decide(state, makeMailbox());
-    expect(decision.action).toBe("replan");
+    // Local quality issues with exhausted repair budget should finish (not replan),
+    // because a fresh plan with the same LLM produces similar quality.
+    expect(decision.action).toBe("finish");
   });
 
   it("allows final-review repair within budget (before exhaustion)", async () => {
@@ -536,6 +579,7 @@ describe("AgentOrchestrator decisions", () => {
     const decision = await coordinator.decide(state, makeMailbox());
 
     expect(decision.action).toBe("inspect");
+    expect(state.decisionCount).toBe(0);
   });
 
   // -----------------------------------------------------------------------

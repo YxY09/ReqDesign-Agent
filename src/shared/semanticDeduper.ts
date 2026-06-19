@@ -4,7 +4,6 @@
  * Architecture:
  *   1. Candidate pair generation (deterministic) — O(n²) comparison
  *   2. Deterministic merge rules (high confidence, no LLM)
- *   3. LLM adjudication for uncertain pairs (optional)
  *
  * Deterministic merge layers:
  *   - same_source (score 1.0): normalized sourceText identical
@@ -14,9 +13,8 @@
  *   - token_overlap (score = Jaccard, emitted when ≥ 0.6): word token similarity
  *
  * Deterministic merges are applied for score ≥ 0.8 (Union-Find).
- * Glossary_equiv at 0.75 is below the deterministic threshold, so it requires
- * confirmation from another layer (token overlap or LLM adjudication) to merge.
- * Token overlap pairs (score < 0.8) are reserved for optional LLM adjudication.
+ * Glossary_equiv at 0.75 is below the deterministic threshold, so it is used
+ * as a candidate signal but does not merge by itself.
  *
  * NOTE (CJK tokenization limitation): The tokenize() function splits on whitespace
  * and removes punctuation. For CJK-only text (e.g. "审计数据不可修改"), the entire
@@ -52,13 +50,6 @@ export interface DedupCandidate {
 export interface DedupResult<T> {
   kept: T[];
   merged: Array<{ survivors: T[]; absorbed: T[]; reason: string }>;
-}
-
-export interface LlmMergeDecision {
-  aId: string;
-  bId: string;
-  decision: "merge" | "keep_separate";
-  canonicalDescription?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -312,25 +303,42 @@ export function applyDeterministicMerges<T>(
   if (items.length === 0) return { kept: [], merged: [] };
   if (items.length === 1) return { kept: [items[0]], merged: [] };
 
-  // Build ID → index map
+  const rawIds = items.map((item, index) => getId(item, index));
+  const internalKeys = rawIds.map((id, index) => `${id}\u0000${index}`);
+  const rawIdToKeys = new Map<string, string[]>();
+  for (let i = 0; i < rawIds.length; i++) {
+    const keys = rawIdToKeys.get(rawIds[i]) ?? [];
+    keys.push(internalKeys[i]);
+    rawIdToKeys.set(rawIds[i], keys);
+  }
+
+  const uniqueKeyForRawId = (id: string): string | undefined => {
+    const keys = rawIdToKeys.get(id);
+    return keys?.length === 1 ? keys[0] : undefined;
+  };
+
+  // Build internal ID → index map. Raw item IDs can collide across generation
+  // groups, so never key merge state directly by getId().
   const idToIdx = new Map<string, number>();
   for (let i = 0; i < items.length; i++) {
-    idToIdx.set(getId(items[i], i), i);
+    idToIdx.set(internalKeys[i], i);
   }
 
   // Union-Find for high-confidence merges (score >= 0.8)
   const uf = new UnionFind();
 
   for (const c of candidates) {
-    if (c.score >= 0.8) {
-      uf.union(c.aId, c.bId);
-    }
+    if (c.score < 0.8) continue;
+    const aKey = uniqueKeyForRawId(c.aId);
+    const bKey = uniqueKeyForRawId(c.bId);
+    if (!aKey || !bKey) continue;
+    uf.union(aKey, bKey);
   }
 
   // Collect groups: root → [ids]
   const groupMap = new Map<string, string[]>();
   for (let i = 0; i < items.length; i++) {
-    const id = getId(items[i], i);
+    const id = internalKeys[i];
     const root = uf.find(id);
     let group = groupMap.get(root);
     if (!group) {
@@ -344,7 +352,10 @@ export function applyDeterministicMerges<T>(
   const groupReasons = new Map<string, string>();
   for (const c of candidates) {
     if (c.score >= 0.8) {
-      const root = uf.find(c.aId);
+      const aKey = uniqueKeyForRawId(c.aId);
+      const bKey = uniqueKeyForRawId(c.bId);
+      if (!aKey || !bKey) continue;
+      const root = uf.find(aKey);
       if (!groupReasons.has(root)) {
         groupReasons.set(root, c.reason);
       }
@@ -380,66 +391,3 @@ export function applyDeterministicMerges<T>(
   return { kept, merged };
 }
 
-// ---------------------------------------------------------------------------
-// LLM adjudication (optional)
-// ---------------------------------------------------------------------------
-
-/**
- * Adjudicate uncertain pairs (0.4 ≤ score < 0.8) via LLM.
- * Returns all pairs as "keep_separate" if llmClient or systemPrompt is not provided.
- */
-export async function llmAdjudicatePairs<T>(
-  items: T[],
-  candidates: DedupCandidate[],
-  config: DedupConfig<T>,
-  llmClient?: { generateJson: (prompt: string, systemPrompt: string) => Promise<unknown> },
-  systemPrompt?: string,
-): Promise<LlmMergeDecision[]> {
-  if (!llmClient || !systemPrompt) {
-    const uncertain = candidates.filter((c) => c.score >= 0.4 && c.score < 0.8);
-    return uncertain.map((c) => ({
-      aId: c.aId,
-      bId: c.bId,
-      decision: "keep_separate" as const,
-    }));
-  }
-
-  const uncertain = candidates.filter((c) => c.score >= 0.4 && c.score < 0.8);
-  if (uncertain.length === 0) return [];
-
-  const { getId, getText } = config;
-  const idToItem = new Map<string, T>();
-  for (let i = 0; i < items.length; i++) {
-    idToItem.set(getId(items[i], i), items[i]);
-  }
-
-  const pairs = uncertain.map((c) => ({
-    aId: c.aId,
-    aDesc: getText(idToItem.get(c.aId)!),
-    bId: c.bId,
-    bDesc: getText(idToItem.get(c.bId)!),
-  }));
-
-  const prompt = JSON.stringify({
-    pairs,
-    task: "For each pair, decide: merge or keep_separate. If merge, provide canonical description.",
-  });
-
-  try {
-    const result = await llmClient.generateJson(prompt, systemPrompt);
-    if (!Array.isArray(result)) {
-      return uncertain.map((c) => ({
-        aId: c.aId,
-        bId: c.bId,
-        decision: "keep_separate" as const,
-      }));
-    }
-    return result as LlmMergeDecision[];
-  } catch {
-    return uncertain.map((c) => ({
-      aId: c.aId,
-      bId: c.bId,
-      decision: "keep_separate" as const,
-    }));
-  }
-}

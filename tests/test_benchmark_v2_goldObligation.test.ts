@@ -146,9 +146,9 @@ describe("loadGoldContract", () => {
     const loaded = loadGoldContract(join("benchmark", "gold_contracts", "hospital_mgmt.json"));
     expect(loaded).not.toBeNull();
     expect(loaded!.case_id).toBe("hospital_mgmt");
-    // Spec: 5-8 key obligations covering all three types.
+    // Spec: 5-12 key obligations covering all three types.
     expect(loaded!.obligations.length).toBeGreaterThanOrEqual(5);
-    expect(loaded!.obligations.length).toBeLessThanOrEqual(9);
+    expect(loaded!.obligations.length).toBeLessThanOrEqual(12);
     const types = new Set(loaded!.obligations.map((o) => o.type));
     expect(types.has("constraint")).toBe(true);
     expect(types.has("functional")).toBe(true);

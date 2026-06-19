@@ -44,14 +44,14 @@ const LlmConfigSchema = z.object({
   temperature: z.number().min(0).max(2).default(0.3),
   maxTokens: z.number().int().positive().default(8192),
   timeout: z.number().positive().default(120),
-});
+}).strict();
 
 const RetryConfigSchema = z.object({
   maxRetries: z.number().int().nonnegative().default(3),
   retryDelayMs: z.number().int().positive().default(1000),
   maxDelayMs: z.number().int().positive().default(30_000),
   retryOnTimeout: z.boolean().default(true),
-});
+}).strict();
 
 const TraceConfigSchema = z.object({
   /** When false, run_summary.json is omitted (it's on by default since it's small/canonical). */
@@ -61,7 +61,7 @@ const TraceConfigSchema = z.object({
   traceabilityMatrix: z.boolean().default(true),
   /** When true, multi_agent_trace.json embeds the full mailbox notification dump. */
   multiAgentTraceFullDump: z.boolean().default(false),
-});
+}).strict();
 
 /**
  * Trace output may be toggled either with a single boolean (gates all trace
@@ -74,19 +74,44 @@ const OutputConfigSchema = z.object({
   defaultDir: z.string().default("outputs/"),
   /** Controls which trace files are written. Defaults to all-on (object form). */
   trace: OutputTraceSchema.default({}),
-});
+}).strict();
 
 const LoggingConfigSchema = z.object({
   level: z.enum(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]).default("INFO"),
   logDir: z.string().default("logs/"),
-});
+}).strict();
 
 const BenchmarkConfigSchema = z.object({
   entityNameMap: z.record(z.string(), z.array(z.string())).default({}),
   functionSynonyms: z.record(z.string(), z.array(z.string())).default({}),
   /** Per-case wall-clock timeout in seconds (0 = unlimited). Default: 3600. */
   caseTimeoutSeconds: z.number().nonnegative().default(3600),
-});
+}).strict();
+
+const OrchestrationConfigSchema = z.object({
+  maxRepairPerTask: z.number().int().nonnegative().default(4),
+  diagramRepairBeforeRegenerate: z.number().int().nonnegative().default(2),
+  designRepairBeforeRegenerate: z.number().int().nonnegative().default(2),
+  maxRegeneratePerTask: z.number().int().nonnegative().default(1),
+  maxReplanCount: z.number().int().nonnegative().default(1),
+  maxRuntimeSeconds: z.number().positive().default(1800),
+  maxDecisionCount: z.number().int().positive().default(500),
+  maxPlannerFailures: z.number().int().nonnegative().default(3),
+  maxEvaluatorTimeouts: z.number().int().nonnegative().default(3),
+  maxSaveFailures: z.number().int().nonnegative().default(3),
+  maxFinalMajorIssues: z.number().int().nonnegative().default(3),
+  maxFinalMajorRepairPerTask: z.number().int().nonnegative().default(3),
+  maxConcurrentEvaluators: z.number().int().positive().default(2),
+  minRuntimeRemainingForNewWorkSeconds: z.number().nonnegative().default(120),
+  skipEvaluation: z.boolean().default(false),
+  workerTimeoutSeconds: z.number().positive().default(900),
+  pollIntervalMs: z.number().int().positive().default(20),
+  heartbeatIntervalSeconds: z.number().nonnegative().default(0.25),
+  maxConcurrency: z.number().int().positive().default(5),
+  convergenceAcceptMaxIssuesDecreasing: z.number().int().nonnegative().default(8),
+  convergenceAcceptMaxIssuesFlat: z.number().int().nonnegative().default(10),
+  maxConvergenceRounds: z.number().int().positive().default(6),
+}).strict();
 
 const AgentConfigSchema = z.object({
   llm: LlmConfigSchema.default({}),
@@ -94,11 +119,12 @@ const AgentConfigSchema = z.object({
   output: OutputConfigSchema.default({}),
   logging: LoggingConfigSchema.default({}),
   benchmark: BenchmarkConfigSchema.default({}),
-});
+  orchestration: OrchestrationConfigSchema.default({}),
+}).strict();
 
 /** 根据 schema 验证原始 YAML 数据。验证失败时抛出 ZodError。 */
 export function parseAndValidate(raw: unknown) {
-  return AgentConfigSchema.parse(raw ?? {});
+  return AgentConfigSchema.parse(snakeToCamel(raw ?? {}));
 }
 
 // =========================================================================
@@ -161,6 +187,13 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;
 
 /** Benchmark 配置（实体名映射、同义词等）。 */
 export type BenchmarkConfig = z.infer<typeof BenchmarkConfigSchema>;
+
+/** Runtime orchestration and budget settings. */
+export type OrchestrationConfig = z.infer<typeof OrchestrationConfigSchema>;
+
+export function parseOrchestrationConfig(raw: unknown): OrchestrationConfig {
+  return OrchestrationConfigSchema.parse(snakeToCamel(raw ?? {}));
+}
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -245,45 +278,27 @@ function loadDotenv(dotenvDir?: string): void {
 // ---------------------------------------------------------------------------
 
 function defaultLLMConfig(): LLMConfig {
-  return {
-    provider: "openai",
-    model: "gpt-4o",
-    apiKey: "",
-    baseUrl: "",
-    temperature: 0.3,
-    maxTokens: 8192,
-    timeout: 120,
-  };
+  return AgentConfigSchema.parse({}).llm;
 }
 
 function defaultRetryConfig(): RetryConfig {
-  return {
-    maxRetries: 3,
-    retryDelayMs: 1000,
-    maxDelayMs: 30_000,
-    retryOnTimeout: true,
-  };
+  return AgentConfigSchema.parse({}).retry;
 }
 
 function defaultOutputConfig(): OutputConfig {
-  return {
-    defaultDir: "outputs/",
-    trace: {
-      runSummary: true,
-      llmTrace: true,
-      multiAgentTrace: true,
-      traceabilityMatrix: true,
-      multiAgentTraceFullDump: false,
-    },
-  };
+  return AgentConfigSchema.parse({}).output;
 }
 
 function defaultLoggingConfig(): LoggingConfig {
-  return { level: "INFO", logDir: "logs/" };
+  return AgentConfigSchema.parse({}).logging;
 }
 
 function defaultBenchmarkConfig(): BenchmarkConfig {
-  return { entityNameMap: {}, functionSynonyms: {}, caseTimeoutSeconds: 3600 };
+  return AgentConfigSchema.parse({}).benchmark;
+}
+
+function defaultOrchestrationConfig(): OrchestrationConfig {
+  return AgentConfigSchema.parse({}).orchestration;
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +316,7 @@ export class AgentConfig {
   output: OutputConfig;
   logging: LoggingConfig;
   benchmark: BenchmarkConfig;
+  orchestration: OrchestrationConfig;
   /** 原始 YAML 数据（API 密钥已脱敏）。 */
   raw: Record<string, unknown>;
 
@@ -310,6 +326,7 @@ export class AgentConfig {
     output?: OutputConfig;
     logging?: LoggingConfig;
     benchmark?: BenchmarkConfig;
+    orchestration?: OrchestrationConfig;
     raw?: Record<string, unknown>;
   }) {
     this.llm = opts?.llm ?? defaultLLMConfig();
@@ -317,6 +334,7 @@ export class AgentConfig {
     this.output = opts?.output ?? defaultOutputConfig();
     this.logging = opts?.logging ?? defaultLoggingConfig();
     this.benchmark = opts?.benchmark ?? defaultBenchmarkConfig();
+    this.orchestration = opts?.orchestration ?? defaultOrchestrationConfig();
     this.raw = opts?.raw ?? {};
   }
 
@@ -366,6 +384,7 @@ export class AgentConfig {
       output: parsed.output,
       logging: parsed.logging,
       benchmark: parsed.benchmark,
+      orchestration: parsed.orchestration,
       raw: safeRaw,
     });
     console.info(
@@ -436,6 +455,13 @@ export class AgentConfig {
       errors.push("llm.timeout must be a number");
     } else if (this.llm.timeout <= 0) {
       errors.push("llm.timeout must be positive");
+    }
+
+    try {
+      this.orchestration = parseOrchestrationConfig(this.orchestration);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`orchestration config is invalid: ${message}`);
     }
 
     if (typeof this.logging.level !== "string") {

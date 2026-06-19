@@ -17,7 +17,7 @@ import type { ConstraintCandidate } from "../shared/constraintCanonicalizer.js";
 // Input type for generate()
 // ---------------------------------------------------------------------------
 
-export interface ConstraintExtractorInput {
+interface ConstraintExtractorInput {
   requirementText: string;
   entityRegistry: Array<{ id: string; canonicalName: string; aliases?: string[] }>;
   functionRegistry: Array<{ id: string; name: string; aliases?: string[] }>;
@@ -94,7 +94,7 @@ function postProcess(items: unknown[]): ConstraintCandidate[] {
     "security", "performance", "usability", "data", "availability", "functional",
   ]);
 
-  return items
+  const normalized = items
     .filter((item): item is Record<string, unknown> => {
       if (typeof item !== "object" || item === null) return false;
       const rec = item as Record<string, unknown>;
@@ -125,4 +125,66 @@ function postProcess(items: unknown[]): ConstraintCandidate[] {
         relatedFunctionCandidates,
       } satisfies ConstraintCandidate;
     });
+
+  // De-duplicate by sourceText subset/overlap. When the LLM emits both an
+  // entire compound sentence AND its atomic sub-clauses (which the prompt
+  // tries to forbid but cannot guarantee), drop the LONGER container in favor
+  // of the shorter atomic pieces — the atomic ones are what tests/design need
+  // to ground against. This is a deterministic, dataset-agnostic backstop.
+  return dropContainerConstraints(normalized);
+}
+
+/**
+ * Drop "container" constraints whose sourceText fully contains (or is fully
+ * contained by) another constraint's sourceText. We keep the SHORTER one in
+ * each pair: shorter = more atomic = the rule that downstream stages can
+ * actually anchor against. When two candidates share an identical sourceText,
+ * keep the first occurrence.
+ *
+ * Containment is detected with a normalized substring check (lowercase ASCII,
+ * whitespace and ASCII hyphen folded) so "Database files use the .kdb
+ * extension." matches inside "Database files use the .kdb extension.
+ * Databases must have unique names to avoid overwriting." even when quoting
+ * differs slightly.
+ *
+ * Exported for unit tests.
+ */
+export function dropContainerConstraints(
+  items: ConstraintCandidate[],
+): ConstraintCandidate[] {
+  const norm = (s: string): string =>
+    String(s ?? "")
+      .toLowerCase()
+      .replace(/[-\s]+/g, " ")
+      .replace(/[^a-z0-9 一-鿿]/g, "")
+      .trim();
+
+  const withNorm = items.map((c) => ({
+    item: c,
+    src: c.sourceText ?? c.description ?? "",
+    normSrc: norm(c.sourceText ?? c.description ?? ""),
+  }));
+
+  const dropped = new Set<number>();
+  for (let i = 0; i < withNorm.length; i++) {
+    if (dropped.has(i)) continue;
+    const a = withNorm[i];
+    if (a.normSrc.length < 6) continue;
+    for (let j = 0; j < withNorm.length; j++) {
+      if (i === j || dropped.has(j)) continue;
+      const b = withNorm[j];
+      if (b.normSrc.length < 6) continue;
+      // Identical → keep i, drop j
+      if (a.normSrc === b.normSrc) {
+        dropped.add(j);
+        continue;
+      }
+      // a contains b → a is the container, drop a (keep the shorter atom b)
+      if (a.normSrc.includes(b.normSrc) && a.normSrc.length > b.normSrc.length + 5) {
+        dropped.add(i);
+        break;
+      }
+    }
+  }
+  return withNorm.filter((_, i) => !dropped.has(i)).map((w) => w.item);
 }

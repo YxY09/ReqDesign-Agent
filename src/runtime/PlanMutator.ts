@@ -102,18 +102,31 @@ export class PlanMutator {
         errors.push(`invalid task type '${task.type}' for '${task.id}'`);
       }
     }
-    for (const taskId of mutation.dropTaskIds) {
-      if (this._state.isTaskCompleted(taskId)) {
-        errors.push(`cannot drop completed task '${taskId}'`);
-      }
-    }
-
     // --- Validate: new task IDs must be unique ---
     const existingIds = new Set(this._state.plan.tasks.map((t) => t.id));
     const requestedDropSet = new Set(mutation.dropTaskIds);
     const protectedDropSet = this._protectedDropIds(requestedDropSet);
     const effectiveDropIds = mutation.dropTaskIds.filter((id) => !protectedDropSet.has(id));
     const dropSet = new Set(effectiveDropIds);
+
+    if (
+      mutation.dropTaskIds.length > 0 &&
+      effectiveDropIds.length === 0 &&
+      mutation.addTasks.length === 0 &&
+      mutation.updateTasks.length === 0 &&
+      Object.keys(mutation.reorderEdges).length === 0
+    ) {
+      for (const taskId of mutation.dropTaskIds) {
+        if (protectedDropSet.has(taskId)) {
+          if (this._state.isTaskCompleted(taskId)) {
+            errors.push(`cannot drop completed task '${taskId}'`);
+          } else {
+            errors.push(`cannot drop protected task '${taskId}'`);
+          }
+        }
+      }
+    }
+
     for (const task of mutation.addTasks) {
       if (existingIds.has(task.id) && !dropSet.has(task.id)) {
         errors.push(`new task id '${task.id}' conflicts with existing task`);
@@ -257,6 +270,7 @@ export class PlanMutator {
         : mutation.reasoning,
     });
     this._state.progress.recordPlanMutation();
+    this._state.convergence.reset();
     return [];
   }
 
@@ -265,7 +279,7 @@ export class PlanMutator {
     if (!this._state.plan) return protectedIds;
 
     for (const taskId of requestedDropSet) {
-      if (this._state.artifacts[taskId]) {
+      if (this._state.artifacts[taskId] || this._state.isTaskCompleted(taskId)) {
         protectedIds.add(taskId);
       }
     }

@@ -16,6 +16,8 @@ import {
   buildTraceChainPrompt,
   judgeTraceChain,
   extractChainsForObligation,
+  extractDesignSliceForObligation,
+  extractTestsSliceForObligation,
   type ObligationVerdict,
 } from "../src/benchmark/qualityJudge.js";
 import type { JudgeClient } from "../src/benchmark/scorer.js";
@@ -780,6 +782,99 @@ describe("Phase 2.5 — extractChainsForObligation + matrix mapping", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 2.5 — extractDesignSliceForObligation (per-obligation design slicing)
+// ---------------------------------------------------------------------------
+// Replaces the old truncate(design, 6000) head+tail cut that dropped the
+// middle of long designs. The slice keeps only the windows around the
+// obligation's anchors (id / source_span / expected_design_evidence), so a
+// long design is no longer unfairly truncated and a short design still works.
+
+describe("extractDesignSliceForObligation — per-obligation design slicing", () => {
+  /**
+   * A long design (>6000 chars, >200 lines) whose only payment-timeout
+   * content sits in the MIDDLE, flanked by many unrelated filler lines. The
+   * ±10-line slice window around the evidence must NOT reach the document
+   * head or tail — which is exactly what the old head+tail truncate would
+   * emphasize and the middle-truncate would drop.
+   */
+  function longDesignWithPaymentTimeout(): string {
+    // ASCII filler so the evidence's CJK needles (支付超时/分钟/...) cannot
+    // accidentally match a filler line — only the real evidence line anchors.
+    const filler = (label: string, n: number): string[] =>
+      Array.from(
+        { length: n },
+        (_, i) => `${label}-${i}: lorem ipsum dolor sit amet, consectetur adipiscing elit.`,
+      );
+    return [
+      "# 设计文档",
+      ...filler("head", 120),
+      "## 支付模块",
+      "支付超时 30 分钟自动取消订单，已支付订单不可重复发起支付。",
+      "超时后订单状态转为 CANCELED，并释放限购库存。",
+      ...filler("tail", 120),
+      "# 结束",
+    ].join("\n");
+  }
+
+  function paymentTimeoutObligation(): GoldObligation {
+    return {
+      id: "C-100",
+      type: "constraint",
+      severity: "major",
+      source_span: "支付超时应在 30 分钟后自动取消订单",
+      expected_design_evidence: ["支付超时 30 分钟自动取消"],
+      expected_test_evidence: ["等待 30 分钟后订单变为 CANCELED"],
+      anti_patterns: ["仅写支付超时无具体时长"],
+    };
+  }
+
+  it("extracts the window containing the obligation evidence and drops the far head/tail", () => {
+    const design = longDesignWithPaymentTimeout();
+    expect(design.length).toBeGreaterThan(6000); // would be truncated by the old cut
+    const slice = extractDesignSliceForObligation(design, paymentTimeoutObligation());
+    // The verbatim evidence line (in the middle) must survive in the slice.
+    expect(slice).toContain("支付超时 30 分钟自动取消");
+    // The document head and tail (far from the evidence) must be dropped —
+    // this is the whole point of slicing vs head+tail truncation.
+    expect(slice).not.toContain("head-0:");
+    expect(slice).not.toContain("# 结束");
+  });
+
+  it("returns an empty string when the design mentions nothing about the obligation", () => {
+    const design = "完全无关的设计文本，不包含任何支付或超时的内容。";
+    const slice = extractDesignSliceForObligation(design, paymentTimeoutObligation());
+    expect(slice).toBe("");
+  });
+
+  it("also matches the obligation id inside the design (e.g. C-100)", () => {
+    const design = [
+      ...Array.from({ length: 40 }, () => "填充行"),
+      "## 约束 C-100",
+      "该约束由支付模块实现。",
+      ...Array.from({ length: 40 }, () => "填充行"),
+    ].join("\n");
+    const slice = extractDesignSliceForObligation(design, paymentTimeoutObligation());
+    expect(slice).toContain("C-100");
+  });
+
+  it("is embedded into buildJudgePrompt (replaces the old truncate(design,6000))", () => {
+    const prompt = buildJudgePrompt({
+      obligation: paymentTimeoutObligation(),
+      source_language: "zh",
+      requirement_source: "r",
+      design: longDesignWithPaymentTimeout(),
+      tests: "t",
+    });
+    // The prompt now carries the sliced evidence, not the head+tail truncation.
+    expect(prompt).toContain("支付超时 30 分钟自动取消");
+    expect(prompt).not.toContain("head-0:");
+    expect(prompt).not.toContain("# 结束");
+    expect(prompt).not.toContain("[truncated"); // no head/tail truncation marker on the design
+  });
+});
+
+
+// ---------------------------------------------------------------------------
 // Phase 2.5 — aggregateQuality prioritizes chain truthfulness
 // ---------------------------------------------------------------------------
 
@@ -810,5 +905,182 @@ describe("Phase 2.5 — aggregateQuality traceability_truthfulness with chains",
     ]);
     // 1 of 2 rule-bearing obligations has aligned tests ⇒ 50.
     expect(q.traceability_truthfulness).toBe(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractTestsSliceForObligation (per-obligation tests slicing)
+// ---------------------------------------------------------------------------
+// Replaces the old truncate(tests, 6000) head+tail cut that dropped the
+// middle of long test-cases files (the agent's 16k-char / 37-case file was
+// chopped so only ~12 cases survived ⇒ has_test_alignment capped). Mirrors
+// extractDesignSliceForObligation but anchors on expected_test_evidence.
+
+describe("extractTestsSliceForObligation — per-obligation tests slicing", () => {
+  /**
+   * A long test-cases file (>6000 chars, >200 lines) whose only relevant
+   * payment-timeout test sits in the MIDDLE, flanked by unrelated filler
+   * cases. ASCII filler so the evidence's CJK needles cannot accidentally
+   * match a filler line.
+   */
+  function longTestsWithPaymentTimeout(): string {
+    const filler = (label: string, n: number): string[] =>
+      Array.from(
+        { length: n },
+        (_, i) => `TC-${label}-${i}: target=filler${label}; expected=pass; lorem ipsum dolor sit amet.`,
+      );
+    return [
+      "# 测试用例",
+      ...filler("head", 120),
+      "## TC-PAY-001",
+      "target: 支付超时后订单状态",
+      "expected: 等待 30 分钟后订单变为 CANCELED",
+      ...filler("tail", 120),
+      "# 结束",
+    ].join("\n");
+  }
+
+  function paymentTimeoutObligation(): GoldObligation {
+    return {
+      id: "C-100",
+      type: "constraint",
+      severity: "major",
+      source_span: "支付超时应在 30 分钟后自动取消订单",
+      expected_design_evidence: ["支付超时 30 分钟自动取消"],
+      expected_test_evidence: ["等待 30 分钟后订单变为 CANCELED"],
+      anti_patterns: ["仅写支付超时无具体时长"],
+    };
+  }
+
+  it("extracts the window containing the obligation test evidence and drops the far head/tail", () => {
+    const tests = longTestsWithPaymentTimeout();
+    expect(tests.length).toBeGreaterThan(6000); // would be truncated by the old cut
+    const slice = extractTestsSliceForObligation(tests, paymentTimeoutObligation());
+    // The verbatim test-evidence line (in the middle) must survive in the slice.
+    expect(slice).toContain("等待 30 分钟后订单变为 CANCELED");
+    // The document head and tail (far from the evidence) must be dropped —
+    // this is the whole point of slicing vs head+tail truncation.
+    expect(slice).not.toContain("TC-head-0:");
+    expect(slice).not.toContain("# 结束");
+  });
+
+  it("returns an empty string when the tests mention nothing about the obligation", () => {
+    const tests = "完全无关的测试文本，不包含任何支付或超时的内容。";
+    const slice = extractTestsSliceForObligation(tests, paymentTimeoutObligation());
+    expect(slice).toBe("");
+  });
+
+  it("also matches the obligation id inside the tests (e.g. C-100)", () => {
+    const tests = [
+      ...Array.from({ length: 40 }, () => "填充行"),
+      "## TC-C-100",
+      "target: 支付超时场景",
+      ...Array.from({ length: 40 }, () => "填充行"),
+    ].join("\n");
+    const slice = extractTestsSliceForObligation(tests, paymentTimeoutObligation());
+    expect(slice).toContain("C-100");
+  });
+
+  it("is embedded into buildJudgePrompt (replaces the old truncate(tests,6000))", () => {
+    const prompt = buildJudgePrompt({
+      obligation: paymentTimeoutObligation(),
+      source_language: "zh",
+      requirement_source: "r",
+      design: "d",
+      tests: longTestsWithPaymentTimeout(),
+    });
+    // The prompt now carries the sliced test evidence, not the head+tail cut.
+    expect(prompt).toContain("等待 30 分钟后订单变为 CANCELED");
+    expect(prompt).not.toContain("TC-head-0:");
+    expect(prompt).not.toContain("# 结束");
+    // No head/tail truncation marker on the tests section.
+    expect(prompt).not.toMatch(/TESTS artifact[\s\S]*\[truncated/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractChainsForObligation — functional (F-*) / exception (X-*) coverage
+// ---------------------------------------------------------------------------
+// The matrix builder already populates functionToTests/exceptionToTests (and
+// functionToDesign/exceptionToDesign). Previously the reader only consulted
+// the constraint maps, so functional/exception obligations got [] chains ⇒
+// traceability_truthfulness = 0 for them. Now the reader picks the map pair
+// matching obligation.type.
+
+describe("extractChainsForObligation — functional / exception obligations", () => {
+  it("extracts chains for a functional obligation (F-005) from functionTo*", () => {
+    const matrix = {
+      functionToDesign: { F005: ["UserService.register"] },
+      functionToTests: { F005: ["TC-REG-007"] },
+    };
+    const obligation: GoldObligation = {
+      id: "F-005",
+      type: "functional",
+      severity: "major",
+      source_span: "用户注册功能",
+      expected_design_evidence: ["注册接口"],
+      expected_test_evidence: ["注册成功返回用户 id"],
+      anti_patterns: [],
+    };
+    const chains = extractChainsForObligation(obligation, matrix);
+    expect(chains).toHaveLength(1);
+    expect(chains[0].design_element).toContain("UserService.register");
+    expect(chains[0].test_id).toContain("TC-REG-007");
+    // F bucket has no descriptions map ⇒ falls back to the obligation source.
+    expect(chains[0].constraint_description).toBe("用户注册功能");
+  });
+
+  it("extracts chains for an exception obligation (X-001) from exceptionTo*", () => {
+    const matrix = {
+      exceptionToDesign: { X001: ["ErrorHandler"] },
+      exceptionToTests: { X001: ["TC-ERR-001"] },
+    };
+    const obligation: GoldObligation = {
+      id: "X-001",
+      type: "exception",
+      severity: "major",
+      source_span: "重复用户异常",
+      expected_design_evidence: ["抛出重复异常"],
+      expected_test_evidence: ["重复注册返回 409"],
+      anti_patterns: [],
+    };
+    const chains = extractChainsForObligation(obligation, matrix);
+    expect(chains).toHaveLength(1);
+    expect(chains[0].design_element).toContain("ErrorHandler");
+    expect(chains[0].test_id).toContain("TC-ERR-001");
+  });
+
+  it("returns [] for a functional obligation when the matrix has no function maps", () => {
+    // Even with constraint maps populated, a functional obligation should not
+    // steal a constraint's chain.
+    const matrix = {
+      constraintToDesign: { "F-005": ["should-not-match"] },
+      constraintToTests: { "F-005": ["should-not-match"] },
+    };
+    const obligation: GoldObligation = {
+      id: "F-005",
+      type: "functional",
+      severity: "major",
+      source_span: "用户注册功能",
+      expected_design_evidence: ["注册接口"],
+      expected_test_evidence: ["注册成功返回用户 id"],
+      anti_patterns: [],
+    };
+    const chains = extractChainsForObligation(obligation, matrix);
+    expect(chains).toEqual([]);
+  });
+
+  it("still extracts chains for a constraint obligation (regression guard)", () => {
+    // sampleObligation() is type=constraint, id=C-001 — existing behavior must
+    // be unchanged: it reads constraintToDesign/constraintToTests.
+    const matrix = {
+      constraintToDesign: { "C-001": ["AppointmentService"] },
+      constraintToTests: { "C-001": ["TC-B-014"] },
+      functionToDesign: { "C-001": ["should-not-leak"] },
+    };
+    const chains = extractChainsForObligation(sampleObligation(), matrix);
+    expect(chains).toHaveLength(1);
+    expect(chains[0].design_element).toContain("AppointmentService");
+    expect(chains[0].test_id).toContain("TC-B-014");
   });
 });

@@ -1,6 +1,6 @@
 import process from "node:process";
 
-export type WorkflowEventScope = "runtime" | "benchmark" | "llm";
+type WorkflowEventScope = "runtime" | "benchmark" | "llm";
 
 export interface WorkflowEvent {
   scope: WorkflowEventScope;
@@ -31,7 +31,7 @@ export function createWorkflowEvent(
   };
 }
 
-export function formatWorkflowEvent(event: WorkflowEvent): string {
+function formatWorkflowEvent(event: WorkflowEvent): string {
   const stamp = new Date(event.timestamp * 1000).toISOString().slice(11, 19);
   const parts = [`[${stamp}]`, event.scope];
   if (event.caseName) parts.push(`case=${event.caseName}`);
@@ -101,7 +101,7 @@ export class ConsoleWorkflowStreamer {
   private writeTranscript(_tag: string, content: string): void {
     const trimmed = content.trimEnd();
     if (!trimmed) return;
-    // LLM 输出现在由 TracingLLMClient 捕获到 llm_trace.json。
+    // LLM 输出由 runtime trace sink 捕获到 llm_trace.json。
     // 不再将原始 LLM 输出写入主日志文件。
   }
 

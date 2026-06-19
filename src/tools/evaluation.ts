@@ -7,7 +7,7 @@ import type { LLMClient } from "../llmClient.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
 import {
-  type Issue, type Task, type Verdict, type Scope,
+  type Issue, type IssueKind, type Task, type Verdict, type Scope,
   createIssue, createTask, createVerdict, isDesignModel,
 } from "../shared/types.js";
 import { SystemDesigner } from "../generators/design.js";
@@ -70,8 +70,18 @@ export class EvaluationTool extends BaseTool {
 
     // 1. 规则检查
     const ruleIssues = this._ruleCheckSnapshots(snapshots, isDirectMode, requirementJson);
+    // Classify each rule issue defect vs advisory (deterministic, by content).
+    for (const issue of ruleIssues) issue.kind = EvaluationTool._classifyIssueKind(issue);
     issues.push(...ruleIssues);
     this.logger.info(`evaluate: 规则检查发现 ${ruleIssues.length} 个问题`);
+
+    // Targets a deterministic rule-check already proved defective — used to
+    // corroborate (promote) LLM complaints about the same field.
+    const ruleDefectTargets = new Set(
+      ruleIssues
+        .filter((issue) => issue.kind === "defect")
+        .map((issue) => `${issue.targetTaskId}::${issue.targetField}`),
+    );
 
     // 1.5 Review 前置门禁（确定性验证）
     const snapDesignText = EvaluationTool._extractDesignText(snapshots);
@@ -96,20 +106,29 @@ export class EvaluationTool extends BaseTool {
       llmIssues = [];
     }
     llmIssues = this._filterSnapshotIssues(llmIssues, snapshots);
+    // Classify LLM issues: advisory unless they match a defect signature or are
+    // corroborated by a rule-check defect on the same field. The LLM's own
+    // severity label is NOT trusted to drive control flow.
+    for (const issue of llmIssues) {
+      issue.kind = EvaluationTool._classifyLlmIssueKind(issue, ruleDefectTargets);
+    }
     issues.push(...llmIssues);
     EvaluationTool._mapSyntheticFinalIssuesToSources(issues, snapshots);
 
     // 分类范围
     for (const issue of issues) EvaluationTool._classifyIssueScope(issue);
 
-    // 3. 判断通过/失败
-    const blockers = issues.filter((i) => i.severity === "blocker");
+    // 3. 判断通过/失败 — gate on verifiable DEFECTS, not raw severity. Advisories
+    // (completeness/coverage opinions) never block acceptance or trigger repair.
+    const defects = issues.filter((i) => i.kind === "defect");
+    const blockers = defects.filter((i) => i.severity === "blocker");
     const majors = issues.filter((i) => i.severity === "major");
+    const advisories = issues.filter((i) => i.kind === "advisory");
     const passed = blockers.length === 0;
-    this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，majors=${majors.length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
+    this.logger.info(`evaluate: 评审完成，passed=${passed}，blockers=${blockers.length}，defects=${defects.length}，majors=${majors.length}，advisories=${advisories.length}，minors=${issues.filter((i) => i.severity === "minor").length}`);
 
-    // 4. 构建修复任务
-    const fixes = passed ? [] : EvaluationTool._buildFixes(issues);
+    // 4. 构建修复任务 — only for defects; advisories are recorded, not repaired.
+    const fixes = passed ? [] : EvaluationTool._buildFixes(defects);
 
     // Log all issues for observability
     for (const iss of issues) {
@@ -157,6 +176,45 @@ export class EvaluationTool extends BaseTool {
   // 规则检查（无 LLM）
   // --------------------------------------------------------------
 
+  /**
+   * Deterministic defect signatures — text that means the artifact is WRONG
+   * (hallucinated/undefined references, broken syntax, contradictions, bad
+   * mappings), as opposed to merely incomplete. Matching is content-based so it
+   * works regardless of whether the issue came from a rule-check or the LLM, and
+   * regardless of the (untrustworthy) severity label the LLM assigned.
+   */
+  static readonly _DEFECT_SIGNATURE =
+    /未定义|不存在|未在需求中|引用了错误类型|使用了内部\s*ID|语义未匹配|为空|格式错误|无法渲染|缺少正确的\s*Mermaid|\[object Object\]|矛盾|冲突|映射错误|hallucinat|undefined (?:id|reference)|not defined|does not exist|cannot render/i;
+
+  /**
+   * Classify an issue as a verifiable defect or an advisory. Blockers are always
+   * defects (a blocker means the artifact is unusable). Otherwise an issue is a
+   * defect only if its description matches a defect signature; everything else
+   * (coverage gaps, completeness/precision opinions) is advisory and will not
+   * drive repair/replan.
+   */
+  static _classifyIssueKind(issue: Issue): IssueKind {
+    if (issue.severity === "blocker") return "defect";
+    return EvaluationTool._DEFECT_SIGNATURE.test(issue.description)
+      ? "defect"
+      : "advisory";
+  }
+
+  /**
+   * Classify an LLM-reported issue. Same signature test as rule issues, plus
+   * corroboration: if a deterministic rule-check already flagged a defect on the
+   * same target field, an LLM complaint about that field is almost certainly
+   * describing the same real defect, so promote it even if its wording misses
+   * the signature.
+   */
+  static _classifyLlmIssueKind(issue: Issue, ruleDefectTargets: Set<string>): IssueKind {
+    if (EvaluationTool._classifyIssueKind(issue) === "defect") return "defect";
+    if (ruleDefectTargets.has(`${issue.targetTaskId}::${issue.targetField}`)) {
+      return "defect";
+    }
+    return "advisory";
+  }
+
   static _classifyIssueScope(issue: Issue): Scope {
     if (issue.targetTaskType === "analyze" && issue.severity === "blocker") {
       issue.scope = "systemic";
@@ -196,10 +254,7 @@ export class EvaluationTool extends BaseTool {
   static _extractDesignText(snapshots: Record<string, Record<string, unknown>>): string {
     for (const snapshot of Object.values(snapshots)) {
       if (String(snapshot.type ?? "") === "design") {
-        const content = snapshot.content;
-        if (typeof content === "string") return content;
-        if (isDesignModel(content)) return SystemDesigner.renderDesignMarkdown(content);
-        if (typeof content === "object" && content !== null) return JSON.stringify(content);
+        return EvaluationTool._snapshotText(snapshot);
       }
     }
     return "";
@@ -215,6 +270,19 @@ export class EvaluationTool extends BaseTool {
       }
     }
     return "";
+  }
+
+  static _snapshotText(snapshot: Record<string, unknown>): string {
+    const taskType = String(snapshot.type ?? "");
+    const content = snapshot.content;
+    if (taskType === "design" && isDesignModel(content)) {
+      return SystemDesigner.renderDesignMarkdown(content);
+    }
+    if (typeof content === "string") return content;
+    if (typeof content === "object" && content !== null) {
+      return JSON.stringify(content);
+    }
+    return String(content ?? "");
   }
 
   static _selectReviewMode(
@@ -444,8 +512,7 @@ export class EvaluationTool extends BaseTool {
       if (taskType === "design") {
         if (skipMissingArtifact) continue;
         const isEmpty = content === null || content === undefined ||
-          (typeof content === "string" && !content.trim()) ||
-          (typeof content === "object" && !isDesignModel(content));
+          (typeof content === "string" && !content.trim());
         if (isEmpty) {
           issues.push(createIssue({ severity: "blocker", targetTaskId: taskId, targetTaskType: "design", targetField: "design_text", description: "系统设计文档为空", suggestion: "重新执行设计生成任务" }));
         } else if (isDesignModel(content)) {
@@ -464,7 +531,10 @@ export class EvaluationTool extends BaseTool {
             ...this._checkUndefinedExceptionIds(taskId, "design", "design_text", rendered, requirementJson),
           );
         } else {
-          for (const warning of SystemDesigner.validateDesign(String(content), requirementJson)) {
+          const textContent = typeof content === "object"
+            ? JSON.stringify(content, null, 2)
+            : String(content);
+          for (const warning of SystemDesigner.validateDesign(textContent, requirementJson)) {
             issues.push(createIssue({
               severity: "major",
               targetTaskId: taskId,
@@ -477,7 +547,7 @@ export class EvaluationTool extends BaseTool {
             }));
           }
           issues.push(
-            ...this._checkUndefinedExceptionIds(taskId, "design", "design_text", String(content), requirementJson),
+            ...this._checkUndefinedExceptionIds(taskId, "design", "design_text", textContent, requirementJson),
           );
         }
         continue;
@@ -596,7 +666,7 @@ export class EvaluationTool extends BaseTool {
     for (const [taskId, snapshot] of Object.entries(snapshots)) {
       const taskType = String(snapshot.type ?? "");
       if (taskType !== "design") continue;
-      const content = String(snapshot.content ?? "");
+      const content = EvaluationTool._snapshotText(snapshot);
       if (!content) continue;
 
       // Extract class names from design text (Markdown table rows)
@@ -773,7 +843,11 @@ export class EvaluationTool extends BaseTool {
       ? requirementJson.functions as Array<Record<string, unknown>>
       : []);
     const analysisIds = new Set(
-      functions.map(f => String(f.id ?? "").trim()).filter(id => /^F\d+$/.test(id)),
+      functions.flatMap((f) => [f.displayId, f.id])
+        .map((id) => String(id ?? "").trim())
+        // Keep both display (F001) and canonical (FUN_xxx) forms, matching
+        // RequirementIndex.allowedIds (requirementIndex.ts).
+        .filter((id) => /^F\d+$/.test(id) || /^FUN_/.test(id)),
     );
     if (analysisIds.size === 0) return issues;
 
@@ -782,13 +856,13 @@ export class EvaluationTool extends BaseTool {
       // Only check design and test artifacts
       if (taskType !== "design" && taskType !== "tests") continue;
 
-      const content = typeof snapshot.content === "string"
-        ? snapshot.content
-        : JSON.stringify(snapshot.content ?? "");
+      const content = EvaluationTool._snapshotText(snapshot);
       if (!content) continue;
 
-      // Extract all Fxxx IDs from downstream artifact
-      const idRe = /\b(F\d{1,4})\b/g;
+      // Extract all Fxxx / FUN_xxx IDs from downstream artifact. FUN_xxx is
+      // included so canonical-form references are also checked for ghosts,
+      // consistent with RequirementIndex.ID_RE.
+      const idRe = /\b(F\d{1,4}|FUN_[A-Za-z0-9_]+)\b/g;
       const referencedIds = new Set<string>();
       let m: RegExpExecArray | null;
       while ((m = idRe.exec(content)) !== null) {
@@ -830,14 +904,26 @@ export class EvaluationTool extends BaseTool {
       const content = String(snapshot.content ?? "");
       if (!content) continue;
 
-      const uncoveredIds: string[] = [];
+      const uncovered: Array<{ id: string; text: string }> = [];
       for (const constraint of constraints) {
-        const cid = String(constraint.id ?? "").trim();
+        const cid = String(constraint.displayId ?? constraint.id ?? "").trim();
         if (!cid) continue;
-        if (!content.includes(cid)) uncoveredIds.push(cid);
+        const covered = new RegExp(`\\b${cid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(content);
+        if (!covered) {
+          const text = String(
+            constraint.source_text ??
+            constraint.sourceText ??
+            constraint.description ??
+            "",
+          ).trim();
+          uncovered.push({ id: cid, text });
+        }
       }
 
-      if (uncoveredIds.length === 0) continue;
+      if (uncovered.length === 0) continue;
+      const uncoveredLabels = uncovered.map((item) =>
+        item.text ? `${item.id}(${item.text})` : item.id,
+      );
 
       // Merge all uncovered constraints into a single issue so the repair LLM
       // can fix all of them in one call, and the issue count stays ≤ convergence threshold.
@@ -846,8 +932,8 @@ export class EvaluationTool extends BaseTool {
         targetTaskId: taskId,
         targetTaskType: "tests",
         targetField: "test_cases",
-        description: `${uncoveredIds.length} 个约束未被测试用例覆盖: ${uncoveredIds.join(", ")}`,
-        suggestion: `为以下每个约束各添加至少一个边界测试用例: ${uncoveredIds.join(", ")}`,
+        description: `${uncovered.length} 个约束未被测试用例覆盖: ${uncoveredLabels.join(", ")}`,
+        suggestion: `为以下每个约束各添加至少一个边界测试用例，target 必须使用 C 编号和当前约束文本，不要使用 CON_* canonicalId: ${uncoveredLabels.join(", ")}`,
       }));
     }
 
@@ -1027,7 +1113,10 @@ export class EvaluationTool extends BaseTool {
           "```json\n" + EvaluationTool._jsonForReview({ diagrams: snippet }, Math.max(diagramLimit * 3, 1800)) + "\n```",
         );
       } else {
-        sections.push(String(content ?? "").slice(0, textLimit));
+        sections.push(EvaluationTool._truncateTextForReview(
+          EvaluationTool._snapshotText(snapshot),
+          textLimit,
+        ));
       }
     }
 

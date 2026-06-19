@@ -106,6 +106,6 @@ export class ArtifactAcceptanceService {
 
     return latestVerdict.issues
       .filter((issue) => issue.targetTaskId === taskId)
-      .map((issue) => ConvergenceTracker.fingerprint(issue.description));
+      .map((issue) => ConvergenceTracker.fingerprint(issue));
   }
 }

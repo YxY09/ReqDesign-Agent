@@ -150,7 +150,7 @@ export function formatRelevantMemories(
 /**
  * 将单条记忆格式化为自然语言的项目符号。
  */
-export function formatSingleMemory(
+function formatSingleMemory(
   description: string,
   content: string,
 ): string {
@@ -213,7 +213,7 @@ export function memoryAgeDays(lastModified: number | string): number {
  *
  * 记忆是历史观察。模型在将陈旧记忆作为当前工作流事实使用前，应验证其有效性。
  */
-export function memoryFreshnessText(lastModified: string): string {
+function memoryFreshnessText(lastModified: string): string {
   const days = memoryAgeDays(lastModified);
   if (days <= 1) return "";
   return `- 记忆时效提醒: 这条记忆是 ${days} 天前生成的，只能作为历史经验；涉及当前代码、策略或运行状态时必须重新验证。`;

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import type { AgentConfig } from "../config.js";
-import { BenchmarkRunner } from "../benchmark/runBenchmark.js";
+import { BenchmarkRunnerV2 } from "../benchmark/benchmarkRunner.js";
 import { LLMClient, type ChatMessage } from "../llmClient.js";
 import { MultiAgentRuntime } from "../runtime.js";
 import type { WorkflowEvent } from "../workflowEvents.js";
@@ -34,7 +34,6 @@ interface UiMessage {
 
 interface ChatAppOptions {
   config: AgentConfig;
-  executionBackend?: string;
 }
 
 interface SidePanelState {
@@ -737,7 +736,6 @@ function defaultPanelState(): SidePanelState {
 export class TerminalChatApp {
   private readonly config: AgentConfig;
   private readonly llm: LLMClient;
-  private readonly executionBackend: string;
   private readonly messages: UiMessage[] = [];
   private readonly chatHistory: ChatMessage[] = [];
   private readonly sessionMemory: string[] = [];
@@ -776,7 +774,6 @@ export class TerminalChatApp {
   constructor(options: ChatAppOptions) {
     this.config = options.config;
     this.llm = new LLMClient(options.config);
-    this.executionBackend = options.executionBackend ?? "thread";
   }
 
   async start(): Promise<void> {
@@ -1551,7 +1548,7 @@ export class TerminalChatApp {
     this.cancelRequested = false;
     this.pushMessage("status", "Workflow", `Running ${goal}\nInput: ${input}\nOutput: ${output}`);
 
-    const runtime = new MultiAgentRuntime(this.config, this.executionBackend);
+    const runtime = new MultiAgentRuntime(this.config);
     this.currentRuntime = runtime;
     try {
       await runtime.run(goal, input, output, {
@@ -1693,8 +1690,18 @@ export class TerminalChatApp {
     this.panel.runStatus = "running";
     this.pushMessage("status", "Benchmark", `Cases: ${casesDir}\nOutput: ${outputDir}`);
 
-    const runner = new BenchmarkRunner(this.config, casesDir, "benchmark/gold_labels", outputDir);
-    await runner.runAll({
+    const runner = new BenchmarkRunnerV2(
+      this.config,
+      casesDir,
+      "benchmark/gold_contracts",
+      (config) => new MultiAgentRuntime(config),
+    );
+    await runner.run({
+      mode: "dev",
+      numRuns: 1,
+      resume: false,
+      onlyFailed: false,
+      resultsBaseDir: outputDir,
       onEvent: (event) => this.consumeWorkflowEvent(event),
     });
   }

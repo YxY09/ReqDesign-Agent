@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { SystemDesigner } from "../src/generators/design.js";
+import { SystemDesigner, extractSalientAnchors, textIncludesAnchor } from "../src/generators/design.js";
 import { GenerationTool } from "../src/tools/generation.js";
 import { createTask, isDesignModel } from "../src/shared/types.js";
 import * as promptLoader from "../src/promptLoader.js";
@@ -225,13 +225,15 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     expect(prompt.includes("User")).toBe(true);
   });
 
-  it("should pass requirement text into the prompt", async () => {
+  it("should pass system prompt separately instead of duplicating it in the user prompt", async () => {
     const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = { functions: [], entities: [] };
     await designer.generateDesign(req, "订单创建后需要触发支付");
     const prompt: string = mockLLM.generateJson.mock.calls[0][0];
-    expect(prompt.includes("订单创建后需要触发支付")).toBe(true);
+    const systemPrompt: string = mockLLM.generateJson.mock.calls[0][1];
+    expect(prompt.includes("订单创建后需要触发支付")).toBe(false);
+    expect(systemPrompt).toBe("订单创建后需要触发支付");
   });
 
   it("should require per-ID constraint enumeration in the prompt template", async () => {
@@ -249,7 +251,7 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     expect(prompt).toMatch(/约束.*ID|各写一条/);
   });
 
-  it("should inject a hard design contract into the prompt", async () => {
+  it("should inject a DesignBrief contract into the prompt", async () => {
     const mockLLM = { generateJson: vi.fn().mockResolvedValue(MINIMAL_DESIGN_JSON) };
     const designer = new SystemDesigner(mockLLM as any);
     const req = {
@@ -260,17 +262,23 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     };
     await designer.generateDesign(req);
     const prompt: string = mockLLM.generateJson.mock.calls[0][0];
-    expect(prompt).toContain("设计合同");
-    expect(prompt).toContain("F043 | LogsAndAudit");
+    expect(prompt).toContain("DesignBrief");
+    expect(prompt).toContain("designContract");
+    expect(prompt).toContain("allowedFunctionIds");
+    expect(prompt).toContain("coverageSkeleton");
+    expect(prompt).toContain("F043");
+    expect(prompt).toContain("LogsAndAudit");
     expect(prompt).toContain("Order");
-    expect(prompt).toContain("X001 | 支付失败");
-    expect(prompt).toContain("设计覆盖矩阵");
-    expect(prompt).toContain("不能改成 E001");
+    expect(prompt).toContain("X001");
+    expect(prompt).toContain("支付失败");
+    expect(prompt).toContain("coverageMatrix");
+    expect(prompt).toContain("禁止输出 `FUN_*`、`CON_*`、`EXC_*`");
+    expect(prompt).not.toContain("F043 | LogsAndAudit");
   });
 
-  it("should include design contract in prompt when fallback template is used", async () => {
-    // Regression: fallback template must contain {requirement_text} placeholder
-    // so the design contract is not silently dropped when design_planner.md fails to load.
+  it("should include DesignBrief in prompt when fallback template is used", async () => {
+    // Regression: fallback template must still receive the compact DesignBrief
+    // even though {requirement_text} no longer carries a duplicated contract.
     const loadPromptSpy = vi.spyOn(promptLoader, "loadPrompt");
     loadPromptSpy.mockReturnValue(
       "请根据以下需求分析结果生成系统设计方案：\n\n结构化需求：\n{requirement_json}\n\n{requirement_text}",
@@ -285,11 +293,13 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
     };
     await designer.generateDesign(req, "system prompt here");
     const prompt: string = mockLLM.generateJson.mock.calls[0][0];
+    const systemPrompt: string = mockLLM.generateJson.mock.calls[0][1];
 
-    // The design contract and system prompt should be injected via {requirement_text}
-    expect(prompt).toContain("设计合同");
-    expect(prompt).toContain("F001 | Login");
-    expect(prompt).toContain("system prompt here");
+    expect(prompt).toContain("designContract");
+    expect(prompt).toContain("\"id\":\"F001\"");
+    expect(prompt).toContain("\"name\":\"Login\"");
+    expect(systemPrompt).toBe("system prompt here");
+    expect(prompt).not.toContain("system prompt here");
     expect(prompt).not.toContain("{requirement_text}");
 
     loadPromptSpy.mockRestore();
@@ -298,15 +308,15 @@ describe("SystemDesigner.generateDesign (mock LLM)", () => {
 
 describe("GenerationTool self-check (no auto-repair)", () => {
   it("records self-check issues without attempting auto-repair", async () => {
-    // DesignModel that has no functions covered in modules (missing F001 in functionIds)
-    // so self-check will fail, but content should still be the DesignModel object
+    // DesignModel with NO coverage gap (F001 is mapped into a module, so the
+    // derived coverageMatrix covers it) but a self-check failure that survives
+    // reconciliation and is not a coverage gap: a class entityRef not in the
+    // allowed entity list. This keeps the loop to a single LLM call (gaps==0 →
+    // returns attempt 1) while still failing self-check.
     const badDesignModel = {
-      modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: [] }],
-      classes: [{ name: "Order", kind: "entity", responsibility: "订单" }],
+      modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: ["F001"] }],
+      classes: [{ name: "Order", kind: "domain", responsibility: "订单", entityRef: "NonExistent" }],
       dataFlows: [{ name: "请求处理流程", steps: ["client → server"], relatedFunctionIds: [] }],
-      coverageMatrix: [
-        { refId: "F001", refKind: "function", originalDescription: "Login", designDecision: "Login", affectedModuleIds: ["MOD_USER"], affectedClassNames: [], testImplication: "test" },
-      ],
     };
     const llm = {
       generateJson: vi.fn().mockResolvedValueOnce(badDesignModel),
@@ -317,7 +327,7 @@ describe("GenerationTool self-check (no auto-repair)", () => {
       createTask({ id: "design-1", type: "design", description: "生成设计" }),
       {
         requirement_json: {
-          functions: [{ id: "F001", name: "Login" }],
+          functions: [{ id: "F001", displayId: "F001", name: "Login" }],
           entities: [{ name: "User", description: "用户" }],
         },
       },
@@ -325,7 +335,12 @@ describe("GenerationTool self-check (no auto-repair)", () => {
 
     // Self-check finds issues but does NOT auto-repair
     expect(artifact.selfCheckPassed).toBe(false);
-    expect(artifact.content).toMatchObject(badDesignModel);
+    // Content is still the generated DesignModel (assert the stable, LLM-authored
+    // parts; coverageMatrix is now derived so it is intentionally not asserted).
+    expect(artifact.content).toMatchObject({
+      modules: badDesignModel.modules,
+      classes: badDesignModel.classes,
+    });
     // LLM called only once (generation), NOT twice (generation + repair)
     expect(llm.generateJson).toHaveBeenCalledTimes(1);
   });
@@ -339,6 +354,8 @@ const MINIMAL_MODEL = {
   modules: [{ id: "MOD_USER", name: "用户模块", responsibility: "用户管理", functionIds: ["F001"] }],
   classes: [{ name: "UserService", kind: "helper" as const, responsibility: "用户服务" }],
   dataFlows: [{ name: "登录流程", steps: ["client → UserService", "UserService → DB"], relatedFunctionIds: ["F001"] }],
+  constraintImplementations: [],
+  exceptionImplementations: [],
   coverageMatrix: [{ refId: "F001", refKind: "function" as const, originalDescription: "用户登录", designDecision: "UserService.login()", affectedModuleIds: ["MOD_USER"], affectedClassNames: ["UserService"], testImplication: "正常/异常登录场景" }],
 };
 
@@ -401,6 +418,87 @@ describe("renderDesignMarkdown", () => {
     expect(md).toContain("## 补充核心类依据");
     expect(md).toContain("TokenHelper");
   });
+
+  it("renders constraintImplementations as a first-class section with verbatim parameters", () => {
+    const modelWithCI = {
+      ...MINIMAL_MODEL,
+      constraintImplementations: [
+        {
+          constraintId: "C001",
+          sourceTextVerbatim: "The database is encrypted using AES/Rijndael (128-bit block, 256-bit key) and Twofish.",
+          implementationMechanism: "EncryptionEngine 在 save() 中使用 AES/Rijndael (128-bit block, 256-bit key) 或 Twofish 加密数据库",
+          parametersPreserved: ["AES/Rijndael", "Twofish", "128-bit block", "256-bit key"],
+          trigger: "Database.save() 被调用时",
+          handling: "用算法+随机 IV 加密整个数据库字节流",
+          affectedModuleIds: ["MOD_SECURITY"],
+          affectedClassNames: ["EncryptionEngine"],
+        },
+      ],
+    };
+    const md = SystemDesigner.renderDesignMarkdown(modelWithCI);
+    expect(md).toContain("## 约束实现");
+    expect(md).toContain("C001 约束实现");
+    expect(md).toContain("256-bit key");
+    expect(md).toContain("AES/Rijndael");
+    expect(md).toContain("Twofish");
+    // 约束实现章节必须出现在模块划分之前——judge 读 verbatim 证据时优先看到
+    expect(md.indexOf("## 约束实现")).toBeLessThan(md.indexOf("## 模块划分"));
+  });
+
+  it("renders exceptionImplementations as a first-class section", () => {
+    const modelWithEI = {
+      ...MINIMAL_MODEL,
+      exceptionImplementations: [
+        {
+          exceptionId: "X001",
+          sourceTextVerbatim: "If the Master Password is lost, the database cannot be opened.",
+          trigger: "Master Password 解密失败",
+          handling: "Database.open 返回错误，禁止任何 recovery 路径",
+          parametersPreserved: ["Master Password"],
+          affectedModuleIds: ["MOD_DATABASE"],
+          affectedClassNames: ["Database"],
+        },
+      ],
+    };
+    const md = SystemDesigner.renderDesignMarkdown(modelWithEI);
+    expect(md).toContain("## 异常实现");
+    expect(md).toContain("X001 异常实现");
+    expect(md).toContain("Master Password");
+  });
+
+  it("does not crash when a dataFlow lacks relatedFunctionIds/steps", () => {
+    // Simulates a repaired LLM payload that omits relatedFunctionIds/steps —
+    // the fields are optional at runtime even though the type declares them.
+    const modelWithSparseFlow = {
+      ...MINIMAL_MODEL,
+      dataFlows: [{ name: "稀疏流程" }],
+    } as unknown as Parameters<typeof SystemDesigner.renderDesignMarkdown>[0];
+    const md = SystemDesigner.renderDesignMarkdown(modelWithSparseFlow);
+    expect(md).toContain("## 数据流说明");
+    expect(md).toContain("稀疏流程");
+  });
+});
+
+describe("parseDesignModel dataFlow coercion", () => {
+  it("normalizes dataFlows missing relatedFunctionIds/steps to empty arrays", () => {
+    const raw = {
+      modules: MINIMAL_MODEL.modules,
+      classes: MINIMAL_MODEL.classes,
+      dataFlows: [{ name: "登录流程" }], // missing steps + relatedFunctionIds
+      coverageMatrix: [],
+      constraintImplementations: [],
+      exceptionImplementations: [],
+    };
+    const parsed = SystemDesigner.parseDesignModel(raw);
+    expect(parsed).not.toBeNull();
+    const flow = parsed!.dataFlows[0];
+    expect(Array.isArray(flow.steps)).toBe(true);
+    expect(flow.steps).toEqual([]);
+    expect(Array.isArray(flow.relatedFunctionIds)).toBe(true);
+    expect(flow.relatedFunctionIds).toEqual([]);
+    // Rendering the parsed model must not throw.
+    expect(() => SystemDesigner.renderDesignMarkdown(parsed!)).not.toThrow();
+  });
 });
 
 describe("validateDesignModel", () => {
@@ -417,7 +515,7 @@ describe("validateDesignModel", () => {
     expect(warnings.some((w) => w.includes("C001"))).toBe(true);
   });
 
-  it("does not warn when constraint covered by canonical id form", () => {
+  it("accepts canonical id coverage but warns that display id should be used", () => {
     const modelWithConstraint = {
       ...MINIMAL_MODEL,
       coverageMatrix: [
@@ -427,7 +525,8 @@ describe("validateDesignModel", () => {
     };
     const reqJson = { functions: [], constraints: [{ id: "CON_PASS", displayId: "C001" }], exceptions: [] };
     const warnings = SystemDesigner.validateDesignModel(modelWithConstraint, reqJson);
-    expect(warnings.some((w) => w.includes("C001") || w.includes("CON_PASS"))).toBe(false);
+    expect(warnings.some((w) => w.includes("约束 C001 未在 coverageMatrix 中体现"))).toBe(false);
+    expect(warnings.some((w) => w.includes("内部 ID CON_PASS") && w.includes("display ID C001"))).toBe(true);
   });
 
   it("warns when exception missing from coverageMatrix", () => {
@@ -461,6 +560,141 @@ describe("isDesignModel", () => {
 
 
 // ---------------------------------------------------------------------------
+// SystemDesigner.reconcileDesignModel — deterministic dangling-ref repair
+// ---------------------------------------------------------------------------
+
+describe("SystemDesigner.reconcileDesignModel", () => {
+  const reqJson = {
+    functions: [{ id: "F001", displayId: "F001", name: "登录" }],
+    constraints: [{ id: "CON_a", displayId: "C001", description: "密码强度" }],
+    exceptions: [],
+    entities: [],
+  };
+  // Dangling class/module refs live in the constraintImplementation blocks the
+  // LLM still authors (coverageMatrix is derived, not LLM-authored, so reconcile
+  // no longer touches it).
+  const baseModel = () => ({
+    modules: [{ id: "MOD_USER", name: "用户", responsibility: "r", functionIds: ["F001", "F999"] }],
+    classes: [{ name: "UserService", kind: "helper" as const, responsibility: "r" }],
+    dataFlows: [],
+    constraintImplementations: [
+      {
+        constraintId: "C001",
+        sourceTextVerbatim: "",
+        implementationMechanism: "校验密码强度规则，长度与复杂度检查",
+        parametersPreserved: [],
+        trigger: "",
+        handling: "",
+        affectedModuleIds: ["MOD_USER", "MOD_GHOST"],
+        affectedClassNames: ["PrescriptionApprovalService", "user_service"],
+      },
+    ],
+    exceptionImplementations: [],
+    coverageMatrix: [],
+  });
+
+  it("promotes an undefined class referenced in an impl block into supplementaryClasses", () => {
+    const result = SystemDesigner.reconcileDesignModel(baseModel(), reqJson);
+    const suppNames = (result.supplementaryClasses ?? []).map((s) => s.name);
+    expect(suppNames).toContain("PrescriptionApprovalService");
+    expect(result.constraintImplementations[0].affectedClassNames).toContain("PrescriptionApprovalService");
+  });
+
+  it("remaps a normalized class-name variant to the canonical defined class (no promotion)", () => {
+    const result = SystemDesigner.reconcileDesignModel(baseModel(), reqJson);
+    expect(result.constraintImplementations[0].affectedClassNames).toContain("UserService");
+    expect(result.constraintImplementations[0].affectedClassNames).not.toContain("user_service");
+    const suppNames = (result.supplementaryClasses ?? []).map((s) => s.name);
+    expect(suppNames).not.toContain("user_service");
+  });
+
+  it("drops affectedModuleIds referencing an undefined module", () => {
+    const result = SystemDesigner.reconcileDesignModel(baseModel(), reqJson);
+    expect(result.constraintImplementations[0].affectedModuleIds).toEqual(["MOD_USER"]);
+  });
+
+  it("drops module.functionIds referencing a non-existent requirement id", () => {
+    const result = SystemDesigner.reconcileDesignModel(baseModel(), reqJson);
+    expect(result.modules[0].functionIds).toEqual(["F001"]);
+  });
+
+  it("does not mutate the input model (returns a deep clone)", () => {
+    const input = baseModel();
+    SystemDesigner.reconcileDesignModel(input, reqJson);
+    expect(input.modules[0].functionIds).toEqual(["F001", "F999"]);
+    expect(input.constraintImplementations[0].affectedClassNames).toEqual([
+      "PrescriptionApprovalService",
+      "user_service",
+    ]);
+    expect(input.constraintImplementations[0].affectedModuleIds).toEqual(["MOD_USER", "MOD_GHOST"]);
+  });
+
+  it("clears the 未定义的类 self-check warning after reconciliation", () => {
+    const before = SystemDesigner.validateDesignModel(baseModel(), reqJson);
+    expect(before.some((w) => w.includes("引用了未定义的类"))).toBe(true);
+    const result = SystemDesigner.reconcileDesignModel(baseModel(), reqJson);
+    const after = SystemDesigner.validateDesignModel(result, reqJson);
+    expect(after.some((w) => w.includes("引用了未定义的类"))).toBe(false);
+    expect(after.some((w) => w.includes("未定义的需求 ID"))).toBe(false);
+    expect(after.some((w) => w.includes("引用了未定义的模块"))).toBe(false);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// SystemDesigner.buildCoverageMatrix — deterministic traceability index
+// ---------------------------------------------------------------------------
+
+describe("SystemDesigner.buildCoverageMatrix", () => {
+  const req = {
+    functions: [
+      { id: "F001", displayId: "F001", name: "登录" },
+      { id: "F002", displayId: "F002", name: "登出" }, // unmapped → no row
+    ],
+    constraints: [{ id: "CON_a", displayId: "C001", description: "密码强度" }],
+    exceptions: [{ id: "EXC_a", displayId: "X001", description: "登录失败" }],
+    entities: [],
+  };
+  const model = () => ({
+    modules: [{ id: "MOD_USER", name: "用户", responsibility: "r", functionIds: ["F001"] }],
+    classes: [{ name: "UserService", kind: "helper" as const, responsibility: "r" }],
+    dataFlows: [],
+    constraintImplementations: [
+      { constraintId: "C001", sourceTextVerbatim: "", implementationMechanism: "校验密码长度≥8", parametersPreserved: [], trigger: "", handling: "", affectedModuleIds: ["MOD_USER"], affectedClassNames: ["UserService"] },
+    ],
+    exceptionImplementations: [
+      { exceptionId: "X001", sourceTextVerbatim: "", trigger: "", handling: "拒绝登录", parametersPreserved: [], affectedModuleIds: ["MOD_USER"], affectedClassNames: ["UserService"] },
+    ],
+    coverageMatrix: [],
+  });
+
+  it("derives one row per covered item, copying refs from impl blocks / module mapping", () => {
+    const cm = SystemDesigner.buildCoverageMatrix(model(), req);
+    const byId = Object.fromEntries(cm.map((r) => [r.refId, r]));
+    expect(byId["F001"].refKind).toBe("function");
+    expect(byId["F001"].affectedModuleIds).toEqual(["MOD_USER"]);
+    expect(byId["C001"].designDecision).toBe("见 constraintImplementations[C001]");
+    expect(byId["C001"].affectedClassNames).toEqual(["UserService"]);
+    expect(byId["X001"].designDecision).toBe("见 exceptionImplementations[X001]");
+  });
+
+  it("omits uncovered items (unmapped function / missing impl block)", () => {
+    const cm = SystemDesigner.buildCoverageMatrix(model(), req);
+    expect(cm.some((r) => r.refId === "F002")).toBe(false);
+  });
+
+  it("references only classes that exist in the impl blocks (fabrication impossible)", () => {
+    const cm = SystemDesigner.buildCoverageMatrix(model(), req);
+    for (const r of cm) {
+      for (const c of r.affectedClassNames) {
+        expect(c).toBe("UserService");
+      }
+    }
+  });
+});
+
+
+// ---------------------------------------------------------------------------
 // SystemDesigner.checkCoverageGaps — coverage matrix gap detection
 // ---------------------------------------------------------------------------
 
@@ -470,16 +704,39 @@ describe("SystemDesigner.checkCoverageGaps", () => {
       modules: [{ id: "MOD_USER", name: "User", responsibility: "r", functionIds: ["F001"] }],
       classes: [],
       dataFlows: [],
+      constraintImplementations: [
+        {
+          constraintId: "C001",
+          sourceTextVerbatim: "用户密码长度必须不少于8位",
+          implementationMechanism: "UserService 在 register 时强制校验密码长度不少于8位",
+          parametersPreserved: ["8位"],
+          trigger: "用户提交注册请求时",
+          handling: "若密码长度低于8位则拒绝注册",
+          affectedModuleIds: ["MOD_USER"],
+          affectedClassNames: ["UserService"],
+        },
+      ],
+      exceptionImplementations: [
+        {
+          exceptionId: "X001",
+          sourceTextVerbatim: "密码错误时拒绝登录",
+          trigger: "用户输入错误密码",
+          handling: "返回 401，提示密码错误",
+          parametersPreserved: [],
+          affectedModuleIds: ["MOD_USER"],
+          affectedClassNames: ["UserService"],
+        },
+      ],
       coverageMatrix: [
         { refId: "F001", refKind: "function" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
-        { refId: "C001", refKind: "constraint" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
-        { refId: "X001", refKind: "exception" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+        { refId: "C001", refKind: "constraint" as const, originalDescription: "d", designDecision: "见 constraintImplementations[C001]", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+        { refId: "X001", refKind: "exception" as const, originalDescription: "d", designDecision: "见 exceptionImplementations[X001]", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
       ],
     };
     const req = {
       functions: [{ displayId: "F001", id: "FUN_abc", name: "Login" }],
-      constraints: [{ displayId: "C001", id: "CON_def", description: "c" }],
-      exceptions: [{ displayId: "X001", id: "EXC_ghi", description: "e" }],
+      constraints: [{ displayId: "C001", id: "CON_def", description: "c", source_text: "用户密码长度必须不少于8位" }],
+      exceptions: [{ displayId: "X001", id: "EXC_ghi", description: "e", source_text: "密码错误时拒绝登录" }],
     };
     const gaps = SystemDesigner.checkCoverageGaps(model, req);
     expect(gaps).toHaveLength(0);
@@ -490,6 +747,8 @@ describe("SystemDesigner.checkCoverageGaps", () => {
       modules: [{ id: "MOD_USER", name: "User", responsibility: "r", functionIds: ["F001"] }],
       classes: [],
       dataFlows: [],
+      constraintImplementations: [],
+      exceptionImplementations: [],
       coverageMatrix: [
         { refId: "F001", refKind: "function" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
       ],
@@ -500,22 +759,33 @@ describe("SystemDesigner.checkCoverageGaps", () => {
       exceptions: [{ displayId: "X001", id: "EXC_jkl", description: "e" }],
     };
     const gaps = SystemDesigner.checkCoverageGaps(model, req);
-    expect(gaps).toHaveLength(3); // F002, C001, X001 uncovered
+    expect(gaps).toHaveLength(3); // F002 (no coverage), C001 (no impl block), X001 (no impl block)
     expect(gaps.map((g) => g.id).sort()).toEqual(["C001", "F002", "X001"]);
   });
 
-  it("matches by canonical id when displayId absent", () => {
+  it("matches a constraint by canonical id when displayId absent", () => {
     const model = {
       modules: [],
       classes: [],
       dataFlows: [],
-      coverageMatrix: [
-        { refId: "CON_abc", refKind: "constraint" as const, originalDescription: "d", designDecision: "d", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
+      constraintImplementations: [
+        {
+          constraintId: "CON_abc",
+          sourceTextVerbatim: "用户必须先完成实名认证",
+          implementationMechanism: "UserService.register 在创建账户前调用 KycService 完成实名认证流程",
+          parametersPreserved: [],
+          trigger: "用户注册请求",
+          handling: "未通过认证则注册失败",
+          affectedModuleIds: ["MOD_USER"],
+          affectedClassNames: ["UserService", "KycService"],
+        },
       ],
+      exceptionImplementations: [],
+      coverageMatrix: [],
     };
     const req = {
       functions: [],
-      constraints: [{ displayId: "", id: "CON_abc", description: "c" }],
+      constraints: [{ displayId: "", id: "CON_abc", description: "c", source_text: "用户必须先完成实名认证" }],
       exceptions: [],
     };
     const gaps = SystemDesigner.checkCoverageGaps(model, req);
@@ -527,6 +797,8 @@ describe("SystemDesigner.checkCoverageGaps", () => {
       modules: [],
       classes: [],
       dataFlows: [],
+      constraintImplementations: [],
+      exceptionImplementations: [],
       coverageMatrix: [],
     };
     const req: Record<string, unknown> = { functions: [], constraints: [], exceptions: [] };
@@ -534,18 +806,32 @@ describe("SystemDesigner.checkCoverageGaps", () => {
     expect(gaps).toHaveLength(0);
   });
 
-  it("flags a listed constraint as a gap when designDecision is empty/too thin", () => {
+  it("flags constraints with NO constraintImplementation block as gaps", () => {
+    // Listed in coverageMatrix but missing from the first-class
+    // constraintImplementations block → fail-closed gap. This is the new
+    // primary check: the coverageMatrix one-liner is no longer enough to
+    // claim a constraint is implemented.
     const model = {
       modules: [],
       classes: [],
       dataFlows: [],
+      constraintImplementations: [
+        {
+          constraintId: "C003",
+          sourceTextVerbatim: "抗生素处方必须由主任医师审核",
+          implementationMechanism: "RxService 在处方提交时检查抗生素标记并强制主任医师审核流程",
+          parametersPreserved: ["抗生素", "主任医师"],
+          trigger: "处方提交且包含抗生素",
+          handling: "若未经过主任医师审核则拒绝处方",
+          affectedModuleIds: ["MOD_RX"],
+          affectedClassNames: ["RxService"],
+        },
+      ],
+      exceptionImplementations: [],
       coverageMatrix: [
-        // Listed by refId but designDecision is empty → content-incomplete gap
-        { refId: "C001", refKind: "constraint" as const, originalDescription: "", designDecision: "", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
-        // Listed with a ≤10-char generic decision → also a gap
+        { refId: "C001", refKind: "constraint" as const, originalDescription: "", designDecision: "见 constraintImplementations[C001]", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
         { refId: "C002", refKind: "constraint" as const, originalDescription: "", designDecision: "ok", affectedModuleIds: [], affectedClassNames: [], testImplication: "t" },
-        // Listed with a substantive, semantically-matching decision → not a gap
-        { refId: "C003", refKind: "constraint" as const, originalDescription: "抗生素处方", designDecision: "抗生素处方需要医生审核与药库校验", affectedModuleIds: ["MOD_RX"], affectedClassNames: ["RxService"], testImplication: "t" },
+        { refId: "C003", refKind: "constraint" as const, originalDescription: "抗生素", designDecision: "见 constraintImplementations[C003]", affectedModuleIds: ["MOD_RX"], affectedClassNames: ["RxService"], testImplication: "t" },
       ],
     };
     const req = {
@@ -553,35 +839,121 @@ describe("SystemDesigner.checkCoverageGaps", () => {
       constraints: [
         { displayId: "C001", id: "CON_a", source_text: "审计跟踪数据不可修改与删除" },
         { displayId: "C002", id: "CON_b", source_text: "系统响应时间必须低于两秒钟以内" },
-        { displayId: "C003", id: "CON_c", source_text: "抗生素处方需要医生审核" },
+        { displayId: "C003", id: "CON_c", source_text: "抗生素处方必须由主任医师审核" },
       ],
       exceptions: [],
     };
     const gaps = SystemDesigner.checkCoverageGaps(model, req);
+    // C001 and C002 lack constraintImplementations entries; C003 has one
+    // with a passing param check.
     expect(gaps.map((g) => g.id).sort()).toEqual(["C001", "C002"]);
-    // C003 has a substantive matching decision → not flagged
     expect(gaps.map((g) => g.id)).not.toContain("C003");
   });
 
-  it("flags a listed constraint as a gap when designDecision omits source keywords (antibiotic drift)", () => {
+  it("flags a constraint as a gap when its implementationMechanism omits a source anchor", () => {
+    // Has a constraintImplementation entry but the mechanism does NOT mention
+    // the source anchor "256-bit" → fail because the parameter is lost.
     const model = {
       modules: [],
       classes: [],
       dataFlows: [],
-      coverageMatrix: [
-        // Listed with a substantive decision that does NOT mention the source
-        // keyword “抗生素” → content-drift gap
-        { refId: "C001", refKind: "constraint" as const, originalDescription: "", designDecision: "普通处方需要药师审核并记录日志", affectedModuleIds: ["MOD_RX"], affectedClassNames: ["RxService"], testImplication: "t" },
+      constraintImplementations: [
+        {
+          constraintId: "C001",
+          sourceTextVerbatim: "数据库使用 AES (256-bit key) 加密",
+          implementationMechanism: "EncryptionEngine 使用 AES 算法加密数据库",
+          parametersPreserved: ["AES"],
+          trigger: "save() 时",
+          handling: "加密整个数据库",
+          affectedModuleIds: ["MOD_SEC"],
+          affectedClassNames: ["EncryptionEngine"],
+        },
       ],
+      exceptionImplementations: [],
+      coverageMatrix: [],
     };
     const req = {
       functions: [],
       constraints: [
-        { displayId: "C001", id: "CON_a", source_text: "抗生素处方必须由主任医师审核" },
+        { displayId: "C001", id: "CON_a", source_text: "数据库使用 AES (256-bit key) 加密" },
       ],
       exceptions: [],
     };
     const gaps = SystemDesigner.checkCoverageGaps(model, req);
     expect(gaps.map((g) => g.id)).toContain("C001");
+    // The gap reason should call out the missing 256-bit anchor.
+    expect(gaps[0].reason ?? "").toMatch(/256-bit|anchor/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractSalientAnchors — verbatim parameter extraction
+// ---------------------------------------------------------------------------
+
+describe("extractSalientAnchors", () => {
+  it("extracts numeric+unit anchors (256-bit, 128-bit, 10 seconds)", () => {
+    const t = "AES (128-bit block, 256-bit key) and Twofish; clipboard cleared after 10 seconds.";
+    const anchors = extractSalientAnchors(t);
+    expect(anchors).toContain("128-bit");
+    expect(anchors).toContain("256-bit");
+    expect(anchors).toContain("10 seconds");
+  });
+
+  it("extracts algorithm names", () => {
+    const t = "Encrypted with AES/Rijndael, Twofish, and PBKDF2 for key derivation; in-memory uses ARC4.";
+    const anchors = extractSalientAnchors(t);
+    expect(anchors).toContain("AES/Rijndael");
+    expect(anchors).toContain("Twofish");
+    expect(anchors).toContain("PBKDF2");
+    expect(anchors).toContain("ARC4");
+  });
+
+  it("extracts file extensions and product-level key phrases", () => {
+    const t = "Database files use the .kdb extension. The user must set a Master Password. No recovery is supported and only single instance allowed.";
+    const anchors = extractSalientAnchors(t);
+    expect(anchors).toContain(".kdb");
+    expect(anchors.some((a) => /Master Password/i.test(a))).toBe(true);
+    expect(anchors.some((a) => /no recovery/i.test(a))).toBe(true);
+    expect(anchors.some((a) => /single[ -]instance/i.test(a))).toBe(true);
+  });
+
+  it("extracts CJK numeric units (10秒)", () => {
+    const t = "复制的密码 10 秒后自动从剪贴板清除。";
+    const anchors = extractSalientAnchors(t);
+    expect(anchors.some((a) => /10\s*秒/.test(a))).toBe(true);
+  });
+
+  it("returns empty for empty input", () => {
+    expect(extractSalientAnchors("")).toEqual([]);
+  });
+
+  it("does NOT false-positive on plain TLD-shaped tokens (.com)", () => {
+    const t = "See https://example.com for details.";
+    const anchors = extractSalientAnchors(t);
+    expect(anchors).not.toContain(".com");
+  });
+});
+
+describe("textIncludesAnchor", () => {
+  it("matches case-insensitively for ASCII", () => {
+    expect(textIncludesAnchor("Uses aes-256 encryption", "AES-256")).toBe(true);
+  });
+
+  it("treats hyphen and space as interchangeable for ASCII", () => {
+    expect(textIncludesAnchor("Uses 256 bit key", "256-bit")).toBe(true);
+    expect(textIncludesAnchor("Uses 256-bit key", "256 bit")).toBe(true);
+  });
+
+  it("matches CJK exact substring", () => {
+    expect(textIncludesAnchor("剪贴板会在10秒后清除", "10秒")).toBe(true);
+    expect(textIncludesAnchor("剪贴板清除", "10秒")).toBe(false);
+  });
+
+  it("returns true for empty anchor (degenerate case)", () => {
+    expect(textIncludesAnchor("anything", "")).toBe(true);
+  });
+
+  it("returns false when haystack is empty", () => {
+    expect(textIncludesAnchor("", "AES")).toBe(false);
   });
 });

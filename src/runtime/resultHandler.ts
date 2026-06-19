@@ -27,7 +27,7 @@ import {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
-export function asPlainNotification(notif: TaskNotification): Record<string, unknown> {
+function asPlainNotification(notif: TaskNotification): Record<string, unknown> {
   return {
     taskId: notif.taskId,
     sessionId: notif.sessionId,
@@ -44,7 +44,7 @@ export function asPlainNotification(notif: TaskNotification): Record<string, unk
   };
 }
 
-export function isArtifactResult(value: unknown): value is Artifact {
+function isArtifactResult(value: unknown): value is Artifact {
   return (
     isRecord(value) &&
     typeof value.taskId === "string" &&
@@ -52,7 +52,7 @@ export function isArtifactResult(value: unknown): value is Artifact {
   );
 }
 
-export function isVerdictResult(value: unknown): value is Verdict {
+function isVerdictResult(value: unknown): value is Verdict {
   return (
     isRecord(value) &&
     typeof value.passed === "boolean" &&
@@ -61,7 +61,7 @@ export function isVerdictResult(value: unknown): value is Verdict {
   );
 }
 
-export function isExecutionPlanResult(value: unknown): value is ExecutionPlan {
+function isExecutionPlanResult(value: unknown): value is ExecutionPlan {
   return (
     isRecord(value) &&
     Array.isArray(value.tasks) &&
@@ -69,7 +69,7 @@ export function isExecutionPlanResult(value: unknown): value is ExecutionPlan {
   );
 }
 
-export function isPlanMutationResult(value: unknown): value is PlanMutation {
+function isPlanMutationResult(value: unknown): value is PlanMutation {
   return (
     isRecord(value) &&
     Array.isArray(value.addTasks) &&
@@ -195,6 +195,7 @@ export class ResultHandler {
     state.markTaskStatus(taskId, notif.status, notif.sessionId, {
       event: notif.event,
       summary: notif.summary,
+      error: notif.error,
     });
     if (notif.error || notif.summary) {
       state.stores.execution.addError(notif.error || notif.summary);
@@ -330,7 +331,7 @@ export class ResultHandler {
     if (!plan) return;
 
     const analyzeTasks = plan.tasks.filter((t) => t.type === "analyze");
-    if (analyzeTasks.length <= 1) return; // single analyze: no merge needed
+    if (analyzeTasks.length === 0) return; // no analyze tasks: nothing to do
 
     const allDone = analyzeTasks.every((t) => state.isTaskCompleted(t.id));
     if (!allDone) return;
@@ -344,7 +345,7 @@ export class ResultHandler {
       })
       .filter((a): a is { taskId: string; content: Record<string, unknown> } => a !== null);
 
-    if (artifacts.length <= 1) return;
+    if (artifacts.length === 0) return; // nothing collected: skip
 
     this.deps.onEmitRuntimeEvent(
       "merge_started",

@@ -13,7 +13,7 @@
  *           │   ├── result.json     canonical per-run result (see BenchmarkResult)
  *           │   ├── sanity.json     Layer-0 sanity gate output
  *           │   ├── review.json     review-gate record (separate from quality)
- *           │   ├── quality.json    Phase-1 placeholder; Phase-2 rubric scores
+ *           │   ├── quality.json    quality rubric sub-scores (judge output)
  *           │   └── artifacts/      runtime-produced artifacts (copied in)
  *           ├── run_1/ ...
  *           └── ...
@@ -34,30 +34,32 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { RUNNER_VERSION, SCORING_VERSION, type BenchmarkMetadata } from "./metadata.js";
+import type { BenchmarkMetadata } from "./metadata.js";
 
 // ---------------------------------------------------------------------------
-// Quality scores (Phase-1 placeholders)
+// Quality scores
 // ---------------------------------------------------------------------------
 
 /**
- * The four Phase-2 quality sub-scores. Phase 1 leaves every field `null` and
- * records a `TODO(Phase2)`; once the rubric lands they become 0-100 numbers.
+ * The four quality sub-scores, each 0-100 or null when not scored. The
+ * evidence-based judge (`qualityJudge.ts`) computes these from the on-disk
+ * design+tests against the case's gold contract; a run without a gold
+ * contract (or a judge failure) keeps all fields null.
  */
 export interface QualityScores {
-  /** Layer 1 — Gold Obligation coverage (Phase 2). */
+  /** Layer 1 — Gold Obligation coverage. */
   gold_obligation_coverage: number | null;
-  /** Layer 2 — Traceability Truthfulness (Phase 2). */
+  /** Layer 2 — Traceability Truthfulness. */
   traceability_truthfulness: number | null;
-  /** Layer 3 — Test Effectiveness (mutant / Phase 2). */
+  /** Layer 3 — Test Effectiveness (mutant-based; not yet implemented). */
   test_effectiveness: number | null;
-  /** Layer 4 — Design Depth (rubric / Phase 2). */
+  /** Layer 4 — Design Depth (rubric). */
   design_depth: number | null;
-  /** Aggregate of the four sub-scores (Phase 2). */
+  /** Aggregate of the four sub-scores. */
   final_score: number | null;
 }
 
-/** All-null quality block (Phase-1 valid-but-unscored). */
+/** All-null quality block (valid run that was not scored by the judge). */
 export const NULL_QUALITY: QualityScores = {
   gold_obligation_coverage: null,
   traceability_truthfulness: null,
@@ -68,8 +70,8 @@ export const NULL_QUALITY: QualityScores = {
 
 /**
  * Quality block for an *invalid* run (failed the sanity gate). Identical to
- * {@link NULL_QUALITY} today; kept as a distinct symbol so Phase-2 invalid
- * handling can diverge from "valid-but-not-judged" without touching call sites.
+ * {@link NULL_QUALITY} today; kept as a distinct symbol so invalid handling
+ * can diverge from "valid-but-not-judged" without touching call sites.
  */
 export const INVALID_QUALITY: QualityScores = { ...NULL_QUALITY };
 
@@ -88,13 +90,13 @@ export interface SanityResult {
 // ---------------------------------------------------------------------------
 
 /**
- * The pipeline's own final-review gate. Phase 1 records it but explicitly does
- * NOT weight it into {@link QualityScores} (per the v2 design: the review gate
- * is an independent signal, decoupled from the quality rubric).
+ * The pipeline's own final-review gate. Recorded but explicitly NOT weighted
+ * into {@link QualityScores} (per the v2 design: the review gate is an
+ * independent signal, decoupled from the quality rubric).
  */
 export interface ReviewGateRecord {
   passed: boolean;
-  /** null in Phase 1 — the review has no numeric score in the v2 contract. */
+  /** null — the review has no numeric score in the v2 contract. */
   score: number | null;
   open_major_issues: number;
   quality_status: string;
@@ -105,12 +107,12 @@ export interface ReviewGateRecord {
 // Canonical per-run result
 // ---------------------------------------------------------------------------
 
-export type RunStatus = "valid" | "invalid";
+type RunStatus = "valid" | "invalid";
 
 /**
  * Canonical `result.json`. `status === "invalid"` ⇒ quality is all-null
  * (sanity gate failed). `status === "valid"` ⇒ quality may still be all-null
- * in Phase 1 (judge not implemented yet).
+ * when the case has no gold contract or the judge fell back.
  */
 export interface BenchmarkResult {
   case_id: string;
@@ -174,7 +176,7 @@ export function runDirBase(baseDir: string, benchmarkId: string): string {
 }
 
 /** `{base}/{benchmark_id}/cases/{caseId}` — all runs for one case. */
-export function caseDir(baseDir: string, benchmarkId: string, caseId: string): string {
+function caseDir(baseDir: string, benchmarkId: string, caseId: string): string {
   return join(runDirBase(baseDir, benchmarkId), "cases", caseId);
 }
 
@@ -273,7 +275,7 @@ export class ResultStore {
    * @param result   canonical result.json content
    * @param sanity   Layer-0 sanity gate output (also written as sanity.json)
    * @param review   review-gate record (review.json, separate from quality)
-   * @param quality  quality block (quality.json; Phase-1 placeholder)
+   * @param quality  quality block (quality.json; judge output, or all-null)
    */
   writeRun(params: {
     result: BenchmarkResult;
@@ -337,5 +339,3 @@ export function readJsonIfExists<T>(filePath: string): T | null {
   }
 }
 
-/** Re-exported for summary builders that stamp runner/scoring versions. */
-export { RUNNER_VERSION, SCORING_VERSION };

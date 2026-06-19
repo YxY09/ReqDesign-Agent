@@ -13,6 +13,7 @@ build/
 .eggs/
 outputs/
 output/
+results/
 .tmp-test-output/
 .pi/
 logs/

@@ -415,7 +415,6 @@
 | registry_extraction.md | 实体注册表提取 |
 | constraint_extraction.md | 约束提取 |
 | merge_constraints.md | 约束合并 |
-| merge_relationships.md | 关系合并 |
 | merge_post_process.md | 合并后处理 |
 | class_diagram.md | 类图生成 |
 | activity_diagram.md | 活动图生成 |

@@ -35,8 +35,10 @@ export class RemediationLadder {
     const targetIssues = snapshot.latestIssues.filter(
       (issue) => issue["target_task_id"] === target,
     );
+    // Only verifiable DEFECTS are repair targets; advisory majors are recorded,
+    // not repaired.
     const majorIssues = targetIssues.filter(
-      (issue) => issue["severity"] === "major",
+      (issue) => issue["severity"] === "major" && issue["kind"] === "defect",
     );
     if (majorIssues.length === 0) return false;
 
@@ -93,15 +95,12 @@ export class RemediationLadder {
       });
     }
 
-    if (
-      snapshot.stalledTaskIds.includes(target) ||
-      !this.budget.canRepair(snapshot, target)
-    ) {
+    if (!this.budget.canRepair(snapshot, target)) {
       if (this.budget.canReplan(snapshot)) {
         return createStrategyDecision({
           strategy: "escalate_to_replan",
           targetTaskId: target,
-          reason: reason || `${target} is stalled or exhausted repair budget`,
+          reason: reason || `${target} exhausted repair budget`,
         });
       }
       return createStrategyDecision({
@@ -136,6 +135,10 @@ export class RemediationLadder {
     for (const target of snapshot.majorPendingTaskIds) {
       if (isTaskRunning(snapshot, target)) continue;
       if (!this.budget.canRepairFinalMajor(snapshot, target)) continue;
+      // Repair-effectiveness gate: if a prior repair of this task left the same
+      // structural issue in place, repeating it is futile — skip so the ladder
+      // falls through to accept (local) or pause (upstream/systemic).
+      if (snapshot.repairFutileTaskIds.includes(target)) continue;
       if (!this.isSafeFinalMajorRepairTarget(snapshot, target)) continue;
       return createStrategyDecision({
         strategy: "repair_local_artifact",
@@ -165,10 +168,49 @@ export class RemediationLadder {
       });
     }
 
-    if (this.budget.canReplan(snapshot)) {
+    // Upstream/systemic scope issues represent genuine plan-level problems
+    // (e.g. missing modules, wrong decomposition). Replan if budget remains;
+    // otherwise it is a structural defect we cannot fix automatically, so hand
+    // it to the user rather than silently shipping a known-broken plan.
+    const hasUpstreamMajor = snapshot.latestIssues.some((issue) => {
+      const scope = String(issue["scope"] ?? "");
+      return (
+        (scope === "upstream" || scope === "systemic") &&
+        issue["severity"] === "major" &&
+        issue["kind"] === "defect"
+      );
+    });
+    if (hasUpstreamMajor) {
+      if (this.budget.canReplan(snapshot)) {
+        return createStrategyDecision({
+          strategy: "escalate_to_replan",
+          targetTaskId: snapshot.majorPendingTaskIds[0],
+          reason:
+            reason ||
+            "final review found upstream/systemic major issues that may benefit from replanning",
+        });
+      }
       return createStrategyDecision({
-        strategy: "escalate_to_replan",
-        reason: reason || "final review major issues exceeded repair budget",
+        strategy: "pause_for_user",
+        targetTaskId: snapshot.majorPendingTaskIds[0],
+        reason:
+          reason ||
+          "final review found upstream/systemic major issues but replan budget is exhausted",
+      });
+    }
+
+    // Only local quality issues remain. A fresh plan with the same LLM produces
+    // the same quality level, so accept the current output unless a blocker
+    // defect is present (the artifact is unusable, not just imperfect).
+    const hasBlocker = snapshot.latestIssues.some(
+      (issue) => issue["severity"] === "blocker" && issue["kind"] === "defect",
+    );
+    if (!hasBlocker) {
+      return createStrategyDecision({
+        strategy: "finish",
+        reason:
+          reason ||
+          `final review defects remain in ${snapshot.majorPendingTaskIds.length} task(s) but no further repair will help (budget exhausted or repair proved futile) and no blockers; accepting with annotation`,
       });
     }
 
@@ -177,7 +219,7 @@ export class RemediationLadder {
       targetTaskId: snapshot.majorPendingTaskIds[0],
       reason:
         reason ||
-        "final review major issues remain but repair/replan budget is exhausted",
+        "final review has blockers and repair budget is exhausted",
     });
   }
 }

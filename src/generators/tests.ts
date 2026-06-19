@@ -21,10 +21,12 @@ import {
   type DedupConfig,
 } from "../shared/semanticDeduper.js";
 import { extractContentTerms, jaccardSimilarity as jaccard } from "../shared/testAlignment.js";
+import { setupLogger, type Logger } from "../logger.js";
 
 export class TestCaseGenerator extends BaseGenerator<string> {
   private promptTemplate: string;
   private taskPromptTemplate: string;
+  private readonly logger: Logger = setupLogger("reqdesign.TestCaseGenerator");
 
   constructor(llm: LLMClient) {
     super(llm);
@@ -64,12 +66,13 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     // Phase 2: Group tasks and generate with LLM per group
     const groups = groupByModule(testPlan);
     const allRawResults: string[] = [];
+    this.logger.info(`generate: test plan targets=${testPlan.length}, groups=${groups.length}`);
 
     let safeDesign = this.sanitizePlaceholder(designText, "requirement_json");
     safeDesign = this.sanitizePlaceholder(safeDesign, "design_text");
     safeDesign = this.sanitizePlaceholder(safeDesign, "test_tasks");
 
-    for (const group of groups) {
+    for (const [index, group] of groups.entries()) {
       const taskText = formatTaskGroupForPrompt(group);
       let taskPrompt = this.taskPromptTemplate.replace(/\{test_tasks\}/g, taskText);
       taskPrompt = taskPrompt.replace(
@@ -77,7 +80,12 @@ export class TestCaseGenerator extends BaseGenerator<string> {
         `${TestCaseGenerator.buildTestContract(requirementJson)}\n\n${safeDesign}`,
       );
 
-      const result = await this.llm.generateText(taskPrompt, systemPrompt ?? "");
+      this.logger.info(`generate: group ${index + 1}/${groups.length} targets=${group.tasks.length} 开始`);
+      const result = await this.withStreamTag(
+        `[Generator:tests:group-${index + 1}-of-${groups.length}]`,
+        () => this.llm.generateText(taskPrompt, systemPrompt ?? ""),
+      );
+      this.logger.info(`generate: group ${index + 1}/${groups.length} 完成，chars=${result.length}`);
       allRawResults.push(result);
     }
 
@@ -108,14 +116,14 @@ export class TestCaseGenerator extends BaseGenerator<string> {
     if (issues.length > 0) {
       const rejectCount = issues.filter((i) => i.severity === "reject").length;
       const warnCount = issues.filter((i) => i.severity === "warning").length;
-      console.warn(
-        `[TestCaseGenerator] Quality validation: ${goodCases.length} passed, ${rejectCount} rejected, ${warnCount} warnings`,
+      this.logger.warn(
+        `generate: quality validation passed=${goodCases.length}, rejected=${rejectCount}, warnings=${warnCount}`,
       );
     }
 
     // If all cases were rejected, fall back to single-shot as safety net
     if (goodCases.length === 0) {
-      console.warn("[TestCaseGenerator] All test cases rejected by quality validator, falling back to single-shot generation");
+      this.logger.warn("generate: all test cases rejected by quality validator, falling back to single-shot generation");
       return this.generateSingleShot(requirementJson, designText, systemPrompt);
     }
 
@@ -141,7 +149,9 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       `${TestCaseGenerator.buildTestContract(requirementJson)}\n\n${safeDesign}`,
     );
 
-    const result = await this.llm.generateText(prompt, systemPrompt ?? "");
+    const result = await this.withStreamTag("[Generator:tests:single-shot]", () =>
+      this.llm.generateText(prompt, systemPrompt ?? "")
+    );
     return TestCaseGenerator.normalizeStructuredTestCases(result, requirementJson) ?? result;
   }
 
@@ -158,7 +168,55 @@ export class TestCaseGenerator extends BaseGenerator<string> {
         allCases.push(...parsed);
       }
     }
-    return allCases;
+    return TestCaseGenerator.normalizeStructuredTestCaseRecords(allCases);
+  }
+
+  static normalizeStructuredTestCaseRecords(
+    cases: Array<Record<string, unknown>>,
+  ): Array<Record<string, unknown>> {
+    const normalized = TestCaseGenerator.normalizeStructuredTestCaseIds(
+      JSON.stringify({ test_cases: cases }),
+    );
+    return normalized
+      ? TestCaseGenerator.parseStructuredTestCases(normalized) ?? cases
+      : cases;
+  }
+
+  static mergeStructuredTestCaseRecords(
+    currentCases: Array<Record<string, unknown>>,
+    incomingCases: Array<Record<string, unknown>>,
+  ): {
+    cases: Array<Record<string, unknown>>;
+    replaced: number;
+    added: number;
+  } {
+    const merged = [...currentCases];
+    const idToIndex = new Map<string, number>();
+    for (let i = 0; i < merged.length; i++) {
+      const id = String(merged[i].id ?? "").trim();
+      if (id && !idToIndex.has(id)) idToIndex.set(id, i);
+    }
+
+    let replaced = 0;
+    let added = 0;
+    for (const incomingCase of incomingCases) {
+      const id = String(incomingCase.id ?? "").trim();
+      const existingIndex = id ? idToIndex.get(id) : undefined;
+      if (existingIndex !== undefined) {
+        merged[existingIndex] = incomingCase;
+        replaced++;
+        continue;
+      }
+      merged.push(incomingCase);
+      if (id) idToIndex.set(id, merged.length - 1);
+      added++;
+    }
+
+    return {
+      cases: TestCaseGenerator.normalizeStructuredTestCaseRecords(merged),
+      replaced,
+      added,
+    };
   }
 
   /**
@@ -285,11 +343,13 @@ export class TestCaseGenerator extends BaseGenerator<string> {
       "以下 ID 是唯一可信来源。测试对象和测试步骤只能引用这些真实 ID，禁止重新编号或改前缀。",
       functions.length > 0 ? `### 必须覆盖的功能 ID\n${functions.map((item) => `- ${item}`).join("\n")}` : "",
       exceptions.length > 0 ? `### 必须覆盖的异常 ID\n${exceptions.map((item) => `- ${item}`).join("\n")}` : "",
-      constraints.length > 0 ? `### 必须覆盖的约束 ID\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
-      "- 每个功能 ID 至少出现在一个测试对象中。",
+      constraints.length > 0 ? `### 必须覆盖的约束 ID（source_text 是断言基线）\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
+      "- 每个功能 ID 至少出现在一个测试对象（target）中。",
       "- 每个异常 ID 至少出现在一个异常测试的测试对象或测试步骤中。",
       "- 如果异常 ID 是 X001，就必须写 X001；禁止改写为 E001。",
-      constraints.length > 0 ? "- 每个约束 ID 至少出现在一个边界测试或约束验证测试的测试对象或测试步骤中。约束的 source_text 描述了具体规则，related_functions 描述了涉及的功能，测试用例应基于这些信息编写。" : "",
+      constraints.length > 0 ? "- **每个约束 ID 必须至少出现在一个边界/约束测试的 target 字段中**，且 target 格式必须为 `<C编号> <约束描述前 30 字>`（例：`C003 复制的密码 10 秒后自动清除`）。约束的 source_text 是测试 expected_result 的断言基线——expected_result 必须验证 source_text 中的具体参数（算法/密钥长度/时限/数量限制等），禁止把约束测试写成普通功能流程。" : "",
+      constraints.length > 0 ? "- **参数保真（关键）**：约束测试的 steps 与 expected_result 必须逐字使用 source_text 中的算法名、数值、单位、限制值。例如 N001 的 source_text 含 \"AES/Rijndael (256-bit key)\" 时，测试 expected_result 应写 \"数据库以 AES 256-bit 密钥加密\"，不能泛化为 \"数据库加密\"。" : "",
+      constraints.length > 0 ? "- **测试只能引用 design 里出现过的术语**：测试的 target/steps/expected_result 中提到的算法名、产品代号、版本号、机制名，**必须**已经出现在上方「系统设计」的 `## 约束实现` 或 `## 异常实现` 段落中。**严禁虚构**：禁止写出像 `CON_FUNC_xxx`、`E3K31 加密算法`、`KDB_K28M 加密算法` 这类 design/analysis 里**从未出现**的代号或机制名。如果某条约束在 design 里只描述到 \"AES 加密\" 这个层级，你的测试也只能停在这个层级——不允许凭空发明新概念。" : "",
       "- 输出必须是合法 JSON 根对象，且包含 `test_cases` 数组；禁止输出 Markdown、表格、代码围栏或解释文本。",
       "- 每个测试用例对象必须包含 id/title/type/target/preconditions/steps/expected_result/priority。",
       "- 优先级必须使用 P0/P1/P2。",

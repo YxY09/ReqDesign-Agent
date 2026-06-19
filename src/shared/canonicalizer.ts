@@ -6,6 +6,12 @@
  * displayId (F001/C001/X001) 给人看，canonicalId 给程序用。
  */
 
+import {
+  displayIdFromRecord,
+  formatDisplayId,
+  nextDisplayIdCounter,
+} from "./idPolicy.js";
+
 export interface CanonicalMaps {
   functionMap: Map<string, string>;    // oldId/name → canonicalId
   constraintMap: Map<string, string>;  // oldId → canonicalId
@@ -23,7 +29,7 @@ export function canonicalizeAndLink(merged: Record<string, unknown>): CanonicalM
     exceptionMap: new Map(),
   };
 
-  // 1. Functions: 按 name 排序，分配 FUN_UPPER_SNAKE 格式
+  // 1. Functions: preserve source display IDs, assign FUN_UPPER_SNAKE IDs
   canonicalizeFunctions(merged, maps);
 
   // 2. Constraints: 分配 CON_UPPER_SNAKE 格式
@@ -45,13 +51,13 @@ function canonicalizeFunctions(
   const functions = asArray(merged["functions"]);
   if (!functions.length) return;
 
-  // 按 name 排序确保确定性
-  functions.sort((a, b) =>
-    String(a.name ?? "").localeCompare(String(b.name ?? "")),
-  );
-
   const usedIds = new Set<string>();
-  let counter = 1;
+  const preferredDisplayIds = functions
+    .map((fn) => displayIdFromRecord(fn, "F"))
+    .filter((id): id is string => Boolean(id));
+  const usedDisplayIds = new Set<string>();
+  let counter = nextDisplayIdCounter(preferredDisplayIds, 1);
+
   for (const fn of functions) {
     const name = String(fn.name ?? "").trim();
     if (!name) continue;
@@ -63,12 +69,17 @@ function canonicalizeFunctions(
       canonicalId = `${canonicalId}_${suffix}`;
     }
     usedIds.add(canonicalId);
-    const displayId = `F${String(counter++).padStart(3, "0")}`;
+    const preferred = displayIdFromRecord(fn, "F");
+    const displayId = preferred && !usedDisplayIds.has(preferred)
+      ? preferred
+      : formatDisplayId("F", counter++);
+    usedDisplayIds.add(displayId);
 
     // 映射：旧 ID、name → canonicalId
     const oldId = String(fn.id ?? "").trim();
     if (oldId) maps.functionMap.set(oldId, canonicalId);
     maps.functionMap.set(name, canonicalId);
+    maps.functionMap.set(displayId, canonicalId);
 
     fn.id = canonicalId;
     fn.displayId = displayId;
@@ -82,21 +93,11 @@ function canonicalizeConstraints(
   const constraints = asArray(merged["constraints"]);
   if (!constraints.length) return;
 
-  // Sort all constraints by description for deterministic ordering
-  constraints.sort((a, b) =>
-    String(a.description ?? a.text ?? "").localeCompare(
-      String(b.description ?? b.text ?? ""),
-    ),
-  );
-
-  // Determine starting counter from already-canonicalized constraints
-  const existingDisplayIds = constraints
-    .filter((c) => typeof c.displayId === "string")
-    .map((c) => String(c.displayId))
-    .filter((d) => /^C\d{3}$/.test(d));
-  let counter = existingDisplayIds.length > 0
-    ? Math.max(...existingDisplayIds.map((d) => parseInt(d.slice(1), 10))) + 1
-    : 1;
+  const preferredDisplayIds = constraints
+    .map((c) => displayIdFromRecord(c, "C"))
+    .filter((id): id is string => Boolean(id));
+  const usedDisplayIds = new Set<string>();
+  let counter = nextDisplayIdCounter(preferredDisplayIds, 1);
 
   const usedIds = new Set<string>();
 
@@ -106,6 +107,8 @@ function canonicalizeConstraints(
       const cid = String(c.canonicalId);
       const existingId = String(c.id ?? "").trim();
       if (existingId) maps.constraintMap.set(existingId, cid);
+      const displayId = displayIdFromRecord(c, "C");
+      if (displayId) maps.constraintMap.set(displayId, cid);
       usedIds.add(cid);
       continue;
     }
@@ -120,10 +123,15 @@ function canonicalizeConstraints(
       canonicalId = `${canonicalId}_${suffix}`;
     }
     usedIds.add(canonicalId);
-    const displayId = `C${String(counter++).padStart(3, "0")}`;
+    const preferred = displayIdFromRecord(c, "C");
+    const displayId = preferred && !usedDisplayIds.has(preferred)
+      ? preferred
+      : formatDisplayId("C", counter++);
+    usedDisplayIds.add(displayId);
 
     const oldId = String(c.id ?? "").trim();
     if (oldId) maps.constraintMap.set(oldId, canonicalId);
+    maps.constraintMap.set(displayId, canonicalId);
 
     c.id = canonicalId;
     c.displayId = displayId;
@@ -137,14 +145,13 @@ function canonicalizeExceptions(
   const exceptions = asArray(merged["exceptions"]);
   if (!exceptions.length) return;
 
-  exceptions.sort((a, b) =>
-    String(a.description ?? a.text ?? "").localeCompare(
-      String(b.description ?? b.text ?? ""),
-    ),
-  );
-
   const usedIds = new Set<string>();
-  let counter = 1;
+  const preferredDisplayIds = exceptions
+    .map((x) => displayIdFromRecord(x, "X"))
+    .filter((id): id is string => Boolean(id));
+  const usedDisplayIds = new Set<string>();
+  let counter = nextDisplayIdCounter(preferredDisplayIds, 1);
+
   for (const x of exceptions) {
     const text = String(x.description ?? x.text ?? "").trim();
     if (!text) continue;
@@ -156,10 +163,15 @@ function canonicalizeExceptions(
       canonicalId = `${canonicalId}_${suffix}`;
     }
     usedIds.add(canonicalId);
-    const displayId = `X${String(counter++).padStart(3, "0")}`;
+    const preferred = displayIdFromRecord(x, "X");
+    const displayId = preferred && !usedDisplayIds.has(preferred)
+      ? preferred
+      : formatDisplayId("X", counter++);
+    usedDisplayIds.add(displayId);
 
     const oldId = String(x.id ?? "").trim();
     if (oldId) maps.exceptionMap.set(oldId, canonicalId);
+    maps.exceptionMap.set(displayId, canonicalId);
 
     x.id = canonicalId;
     x.displayId = displayId;
@@ -223,6 +235,7 @@ function asArray(val: unknown): Record<string, unknown>[] {
   if (!Array.isArray(val)) return [];
   return val as Record<string, unknown>[];
 }
+
 
 /**
  * 用 name 生成 canonicalId

@@ -195,10 +195,11 @@ export class LLMClient {
     suffix: string,
     fn: () => Promise<T>,
   ): Promise<T> {
+    const parent = this._streamTagContext.getStore();
     return this._streamTagContext.run(
       {
         tag: initialTag,
-        suffix,
+        suffix: suffix || parent?.suffix || "",
       },
       fn,
     );

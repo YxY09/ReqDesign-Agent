@@ -377,4 +377,63 @@ describe("RequirementIndex.normalizeTargetReferences — canonical pre-rewrite",
     // Should not contain the fabricated canonicalId
     expect(out).not.toContain("CON_FABRICATED_XYZ");
   });
+
+  it("uses target description to remap a stale bare canonicalId", () => {
+    const idx = RequirementIndex.fromRequirementJson({
+      functions: [],
+      constraints: [
+        { id: "CON_AUDIT", displayId: "C001", description: "病历修改留痕" },
+        { id: "CON_ANTIBIOTIC", displayId: "C004", description: "抗生素需主任医师审核" },
+      ],
+      exceptions: [],
+    });
+
+    const out = idx.normalizeTargetReferences(
+      "CON_AUDIT 抗生素需主任医师审核",
+      { type: "边界" },
+    );
+
+    expect(out).toBe("C004 | CON_ANTIBIOTIC 抗生素需主任医师审核");
+  });
+
+  it("keeps a valid displayId even when target text resembles another constraint", () => {
+    const idx = RequirementIndex.fromRequirementJson({
+      functions: [],
+      constraints: [
+        { id: "CON_SINGLE_INSTANCE", displayId: "C004", description: "仅允许运行一个KeePass实例" },
+        { id: "CON_PASSWORD_LENGTH", displayId: "C014", description: "主密码没有长度限制" },
+      ],
+      exceptions: [],
+    });
+
+    const out = idx.normalizeTargetReferences(
+      "C004 | CON_SINGLE_INSTANCE 主密码没有长度限制",
+      { type: "边界" },
+    );
+
+    expect(out).toBe("C004 | CON_SINGLE_INSTANCE 主密码没有长度限制");
+  });
+
+  it("does not rewrite a valid display-only target by semantic similarity", () => {
+    const idx = RequirementIndex.fromRequirementJson({
+      functions: [],
+      constraints: [
+        { id: "CON_TIMEOUT_A", displayId: "C003", description: "支付超时时间为30分钟" },
+        { id: "CON_TIMEOUT_B", displayId: "C011", description: "订单支付超时自动取消（30分钟）" },
+      ],
+      exceptions: [],
+    });
+
+    const out = idx.normalizeTargetReferences(
+      "C011 支付超时时间为30分钟",
+      {
+        type: "边界",
+        title: "支付超时30分钟边界测试",
+        steps: ["订单创建后等待30分钟", "系统执行超时取消"],
+        expected_result: "订单因支付超时被取消",
+      },
+    );
+
+    expect(out).toBe("C011 支付超时时间为30分钟");
+  });
 });

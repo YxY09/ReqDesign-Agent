@@ -503,6 +503,332 @@ describe("Step 6d: PlanningTool._ensureSectionCoverage", () => {
 });
 
 // ---------------------------------------------------------------------------
+// PlanningTool._capAnalyzeShards: smart section-based shard capping
+// ---------------------------------------------------------------------------
+
+describe("PlanningTool._capAnalyzeShards", () => {
+  const req = "x".repeat(100);
+
+  function makeSections(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      id: `s${i + 1}`, depth: 2, title: `Section ${i + 1}`, body: "content", charRange: [0, 10] as [number, number],
+    }));
+  }
+
+  function shardedPlan(shardCount = 2) {
+    const tasks = Array.from({ length: shardCount }, (_, i) =>
+      createTask({ id: `analyze-${i + 1}`, type: "analyze", description: `a${i + 1}`, contextHints: { assignedSections: [`s${i + 1}`] } }),
+    );
+    tasks.push(createTask({ id: "design-1", type: "design", description: "d", dependsOn: tasks.map((t) => t.id) }));
+    return createExecutionPlan({ tasks, goal: "design", reasoning: "test" });
+  }
+
+  it("collapses to single shard for simple docs (≤ SINGLE_SHARD_SECTION_LIMIT sections)", () => {
+    const sections = makeSections(15);
+    const result = PlanningTool._capAnalyzeShards(shardedPlan(), req, sections);
+    const analyze = result.tasks.filter((t) => t.type === "analyze");
+    expect(analyze).toHaveLength(1);
+    expect(analyze[0].id).toBe("analyze-1");
+    expect(analyze[0].contextHints?.assignedSections).toBeUndefined();
+  });
+
+  it("repoints dependents of removed shards to the kept analyze task", () => {
+    const sections = makeSections(10);
+    const result = PlanningTool._capAnalyzeShards(shardedPlan(), req, sections);
+    const design = result.tasks.find((t) => t.id === "design-1")!;
+    expect(design.dependsOn).toEqual(["analyze-1"]);
+  });
+
+  it("keeps multi-shard for complex docs (> SINGLE_SHARD_SECTION_LIMIT sections)", () => {
+    const sections = makeSections(50);
+    const plan = shardedPlan(2);
+    const result = PlanningTool._capAnalyzeShards(plan, req, sections);
+    expect(result).toBe(plan);
+    expect(result.tasks.filter((t) => t.type === "analyze")).toHaveLength(2);
+  });
+
+  it("caps excessive shards based on section count", () => {
+    const sections = makeSections(30);
+    // 30 sections / 20 per shard = ceil → 2 max, but plan has 4
+    const plan = shardedPlan(4);
+    const result = PlanningTool._capAnalyzeShards(plan, req, sections);
+    expect(result.tasks.filter((t) => t.type === "analyze")).toHaveLength(2);
+    // Removed shards' deps repointed
+    const design = result.tasks.find((t) => t.id === "design-1")!;
+    expect(design.dependsOn).toContain("analyze-2");
+    expect(design.dependsOn).not.toContain("analyze-3");
+  });
+
+  it("falls back to regex counting when no sectionIndex provided", () => {
+    const mdText = Array.from({ length: 10 }, (_, i) => `### Section ${i}`).join("\n");
+    const result = PlanningTool._capAnalyzeShards(shardedPlan(), mdText);
+    const analyze = result.tasks.filter((t) => t.type === "analyze");
+    expect(analyze).toHaveLength(1);
+  });
+
+  it("is a no-op when there is a single analyze task", () => {
+    const plan = createExecutionPlan({
+      tasks: [createTask({ id: "analyze-1", type: "analyze", description: "a" })],
+      goal: "design", reasoning: "test",
+    });
+    const result = PlanningTool._capAnalyzeShards(plan, req, makeSections(5));
+    expect(result).toBe(plan);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PlanningTool._allocateAnalyzeShards: section-based shard allocation
+// ---------------------------------------------------------------------------
+
+describe("PlanningTool._allocateAnalyzeShards", () => {
+  function makeSections(specs: Array<{ parentId: string; leafCount: number }>) {
+    const result: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }> = [];
+    let leafIdx = 0;
+    for (const { parentId, leafCount } of specs) {
+      result.push({ id: parentId, depth: 1, title: `Parent ${parentId}`, body: "", charRange: [0, 0] });
+      for (let i = 0; i < leafCount; i++) {
+        leafIdx++;
+        result.push({ id: `s${leafIdx}`, depth: 2, title: `Section ${leafIdx}`, body: "x", charRange: [0, 1] });
+      }
+    }
+    return result;
+  }
+
+  it("returns empty for no sectionIndex", () => {
+    expect(PlanningTool._allocateAnalyzeShards()).toEqual([]);
+    expect(PlanningTool._allocateAnalyzeShards([])).toEqual([]);
+  });
+
+  it("returns empty (single shard) for ≤ SINGLE_SHARD_SECTION_LIMIT leaf sections", () => {
+    const sections = makeSections([{ parentId: "p1", leafCount: 15 }]);
+    expect(PlanningTool._allocateAnalyzeShards(sections)).toEqual([]);
+  });
+
+  it("creates multiple shards for > SINGLE_SHARD_SECTION_LIMIT leaf sections", () => {
+    const sections = makeSections([{ parentId: "p1", leafCount: 25 }, { parentId: "p2", leafCount: 25 }]);
+    const shards = PlanningTool._allocateAnalyzeShards(sections);
+    expect(shards.length).toBeGreaterThanOrEqual(2);
+    // All leaf IDs covered, no duplicates
+    const all = shards.flat();
+    expect(all).toHaveLength(50);
+    expect(new Set(all).size).toBe(50);
+  });
+
+  it("snaps cut points to parent boundaries", () => {
+    // 30 leafs: parent A has 14, parent B has 16
+    // Ideal cut at 15, but parent boundary is at 14 — should snap to 14
+    const sections = makeSections([{ parentId: "A", leafCount: 14 }, { parentId: "B", leafCount: 16 }]);
+    const shards = PlanningTool._allocateAnalyzeShards(sections);
+    expect(shards).toHaveLength(2);
+    expect(shards[0]).toHaveLength(14);
+    expect(shards[1]).toHaveLength(16);
+  });
+
+  it("handles promise-style docs (2 parents, many leafs)", () => {
+    // 93 leafs across 2 parent groups — like promise_p08
+    const sections = makeSections([{ parentId: "A", leafCount: 46 }, { parentId: "B", leafCount: 47 }]);
+    const shards = PlanningTool._allocateAnalyzeShards(sections);
+    // ceil(93/20) = 5 shards
+    expect(shards.length).toBe(5);
+    // All covered
+    expect(shards.flat()).toHaveLength(93);
+    // Reasonably balanced (no shard should be > 25 or < 10)
+    for (const shard of shards) {
+      expect(shard.length).toBeGreaterThanOrEqual(10);
+      expect(shard.length).toBeLessThanOrEqual(25);
+    }
+  });
+
+  it("handles many small parent groups", () => {
+    // 6 parents with 5 leafs each = 30 leafs → ceil(30/20) = 2 shards
+    const sections = makeSections(
+      Array.from({ length: 6 }, (_, i) => ({ parentId: `p${i}`, leafCount: 5 })),
+    );
+    const shards = PlanningTool._allocateAnalyzeShards(sections);
+    expect(shards).toHaveLength(2);
+    expect(shards.flat()).toHaveLength(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PlanningTool.buildDeterministicPlan: standard design workflow
+// ---------------------------------------------------------------------------
+
+describe("PlanningTool.buildDeterministicPlan", () => {
+  function makeSections(leafCount: number) {
+    const result: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }> = [];
+    result.push({ id: "p1", depth: 1, title: "Parent", body: "", charRange: [0, 0] });
+    for (let i = 0; i < leafCount; i++) {
+      result.push({ id: `s${i + 1}`, depth: 2, title: `Section ${i + 1}`, body: "x", charRange: [0, 1] });
+    }
+    return result;
+  }
+
+  it("creates standard task chain: analyze → design → diagrams + tests", () => {
+    const plan = PlanningTool.buildDeterministicPlan("design");
+    const types = plan.tasks.map((t) => t.type);
+    expect(types).toContain("analyze");
+    expect(types).toContain("design");
+    expect(types).toContain("diagrams");
+    expect(types).toContain("tests");
+  });
+
+  it("creates 3 separate diagram tasks", () => {
+    const plan = PlanningTool.buildDeterministicPlan("design");
+    const diagrams = plan.tasks.filter((t) => t.type === "diagrams");
+    expect(diagrams).toHaveLength(3);
+    const kinds = diagrams.map((t) => t.contextHints?.diagram_kind);
+    expect(kinds).toContain("class_diagram");
+    expect(kinds).toContain("activity_diagram");
+    expect(kinds).toContain("state_diagram");
+  });
+
+  it("design depends on all analyze shards", () => {
+    const sections = makeSections(50);
+    const plan = PlanningTool.buildDeterministicPlan("design", sections);
+    const design = plan.tasks.find((t) => t.type === "design")!;
+    const analyzeIds = plan.tasks.filter((t) => t.type === "analyze").map((t) => t.id);
+    expect(analyzeIds.length).toBeGreaterThan(1);
+    for (const id of analyzeIds) {
+      expect(design.dependsOn).toContain(id);
+    }
+  });
+
+  it("diagrams and tests depend on design", () => {
+    const plan = PlanningTool.buildDeterministicPlan("design");
+    for (const t of plan.tasks) {
+      if (t.type === "diagrams" || t.type === "tests") {
+        expect(t.dependsOn).toContain("design-1");
+      }
+    }
+  });
+
+  it("analyze-only mode produces only analyze tasks", () => {
+    const plan = PlanningTool.buildDeterministicPlan("analyze");
+    expect(plan.tasks.every((t) => t.type === "analyze")).toBe(true);
+  });
+
+  it("single shard has no assignedSections", () => {
+    const sections = makeSections(10);
+    const plan = PlanningTool.buildDeterministicPlan("design", sections);
+    const analyze = plan.tasks.filter((t) => t.type === "analyze");
+    expect(analyze).toHaveLength(1);
+    expect(analyze[0].contextHints?.assignedSections).toBeUndefined();
+  });
+
+  it("multi-shard tasks have assignedSections", () => {
+    const sections = makeSections(50);
+    const plan = PlanningTool.buildDeterministicPlan("design", sections);
+    const analyze = plan.tasks.filter((t) => t.type === "analyze");
+    expect(analyze.length).toBeGreaterThan(1);
+    for (const t of analyze) {
+      expect(Array.isArray(t.contextHints?.assignedSections)).toBe(true);
+      expect((t.contextHints.assignedSections as string[]).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// plan() integration: deterministic mode end-to-end
+// ---------------------------------------------------------------------------
+
+describe("PlanningTool.plan() deterministic mode", () => {
+  function makeSectionIndex(leafCount: number) {
+    const result: Array<{ id: string; depth: number; title: string; body: string; charRange: [number, number] }> = [];
+    result.push({ id: "p1", depth: 1, title: "Parent", body: "", charRange: [0, 0] });
+    for (let i = 0; i < leafCount; i++) {
+      result.push({ id: `s${i + 1}`, depth: 2, title: `Sec ${i + 1}`, body: "content", charRange: [0, 7] });
+    }
+    return result;
+  }
+
+  it("does not call LLM planner in deterministic mode", async () => {
+    let llmCalled = false;
+    const fakeLlm = {
+      generateJson: async () => { llmCalled = true; return { entities: [], functions: [] }; },
+      generateText: async () => "",
+      streamTag: "",
+    } as any;
+
+    const planner = new PlanningTool(fakeLlm);
+    expect(planner.plannerMode).toBe("deterministic");
+
+    const plan = await planner.plan("## 需求\n### 功能A\n用户登录", "design", makeSectionIndex(5));
+
+    // generateJson IS called for registry/constraint extraction, but NOT for planner
+    // The plan should have deterministic structure regardless of LLM output
+    expect(plan.tasks.find((t) => t.type === "analyze")).toBeDefined();
+    expect(plan.tasks.find((t) => t.type === "design")).toBeDefined();
+    expect(plan.reasoning).toContain("deterministic");
+  });
+
+  it("still injects constraint candidates into analyze tasks", async () => {
+    let callCount = 0;
+    const fakeLlm = {
+      generateJson: async () => {
+        callCount++;
+        if (callCount === 1) {
+          // RegistryExtractor.extract → unwrapContent → .entities/.functions
+          return { entities: [{ id: "E001", canonicalName: "User", aliases: [] }], functions: [{ id: "F001", name: "Login" }] };
+        }
+        // ConstraintExtractor.extractCandidates → unwrapContent → .constraints
+        return { constraints: [{ description: "must authenticate", sourceText: "原文", sectionId: "s1" }] };
+      },
+      generateText: async () => "",
+      streamTag: "",
+    } as any;
+
+    const planner = new PlanningTool(fakeLlm);
+    const plan = await planner.plan("## 需求\n### 功能\n用户登录", "design", makeSectionIndex(5));
+
+    const analyzeTask = plan.tasks.find((t) => t.type === "analyze")!;
+    const constraints = analyzeTask.contextHints?.availableConstraints as Array<Record<string, unknown>> | undefined;
+    expect(constraints).toBeDefined();
+    expect(constraints!.length).toBeGreaterThan(0);
+    expect(constraints![0].constraintRef).toMatch(/^C\d{3}$/);
+  });
+
+  it("attaches registry to plan", async () => {
+    const fakeRegistry = { entities: [{ id: "E001", canonicalName: "User", aliases: [] }], functions: [] };
+    const fakeLlm = {
+      generateJson: async () => fakeRegistry,
+      generateText: async () => "",
+      streamTag: "",
+    } as any;
+
+    const planner = new PlanningTool(fakeLlm);
+    const plan = await planner.plan("## Req\n### F1\nSome requirement", "design");
+    expect(plan.registry).toBeDefined();
+    expect(plan.registry!.entities[0].canonicalName).toBe("User");
+  });
+
+  it("multi-shard plan covers all sections without duplicates", async () => {
+    const fakeLlm = {
+      generateJson: async () => ({ entities: [], functions: [] }),
+      generateText: async () => "",
+      streamTag: "",
+    } as any;
+
+    const planner = new PlanningTool(fakeLlm);
+    const sections = makeSectionIndex(50);
+    const plan = await planner.plan("x".repeat(100), "design", sections);
+
+    const analyzeTasks = plan.tasks.filter((t) => t.type === "analyze");
+    expect(analyzeTasks.length).toBeGreaterThan(1);
+
+    const allSectionIds = analyzeTasks.flatMap((t) => (t.contextHints?.assignedSections as string[]) ?? []);
+    const leafIds = sections.filter((s) => s.depth >= 2).map((s) => s.id);
+
+    // All covered
+    expect(new Set(allSectionIds)).toEqual(new Set(leafIds));
+    // No duplicates
+    expect(allSectionIds.length).toBe(new Set(allSectionIds).size);
+    // Contiguous order preserved
+    expect(allSectionIds).toEqual(leafIds);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildSectionToc: section TOC generation for global context
 // ---------------------------------------------------------------------------
 

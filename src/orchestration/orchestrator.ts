@@ -47,8 +47,6 @@ export class AgentOrchestrator extends BaseTool {
     mailbox: TaskMailbox,
   ): Promise<RuntimeAction> {
     const latestNotif = mailbox.peekLatestNotification();
-    state.decisionCount += 1;
-    const curr = state.decisionCount;
 
     if (latestNotif?.status === "failed") {
       state.errors.push(
@@ -64,6 +62,11 @@ export class AgentOrchestrator extends BaseTool {
 
     const guarded = this.policyGuard.validate(strategy, snapshot);
     const action = this.actionCompiler.compile(guarded, snapshot);
+    const budgetedDecision = action.action !== "inspect";
+    if (budgetedDecision) {
+      state.decisionCount += 1;
+    }
+    const curr = state.decisionCount;
     this.logger.info(`decide: strategy=${strategy.strategy}，action=${action.action}，reason=${strategy.reason?.slice(0, 80)}`);
     state.lastAction = action.action;
     state.lastDecisionCount = curr;

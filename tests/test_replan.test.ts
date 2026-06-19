@@ -116,6 +116,42 @@ describe("Plan mutation", () => {
     expect(errors.some((e) => e.includes("completed"))).toBe(true);
   });
 
+  it("ignores completed drops when a replan also adds executable remediation tasks", () => {
+    const state = new WorkflowState();
+    state.plan = makePlan([
+      makeTask("analyze-1", "analyze"),
+      makeTask("design-1", "design", "design", ["analyze-1"]),
+      makeTask("tests-1", "tests", "tests", ["design-1"]),
+    ]);
+    state.markTaskStatus("analyze-1", "completed");
+    state.markTaskStatus("design-1", "completed");
+    state.markTaskStatus("tests-1", "completed");
+
+    const mutation = createPlanMutation({
+      dropTaskIds: ["design-1", "tests-1"],
+      addTasks: [
+        makeTask("analyze-2", "analyze", "redo analysis"),
+        makeTask("design-2", "design", "redo design", ["analyze-2"]),
+        makeTask("tests-2", "tests", "redo tests", ["design-2"]),
+      ],
+      reasoning: "replace bad completed artifacts with a new remediation chain",
+    });
+
+    const errors = state.mutatePlan(mutation);
+
+    expect(errors).toEqual([]);
+    expect(state.getPlanTaskIds()).toEqual([
+      "analyze-1",
+      "design-1",
+      "tests-1",
+      "analyze-2",
+      "design-2",
+      "tests-2",
+    ]);
+    expect(state.getReadyTaskIds()).toEqual(["analyze-2"]);
+    expect(state.progress.planRevisionCount).toBe(1);
+  });
+
   it("should reject mutations that create cycles", () => {
     const state = new WorkflowState();
     state.plan = makePlan([
@@ -203,12 +239,12 @@ describe("Plan mutation", () => {
 // ---------------------------------------------------------------------------
 
 describe("Coordinator replan fallback", () => {
-  it("should choose replan when a task is stalled after repeated rejections", async () => {
+  it("handles a rejected artifact via the remediation ladder", async () => {
     const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("analyze-1", "analyze")]);
 
-    // Simulate: artifact exists, evaluated, rejected, stalled
+    // Artifact exists, was evaluated, and is rejected.
     state.artifacts["analyze-1"] = {
       taskId: "analyze-1",
       type: "analyze",
@@ -221,7 +257,6 @@ describe("Coordinator replan fallback", () => {
     state.artifactRevisionsByTask["analyze-1"] = 1;
     state.evaluatedRevisionsByTask["analyze-1"] = 1;
     state.reviewStatusByTask["analyze-1"] = "rejected";
-    state.progress.stalledTaskIds.add("analyze-1");
 
     const mailbox = new TaskMailbox();
     const decision = await coordinator.decide(state, mailbox);
@@ -229,24 +264,10 @@ describe("Coordinator replan fallback", () => {
     expect(decision.action).toBeDefined();
   });
 
-  it("should handle globally stalled state", async () => {
+  it("waits when the planner is already running", async () => {
     const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
-
-    // Simulate global stall
-    state.progress.noProgressStreak = 4;
-
-    const mailbox = new TaskMailbox();
-    const decision = await coordinator.decide(state, mailbox);
-    expect(decision).toBeDefined();
-  });
-
-  it("should wait instead of replanning when planner is already running", async () => {
-    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
-    const state = new WorkflowState();
-    state.plan = makePlan([makeTask("design-1", "design")]);
-    state.progress.noProgressStreak = 4;
     state.markTaskStatus("planner", "running");
 
     const decision = await coordinator.decide(state, new TaskMailbox());
@@ -257,7 +278,6 @@ describe("Coordinator replan fallback", () => {
     const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
-    state.progress.noProgressStreak = 4;
     state.recordPlannerFailure();
     state.recordPlannerFailure();
     state.recordPlannerFailure();
@@ -266,38 +286,11 @@ describe("Coordinator replan fallback", () => {
     expect(decision.action).not.toBe("replan");
   });
 
-  it("should handle task with high rejection streak", async () => {
-    const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
-    const state = new WorkflowState();
-    state.plan = makePlan([makeTask("design-1", "design")]);
-
-    state.artifacts["design-1"] = {
-      taskId: "design-1",
-      type: "design",
-      revision: 1,
-      content: "some content",
-      selfCheckPassed: true,
-      selfCheckIssues: [],
-      generationDuration: 0,
-    };
-    state.artifactRevisionsByTask["design-1"] = 1;
-    state.evaluatedRevisionsByTask["design-1"] = 1;
-    state.reviewStatusByTask["design-1"] = "rejected";
-    state.progress.rejectionStreakByTask["design-1"] = 4;
-    state.progress.stalledTaskIds.add("design-1");
-
-    const mailbox = new TaskMailbox();
-    const decision = await coordinator.decide(state, mailbox);
-    expect(decision).toBeDefined();
-  });
-
   it("should handle exhausted replan budget", async () => {
     const coordinator = new AgentOrchestrator(null, new BudgetManager(undefined));
     const state = new WorkflowState();
     state.plan = makePlan([makeTask("design-1", "design")]);
     state.progress.planRevisionCount = 3; // at max
-    state.progress.rejectionStreakByTask["design-1"] = 5;
-    state.progress.stalledTaskIds.add("design-1");
 
     state.artifacts["design-1"] = {
       taskId: "design-1",

@@ -6,7 +6,6 @@ import { WorkerFactory } from "./execution/factory.js";
 import { SessionBackend } from "./execution/backend.js";
 import { LLMClient, type LlmCallInfo, type LlmStreamEvent } from "./llmClient.js";
 import { setupLogger, initSharedLog, type Logger } from "./logger.js";
-import { isRecord } from "./utils/isRecord.js";
 
 import { TaskMailbox, type TaskNotification } from "./messaging.js";
 import { setMemory, MemoryStore } from "./memory/store.js";
@@ -80,7 +79,6 @@ export class MultiAgentRuntime {
   private readonly analyzeMerger: AnalyzeMerger;
   readonly inputLoader: typeof InputLoader;
   readonly trace: TraceLogger;
-  readonly executionBackendName: string;
 
   private readonly logger: Logger;
   private readonly memoryStore: MemoryStore;
@@ -105,7 +103,7 @@ export class MultiAgentRuntime {
   private readonly resultHandler: ResultHandler;
   private readonly actionHandlers: Record<ActionType, RuntimeActionHandler>;
 
-  constructor(config: AgentConfig, executionBackend?: string | null) {
+  constructor(config: AgentConfig) {
     this.config = config;
     this.logger = setupLogger("reqdesign.runtime", config.logging.level);
     this.trace = new TraceLogger();
@@ -131,17 +129,8 @@ export class MultiAgentRuntime {
     this.analyzeMerger = new AnalyzeMerger(this.llm);
     this.inputLoader = InputLoader;
 
-    this.executionBackendName =
-      executionBackend && executionBackend.trim().toLowerCase() === "process"
-        ? "thread"
-        : executionBackend?.trim().toLowerCase() || "thread";
 
-    const orchestrationRaw = isRecord(config.raw.orchestration)
-      ? config.raw.orchestration
-      : {};
-    const orchestrationConfig = OrchestrationConfig.fromRaw(
-      orchestrationRaw as Record<string, unknown>,
-    );
+    const orchestrationConfig = OrchestrationConfig.fromRaw(config.orchestration);
     this.budget = new BudgetManager(orchestrationConfig);
     this.defaultTimeoutSeconds = this.budget.workerTimeoutSeconds;
     this.pollIntervalMs = this.budget.pollIntervalMs;
@@ -159,8 +148,7 @@ export class MultiAgentRuntime {
     this.backend = new SessionBackend({
       factory: this.factory,
       heartbeatInterval: this.budget.heartbeatIntervalSeconds,
-      maxConcurrency:
-        parseInt(process.env.MAX_CONCURRENCY ?? "", 10) || this.budget.maxConcurrency,
+      maxConcurrency: this.budget.maxConcurrency,
       onNotification: (session, notification) => {
         this.emitBackendNotification(
           session.workerType as "planner" | "generator" | "evaluator" | "repair",

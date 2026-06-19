@@ -33,8 +33,12 @@ export function minimizeForPrompt(
     delete c["evidence"];
     delete c["verification"];
     delete c["constraintUid"];
+    delete c["canonicalId"];
     delete c["descriptionZh"];
     delete c["canonicalRuleEn"];
+    if (c["source_text"] && c["sourceText"] === c["source_text"]) {
+      delete c["sourceText"];
+    }
 
     // relatedFunctions 对象数组 → 简单字符串数组
     if (Array.isArray(c["relatedFunctions"])) {
@@ -50,6 +54,9 @@ export function minimizeForPrompt(
 
   // 去掉 traceability（如果有）
   delete result["traceability"];
+  delete result["__qualityGate"];
+  delete result["proposeNewEntities"];
+  delete result["proposeNewFunctions"];
 
   return result;
 }

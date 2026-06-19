@@ -71,6 +71,65 @@ describe("OutputManager – summary report", () => {
     expect(summary).toContain("- 问题分布: blocker=0, major=1, minor=1");
   });
 
+  it("summary report lists unresolved issues as known limitations (accept-with-annotation)", () => {
+    tempDir = makeTempDir();
+    const manager = new OutputManager(tempDir);
+
+    manager.saveAll(
+      { actors: [], functions: [], entities: [], constraints: [], exceptions: [] },
+      "requirement",
+      "design",
+      {},
+      "tests",
+      {
+        passed: true,
+        issues: [
+          { severity: "minor", description: "命名风格不一致" },
+          {
+            severity: "major",
+            target: "design-1",
+            targetType: "design",
+            description: "未覆盖取消流程的补偿逻辑",
+            suggestion: "补充补偿与回滚处理",
+          },
+        ],
+      },
+    );
+
+    const summary = readFileSync(join(tempDir, "summary_report.md"), {
+      encoding: "utf-8",
+    });
+
+    expect(summary).toContain("## 已知局限（未解决的评审意见）");
+    expect(summary).toContain("未覆盖取消流程的补偿逻辑");
+    expect(summary).toContain("建议：补充补偿与回滚处理");
+    expect(summary).toContain("命名风格不一致");
+    // Ordered blocker → major → minor: the major issue precedes the minor one.
+    expect(summary.indexOf("未覆盖取消流程的补偿逻辑")).toBeLessThan(
+      summary.indexOf("命名风格不一致"),
+    );
+  });
+
+  it("summary report omits the known-limitations section when there are no issues", () => {
+    tempDir = makeTempDir();
+    const manager = new OutputManager(tempDir);
+
+    manager.saveAll(
+      { actors: [], functions: [], entities: [], constraints: [], exceptions: [] },
+      "requirement",
+      "design",
+      {},
+      "tests",
+      { passed: true, issues: [] },
+    );
+
+    const summary = readFileSync(join(tempDir, "summary_report.md"), {
+      encoding: "utf-8",
+    });
+
+    expect(summary).not.toContain("## 已知局限");
+  });
+
   it("saveAll writes review/report.md with formatted content (not empty)", () => {
     tempDir = makeTempDir();
     const manager = new OutputManager(tempDir);

@@ -8,10 +8,9 @@ import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
-import { ArtifactPatcher, type PatchOp, type Section, type JsonPatchOp } from "./artifactPatcher.js";
 import { isDesignModel, type Task } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
-import { isTemplateLike } from "../generators/testQualityValidator.js";
+import { isTemplateLike, validateTestCases as validateTestCaseQuality } from "../generators/testQualityValidator.js";
 import { isRelationLine } from "../shared/mermaidRelations.js";
 import { extractDesignClassDefinitions } from "../shared/designClassExtractor.js";
 
@@ -48,20 +47,29 @@ export class RepairTool extends BaseTool {
     let content: unknown = null;
     try {
       if (task.type === "analyze") {
-        // analyze: full rewrite (structured JSON data, not suitable for patching)
+        // analyze: full rewrite for structured JSON data.
         const response = await this.llm.generateJson(userPrompt, system);
         content = this._parseResponse(response as Record<string, unknown>, task);
+      } else if (task.type === "design") {
+        // design: keep the structured DesignModel contract end-to-end.
+        const response = await this.llm.generateJson(userPrompt, system);
+        content = this._parseDesignRepairResponse(response as Record<string, unknown>, task);
       } else {
-        // design/diagrams/tests: patch mode
+        // diagrams/tests: direct full-artifact replacement.
         const text = await this.llm.generateText(userPrompt, system);
-        content = this._applyPatchResponse(task, currentContent, text);
+        content = this._applyFullRepairResponse(task, currentContent, text);
       }
     } catch (e) {
       this.logger.error(`repair: task=${task.id} 修复失败: ${e instanceof Error ? e.message : String(e)}`);
       content = null;
     }
 
+    if (content != null && task.type === "design") {
+      content = this._normalizeStructuredDesignRepair(content, context);
+    }
+
     if (content != null && task.type === "tests") {
+      content = this._mergeTestRepairWithCurrent(task, currentContent, content);
       content = this._normalizeAndValidateTestRepair(task, content, context);
       if (content != null) {
         content = this._rejectTemplateLikeRepair(task, content);
@@ -86,6 +94,35 @@ export class RepairTool extends BaseTool {
     return content;
   }
 
+  private _mergeTestRepairWithCurrent(
+    task: Task,
+    currentContent: unknown,
+    repairedContent: unknown,
+  ): unknown {
+    const currentCases = TestCaseGenerator.parseStructuredTestCases(
+      RepairTool._contentToText(currentContent),
+    );
+    const repairedCases = TestCaseGenerator.parseStructuredTestCases(
+      RepairTool._contentToText(repairedContent),
+    );
+    if (!currentCases || currentCases.length === 0 || !repairedCases) {
+      return repairedContent;
+    }
+    if (repairedCases.length === 0) {
+      return repairedContent;
+    }
+
+    const mergeResult = TestCaseGenerator.mergeStructuredTestCaseRecords(
+      currentCases,
+      repairedCases,
+    );
+
+    this.logger.info(
+      `repair: task=${task.id} merged test repair with current content (kept=${currentCases.length - mergeResult.replaced}, replaced=${mergeResult.replaced}, added=${mergeResult.added})`,
+    );
+    return JSON.stringify({ test_cases: mergeResult.cases }, null, 2);
+  }
+
   private _normalizeAndValidateTestRepair(
     task: Task,
     content: unknown,
@@ -95,7 +132,7 @@ export class RepairTool extends BaseTool {
     const requirementJson = isRecord(context.requirement_json)
       ? context.requirement_json
       : undefined;
-    const normalized = TestCaseGenerator.normalizeStructuredTestCases(text, requirementJson)
+    let normalized = TestCaseGenerator.normalizeStructuredTestCases(text, requirementJson)
       ?? TestCaseGenerator.normalizeStructuredTestCaseIds(text);
     if (normalized === null) {
       return content;
@@ -109,6 +146,7 @@ export class RepairTool extends BaseTool {
       return normalized;
     }
 
+    let parsedCases = TestCaseGenerator.parseStructuredTestCases(normalized);
     const warnings = TestCaseGenerator.validateTestCases(normalized, requirementJson);
     const structuralWarnings = warnings.filter((warning) =>
       warning.includes("编号不合法") ||
@@ -123,102 +161,101 @@ export class RepairTool extends BaseTool {
       this.logger.warn(
         `repair: task=${task.id} 修复后的测试结构仍不合法: ${structuralWarnings.join("; ")}`,
       );
-      return null;
+      const sanitized = parsedCases
+        ? this._dropStructurallyInvalidTests(task, parsedCases)
+        : null;
+      if (sanitized === null) {
+        return null;
+      }
+      normalized = TestCaseGenerator.normalizeStructuredTestCases(sanitized, requirementJson) ?? sanitized;
+      parsedCases = TestCaseGenerator.parseStructuredTestCases(normalized);
+    }
+
+    if (parsedCases) {
+      const qualityIssues = validateTestCaseQuality(parsedCases, requirementJson);
+      const fatalIssues = qualityIssues.filter((issue) =>
+        issue.severity === "reject" && issue.issue !== "target_content_alignment",
+      );
+      if (fatalIssues.length > 0) {
+        this.logger.warn(
+          `repair: task=${task.id} 修复后的测试质量仍不合法: ${fatalIssues.map((issue) => issue.detail).join("; ")}`,
+        );
+        const rejectedIds = new Set(
+          fatalIssues
+            .map((issue) => issue.testId)
+            .map((id) => String(id ?? "").trim())
+            .filter((id) => id && id !== "unknown"),
+        );
+        if (rejectedIds.size > 0) {
+          const kept = parsedCases.filter((tc) => !rejectedIds.has(String(tc.id ?? "").trim()));
+          if (kept.length > 0 && kept.length < parsedCases.length) {
+            this.logger.warn(
+              `repair: task=${task.id} 移除 ${parsedCases.length - kept.length} 条仍不合格测试，保留 ${kept.length} 条可用测试`,
+            );
+            const sanitized = JSON.stringify({ test_cases: kept }, null, 2);
+            return TestCaseGenerator.normalizeStructuredTestCases(sanitized, requirementJson) ?? sanitized;
+          }
+        }
+        return null;
+      }
     }
 
     return normalized;
   }
 
-  // ------------------------------------------------------------------
-  // Ops validation: convert append→replace for test repair
-  // ------------------------------------------------------------------
-
-  /**
-   * Validate JSON ops before applying: for test_cases append ops, check if
-   * the target is already covered by an existing test. If so, convert
-   * the append to a replace op (matching on the first existing test with
-   * the same target) so we don't accumulate duplicate/template-like tests.
-   */
-  private _validateOpsBeforeApply(ops: JsonPatchOp[], currentJson: string): JsonPatchOp[] {
-    let existingTests: Array<Record<string, unknown>> = [];
-    try {
-      const doc = JSON.parse(currentJson);
-      if (Array.isArray(doc.test_cases)) {
-        existingTests = doc.test_cases.filter(
-          (tc: unknown) => typeof tc === "object" && tc !== null,
-        ) as Array<Record<string, unknown>>;
+  private _dropStructurallyInvalidTests(
+    task: Task,
+    cases: Array<Record<string, unknown>>,
+  ): string | null {
+    const seen = new Set<string>();
+    const kept: Array<Record<string, unknown>> = [];
+    const requiredFields = ["id", "title", "type", "target", "preconditions", "steps", "expected_result", "priority"];
+    for (const tc of cases) {
+      const id = String(tc.id ?? "").trim();
+      const type = String(tc.type ?? "").trim();
+      const priority = String(tc.priority ?? "").trim();
+      const missingRequired = requiredFields.some((field) => {
+        const value = tc[field];
+        return value === undefined || value === null || value === "" ||
+          (Array.isArray(value) && value.length === 0);
+      });
+      const invalid =
+        missingRequired ||
+        !/^TC-[NEB]-\d{3,}$/.test(id) ||
+        seen.has(id) ||
+        !["正常", "异常", "边界"].includes(type) ||
+        !/^P[012]$/.test(priority) ||
+        !Array.isArray(tc.steps) ||
+        tc.steps.length === 0;
+      if (invalid) {
+        if (id) seen.add(id);
+        continue;
       }
-    } catch {
-      // Cannot parse existing tests; skip validation
-      return ops;
+      seen.add(id);
+      kept.push(tc);
     }
 
-    const validated: JsonPatchOp[] = [];
-    for (const op of ops) {
-      if (op.action === "append" && op.path === "test_cases" && op.items) {
-        const stillAppend: unknown[] = [];
-        for (const item of op.items) {
-          if (typeof item !== "object" || item === null) {
-            stillAppend.push(item);
-            continue;
-          }
-          const rec = item as Record<string, unknown>;
-          const target = String(rec.target ?? "").trim();
-
-          if (!target) {
-            // No target to match; allow append
-            stillAppend.push(item);
-            continue;
-          }
-
-          // Check if an existing test already covers this target
-          const existingMatch = existingTests.find((tc: Record<string, unknown>) => {
-            const tcTarget = String(tc.target ?? "").trim();
-            if (tcTarget === target) return true;
-            // Also check trace constraints/functions
-            const tcTrace = tc.trace as Record<string, unknown> | undefined;
-            if (tcTrace) {
-              const tcConstraints = Array.isArray(tcTrace.constraints)
-                ? tcTrace.constraints.map(String)
-                : [];
-              const tcFunctions = Array.isArray(tcTrace.functions)
-                ? tcTrace.functions.map(String)
-                : [];
-              if (tcConstraints.includes(target) || tcFunctions.includes(target)) return true;
-            }
-            return false;
-          });
-
-          if (existingMatch) {
-            // Convert to replace: target is already covered, replace the poor test
-            const existingId = String(existingMatch.id ?? "").trim();
-            if (existingId) {
-              validated.push({
-                action: "replace",
-                path: "test_cases",
-                match: { field: "id", value: existingId },
-                value: item,
-              });
-              this.logger.info(
-                `repair: converting append→replace for target "${target}" (replacing ${existingId})`,
-              );
-            } else {
-              // No ID to match; still allow append as fallback
-              stillAppend.push(item);
-            }
-          } else {
-            // Genuinely missing coverage; allow append
-            stillAppend.push(item);
-          }
-        }
-        if (stillAppend.length > 0) {
-          validated.push({ ...op, items: stillAppend });
-        }
-      } else {
-        validated.push(op);
-      }
+    if (kept.length === 0 || kept.length === cases.length) {
+      return null;
     }
-    return validated;
+    this.logger.warn(
+      `repair: task=${task.id} 移除 ${cases.length - kept.length} 条结构不合法测试，保留 ${kept.length} 条可用测试`,
+    );
+    return JSON.stringify({ test_cases: kept }, null, 2);
+  }
+
+  private _normalizeStructuredDesignRepair(
+    content: unknown,
+    context: Record<string, unknown>,
+  ): unknown | null {
+    if (!isDesignModel(content)) return content;
+
+    const requirementJson = isRecord(context.requirement_json)
+      ? context.requirement_json
+      : {};
+    const reconciled = SystemDesigner.reconcileDesignModel(content, requirementJson);
+    reconciled.coverageMatrix = SystemDesigner.buildCoverageMatrix(reconciled, requirementJson);
+    return reconciled;
   }
 
   /**
@@ -636,149 +673,144 @@ export class RepairTool extends BaseTool {
   }
 
   // ------------------------------------------------------------------
-  // Patch 模式
+  // 完整产物修复响应解析
   // ------------------------------------------------------------------
 
-  private _applyPatchResponse(
+  private _parseDesignRepairResponse(
+    response: Record<string, unknown>,
+    task: Task,
+  ): unknown | null {
+    if (!isRecord(response)) {
+      this.logger.warn(`repair: task=${task.id} rejected empty design repair response`);
+      return null;
+    }
+    if (RepairTool._isLegacyRepairEnvelope(response)) {
+      this.logger.warn(`repair: task=${task.id} rejected legacy design repair envelope`);
+      return null;
+    }
+    const designModel = RepairTool._extractDesignModelRepair(response);
+    if (!designModel) {
+      this.logger.warn(`repair: task=${task.id} rejected non-DesignModel design repair`);
+      return null;
+    }
+    this.logger.info(`repair: task=${task.id} accepted full DesignModel repair`);
+    return designModel;
+  }
+
+  private _applyFullRepairResponse(
     task: Task,
     currentContent: unknown,
     llmText: string,
   ): unknown | null {
-    // Try to parse LLM output as JSON with patches array
-    let parsed: Record<string, unknown>;
+    const cleanText = RepairTool._stripCodeFences(llmText);
+    if (task.type === "tests") {
+      return this._parseTestsRepairResponse(task, currentContent, cleanText);
+    }
+    if (task.type === "diagrams") {
+      return this._parseDiagramRepairResponse(task, cleanText);
+    }
+    return cleanText;
+  }
+
+  private _parseTestsRepairResponse(
+    task: Task,
+    currentContent: unknown,
+    cleanText: string,
+  ): unknown | null {
+    const currentIsJson = RepairTool._looksLikeJsonContent(currentContent);
     try {
-      // Strip markdown code fences if present
-      const cleanText = RepairTool._stripCodeFences(llmText);
-      parsed = JSON.parse(cleanText);
-    } catch {
-      this.logger.warn(`repair: task=${task.id} LLM输出不是有效JSON，fallback到完整替换`);
-      return RepairTool._wrapDiagramText(task, llmText);
-    }
-
-    // --- New: ops-based JSON patch routing ---
-    const opsRaw = parsed.ops;
-    if (Array.isArray(opsRaw) && opsRaw.length > 0) {
-      const contentStr = RepairTool._stripCodeFences(
-        typeof currentContent === "string" ? currentContent : JSON.stringify(currentContent),
-      );
-      if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
-        const ops: JsonPatchOp[] = opsRaw
-          .filter((o: unknown): o is Record<string, unknown> => typeof o === "object" && o !== null)
-          .map((o: Record<string, unknown>) => ({
-            action: String(o.action ?? "") as JsonPatchOp["action"],
-            path: String(o.path ?? ""),
-            items: Array.isArray(o.items) ? o.items : undefined,
-            value: o.value,
-            match: typeof o.match === "object" && o.match !== null
-              ? { field: String((o.match as Record<string, unknown>).field ?? ""), value: String((o.match as Record<string, unknown>).value ?? "") }
-              : undefined,
-          }))
-          .filter((o: JsonPatchOp) => o.path && (o.action === "append" || o.action === "replace" || o.action === "delete"));
-        if (ops.length > 0) {
-          // Validate ops: convert append→replace when target already covered
-          const validatedOps = task.type === "tests" ? this._validateOpsBeforeApply(ops, contentStr) : ops;
-          try {
-            const patched = ArtifactPatcher.applyJsonOps(contentStr, validatedOps);
-            if (patched !== contentStr) {
-              this.logger.info(`repair: task=${task.id} 成功应用 ${ops.length} 个JSON ops`);
-              return patched;
-            } else {
-              this.logger.warn(`repair: task=${task.id} ${ops.length} 个JSON ops无效果`);
-            }
-          } catch {
-            this.logger.warn(`repair: task=${task.id} applyJsonOps失败，fallback`);
-          }
-        }
-      } else {
-        this.logger.warn(`repair: task=${task.id} ops存在但currentContent不以{或[开头，无法应用JSON patch`);
-      }
-    }
-
-    // --- New: full_replace routing ---
-    if (parsed.action === "full_replace" && typeof parsed.content === "string") {
-      this.logger.info(`repair: task=${task.id} full_replace`);
-      return task.type === "diagrams"
-        ? RepairTool._wrapDiagramText(task, parsed.content)
-        : parsed.content;
-    }
-
-    const patchesRaw = parsed.patches;
-    if (!Array.isArray(patchesRaw) || patchesRaw.length === 0) {
-      this.logger.warn(`repair: task=${task.id} LLM未返回有效的patches/ops数组，fallback到完整替换`);
-      // Try parsed.content fallback before giving up — even when ops existed
-      // but failed, the LLM may have also returned the full content.
-      if (typeof parsed.content === "string") {
-        this.logger.info(`repair: task=${task.id} ops/patches无效，使用parsed.content回退`);
-        return task.type === "diagrams"
-          ? RepairTool._wrapDiagramText(task, parsed.content)
-          : parsed.content;
-      }
-      if (Array.isArray(opsRaw) && opsRaw.length > 0) {
-        this.logger.warn(`repair: task=${task.id} ops未产生有效修复且没有完整内容，返回空结果`);
+      const parsed = JSON.parse(cleanText) as unknown;
+      if (!isRecord(parsed)) {
+        this.logger.warn(`repair: task=${task.id} rejected non-object test repair JSON`);
         return null;
       }
-      return RepairTool._wrapDiagramText(task, llmText);
+      if (RepairTool._isLegacyRepairEnvelope(parsed)) {
+        this.logger.warn(`repair: task=${task.id} rejected legacy test repair envelope`);
+        return null;
+      }
+      const inferred = RepairTool._inferContent(parsed, task);
+      if (typeof inferred === "string") {
+        return RepairTool._normalizeFullTextRepair(task, inferred, currentIsJson, this.logger);
+      }
+      if (isRecord(inferred) || Array.isArray(inferred)) {
+        return JSON.stringify(inferred, null, 2);
+      }
+      this.logger.warn(`repair: task=${task.id} test repair missing full test_cases content`);
+      return null;
+    } catch {
+      if (currentIsJson) {
+        this.logger.warn(`repair: task=${task.id} rejected non-JSON repair for structured tests`);
+        return null;
+      }
+      return cleanText;
     }
+  }
 
-    const patches: PatchOp[] = patchesRaw
-      .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
-      .map((p) => ({
-        op: String(p.op ?? "replace_section") as PatchOp["op"],
-        section: String(p.section ?? ""),
-        content: typeof p.content === "string" ? p.content : String(p.content ?? ""),
-      }))
-      .filter((p) => p.section && p.content !== undefined);
+  private _parseDiagramRepairResponse(task: Task, cleanText: string): unknown | null {
+    try {
+      const parsed = JSON.parse(cleanText) as unknown;
+      if (!isRecord(parsed)) {
+        this.logger.warn(`repair: task=${task.id} rejected non-object diagram repair JSON`);
+        return null;
+      }
+      if (RepairTool._isLegacyRepairEnvelope(parsed)) {
+        this.logger.warn(`repair: task=${task.id} rejected legacy diagram repair envelope`);
+        return null;
+      }
+      const inferred = RepairTool._inferContent(parsed, task);
+      if (isRecord(inferred)) return inferred;
+      if (typeof inferred === "string") return RepairTool._wrapDiagramText(task, inferred);
+      this.logger.warn(`repair: task=${task.id} diagram repair missing full diagram content`);
+      return null;
+    } catch {
+      return RepairTool._wrapDiagramText(task, cleanText);
+    }
+  }
 
-    if (patches.length === 0) {
-      this.logger.warn(`repair: task=${task.id} 解析后无有效patches`);
+  private static _normalizeFullTextRepair(
+    task: Task,
+    text: string,
+    currentIsJson: boolean,
+    logger: { warn: (msg: string) => void },
+  ): unknown | null {
+    if (!currentIsJson) return text;
+    try {
+      const parsed = JSON.parse(RepairTool._stripCodeFences(text));
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      logger.warn(`repair: task=${task.id} rejected string repair because current content is JSON`);
       return null;
     }
+  }
 
-    const sections = ArtifactPatcher.parseSections(currentContent, task.type);
+  private static _looksLikeJsonContent(content: unknown): boolean {
+    if (typeof content === "object" && content !== null) return true;
+    if (typeof content !== "string") return false;
+    const clean = RepairTool._stripCodeFences(content).trim();
+    return clean.startsWith("{") || clean.startsWith("[");
+  }
 
-    if (task.type === "diagrams") {
-      // Diagrams are Record<string, string>. Apply patches directly on sections
-      // to preserve key structure (class_diagram, activity_diagram, etc.).
-      // Do NOT go through applyPatches→string→parseSections which loses keys.
-      const patchedSections = ArtifactPatcher.applyPatchesDirect(sections, patches);
-      // Safety net: ensure no class definitions were lost during patching
-      RepairTool._preserveClassDefinitions(sections, patchedSections, this.logger, task.id);
-      return ArtifactPatcher.reconstruct(patchedSections, task.type);
+  private static _contentToText(content: unknown): string {
+    if (typeof content === "string") return content;
+    if (content === null || content === undefined) return "";
+    if (typeof content === "object") return JSON.stringify(content);
+    return String(content);
+  }
+
+  private static _isLegacyRepairEnvelope(parsed: Record<string, unknown>): boolean {
+    return (
+      Array.isArray(parsed.ops) ||
+      Array.isArray(parsed.patches) ||
+      String(parsed.action ?? "") === "full_replace"
+    );
+  }
+
+  private static _extractDesignModelRepair(parsed: Record<string, unknown>): unknown | null {
+    for (const candidate of [parsed, parsed.content, parsed.design, parsed.result]) {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+      const model = SystemDesigner.parseDesignModel(candidate as Record<string, unknown>);
+      if (model) return model;
     }
-
-    const patchedText = ArtifactPatcher.applyPatches(sections, patches);
-
-    // Fallback for JSON-format content where section-based patching doesn't work.
-    // JSON content (e.g., {"test_cases": [...]}) has no markdown headings,
-    // so parseSections returns [{key: "full"}]. Patches target specific IDs
-    // (e.g., "TC-B-001") that don't match "full" → silently dropped.
-    // When patches had no effect and content is JSON, use LLM's full content.
-    const originalText = ArtifactPatcher.applyPatches(sections, []);
-    if (patchedText === originalText && patches.length > 0) {
-      const contentStr = RepairTool._stripCodeFences(
-        typeof currentContent === "string" ? currentContent : JSON.stringify(currentContent),
-      );
-      if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
-        if (typeof parsed.content === "string") {
-          this.logger.info(
-            `repair: task=${task.id} JSON patch fallback: ${patches.length} patches had no effect, using full content`,
-          );
-          return parsed.content;
-        }
-        this.logger.warn(
-          `repair: task=${task.id} JSON patch fallback: ${patches.length} patches had no effect and no full content available`,
-        );
-      }
-    }
-
-    if (patchedText !== originalText) {
-      this.logger.info(`repair: task=${task.id} 成功应用 ${patches.length} 个patches`);
-      return patchedText;
-    } else {
-      this.logger.warn(`repair: task=${task.id} ${patches.length} 个patches无效果`);
-    }
-    // Intentional: no-effect patches return null rather than patchedText,
-    // signaling to callers that the repair had no effect.
     return null;
   }
 
@@ -810,19 +842,14 @@ export class RepairTool extends BaseTool {
 
     sections.push(`## Evaluator 发现的问题\n${RepairTool._formatIssues(fixInstructions)}`);
 
-    // For patch-mode tasks, show section listing and current content
-    if (task.type !== "analyze") {
-      const parsedSections = ArtifactPatcher.parseSections(currentContent, task.type);
-      if (parsedSections.length > 1) {
-        sections.push(`## 产物章节列表\n以下是当前产物的章节，修复时用 section 字段引用这些名称：\n${ArtifactPatcher.sectionListing(parsedSections)}`);
-      }
-    }
-
     sections.push(`## 当前产物\n${RepairTool._formatContent(currentContent)}`);
 
     // For tests: add test quality diagnostics identifying template-like tests
     if (task.type === "tests") {
-      const diagSection = this._buildTestQualityDiagnostic(currentContent);
+      const requirementJson = isRecord(context.requirement_json)
+        ? context.requirement_json
+        : undefined;
+      const diagSection = this._buildTestQualityDiagnostic(currentContent, requirementJson);
       if (diagSection) sections.push(diagSection);
     }
 
@@ -854,19 +881,21 @@ export class RepairTool extends BaseTool {
     if (task.type === "analyze") {
       fmtNote = '- 严格输出 JSON 格式：{"content": <修复后的完整产物>}';
     } else if (task.type === "tests") {
-      fmtNote = '- 如果当前产物是 JSON 格式（{"test_cases": [...]}），使用 ops 格式：{"ops": [{"action": "replace|append|delete", "path": "test_cases", "match": {"field": "id", "value": "..."}, "value": {...}|"items": [...]}]}\n- 如果当前产物是 Markdown 格式，使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整内容"}\n- 测试用例 id 只能使用 TC-N-###、TC-E-###、TC-B-###，分别对应正常/异常/边界；禁止使用 TC-F010、TC-X002、TC-CON-001 或把需求 ID 拼进测试用例 id\n- 需求 ID 只能写在 target、steps 或 expected_result 中，不要写进测试用例 id\n- 不要重写未出问题的内容\n- **优先使用 replace 修复低质量/模板化测试**，仅在完全无覆盖时使用 append\n- **禁止在已有相同 target 测试时 append 新测试**——必须 replace 已有测试';
+      fmtNote = '- 如果当前产物是 JSON 格式（{"test_cases": [...]}），直接输出修复后的完整 JSON 根对象，必须包含完整 `test_cases` 数组。\n- 如果当前产物是 Markdown 格式，直接输出修复后的完整 Markdown 文本。\n- 测试用例 id 使用 TC-N-###、TC-E-###、TC-B-###，分别对应正常/异常/边界。\n- target 字段使用显示 ID（F001/C001/X001）加当前约束/功能描述。\n- 需求 ID 写在 target、steps 或 expected_result 中。\n- 对低质量/模板化测试，直接保留原 id 并重写该测试用例内容；同一 target 保留一条高质量测试。';
     } else if (task.type === "design") {
-      fmtNote = '- 使用 full_replace 格式：{"action": "full_replace", "content": "修复后的完整 Markdown"}\n- 不要重写未出问题的章节';
+      fmtNote = '- 直接输出修复后的完整 DesignModel JSON 根对象。\n- 根对象包含 `constraintImplementations`、`exceptionImplementations`、`modules`、`classes`、`dataFlows`、`coverageMatrix`、`supplementaryClasses`。\n- 每个 `constraintImplementations[].constraintId` 使用需求分析中的 display ID（C001/C002...），每条约束保留独立实现段落。\n- 每个 `exceptionImplementations[].exceptionId` 使用需求分析中的 display ID（X001/X002...）。\n- `modules[].functionIds` 使用需求分析中的 display ID（F001/F002...）。';
+    } else if (task.type === "diagrams") {
+      fmtNote = '- 直接输出修复后的完整 JSON 根对象，例如 {"class_diagram":"完整 Mermaid", "activity_diagram":"完整 Mermaid"}。\n- 只包含本任务负责的图表键；Mermaid 内容作为 JSON 字符串值。';
     } else {
-      fmtNote = '- 输出 JSON 格式的 patches 数组，每个 patch 指定要修改的章节名称和替换内容\n- 不要重写未出问题的章节';
+      fmtNote = '- 直接输出修复后的完整产物。';
     }
     const repairRules = task.type === "analyze"
       ? "- 输出修复后的完整产物"
-      : "- 只修复上述问题中指出的章节\n- 保留所有未被指出问题的正确内容";
+      : "- 输出修复后的完整产物\n- 只改变 Evaluator 指出的问题相关内容\n- 保留所有未被指出问题的正确内容";
     sections.push(`## 修复要求\n根据 Evaluator 发现的问题，精准修复当前产物。\n\n**要求**：\n${repairRules}\n${fmtNote}`);
 
     if (task.type === "diagrams" && diagramKind) {
-      sections.push(`\n## 硬性约束\n本任务仅负责 ${diagramKind}，section 字段填 \`${diagramKind}\`。`);
+      sections.push(`\n## 硬性约束\n本任务仅负责 ${diagramKind}，输出 JSON 只能包含 \`${diagramKind}\`。`);
     }
 
     return sections.join("\n\n");
@@ -876,7 +905,10 @@ export class RepairTool extends BaseTool {
    * Build a diagnostic section identifying template-like tests and listing
    * their IDs, so the repair LLM knows which tests must be replaced.
    */
-  private _buildTestQualityDiagnostic(currentContent: unknown): string | null {
+  private _buildTestQualityDiagnostic(
+    currentContent: unknown,
+    requirementJson?: Record<string, unknown>,
+  ): string | null {
     let tests: Array<Record<string, unknown>> = [];
     try {
       if (typeof currentContent === "string") {
@@ -904,6 +936,7 @@ export class RepairTool extends BaseTool {
     if (tests.length === 0) return null;
 
     const templateIds: string[] = [];
+    const repairIssueLines: string[] = [];
     const coveredTargets = new Set<string>();
 
     for (const tc of tests) {
@@ -915,17 +948,38 @@ export class RepairTool extends BaseTool {
       if (target) coveredTargets.add(target);
     }
 
-    if (templateIds.length === 0) return null;
+    if (requirementJson) {
+      const qualityIssues = validateTestCaseQuality(tests, requirementJson);
+      for (const issue of qualityIssues) {
+        if (
+          issue.issue === "target_content_alignment" ||
+          issue.issue === "canonical_only_target" ||
+          issue.issue === "fabricated_canonical_id" ||
+          issue.issue === "wrong_target"
+        ) {
+          repairIssueLines.push(`- \`${issue.testId}\`: ${issue.detail}`);
+        }
+      }
+    }
+
+    if (templateIds.length === 0 && repairIssueLines.length === 0) return null;
 
     const lines: string[] = ["## 现有测试质量诊断"];
     lines.push("");
-    lines.push(`以下测试用例被检测为模板化/低质量，**必须使用 replace 替换**（不要 append 新测试）：`);
-    for (const id of templateIds) {
-      lines.push(`- \`${id}\` ← 必须用 replace(action="replace", match={"field":"id","value":"${id}"}) 替换为高质量测试`);
+    if (templateIds.length > 0) {
+      lines.push("以下测试用例被检测为模板化/低质量，必须在完整 test_cases 数组中保留原 id，并沿用原 target 的覆盖意图直接改写内容：");
+      for (const id of templateIds) {
+        lines.push(`- \`${id}\` ← 保留该 id，重写为高质量测试`);
+      }
+      lines.push("");
     }
-    lines.push("");
+    if (repairIssueLines.length > 0) {
+      lines.push("以下测试用例的 target 或 target/content 对齐存在问题，必须在完整 JSON 中直接修正 target 与断言内容：");
+      lines.push(...repairIssueLines);
+      lines.push("");
+    }
     lines.push(`已覆盖的 target: ${coveredTargets.size > 0 ? Array.from(coveredTargets).map(t => `\`${t}\``).join(", ") : "(无)"}`);
-    lines.push("如果某个 target 已有测试（即使质量低），使用 replace 而非 append。");
+    lines.push("如果某个 target 已有测试（即使质量低），优先改写已有测试并保持 target 覆盖唯一。");
 
     return lines.join("\n");
   }
@@ -994,77 +1048,6 @@ export class RepairTool extends BaseTool {
     if (!diagramKind) diagramKind = RepairTool._inferDiagramKind(task, text);
     if (diagramKind) return { [diagramKind]: text };
     return { diagram: text };
-  }
-
-  // ------------------------------------------------------------------
-  // Patch 安全网：防止 class_diagram patch 丢失已有类定义
-  // ------------------------------------------------------------------
-
-  /**
-   * 比较 patch 前后的 class_diagram section，如果 patch 丢失了原始中已有的
-   * class 定义，自动从原始内容中补回缺失的类。
-   */
-  static _preserveClassDefinitions(
-    originalSections: Section[],
-    patchedSections: Section[],
-    logger: { info: (msg: string) => void },
-    taskId: string,
-  ): void {
-    const origClass = originalSections.find(s => s.key === "class_diagram");
-    const patchedClass = patchedSections.find(s => s.key === "class_diagram");
-    if (!origClass || !patchedClass) return;
-
-    const origNames = RepairTool._extractClassNames(origClass.content);
-    const patchedNames = RepairTool._extractClassNames(patchedClass.content);
-    if (origNames.length === 0) return;
-
-    const lost = origNames.filter(n => !patchedNames.includes(n));
-    if (lost.length === 0) return;
-
-    // Extract full class blocks from original and append to patched
-    const lostBlocks = RepairTool._extractClassBlocks(origClass.content, lost);
-    if (lostBlocks.length === 0) return;
-
-    // Find insertion point: before first relationship line, or append
-    const lines = patchedClass.content.split("\n");
-    const relIdx = lines.findIndex((l) => isRelationLine(l));
-    if (relIdx >= 0) {
-      lines.splice(relIdx, 0, ...lostBlocks);
-    } else {
-      lines.push(...lostBlocks);
-    }
-
-    patchedClass.content = lines.join("\n");
-    logger.info(
-      `repair: task=${taskId} safety net: restored ${lost.length} lost class(es): ${lost.join(", ")}`,
-    );
-  }
-
-  /** Extract all class names from a Mermaid classDiagram string. */
-  static _extractClassNames(mermaid: string): string[] {
-    const names: string[] = [];
-    const re = /^\s*class\s+(\w+)\s*\{/gm;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(mermaid)) !== null) {
-      if (m[1] && !names.includes(m[1])) names.push(m[1]);
-    }
-    // Also match shorthand: "class X {" not just but also "class X"
-    // already covered by above regex
-    return names;
-  }
-
-  /** Extract full class block (class X { ... }) for given names from a Mermaid string. */
-  static _extractClassBlocks(mermaid: string, names: string[]): string[] {
-    const blocks: string[] = [];
-    for (const name of names) {
-      const re = new RegExp(
-        `(^\\s*class\\s+${name}\\s*\\{[^}]*\\})`,
-        "m",
-      );
-      const m = re.exec(mermaid);
-      if (m) blocks.push(m[1]);
-    }
-    return blocks;
   }
 
   // ------------------------------------------------------------------

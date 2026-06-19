@@ -29,7 +29,7 @@ const ALIGNMENT_STOP_WORDS = new Set([
 ]);
 
 /** Minimum overlap (Jaccard) below which an otherwise-referenced test is rejected. */
-export const TARGET_ALIGNMENT_REJECT_THRESHOLD = 0;
+const TARGET_ALIGNMENT_REJECT_THRESHOLD = 0;
 
 /**
  * Whether the target_content_alignment check hard-rejects (false) or only
@@ -101,7 +101,12 @@ export function collectConstraintSourceTexts(
   for (const con of constraints) {
     if (typeof con !== "object" || con === null) continue;
     const rec = con as Record<string, unknown>;
-    const text = String(rec.source_text ?? rec.description ?? "").trim();
+    const text = [
+      rec.source_text,
+      rec.sourceText,
+      rec.description,
+      rec.canonicalRuleEn,
+    ].map((value) => String(value ?? "").trim()).filter(Boolean).join(" ");
     if (!text) continue;
     const displayId = String(rec.displayId ?? "").trim();
     const id = String(rec.id ?? "").trim();

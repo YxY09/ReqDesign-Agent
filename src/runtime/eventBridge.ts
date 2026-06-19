@@ -40,6 +40,31 @@ export class EventBridge {
     this.deps = deps;
   }
 
+  private notificationContext(sessionId: string): {
+    workerType: WorkerKind;
+    taskId: string;
+    taskType: string;
+    sessionId: string;
+  } | null {
+    const inflight = this.deps.inflight().get(sessionId);
+    if (!inflight) return null;
+    return {
+      workerType: inflight.workerType,
+      taskId: inflight.taskId,
+      taskType: "",
+      sessionId,
+    };
+  }
+
+  private notificationMessage(
+    workerType: "planner" | "generator" | "evaluator" | "repair",
+    notification: TaskNotification,
+  ): string {
+    const summary = notification.summary || `${workerType} ${notification.event}`;
+    if (!notification.error) return summary;
+    return `${summary}: ${notification.error.slice(0, 240)}`;
+  }
+
   // ── public API (called by MultiAgentRuntime or wired as callbacks) ──────
 
   emitBackendNotification(
@@ -53,14 +78,15 @@ export class EventBridge {
       timeout: "worker_timeout",
       result: "worker_result",
     };
+    const context = this.notificationContext(notification.sessionId);
     this.emitRuntimeEvent(
       kindByEvent[notification.event] ?? "worker_event",
-      notification.summary || `${workerType} ${notification.event}`,
+      this.notificationMessage(workerType, notification),
       {
-        goal: this.deps.activeStreamContext()?.taskType || undefined,
+        goal: context?.taskType || undefined,
         phase: workerType,
         taskId: notification.taskId,
-        taskType: this.deps.activeStreamContext()?.taskType || undefined,
+        taskType: context?.taskType || undefined,
         sessionId: notification.sessionId,
         status: notification.status,
         data: {
@@ -203,7 +229,7 @@ export class EventBridge {
         };
       }
     }
-    return this.deps.activeStreamContext();
+    return null;
   }
 
   emitRuntimeEvent(

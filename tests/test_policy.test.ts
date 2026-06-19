@@ -24,15 +24,14 @@ function makeSnapshot(overrides: Partial<OrchestratorSnapshot> = {}): Orchestrat
     evaluatorRunning: false,
     finalReviewCurrent: false,
     finalReviewPassed: false,
-    globallyStalled: false,
     convergenceStalled: false,
     convergenceRoundCount: 0,
     convergenceTrend: null,
     convergenceStalledFingerprints: [],
     planRevisionCount: 0,
     plannerFailures: 0,
-    stalledTaskIds: [],
     regenerateCountsByTask: {},
+    repairFutileTaskIds: [],
     repairCountsByTask: {},
     artifactTypesByTask: {},
     planTaskTypesById: {},
@@ -319,19 +318,6 @@ describe("DeterministicPolicy", () => {
     expect(result!.targetTaskId).toBe("design-1");
   });
 
-  it("replans when globally stalled", () => {
-    const policy = new DeterministicPolicy();
-    const snapshot = makeSnapshot({
-      globallyStalled: true,
-      requirementLoaded: true,
-      hasArtifacts: true,
-      planReady: true,
-    });
-    const result = policy.decide(snapshot);
-    expect(result).not.toBeNull();
-    expect(result!.strategy).toBe("escalate_to_replan");
-  });
-
   it("finishes when outputs already saved", () => {
     const policy = new DeterministicPolicy();
     const snapshot = makeSnapshot({ outputSaved: true });
@@ -484,7 +470,7 @@ describe("convergenceStalled severity gate (0 blockers)", () => {
       convergenceRoundCount: 4,
       convergenceTrend: "decreasing",
       latestIssues: [
-        { severity: "blocker", description: "unfixable blocker" },
+        { severity: "blocker", kind: "defect", description: "unfixable blocker" },
         { severity: "minor", description: "trivial" },
       ],
     });
@@ -502,7 +488,7 @@ describe("convergenceStalled severity gate (0 blockers)", () => {
       convergenceRoundCount: 4,
       convergenceTrend: "flat",
       latestIssues: [
-        { severity: "blocker", description: "unfixable blocker" },
+        { severity: "blocker", kind: "defect", description: "unfixable blocker" },
       ],
     });
     const result = policy.decide(snapshot);
@@ -513,8 +499,10 @@ describe("convergenceStalled severity gate (0 blockers)", () => {
 });
 
 describe("convergenceStalled round-exhaustion termination", () => {
-  it("pauses once convergence rounds reach the max cap, regardless of low issue count", () => {
+  it("auto-finishes at the max round cap when there are no blockers", () => {
     // Default maxConvergenceRounds = 6. Use roundCount = 6 to force exhaustion.
+    // The hard cap is an unattended-run backstop: with no blockers it accepts
+    // the current output rather than pausing (a pause would hang a benchmark).
     const policy = new DeterministicPolicy();
     const snapshot = makeSnapshot({
       convergenceStalled: true,
@@ -526,8 +514,24 @@ describe("convergenceStalled round-exhaustion termination", () => {
     });
     const result = policy.decide(snapshot);
     expect(result).not.toBeNull();
-    // Round cap short-circuits the accept branches even though the issue set
-    // would otherwise qualify for auto-finish (0 blockers, 1 issue, decreasing).
+    expect(result!.strategy).toBe("finish");
+    expect(result!.reason).toContain("exhausted");
+  });
+
+  it("pauses at the max round cap when a blocker is still present", () => {
+    // The only case where the hard cap pauses instead of finishing: an
+    // unresolved blocker means the artifact is unusable, so escalate to a human.
+    const policy = new DeterministicPolicy();
+    const snapshot = makeSnapshot({
+      convergenceStalled: true,
+      convergenceRoundCount: 6,
+      convergenceTrend: "flat",
+      latestIssues: [
+        { severity: "blocker", kind: "defect", description: "unrenderable diagram" },
+      ],
+    });
+    const result = policy.decide(snapshot);
+    expect(result).not.toBeNull();
     expect(result!.strategy).toBe("pause_for_user");
     expect(result!.reason).toContain("exhausted");
   });

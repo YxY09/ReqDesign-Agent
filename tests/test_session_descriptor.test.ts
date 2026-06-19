@@ -3,7 +3,7 @@
  *
  * Ported from tests/test_session_descriptor.py.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   SessionContext,
   SessionDescriptor,
@@ -18,6 +18,7 @@ import {
   createVerdict,
 } from "../src/shared/types.js";
 import { GenerationSession, RepairSession } from "../src/tools/sessions.js";
+import { GenerationTool } from "../src/tools/generation.js";
 
 // ---------------------------------------------------------------------------
 // SessionContext
@@ -282,6 +283,46 @@ describe("Worker sessions", () => {
       sourceTaskIds: ["design-1"],
       sourceRevisions: { "design-1": 3 },
     });
+  });
+
+  it("keeps repaired content when post-repair self-check throws", async () => {
+    const spy = vi.spyOn(GenerationTool, "_ruleCheck").mockImplementation(() => {
+      throw new Error("self-check boom");
+    });
+    const agent = {
+      llm: {},
+      repair: async () => "fixed design",
+    };
+    const ctx = new SessionContext({
+      task: createTask({
+        id: "design-1",
+        type: "design",
+        description: "design",
+      }),
+      taskId: "design-1",
+      taskType: "design",
+      taskDescription: "design",
+      hints: {
+        previous_artifact_content: "old design",
+      },
+    });
+    const session = new RepairSession("s-self-check", ctx, null, {}, agent as never);
+
+    try {
+      const notif = await session.run(createTaskMessage({
+        type: "repair",
+        taskId: "design-1",
+        payload: { fix_instructions: [{ description: "fix" }] },
+      }));
+
+      expect(notif.status).toBe("completed");
+      const artifact = notif.result as ReturnType<typeof createArtifact>;
+      expect(artifact.content).toBe("fixed design");
+      expect(artifact.selfCheckPassed).toBe(false);
+      expect(artifact.selfCheckIssues[0]).toContain("self-check boom");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

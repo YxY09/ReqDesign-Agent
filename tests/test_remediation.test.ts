@@ -20,15 +20,14 @@ function makeSnapshot(overrides: Partial<OrchestratorSnapshot> = {}): Orchestrat
     evaluatorRunning: false,
     finalReviewCurrent: false,
     finalReviewPassed: false,
-    globallyStalled: false,
     convergenceStalled: false,
     convergenceRoundCount: 0,
     convergenceTrend: null,
     convergenceStalledFingerprints: [],
     planRevisionCount: 0,
     plannerFailures: 0,
-    stalledTaskIds: [],
     regenerateCountsByTask: {},
+    repairFutileTaskIds: [],
     repairCountsByTask: {},
     artifactTypesByTask: {},
     planTaskTypesById: {},
@@ -114,17 +113,6 @@ describe("RemediationLadder.rejectedArtifact", () => {
     expect(decision?.strategy).toBe("pause_for_user");
   });
 
-  it("escalates for stalled targets even with repair budget left", () => {
-    const decision = makeLadder().rejectedArtifact(
-      makeSnapshot({
-        rejectedArtifacts: ["design-1"],
-        stalledTaskIds: ["design-1"],
-        planReady: true,
-      }),
-    );
-    expect(decision?.strategy).toBe("escalate_to_replan");
-  });
-
   it("uses the caller-provided reason when given", () => {
     const decision = makeLadder().rejectedArtifact(
       makeSnapshot({ rejectedArtifacts: ["design-1"] }),
@@ -137,6 +125,7 @@ describe("RemediationLadder.rejectedArtifact", () => {
 describe("RemediationLadder.finalMajor", () => {
   const localMajorIssue = {
     severity: "major",
+    kind: "defect",
     target_task_id: "design-1",
     target_task_type: "design",
     scope: "local",
@@ -156,6 +145,19 @@ describe("RemediationLadder.finalMajor", () => {
     );
     expect(decision?.strategy).toBe("repair_local_artifact");
     expect(decision?.targetTaskId).toBe("design-1");
+  });
+
+  it("does NOT repair a local target whose repair has proven futile; accepts instead", () => {
+    const decision = makeLadder().finalMajor(
+      makeSnapshot({
+        majorPendingTaskIds: ["design-1"],
+        latestIssues: [localMajorIssue],
+        artifactTypesByTask: { "design-1": "design" },
+        // A prior repair left the same structural issue in place.
+        repairFutileTaskIds: ["design-1"],
+      }),
+    );
+    expect(decision?.strategy).toBe("finish");
   });
 
   it("does not locally repair upstream-scoped issues", () => {
@@ -213,7 +215,7 @@ describe("RemediationLadder.isSafeFinalMajorRepairTarget", () => {
     const ladder = makeLadder();
     const snapshot = makeSnapshot({
       latestIssues: [
-        { severity: "major", target_task_id: "design-1", target_task_type: "design", scope: "local" },
+        { severity: "major", kind: "defect", target_task_id: "design-1", target_task_type: "design", scope: "local" },
       ],
       artifactTypesByTask: { "design-1": "design" },
     });
@@ -224,7 +226,7 @@ describe("RemediationLadder.isSafeFinalMajorRepairTarget", () => {
     const ladder = makeLadder();
     const snapshot = makeSnapshot({
       latestIssues: [
-        { severity: "major", target_task_id: "design-1", target_task_type: "design", scope: "systemic" },
+        { severity: "major", kind: "defect", target_task_id: "design-1", target_task_type: "design", scope: "systemic" },
       ],
       artifactTypesByTask: { "design-1": "design" },
     });
