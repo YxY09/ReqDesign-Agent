@@ -557,67 +557,6 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
     return lines.join("\n");
   }
 
-  static buildDesignContract(requirementJson: Record<string, unknown>): string {
-    const safeFunctions = BaseGenerator.itemsWithSafeDisplayId(requirementJson.functions);
-    const functions = BaseGenerator.formatContractList(
-      safeFunctions,
-      ["displayId", "name", "description"],
-    );
-
-    // Build sub-capabilities section for each function that has them
-    const functionsWithSubs = safeFunctions.filter((fn) =>
-      Array.isArray(fn.sub_capabilities) && fn.sub_capabilities.length > 0 ||
-      Array.isArray(fn.acceptance_criteria) && fn.acceptance_criteria.length > 0,
-    );
-    const subCapsLines = functionsWithSubs.length > 0
-      ? [
-          "### 功能子能力与验收点（设计必须覆盖）",
-          ...functionsWithSubs.map((fn) => {
-            const id = String(fn.displayId ?? "");
-            const subs = Array.isArray(fn.sub_capabilities) ? fn.sub_capabilities as string[] : [];
-            const acs = Array.isArray(fn.acceptance_criteria) ? fn.acceptance_criteria as string[] : [];
-            const parts: string[] = [];
-            if (subs.length > 0) parts.push(`  子能力: ${subs.join(", ")}`);
-            if (acs.length > 0) parts.push(`  验收点: ${acs.join(", ")}`);
-            return `- ${id} ${String(fn.name ?? "")}:\n${parts.join("\n")}`;
-          }),
-        ]
-      : [];
-
-    const entities = BaseGenerator.formatContractList(
-      requirementJson.entities,
-      ["name", "description"],
-    );
-    const constraints = BaseGenerator.formatContractList(
-      BaseGenerator.itemsWithSafeDisplayId(requirementJson.constraints),
-      ["displayId", "description", "source_text"],
-    );
-    const exceptions = BaseGenerator.formatContractList(
-      BaseGenerator.itemsWithSafeDisplayId(requirementJson.exceptions),
-      ["displayId", "description", "trigger", "handling"],
-    );
-
-    return [
-      "## 设计合同（硬性约束，必须逐项遵守）",
-      "以下清单是设计阶段唯一可信的 ID 和核心领域类来源。不要新增、改名或重新编号。",
-      functions.length > 0 ? `### 功能 ID 清单\n${functions.map((item) => `- ${item}`).join("\n")}` : "",
-      entities.length > 0 ? `### 允许的核心领域类\n${entities.map((item) => `- ${item}`).join("\n")}` : "",
-      constraints.length > 0 ? `### 约束 ID 清单（source_text 是测试可断言的具体规则，不要泛化）\n${constraints.map((item) => `- ${item}`).join("\n")}` : "",
-      exceptions.length > 0 ? `### 异常 ID 清单\n${exceptions.map((item) => `- ${item}`).join("\n")}` : "",
-      subCapsLines.length > 0 ? subCapsLines.join("\n") : "",
-      "### 输出前自检",
-      "- 必须输出 `## 设计覆盖矩阵` 章节，逐条列出功能、约束、异常的原始 ID、原始描述、设计决策、影响模块、影响类、测试启示。",
-      "- 覆盖矩阵中的原始描述必须保留需求分析中的核心语义，不能只写 ID 或改写成其他约束。",
-      "- **参数保真（关键）**：约束的设计决策必须**逐字保留 source_text 中的具体参数**——算法名（AES/Twofish/ARC4/PBKDF2 等）、密钥长度（128-bit/256-bit）、时限（10 秒/8 秒）、数量限制（only one/no length limit）、文件扩展名（.kdb）。禁止泛化为“加密”“超时清除”“有限制”等。",
-      "- **禁止占位**：禁止使用“（原有 XX 保持不变）”“（此处省略）”“（详见上文）”等占位语；每个章节必须自包含、可独立阅读，不允许引用其他章节的内容代替。",
-      "- 模块划分必须覆盖全部功能 ID，且每个 ID 所在模块语义必须匹配功能名称和描述。",
-      "- 核心类/接口设计里的核心领域类必须来自“允许的核心领域类”清单，大小写完全一致。",
-      "- 如果确实需要补充未在实体清单中的核心类，必须增加 `## 补充核心类依据` 表格，列出类名和需求原文依据；没有依据的补充类会被拒绝。",
-      "- 异常处理设计必须使用异常 ID 清单中的原始编号，例如 X001 就必须写 X001，不能改成 E001。",
-      "- 约束处理设计必须使用约束 ID 清单中的原始编号。",
-    ].filter(Boolean).join("\n\n");
-  }
-
   private static _cellSafe(text: string): string {
     return String(text ?? "").replace(/\|/g, "\\|");
   }

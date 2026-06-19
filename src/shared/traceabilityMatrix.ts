@@ -24,6 +24,8 @@ export interface TraceabilityMatrix {
   functionToTests: Record<string, string[]>;
   exceptionToTests: Record<string, string[]>;
   constraintDescriptions: Record<string, string>;
+  functionDescriptions: Record<string, string>;
+  exceptionDescriptions: Record<string, string>;
   uncoveredConstraints: string[];
   uncoveredFunctions: string[];
   uncoveredExceptions: string[];
@@ -382,6 +384,30 @@ export function buildMatrix(
     const desc = String(c.source_text ?? c.sourceText ?? c.description ?? "").trim();
     if (desc) constraintDescriptions[did] = desc;
   }
+  // Function/exception descriptions enable the scorer to match gold obligations
+  // to this matrix SEMANTICALLY (by text), not by positional id coincidence
+  // (gold C-001 ≠ generated C001). Without these, functional/exception
+  // obligations could only fall back to brittle id matching.
+  const functionDescriptions: Record<string, string> = {};
+  for (const f of functions) {
+    const did = String(f.displayId ?? "").trim();
+    if (!did) continue;
+    const desc = [f.name, f.description]
+      .map((p) => String(p ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
+    if (desc) functionDescriptions[did] = desc;
+  }
+  const exceptionDescriptions: Record<string, string> = {};
+  for (const e of exceptions) {
+    const did = String(e.displayId ?? "").trim();
+    if (!did) continue;
+    const desc = [e.description, e.trigger, e.handling]
+      .map((p) => String(p ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
+    if (desc) exceptionDescriptions[did] = desc;
+  }
 
   // design coverage is sourced from designModel.coverageMatrix when available;
   // otherwise fall back to a non-self-referential presence check against the
@@ -629,6 +655,8 @@ export function buildMatrix(
     functionToTests,
     exceptionToTests,
     constraintDescriptions,
+    functionDescriptions,
+    exceptionDescriptions,
     uncoveredConstraints,
     uncoveredFunctions,
     uncoveredExceptions,

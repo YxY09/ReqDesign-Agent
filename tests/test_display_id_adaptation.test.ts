@@ -17,54 +17,6 @@ import type { LLMClient } from "../src/llmClient.js";
 // ═══════════════════════════════════════════════════════
 
 describe("SystemDesigner — displayId in contract", () => {
-  it("buildDesignContract shows displayId when available", () => {
-    const req = {
-      functions: [
-        { id: "FUN_SEARCH_CASE", displayId: "F001", name: "SearchCase", description: "搜索案件" },
-      ],
-      constraints: [
-        { id: "CON_ORDER_LIMIT", displayId: "C001", description: "订单限制" },
-      ],
-      exceptions: [
-        { id: "EXC_PAYMENT_FAIL", displayId: "X001", description: "支付失败", trigger: "余额不足", handling: "提示" },
-      ],
-      entities: [{ name: "Case", description: "案件" }],
-    };
-    const contract = SystemDesigner.buildDesignContract(req);
-
-    // Contract should show displayId (F001) not just canonicalId (FUN_SEARCH_CASE)
-    expect(contract).toContain("F001");
-    // Should NOT show verbose canonicalId in the main listing
-    // (or at minimum, displayId must be visible)
-    expect(contract).toContain("C001");
-    expect(contract).toContain("X001");
-  });
-
-  it("buildDesignContract falls back to id when displayId absent", () => {
-    const req = {
-      functions: [{ id: "F001", name: "Login", description: "登录" }],
-      entities: [],
-    };
-    const contract = SystemDesigner.buildDesignContract(req);
-    expect(contract).toContain("F001");
-  });
-
-  it("buildDesignContract sub-capabilities shows displayId", () => {
-    const req = {
-      functions: [{
-        id: "FUN_SEARCH_CASE",
-        displayId: "F001",
-        name: "SearchCase",
-        description: "搜索",
-        sub_capabilities: ["关键字搜索", "高级筛选"],
-        acceptance_criteria: ["返回结果 < 1s"],
-      }],
-      entities: [],
-    };
-    const contract = SystemDesigner.buildDesignContract(req);
-    expect(contract).toContain("F001");
-  });
-
   it("validateDesign recognizes design text using displayId", () => {
     const design =
       "## 模块划分\n\n包含F001搜索案件功能。\n\n## 核心类\n\nCase类。\n\n## 数据流\n\n请求处理流程。\n\nC001 已处理。X001 支付失败处理。";

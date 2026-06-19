@@ -11,6 +11,7 @@ import {
   formatDisplayId,
   nextDisplayIdCounter,
 } from "./idPolicy.js";
+import { simpleHash } from "./hash.js";
 
 export interface CanonicalMaps {
   functionMap: Map<string, string>;    // oldId/name → canonicalId
@@ -297,14 +298,4 @@ function extractEnglishKeyWords(text: string): string[] {
 
   // 取前 4 个关键词，转为大写
   return words.slice(0, 4).map((w) => w.toUpperCase());
-}
-
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(36).toUpperCase().slice(0, 8).padEnd(8, "0");
 }

@@ -19,6 +19,7 @@ import {
   isDisplayId,
   nextDisplayIdCounter,
 } from "./idPolicy.js";
+import { simpleHash } from "./hash.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -69,17 +70,6 @@ export interface CanonicalConstraint {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** Simple deterministic hash, 8-char uppercase hex-ish string. */
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36).toUpperCase().slice(0, 8).padEnd(8, "0");
-}
 
 /** Normalize text for dedup comparison: lowercase, strip punctuation, collapse whitespace. */
 export function normalizeForComparison(text: string): string {

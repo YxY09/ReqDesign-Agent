@@ -447,6 +447,8 @@ describe("Phase 2.5 — contradiction check", () => {
     expect(prompt).toContain("anti_pattern");
     expect(prompt).toContain("contradicts");
     expect(prompt).toContain("contradicting_evidence");
+    //定向切片替代 head/tail 截断：prompt 中不应出现 [truncated 标记
+    expect(prompt).not.toContain("[truncated");
   });
 
   it("checkContradiction returns contradicts=true when the LLM flags it", async () => {
@@ -656,6 +658,8 @@ describe("Phase 2.5 — trace-chain truthfulness", () => {
     expect(prompt).toContain("chain 1");
     expect(prompt).toContain("TC-B-014");
     expect(prompt).toContain("chain_truthful");
+    //定向切片替代 head/tail 截断：prompt 中不应出现 [truncated 标记
+    expect(prompt).not.toContain("[truncated");
   });
 
   it("judgeTraceChain returns chain_truthful=false when the LLM flags a fake chain", async () => {
@@ -778,6 +782,41 @@ describe("Phase 2.5 — extractChainsForObligation + matrix mapping", () => {
 
   it("returns [] when the matrix is null", () => {
     expect(extractChainsForObligation(sampleObligation(), null)).toEqual([]);
+  });
+
+  it("filters out empty-element chains so they never reach judgeTraceChain", () => {
+    // ["", ""].join(", ") → ", " is truthy but contentless — it must NOT
+    // produce a junk chain that feeds the LLM judge noise.
+    const matrix = {
+      constraintToDesign: { "C-001": ["", ""] },
+      constraintToTests: { "C-001": ["", ""] },
+    };
+    const chains = extractChainsForObligation(sampleObligation(), matrix);
+    expect(chains).toEqual([]);
+  });
+
+  it("keeps the non-empty candidate key when obId/normalizedObId split", () => {
+    // obId "C-001" carries a real module, normalizedObId "C001" carries an
+    // all-empty array. Only the non-empty chain should survive.
+    const matrix = {
+      constraintToDesign: { "C-001": ["AppointmentService"], C001: ["", ""] },
+      constraintToTests: { "C-001": [], C001: ["", ""] },
+    };
+    const chains = extractChainsForObligation(sampleObligation(), matrix);
+    expect(chains).toHaveLength(1);
+    expect(chains[0].design_element).toContain("AppointmentService");
+  });
+
+  it("trims trailing-comma noise from partially-empty element arrays", () => {
+    // ["A", ""].join(", ") → "A, " must be cleaned to "A".
+    const matrix = {
+      constraintToDesign: { "C-001": ["A", ""] },
+      constraintToTests: { "C-001": ["TC-1", ""] },
+    };
+    const chains = extractChainsForObligation(sampleObligation(), matrix);
+    expect(chains).toHaveLength(1);
+    expect(chains[0].design_element).toBe("A");
+    expect(chains[0].test_id).toBe("TC-1");
   });
 });
 

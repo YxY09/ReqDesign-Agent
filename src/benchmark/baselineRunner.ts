@@ -109,6 +109,7 @@ export function buildBaselinePrompt(params: {
   lines.push("## 交付物（一次响应中全部产出，按以下结构组织）");
   lines.push("1. **requirement_analysis**：结构化需求分析对象（用原始需求语言），覆盖 角色 / 功能 / 实体 / 约束 / 异常 / 关键流程。");
   lines.push("2. **system_design**：系统设计（Markdown），包含 架构概览、核心模块/服务、关键数据模型、状态流转、校验与拦截规则、异常处理策略。");
+  lines.push("   - 其中必须包含一个 **## 约束覆盖矩阵** 小节（Markdown 表格），对识别到的每一条约束列出：约束ID（如 C001、C002）、约束描述（一句话）、实现模块/类、触发条件、处理行为。约束ID 要与 requirement_analysis.constraints 中使用的编号一致，实现模块/类要与上文核心模块/服务中出现的名称保持一致。");
   lines.push("3. **diagrams**：至少 3 个 Mermaid 图（class_diagram 类图、activity_diagram 关键流程活动图、state_diagram 关键状态机图），键为图名、值为 Mermaid 源码。");
   lines.push("4. **test_cases**：测试用例数组，每条包含 id/title/target（针对哪个约束或异常）/steps（步骤数组）/expected_result（可断言的预期结果），覆盖约束边界与异常路径。");
   lines.push("");
@@ -128,7 +129,7 @@ export function buildBaselinePrompt(params: {
   lines.push('    "constraints": ["..."],');
   lines.push('    "exceptions": ["..."]');
   lines.push('  },');
-  lines.push('  "system_design": "<Markdown 系统设计，含架构/模块/数据模型/状态流转/校验规则/异常处理>",');
+  lines.push('  "system_design": "<Markdown 系统设计，含架构/模块/数据模型/状态流转/校验规则/异常处理，并包含一个 ## 约束覆盖矩阵 表格：约束ID | 约束描述 | 实现模块/类 | 触发条件 | 处理行为>",');
   lines.push('  "diagrams": {');
   lines.push('    "class_diagram": "classDiagram\\n  ...",');
   lines.push('    "activity_diagram": "flowchart TD\\n  ...",');
@@ -580,12 +581,14 @@ export function writeBaselineArtifacts(outputDir: string, output: BaselineOutput
     "utf8",
   );
 
-  // --- Traceability matrix (fairness: same strict branch as the agent) ---
-  // Without this file, compareRunner leaves matrixPath=undefined and the
-  // quality judge falls back to the lenient legacy formula → baseline
-  // traceability is artificially 100. Generating it here puts both sides on
-  // the strict chain-truthfulness branch so the dimension is comparable.
-  // Best-effort: a failed matrix build must NOT invalidate the artifact set.
+  // --- Traceability matrix (audit artifact, not scoring prerequisite) ---
+  // The quality judge now uses a content-based traceability formula
+  // (has_concrete_rule && has_test_alignment) so this matrix does NOT affect
+  // the traceability_truthfulness score. It is generated for audit/inspection:
+  // the compare report can show which constraints the baseline linked to which
+  // design elements, and judgeTraceChain() still evaluates chain truthfulness
+  // and stores it on each verdict for debugging. Best-effort: a failed matrix
+  // build must NOT invalidate the artifact set.
   try {
     const { normalized, idMap } = normalizeBaselineAnalysisForMatrix(
       output.requirement_analysis ?? {},

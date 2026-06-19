@@ -12,6 +12,7 @@ import { BaseGenerator } from "./base.js";
 import { RequirementNormalizer } from "../shared/normalizer.js";
 import { checkAnalysisQuality, type QualityCheckResult } from "../shared/analysisQualityGate.js";
 import { canonicalizeAndLink } from "../shared/canonicalizer.js";
+import { simpleHash } from "../shared/hash.js";
 import {
   canonicalizeConstraints as canonicalizeConstraintsNew,
   type ConstraintCandidate,
@@ -265,7 +266,7 @@ function exceptionCanonicalId(text: string): string {
       .map((word) => word.toUpperCase());
     if (words.length > 0) return `EXC_${words.join("_")}`;
   }
-  return `EXC_${simpleTextHash(text)}`;
+  return `EXC_${simpleHash(text)}`;
 }
 
 const EXCEPTION_ID_STOP_WORDS = new Set([
@@ -273,15 +274,6 @@ const EXCEPTION_ID_STOP_WORDS = new Set([
   "users", "system", "case", "cases", "attempt", "attempts", "fails",
   "failure", "error", "invalid",
 ]);
-
-function simpleTextHash(text: string): string {
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = ((hash << 5) - hash) + text.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36).toUpperCase().slice(0, 8).padEnd(8, "0");
-}
 
 function normalizeEntityIdentities(
   merged: Record<string, unknown>,
@@ -360,7 +352,7 @@ function entityCanonicalId(name: string): string {
     .replace(/[^A-Za-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .toUpperCase();
-  return `E_${snake || simpleTextHash(name)}`;
+  return `E_${snake || simpleHash(name)}`;
 }
 
 /** Coerce unknown to Record array. */

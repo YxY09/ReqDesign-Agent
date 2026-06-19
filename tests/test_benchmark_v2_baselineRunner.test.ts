@@ -65,6 +65,20 @@ describe("buildBaselinePrompt — strong single-turn prompt", () => {
   it("demands a single response (no staged process)", () => {
     expect(prompt).toMatch(/一次响应|这一次对话|一次响应中/);
   });
+
+  it("requires a 约束覆盖矩阵 (constraint coverage matrix) section in system_design for traceability", () => {
+    // Deliverable #2 must instruct the baseline to emit a Markdown coverage
+    // table mapping each constraint id → module/class, so buildMatrix can
+    // derive constraintToDesign from the baseline design just like the agent.
+    expect(prompt).toContain("约束覆盖矩阵");
+    // The table columns are spelled out so the baseline emits real Markdown.
+    expect(prompt).toContain("约束ID");
+    expect(prompt).toContain("实现模块/类");
+    expect(prompt).toContain("触发条件");
+    expect(prompt).toContain("处理行为");
+    // The JSON template's system_design field echoes the requirement.
+    expect(prompt).toMatch(/system_design.*约束覆盖矩阵/s);
+  });
 });
 
 // ---------------------------------------------------------------------------

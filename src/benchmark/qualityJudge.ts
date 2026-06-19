@@ -65,8 +65,9 @@ export interface ObligationVerdict {
   /**
    * True when the traceability chain (constraint→design→test) was judged
    * semantically truthful; false when a chain exists but points at the wrong
-   * design element / test. Undefined when no matrix / chain was available, in
-   * which case aggregation falls back to has_test_alignment.
+   * design element / test. Undefined when no matrix / chain was available.
+   * Stored for audit only — aggregateQuality() uses the content-based formula
+   * (has_concrete_rule && has_test_alignment) rather than this field.
    */
   trace_chain_truthful?: boolean;
   /**
@@ -518,7 +519,7 @@ export function buildContradictionPrompt(params: {
   }
   lines.push("");
   lines.push("## Full DESIGN text (for context)");
-  lines.push(indent(truncate(designText, 4000), "    "));
+  lines.push(indent(extractDesignSliceForObligation(designText, ob), "    "));
   lines.push("");
   lines.push("## Decision rules");
   lines.push("- contradicts=true ONLY when the design states a rule whose DIRECTION is");
@@ -641,10 +642,10 @@ export function buildTraceChainPrompt(params: {
   }
   lines.push("");
   lines.push("## DESIGN text (verify the design element really implements the constraint)");
-  lines.push(indent(truncate(designText, 4000), "    "));
+  lines.push(indent(extractDesignSliceForObligation(designText, ob), "    "));
   lines.push("");
   lines.push("## TESTS text (verify the test id really tests this constraint)");
-  lines.push(indent(truncate(tests, 4000), "    "));
+  lines.push(indent(extractTestsSliceForObligation(tests, ob), "    "));
   lines.push("");
   lines.push("## Decision rules");
   lines.push("- chain_truthful=true ONLY when the design element genuinely implements");
@@ -808,13 +809,16 @@ export const FINAL_SCORE_WEIGHTS = {
  *                                Hits M3 (missing exception ⇒ no handling).
  *   - test_effectiveness       : fraction of obligations with test alignment.
  *                                Hits M4 (hallucinated assertion).
- *   - traceability_truthfulness: when a traceability matrix was judged,
- *                                fraction of judged chains that are
- *                                semantically truthful (constraint→design→test
- *                                all match). Without a matrix, falls back to
- *                                the fraction of rule-bearing obligations whose
- *                                tests align. Hits M2 (fake trace: chain exists
- *                                but points at the wrong element/test).
+ *   - traceability_truthfulness: fraction of obligations where the design has
+ *                                a concrete rule (design_supported) AND tests
+ *                                assert it (test_supported). Both verified from
+ *                                verbatim evidence — no matrix required, works
+ *                                symmetrically for agent and baseline. Hits M2
+ *                                (fake trace: a claim without supporting design
+ *                                rule + test evidence earns no traceability).
+ *                                The trace_chain_truthful flag from
+ *                                judgeTraceChain() is preserved on each verdict
+ *                                for audit but is NOT folded into this score.
  */
 export function aggregateQuality(verdicts: ObligationVerdict[]): QualityScores {
   if (verdicts.length === 0) {
@@ -845,40 +849,15 @@ export function aggregateQuality(verdicts: ObligationVerdict[]): QualityScores {
     (verdicts.reduce((a, v) => a + (v.score_basis.has_test_alignment ? 1 : 0), 0) / n) * 100,
   );
 
-  // Phase 2.5 (weakness 2): traceability_truthfulness now prefers the
-  // semantic chain truthfulness (trace_chain_truthful) when any verdict
-  // produced one — i.e. a traceability matrix was fed in. When NO verdict has
-  // a chain verdict (no matrix supplied), we fall back to the legacy formula
-  // (fraction of rule-bearing obligations whose tests align) so clean
-  // baselines and matrix-less tests stay green.
-  const withRule = verdicts.filter((v) => v.score_basis.has_concrete_rule);
-  const anyChainVerdict = verdicts.some((v) => v.trace_chain_truthful !== undefined);
-  let traceability: number;
-  if (anyChainVerdict) {
-    // Per-verdict truthfulness: a verdict with a rule is truthful iff its
-    // chain is truthful (when judged) OR its tests align (no chain judged).
-    // A verdict with NO rule contributes nothing to the numerator but still
-    // counts in the denominator when it had a chain judged (it was claimed
-    // covered yet has no real rule → untruthful).
-    const judged = verdicts.filter((v) => v.trace_chain_truthful !== undefined);
-    traceability =
-      judged.length === 0
-        ? 0
-        : round1(
-            (judged.reduce((a, v) => a + (v.trace_chain_truthful ? 1 : 0), 0) /
-              judged.length) *
-              100,
-          );
-  } else {
-    traceability =
-      withRule.length === 0
-        ? 0
-        : round1(
-            (withRule.reduce((a, v) => a + (v.score_basis.has_test_alignment ? 1 : 0), 0) /
-              withRule.length) *
-              100,
-          );
-  }
+  // Content-based traceability: the design addresses the obligation with a
+  // concrete rule (design_supported) AND the tests assert it (test_supported).
+  // Both are verified from verbatim evidence excerpts, so no matrix is needed.
+  // This is symmetric for agent and baseline: a system that writes design rules
+  // but whose tests don't align, or whose matrix claims a trace that the
+  // evidence doesn't support, correctly scores low here.
+  const traceability = round1(
+    (verdicts.reduce((a, v) => a + (v.score_basis.has_concrete_rule && v.score_basis.has_test_alignment ? 1 : 0), 0) / n) * 100,
+  );
 
   const final = round1(
     coverage * FINAL_SCORE_WEIGHTS.gold_obligation_coverage +
@@ -972,30 +951,51 @@ export function extractChainsForObligation(
     toTests = constraintToTests;
   }
 
-  // Optional text descriptions for semantic matching (carried by the mutant's
-  // fake matrix): constraintId → human description. Only the constraint bucket
-  // populates this today; function/exception use source_span as the fallback.
+  // Text descriptions for SEMANTIC matching, by obligation type. Matching gold
+  // obligations to a generated matrix by id is unreliable — gold numbers
+  // independently from the generated matrix (gold C-001 ≠ generated C001), so an
+  // id match pairs the WRONG element. We therefore prefer description/source_span
+  // overlap and only fall back to id equality when no description matches.
   const constraintDescriptions = (matrix.constraintDescriptions ?? {}) as Record<string, string>;
+  const functionDescriptions = (matrix.functionDescriptions ?? {}) as Record<string, string>;
+  const exceptionDescriptions = (matrix.exceptionDescriptions ?? {}) as Record<string, string>;
+  const descriptions =
+    obligation.type === "functional"
+      ? functionDescriptions
+      : obligation.type === "exception"
+        ? exceptionDescriptions
+        : constraintDescriptions;
 
-  // Build the set of keys that map to THIS obligation. Gold obligations use
-  // ids like "C-001"; generated matrices use display ids like "C014". We accept
-  // the obligation id directly, plus a normalized id with no dash.
-  const obId = obligation.id;
-  const normalizedObId = obId.replace(/-/g, "");
-  const candidateKeys = new Set<string>([obId, normalizedObId]);
-  // Also accept keys whose stored description matches the obligation source.
-  for (const [key, desc] of Object.entries(constraintDescriptions)) {
+  // Semantic match first: keys whose stored description overlaps the obligation.
+  const semanticKeys = new Set<string>();
+  for (const [key, desc] of Object.entries(descriptions)) {
     if (desc && textOverlaps(desc, obligation.source_span)) {
-      candidateKeys.add(key);
+      semanticKeys.add(key);
     }
   }
+  // Positional id guess only as a fallback (gold "C-001" → "C001"). Using it
+  // alongside semantic matches would inject wrong chains and, under the
+  // all-chains-must-be-truthful rule, sink every obligation to 0.
+  const obId = obligation.id;
+  const normalizedObId = obId.replace(/-/g, "");
+  const candidateKeys =
+    semanticKeys.size > 0 ? semanticKeys : new Set<string>([obId, normalizedObId]);
 
   for (const key of candidateKeys) {
     const designElements = toDesign[key];
     const testIds = toTests[key];
-    const description = constraintDescriptions[key] ?? obligation.source_span;
-    const designElement = Array.isArray(designElements) ? designElements.join(", ") : "";
-    const testId = Array.isArray(testIds) ? testIds.join(", ") : "";
+    const description = descriptions[key] ?? obligation.source_span;
+    // Only treat an element array as "non-empty" when at least one entry
+    // survives a trim() check. This prevents ["", ""].join(", ") → ", " from
+    // producing a truthy-but-contentless junk chain that would feed the LLM
+    // judge noise. The chain strings themselves are rebuilt from the trimmed,
+    // filtered entries so trailing commas ("A, ") are also cleaned up.
+    const clean = (arr: unknown): string =>
+      Array.isArray(arr)
+        ? arr.map((e) => String(e ?? "").trim()).filter(Boolean).join(", ")
+        : "";
+    const designElement = clean(designElements);
+    const testId = clean(testIds);
     if (designElement || testId) {
       chains.push({ constraint_description: description, design_element: designElement, test_id: testId });
     }
