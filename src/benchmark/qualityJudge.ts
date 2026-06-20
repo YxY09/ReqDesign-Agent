@@ -133,10 +133,10 @@ export function buildJudgePrompt(params: {
   lines.push(indent(truncate(requirement_source, 4000), "    "));
   lines.push("");
   lines.push("## DESIGN artifact (excerpt verbatim evidence from HERE)");
-  lines.push(indent(extractDesignSliceForObligation(design, ob), "    "));
+  lines.push(indent(artifactForObligation(design, ob, "expected_design_evidence", "design"), "    "));
   lines.push("");
   lines.push("## TESTS artifact (excerpt verbatim evidence from HERE)");
-  lines.push(indent(extractTestsSliceForObligation(tests, ob), "    "));
+  lines.push(indent(artifactForObligation(tests, ob, "expected_test_evidence", "tests"), "    "));
   lines.push("");
   lines.push("## Rubric (HARD RULES — violating them is an invalid judgment)");
   lines.push("- Score 0: NO relevant verbatim evidence found in design OR tests.");
@@ -195,6 +195,43 @@ function truncate(text: string, max: number): string {
  * artifact (design or tests) for one obligation.
  */
 const SLICE_WINDOW = 10;
+
+/**
+ * Max chars of a design/tests artifact fed WHOLE to a judge prompt. Real
+ * benchmark artifacts are far below this (designs ≤ ~25KB, tests ≤ ~70KB), so
+ * they are judged against the COMPLETE artifact — see {@link artifactForObligation}.
+ *
+ * Whole-artifact judging is the fix for the per-obligation anchor-slice's CJK
+ * fragility: the strongest anchor (`source_span`) is a long sentence the tests
+ * never quote verbatim, the signature numbers ("50"/"14") are too short to
+ * survive the needle filter, and an artifact that renumbers ids away from the
+ * gold scheme loses the id anchor — so the ±{@link SLICE_WINDOW}-line slice
+ * routinely missed real coverage and `has_test_alignment` was judged false on
+ * tests that DID assert the obligation. The slice survives only as a graceful
+ * fallback for a pathologically large artifact that would not fit the judge's
+ * context window.
+ */
+const JUDGE_WHOLE_ARTIFACT_MAX_CHARS = 200_000;
+
+/**
+ * Choose what slice of an artifact to feed the judge for ONE obligation.
+ *
+ * Default: the WHOLE artifact (it fits — see {@link JUDGE_WHOLE_ARTIFACT_MAX_CHARS}),
+ * so the LLM sees every test/design element and can find the obligation's
+ * coverage regardless of id renumbering or where it sits in the file. Only when
+ * the artifact exceeds the cap do we fall back to the per-obligation anchor
+ * slice ({@link extractSliceForObligation}) to bound the prompt size.
+ */
+function artifactForObligation(
+  fullText: string,
+  obligation: GoldObligation,
+  evidenceField: "expected_design_evidence" | "expected_test_evidence",
+  label: "design" | "tests",
+): string {
+  const text = String(fullText ?? "");
+  if (text.length <= JUDGE_WHOLE_ARTIFACT_MAX_CHARS) return text;
+  return extractSliceForObligation(text, obligation, evidenceField, label);
+}
 
 /**
  * Shared core of {@link extractDesignSliceForObligation} /
@@ -519,7 +556,7 @@ export function buildContradictionPrompt(params: {
   }
   lines.push("");
   lines.push("## Full DESIGN text (for context)");
-  lines.push(indent(extractDesignSliceForObligation(designText, ob), "    "));
+  lines.push(indent(artifactForObligation(designText, ob, "expected_design_evidence", "design"), "    "));
   lines.push("");
   lines.push("## Decision rules");
   lines.push("- contradicts=true ONLY when the design states a rule whose DIRECTION is");
@@ -642,10 +679,10 @@ export function buildTraceChainPrompt(params: {
   }
   lines.push("");
   lines.push("## DESIGN text (verify the design element really implements the constraint)");
-  lines.push(indent(extractDesignSliceForObligation(designText, ob), "    "));
+  lines.push(indent(artifactForObligation(designText, ob, "expected_design_evidence", "design"), "    "));
   lines.push("");
   lines.push("## TESTS text (verify the test id really tests this constraint)");
-  lines.push(indent(extractTestsSliceForObligation(tests, ob), "    "));
+  lines.push(indent(artifactForObligation(tests, ob, "expected_test_evidence", "tests"), "    "));
   lines.push("");
   lines.push("## Decision rules");
   lines.push("- chain_truthful=true ONLY when the design element genuinely implements");

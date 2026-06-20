@@ -1052,6 +1052,18 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
         .map((item) => SystemDesigner._coerceDataFlow(item))
         .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
     }
+    // Normalize `classes` to the canonical DesignClassEntry field names. The
+    // LLM — especially on the REPAIR path, whose prompt example can be truncated
+    // before the classes section — sometimes emits plausible-but-wrong aliases
+    // (className/responsibilities/keyAttributes/keyMethods). Left untouched they
+    // pass isDesignModel (array-only check) and render as blank table rows
+    // (renderDesignMarkdown reads cls.name/kind/responsibility). Coercing here
+    // recovers the data under any alias and drops truly nameless stubs.
+    if (Array.isArray(obj.classes)) {
+      obj.classes = (obj.classes as unknown[])
+        .map((item) => SystemDesigner._coerceClass(item))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+    }
 
     if (!isDesignModel(obj)) return null;
     return obj;
@@ -1126,6 +1138,84 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
         ? r.relatedFunctionIds.map((p) => String(p ?? "").trim()).filter(Boolean)
         : [],
     };
+  }
+
+  /**
+   * Coerce a raw LLM class entry into the canonical DesignClassEntry shape,
+   * accepting the alias field names the LLM (esp. on the repair path) drifts to:
+   *   - name        ← name | className | class_name
+   *   - kind         ← kind | type            (preserved verbatim; default "domain")
+   *   - responsibility ← responsibility | responsibilities (array → joined)
+   *   - attributes   ← attributes | keyAttributes
+   *   - methods      ← methods | keyMethods
+   *   - entityRef    ← entityRef | entity_ref | entity
+   * Returns null for a nameless entry (a promoted/garbage stub) so it is dropped
+   * rather than rendered as a blank table row.
+   */
+  private static _coerceClass(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const r = value as Record<string, unknown>;
+    const name = String(r.name ?? r.className ?? r.class_name ?? "").trim();
+    if (!name) return null;
+    // Preserve the LLM's kind verbatim ("domain"/"service"/"helper"/...) — the
+    // table just renders the string — and only default when it is truly absent.
+    const kind = (String(r.kind ?? r.type ?? "").trim() || "domain") as "domain" | "helper";
+    const respRaw = r.responsibility ?? r.responsibilities ?? "";
+    const responsibility = Array.isArray(respRaw)
+      ? respRaw.map((x) => String(x ?? "").trim()).filter(Boolean).join("；")
+      : String(respRaw ?? "").trim();
+    const entityRef = String(r.entityRef ?? r.entity_ref ?? r.entity ?? "").trim();
+    return {
+      name,
+      kind,
+      responsibility,
+      attributes: SystemDesigner._coerceClassAttributes(r.attributes ?? r.keyAttributes),
+      methods: SystemDesigner._coerceClassMethods(r.methods ?? r.keyMethods),
+      ...(entityRef ? { entityRef } : {}),
+    };
+  }
+
+  /**
+   * Coerce a class attribute list into `[{name, type, description?}]`. Accepts
+   * either objects ({name,type,description}) or strings ("userId (String)" /
+   * "userId: String" / "userId"), the two forms the LLM uses for keyAttributes.
+   */
+  private static _coerceClassAttributes(
+    value: unknown,
+  ): Array<{ name: string; type: string; description?: string }> {
+    if (!Array.isArray(value)) return [];
+    const out: Array<{ name: string; type: string; description?: string }> = [];
+    for (const item of value) {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const r = item as Record<string, unknown>;
+        const name = String(r.name ?? "").trim();
+        if (!name) continue;
+        const desc = r.description != null ? String(r.description).trim() : "";
+        out.push({ name, type: String(r.type ?? "").trim(), ...(desc ? { description: desc } : {}) });
+      } else if (typeof item === "string") {
+        const s = item.trim();
+        if (!s) continue;
+        const m = s.match(/^(.+?)\s*[（(]\s*(.+?)\s*[）)]\s*$/) ?? s.match(/^(.+?)\s*[:：]\s*(.+?)\s*$/);
+        if (m) out.push({ name: m[1].trim(), type: m[2].trim() });
+        else out.push({ name: s, type: "" });
+      }
+    }
+    return out;
+  }
+
+  /** Coerce a class method list into `string[]`, accepting strings or `{name}`. */
+  private static _coerceClassMethods(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((m) => {
+        if (typeof m === "string") return m.trim();
+        if (m && typeof m === "object" && !Array.isArray(m)) {
+          const r = m as Record<string, unknown>;
+          return String(r.name ?? r.signature ?? "").trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
   }
 
   private static _unwrapDesignContent(raw: Record<string, unknown>): unknown {

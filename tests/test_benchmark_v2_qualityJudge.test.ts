@@ -896,7 +896,7 @@ describe("extractDesignSliceForObligation — per-obligation design slicing", ()
     expect(slice).toContain("C-100");
   });
 
-  it("is embedded into buildJudgePrompt (replaces the old truncate(design,6000))", () => {
+  it("embeds the WHOLE design into buildJudgePrompt (no per-obligation slicing under the cap)", () => {
     const prompt = buildJudgePrompt({
       obligation: paymentTimeoutObligation(),
       source_language: "zh",
@@ -904,46 +904,50 @@ describe("extractDesignSliceForObligation — per-obligation design slicing", ()
       design: longDesignWithPaymentTimeout(),
       tests: "t",
     });
-    // The prompt now carries the sliced evidence, not the head+tail truncation.
+    // The obligation evidence is present...
     expect(prompt).toContain("支付超时 30 分钟自动取消");
-    expect(prompt).not.toContain("head-0:");
-    expect(prompt).not.toContain("# 结束");
-    expect(prompt).not.toContain("[truncated"); // no head/tail truncation marker on the design
+    // ...and so are the far head/tail: a normal-sized artifact is fed WHOLE,
+    // which removes the CJK-anchor fragility that made the slice miss coverage.
+    expect(prompt).toContain("head-0:");
+    expect(prompt).toContain("# 结束");
+    expect(prompt).not.toContain("[truncated"); // whole-file, no head/tail truncation
   });
 });
 
 
 // ---------------------------------------------------------------------------
-// Phase 2.5 — aggregateQuality prioritizes chain truthfulness
+// aggregateQuality — traceability_truthfulness is evidence-based (no chain fold)
 // ---------------------------------------------------------------------------
+// The evidence-based refactor scores traceability from the verbatim-evidence
+// flags (has_concrete_rule && has_test_alignment), symmetric for agent and
+// baseline. The trace_chain_truthful flag from judgeTraceChain() is preserved
+// on each verdict for AUDIT ONLY and must NOT change this score.
 
-describe("Phase 2.5 — aggregateQuality traceability_truthfulness with chains", () => {
-  it("uses chain truthfulness when any verdict has a chain verdict (fake chain drops the score)", () => {
-    // Two obligations with rules + tests aligned; one has a JUDGED fake chain.
-    const v1 = verdict("a", 2, { has_concrete_rule: true, has_test_alignment: true });
-    v1.trace_chain_truthful = false; // matrix said chain is fake
-    const v2 = verdict("b", 2, { has_concrete_rule: true, has_test_alignment: true });
-    // v2 has no chain verdict (no matrix entry for it).
-    const q = aggregateQuality([v1, v2]);
-    // Only v1 was judged on its chain; it was untruthful ⇒ 0/1 = 0.
-    expect(q.traceability_truthfulness).toBe(0);
-  });
-
-  it("rewards truthful chains over mere test alignment", () => {
-    const v1 = verdict("a", 2, { has_concrete_rule: true, has_test_alignment: true });
-    v1.trace_chain_truthful = true;
-    const q = aggregateQuality([v1]);
-    expect(q.traceability_truthfulness).toBe(100);
-  });
-
-  it("falls back to has_test_alignment when NO verdict has a chain verdict (legacy)", () => {
-    // Clean baseline: no matrix ⇒ no chain verdicts ⇒ legacy formula.
+describe("aggregateQuality traceability_truthfulness (evidence-based, chain flag is audit-only)", () => {
+  it("counts an obligation only when it has BOTH a concrete rule and aligned tests", () => {
     const q = aggregateQuality([
       verdict("a", 2, { has_concrete_rule: true, has_test_alignment: true }),
       verdict("b", 2, { has_concrete_rule: true, has_test_alignment: false }),
     ]);
     // 1 of 2 rule-bearing obligations has aligned tests ⇒ 50.
     expect(q.traceability_truthfulness).toBe(50);
+  });
+
+  it("ignores trace_chain_truthful (audit-only): a fake-chain flag does NOT drop the score", () => {
+    const v1 = verdict("a", 2, { has_concrete_rule: true, has_test_alignment: true });
+    v1.trace_chain_truthful = false; // audit annotation only — not folded into the score
+    const v2 = verdict("b", 2, { has_concrete_rule: true, has_test_alignment: true });
+    const q = aggregateQuality([v1, v2]);
+    // Both have a concrete rule + aligned tests ⇒ 100; the chain flag is ignored.
+    expect(q.traceability_truthfulness).toBe(100);
+  });
+
+  it("scores 0 when no obligation has both a concrete rule and aligned tests", () => {
+    const q = aggregateQuality([
+      verdict("a", 1, { has_concrete_rule: false, has_test_alignment: true }),
+      verdict("b", 1, { has_concrete_rule: true, has_test_alignment: false }),
+    ]);
+    expect(q.traceability_truthfulness).toBe(0);
   });
 });
 
@@ -1020,7 +1024,7 @@ describe("extractTestsSliceForObligation — per-obligation tests slicing", () =
     expect(slice).toContain("C-100");
   });
 
-  it("is embedded into buildJudgePrompt (replaces the old truncate(tests,6000))", () => {
+  it("embeds the WHOLE tests artifact into buildJudgePrompt (no per-obligation slicing under the cap)", () => {
     const prompt = buildJudgePrompt({
       obligation: paymentTimeoutObligation(),
       source_language: "zh",
@@ -1028,12 +1032,45 @@ describe("extractTestsSliceForObligation — per-obligation tests slicing", () =
       design: "d",
       tests: longTestsWithPaymentTimeout(),
     });
-    // The prompt now carries the sliced test evidence, not the head+tail cut.
+    // The obligation's test evidence is present, and so is the far head/tail:
+    // the tests file is fed WHOLE so test-alignment retrieval no longer depends
+    // on fragile CJK/number/id anchors hitting the right ±10-line window.
+    expect(prompt).toContain("等待 30 分钟后订单变为 CANCELED");
+    expect(prompt).toContain("TC-head-0:");
+    expect(prompt).toContain("# 结束");
+    expect(prompt).not.toMatch(/TESTS artifact[\s\S]*\[truncated/);
+  });
+
+  it("falls back to per-obligation slicing when the tests artifact exceeds the whole-file cap", () => {
+    // A pathologically large tests file (> JUDGE_WHOLE_ARTIFACT_MAX_CHARS) must
+    // not blow the judge's context: it degrades to the ±10-line anchor slice,
+    // which keeps the obligation window and drops the far head/tail.
+    const bulk = (label: string): string[] =>
+      Array.from(
+        { length: 4000 },
+        (_, i) => `TC-${label}-${i}: target=filler${label}; expected=pass; ${"lorem ipsum dolor sit amet ".repeat(2)}`,
+      );
+    const huge = [
+      "# 测试用例",
+      ...bulk("head"),
+      "## TC-PAY-001",
+      "target: 支付超时后订单状态",
+      "expected: 等待 30 分钟后订单变为 CANCELED",
+      ...bulk("tail"),
+      "# 结束",
+    ].join("\n");
+    expect(huge.length).toBeGreaterThan(200_000);
+    const prompt = buildJudgePrompt({
+      obligation: paymentTimeoutObligation(),
+      source_language: "zh",
+      requirement_source: "r",
+      design: "d",
+      tests: huge,
+    });
+    // Obligation window survives; the far head/tail are dropped by the slice.
     expect(prompt).toContain("等待 30 分钟后订单变为 CANCELED");
     expect(prompt).not.toContain("TC-head-0:");
     expect(prompt).not.toContain("# 结束");
-    // No head/tail truncation marker on the tests section.
-    expect(prompt).not.toMatch(/TESTS artifact[\s\S]*\[truncated/);
   });
 });
 
