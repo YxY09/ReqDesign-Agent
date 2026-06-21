@@ -4,6 +4,8 @@
  * Ported from reqdesign/agents/types.py (Phase 1).
  */
 
+import type { ConstraintCandidate } from "./constraintCanonicalizer.js";
+
 // ---------------------------------------------------------------------------
 // Literal union types
 // ---------------------------------------------------------------------------
@@ -124,6 +126,12 @@ export interface ExecutionPlan {
   reasoning: string;
   /** Global entity registry extracted during planning. */
   registry?: EntityRegistry;
+  /**
+   * Authoritative pre-extracted constraint registry (planner order; index i →
+   * ref C{i+1}). Threaded to the analyze merge so dropped constraints can be
+   * detected (and, later, re-added). See constraintReconcile.ts.
+   */
+  constraintRegistry?: ConstraintCandidate[];
 }
 
 /** A generated artifact. */
@@ -334,8 +342,12 @@ interface DesignSupplementaryClass {
 export interface DesignConstraintImplementation {
   /** Constraint displayId (e.g. C001), used to cross-ref with analysis. */
   constraintId: string;
-  /** The constraint's source_text copied verbatim — judge anchors on this. */
-  sourceTextVerbatim: string;
+  /**
+   * The constraint's source_text copied verbatim. Optional now — the design
+   * no longer emits it to save output tokens (the judge reads source_text
+   * from analysis.json, and the self-check falls back to analysisSourceText).
+   */
+  sourceTextVerbatim?: string;
   /** How the constraint is realized (algorithm/mechanism/data path). */
   implementationMechanism: string;
   /**
@@ -362,8 +374,11 @@ export interface DesignConstraintImplementation {
 export interface DesignExceptionImplementation {
   /** Exception displayId (e.g. X001). */
   exceptionId: string;
-  /** Source text describing the failure scenario, verbatim. */
-  sourceTextVerbatim: string;
+  /**
+   * Source text describing the failure scenario, verbatim. Optional now —
+   * omitted from the design output to save tokens.
+   */
+  sourceTextVerbatim?: string;
   /** What triggers this exception in the implementation. */
   trigger: string;
   /** Concrete handling/recovery behavior. */

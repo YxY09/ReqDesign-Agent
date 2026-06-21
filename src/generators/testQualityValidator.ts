@@ -153,7 +153,10 @@ export function isTemplateLike(tc: Record<string, unknown>): boolean {
     segments.some((text) =>
       /违反\s*(C|CON_|约束)/i.test(text) ||
       /检查.*是否满足/.test(text) ||
-      /尝试.*约束/.test(text),
+      // 仅匹配紧凑的空泛模板（"尝试满足约束"/"尝试验证约束"）。限定 尝试→约束
+      // 的字距，避免误杀含具体动作/数据的真实步骤，例如
+      // "尝试提交第二条违反唯一性约束的记录"（尝试与约束相距较远）。
+      /尝试.{0,4}约束/.test(text),
     ) ||
     (Array.isArray(tc.steps) ? tc.steps.length : 0) < 2
   );

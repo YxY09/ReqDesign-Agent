@@ -21,7 +21,7 @@ import {
   writeReport,
   compareRunPaths,
 } from "../src/benchmark/compareRunner.ts";
-import type { JudgeClient } from "../src/benchmark/scorer.ts";
+import type { JudgeClient } from "../src/benchmark/judgeClient.ts";
 
 const ROOT = process.cwd();
 const SRC_RUN = process.argv[2] ?? "full-v27";

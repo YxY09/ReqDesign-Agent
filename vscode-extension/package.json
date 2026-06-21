@@ -1,0 +1,137 @@
+{
+  "name": "reqdesign-agent-vscode",
+  "displayName": "ReqDesign Agent",
+  "description": "需求驱动的多 Agent 系统设计助手 —— 在侧边栏对话中分析需求、生成系统设计、Mermaid 三图与测试用例",
+  "version": "0.1.0",
+  "publisher": "reqdesign",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other",
+    "AI",
+    "Chat"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "reqdesign",
+          "title": "ReqDesign Agent",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "reqdesign": [
+        {
+          "type": "webview",
+          "id": "reqdesign.chatView",
+          "name": "对话",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "reqdesign.focusChat",
+        "title": "ReqDesign: 打开对话侧边栏",
+        "category": "ReqDesign"
+      },
+      {
+        "command": "reqdesign.newSession",
+        "title": "ReqDesign: 新建会话",
+        "category": "ReqDesign",
+        "icon": "$(add)"
+      },
+      {
+        "command": "reqdesign.designCurrentFile",
+        "title": "ReqDesign: 对当前需求文件运行设计流程",
+        "category": "ReqDesign",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "reqdesign.stop",
+        "title": "ReqDesign: 停止当前任务",
+        "category": "ReqDesign",
+        "icon": "$(debug-stop)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "reqdesign.newSession",
+          "when": "view == reqdesign.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "reqdesign.stop",
+          "when": "view == reqdesign.chatView",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "reqdesign.designCurrentFile",
+          "when": "resourceExtname == .md || resourceExtname == .txt",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ReqDesign Agent",
+      "properties": {
+        "reqdesign.projectRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "ReqDesign-Agent 项目根目录的绝对路径（包含 `config.yaml`、`prompts/`、`.env`）。留空则自动探测当前工作区中包含这些文件的目录。"
+        },
+        "reqdesign.outputDir": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "设计产物输出目录。留空则使用 `<项目根>/outputs/design`。可填绝对路径或相对项目根的路径。"
+        },
+        "reqdesign.provider": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "openai",
+            "anthropic",
+            "deepseek",
+            "qwen",
+            "minimax",
+            "kimi-coding",
+            "zhipu"
+          ],
+          "description": "覆盖 config.yaml 中的 LLM provider。留空则用配置文件中的值。"
+        },
+        "reqdesign.model": {
+          "type": "string",
+          "default": "",
+          "description": "覆盖 config.yaml 中的模型名。留空则用配置文件中的值。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "node esbuild.js --production"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.84.0",
+    "esbuild": "^0.24.0",
+    "marked": "^14.1.0",
+    "mermaid": "^11.4.0",
+    "typescript": "^5.5.0"
+  }
+}

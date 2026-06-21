@@ -29,7 +29,7 @@
  * @module benchmark/compareRunner
  */
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AgentConfig } from "../config.js";
@@ -40,11 +40,12 @@ import { MultiAgentRuntime } from "../runtime.js";
 import { runBaseline } from "./baselineRunner.js";
 import { loadGoldContract, type GoldContract } from "./goldObligation.js";
 import { judgeAgainstGold } from "./qualityJudge.js";
-import type { JudgeClient } from "./scorer.js";
+import type { JudgeClient } from "./judgeClient.js";
 import type { QualityScores } from "./resultStore.js";
 import { atomicWriteJson } from "./resultStore.js";
 import { formatTimestamp } from "./metadata.js";
 import type { RuntimeFactory, RuntimeLike } from "./runtimeContract.js";
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -242,42 +243,70 @@ export function discoverCompareCases(casesDir: string, goldDir: string): string[
 export async function scoreSide(
   judge: JudgeClient,
   gold: GoldContract,
-  params: { caseId: string; outputDir: string; requirementSource: string },
+  params: { caseId: string; outputDir: string; requirementSource: string; side?: "baseline" | "agent" | string },
 ): Promise<SideScore> {
+  const scoreLogger = setupLogger("reqdesign.benchmark.compare.score");
   const { outputDir, requirementSource, caseId } = params;
+  const side = params.side ?? "unknown";
   const designPath = join(outputDir, "design", "system_design.md");
   const testsPath = join(outputDir, "tests", "test_cases.json");
   const matrixPath = join(outputDir, "traces", "traceability_matrix.json");
+  const designExists = existsSync(designPath);
+  const testsExists = existsSync(testsPath);
+  const matrixExists = existsSync(matrixPath);
+  const startedAt = Date.now();
 
   // Sanity: if the two judge-critical files are missing, mark unscored with
   // all-null quality (the delta step will treat this as 0).
-  if (!existsSync(designPath) || !existsSync(testsPath)) {
+  if (!designExists || !testsExists) {
+    const error = `missing judge-critical artifacts (design/tests) under ${outputDir}`;
+    scoreLogger.warn(
+      `scoreSide skipped case=${caseId} side=${side} design_exists=${designExists} tests_exists=${testsExists} output_dir=${outputDir}`,
+    );
     return {
       quality: NULL_SCORES,
       scored: false,
-      error: `missing judge-critical artifacts (design/tests) under ${outputDir}`,
+      error,
       output_dir: outputDir,
     };
   }
+
+  scoreLogger.info(
+    `scoreSide start case=${caseId} side=${side} output_dir=${outputDir} design_bytes=${artifactBytes(designPath) ?? "unknown"} tests_bytes=${artifactBytes(testsPath) ?? "unknown"} matrix_bytes=${matrixExists ? (artifactBytes(matrixPath) ?? "unknown") : "absent"}`,
+  );
 
   try {
     const { quality } = await judgeAgainstGold(judge, gold, {
       requirement_source: requirementSource,
       designPath,
       testsPath,
-      matrixPath: existsSync(matrixPath) ? matrixPath : undefined,
+      matrixPath: matrixExists ? matrixPath : undefined,
     });
+    scoreLogger.info(
+      `scoreSide done case=${caseId} side=${side} elapsed_ms=${Date.now() - startedAt} coverage=${quality.gold_obligation_coverage ?? "null"} trace=${quality.traceability_truthfulness ?? "null"} tests=${quality.test_effectiveness ?? "null"} depth=${quality.design_depth ?? "null"} final=${quality.final_score ?? "null"}`,
+    );
     return { quality, scored: true, output_dir: outputDir };
   } catch (err: unknown) {
+    const message = `judge failed for ${caseId}: ${err instanceof Error ? err.message : String(err)}`;
+    scoreLogger.warn(
+      `scoreSide failed case=${caseId} side=${side} elapsed_ms=${Date.now() - startedAt} error=${message}`,
+    );
     return {
       quality: NULL_SCORES,
       scored: false,
-      error: `judge failed for ${caseId}: ${err instanceof Error ? err.message : String(err)}`,
+      error: message,
       output_dir: outputDir,
     };
   }
 }
 
+function artifactBytes(path: string): number | null {
+  try {
+    return statSync(path).size;
+  } catch {
+    return null;
+  }
+}
 /** All-null quality block (matches QualityScores null semantics). */
 const NULL_SCORES: QualityScores = {
   gold_obligation_coverage: null,
@@ -595,7 +624,7 @@ async function runCompareCase(
         llm: params.baselineLlm,
       });
       baseline = result.parsed
-        ? await scoreSide(params.judge, gold, { caseId, outputDir: baselineDir, requirementSource })
+        ? await scoreSide(params.judge, gold, { caseId, outputDir: baselineDir, requirementSource, side: "baseline" })
         : {
             quality: NULL_SCORES,
             scored: false,
@@ -685,7 +714,7 @@ async function runAgentSide(
   }
 
   try {
-    return await scoreSide(judge, gold, { caseId, outputDir: agentDir, requirementSource });
+    return await scoreSide(judge, gold, { caseId, outputDir: agentDir, requirementSource, side: "agent" });
   } catch (err: unknown) {
     logger.warn(`agent score failed for ${caseId}: ${err instanceof Error ? err.message : String(err)}`);
     return {

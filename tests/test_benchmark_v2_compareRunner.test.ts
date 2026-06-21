@@ -23,7 +23,7 @@ import {
   DEFAULT_COMPARE_RESULTS_BASE_DIR,
 } from "../src/benchmark/compareRunner.js";
 import { AgentConfig } from "../src/config.js";
-import type { JudgeClient } from "../src/benchmark/scorer.js";
+import type { JudgeClient } from "../src/benchmark/judgeClient.js";
 import type { RuntimeFactory } from "../src/benchmark/runtimeContract.js";
 import type { GoldContract } from "../src/benchmark/goldObligation.js";
 

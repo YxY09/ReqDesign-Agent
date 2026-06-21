@@ -181,6 +181,18 @@ export class RemediationLadder {
       );
     });
     if (hasUpstreamMajor) {
+      const hasBlocker = snapshot.latestIssues.some(
+        (issue) => issue["severity"] === "blocker" && issue["kind"] === "defect",
+      );
+      if (snapshot.finalReviewCurrent && !hasBlocker) {
+        return createStrategyDecision({
+          strategy: "finish",
+          targetTaskId: snapshot.majorPendingTaskIds[0],
+          reason:
+            reason ||
+            "final review has no blockers; upstream/systemic major issues are recorded but not replanned to avoid destabilizing completed artifacts",
+        });
+      }
       if (this.budget.canReplan(snapshot)) {
         return createStrategyDecision({
           strategy: "escalate_to_replan",

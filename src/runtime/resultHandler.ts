@@ -359,6 +359,7 @@ export class ResultHandler {
         state.requirementText ?? "",
         undefined,
         state.registry ?? undefined,
+        state.plan?.constraintRegistry ?? undefined,
       );
       RequirementNormalizer.normalizeAgainstSource(merged, state.requirementText ?? "");
       state.setRequirementJson(RequirementNormalizer.normalize(merged));

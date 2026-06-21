@@ -210,6 +210,11 @@ export class PlanningTool extends BaseTool {
     if (registry) {
       plan.registry = registry;
     }
+    // Attach the authoritative constraint registry so the analyze merge can
+    // detect (and later re-add) constraints the analyze LLM dropped.
+    if (constraintCandidates && constraintCandidates.length > 0) {
+      plan.constraintRegistry = constraintCandidates;
+    }
     return plan;
   }
 
@@ -245,6 +250,14 @@ export class PlanningTool extends BaseTool {
       mutation,
       currentPlan,
       completedTaskIds,
+      evaluatorIssues ?? [],
+      replanReason,
+    );
+    mutation = PlanningTool._stabilizeAnalyzeReplanMutation(
+      mutation,
+      currentPlan,
+      completedTaskIds,
+      failedTaskIds,
       evaluatorIssues ?? [],
       replanReason,
     );
@@ -598,6 +611,109 @@ export class PlanningTool extends BaseTool {
     });
   }
 
+  private static _stabilizeAnalyzeReplanMutation(
+    mutation: PlanMutation,
+    currentPlan: ExecutionPlan,
+    completedTaskIds: string[],
+    failedTaskIds: string[],
+    evaluatorIssues: Issue[],
+    reason: string,
+  ): PlanMutation {
+    const addedAnalyze = mutation.addTasks.filter((task) => task.type === "analyze");
+    if (addedAnalyze.length === 0) return mutation;
+
+    const currentAnalyzeTasks = currentPlan.tasks.filter((task) => task.type === "analyze");
+    if (currentAnalyzeTasks.length === 0) return mutation;
+
+    const analyzeIds = new Set(currentAnalyzeTasks.map((task) => task.id));
+    const completed = new Set(completedTaskIds);
+    const addedAnalyzeIds = new Set(addedAnalyze.map((task) => task.id));
+    const issueTarget = evaluatorIssues
+      .map((issue) => issue.targetTaskId)
+      .find((taskId) => analyzeIds.has(taskId));
+    const failedTarget = failedTaskIds.find((taskId) => analyzeIds.has(taskId));
+    const latestAnalyze = PlanningTool._latestTaskIdOfType(currentPlan, "analyze", completedTaskIds);
+    const targetId = issueTarget ?? failedTarget ?? latestAnalyze ?? currentAnalyzeTasks[0].id;
+    const targetTask = currentAnalyzeTasks.find((task) => task.id === targetId) ?? currentAnalyzeTasks[0];
+    const firstAdded = addedAnalyze[0];
+
+    const idRemap = new Map<string, string>();
+    for (const task of addedAnalyze) {
+      idRemap.set(task.id, targetTask.id);
+    }
+
+    const rewriteDeps = (deps: string[]): string[] => {
+      const result: string[] = [];
+      const seen = new Set<string>();
+      for (const dep of deps ?? []) {
+        const rewritten = idRemap.get(dep) ?? dep;
+        if (rewritten && !seen.has(rewritten)) {
+          result.push(rewritten);
+          seen.add(rewritten);
+        }
+      }
+      return result;
+    };
+
+    const rewriteTaskDeps = (task: Task): Task => createTask({
+      id: task.id,
+      type: task.type,
+      description: task.description,
+      dependsOn: rewriteDeps(task.dependsOn),
+      contextHints: { ...task.contextHints },
+      ...(task.analysisMode ? { analysisMode: task.analysisMode } : {}),
+    });
+
+    const replacementAnalyze = createTask({
+      id: targetTask.id,
+      type: "analyze",
+      description: firstAdded.description || `[replan] ${targetTask.description}`,
+      dependsOn: rewriteDeps(firstAdded.dependsOn.length > 0 ? firstAdded.dependsOn : targetTask.dependsOn),
+      contextHints: {
+        ...targetTask.contextHints,
+        ...firstAdded.contextHints,
+        replan_redirected_from: [...addedAnalyzeIds],
+        replan_reason: reason,
+      },
+      ...(firstAdded.analysisMode ?? targetTask.analysisMode
+        ? { analysisMode: firstAdded.analysisMode ?? targetTask.analysisMode }
+        : {}),
+    });
+
+    const addTasks = mutation.addTasks
+      .filter((task) => task.type !== "analyze")
+      .map(rewriteTaskDeps);
+    let updateTasks = mutation.updateTasks
+      .filter((task) => !addedAnalyzeIds.has(task.id) && task.id !== targetTask.id)
+      .map(rewriteTaskDeps);
+
+    const dropIds = mutation.dropTaskIds.filter(
+      (taskId) => !addedAnalyzeIds.has(taskId) && (!completed.has(targetTask.id) || taskId !== targetTask.id),
+    );
+
+    if (completed.has(targetTask.id)) {
+      updateTasks = [...updateTasks, replacementAnalyze];
+    } else {
+      addTasks.unshift(replacementAnalyze);
+      if (!dropIds.includes(targetTask.id)) dropIds.push(targetTask.id);
+    }
+
+    const reorderEdges: Record<string, string[]> = {};
+    for (const [taskId, deps] of Object.entries(mutation.reorderEdges)) {
+      const rewrittenTaskId = idRemap.get(taskId) ?? taskId;
+      reorderEdges[rewrittenTaskId] = rewriteDeps(deps);
+    }
+
+    return createPlanMutation({
+      addTasks,
+      updateTasks,
+      dropTaskIds: [...new Set(dropIds)],
+      reorderEdges,
+      reasoning: mutation.reasoning
+        ? `${mutation.reasoning} | stabilized analyze replan: redirected ${[...addedAnalyzeIds].join(", ")} to ${targetTask.id}`
+        : `stabilized analyze replan: redirected ${[...addedAnalyzeIds].join(", ")} to ${targetTask.id}`,
+    });
+  }
   static _ensureIssueTargetedTasks(
     mutation: PlanMutation,
     currentPlan: ExecutionPlan,

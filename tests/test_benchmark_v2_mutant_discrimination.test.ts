@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { judgeAgainstGold, type ObligationVerdict } from "../src/benchmark/qualityJudge.js";
-import type { JudgeClient } from "../src/benchmark/scorer.js";
+import type { JudgeClient } from "../src/benchmark/judgeClient.js";
 import { loadGoldContract } from "../src/benchmark/goldObligation.js";
 
 /** Gold obligation id → the mock verdict the judge would produce for it. */

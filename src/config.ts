@@ -86,6 +86,10 @@ const BenchmarkConfigSchema = z.object({
   functionSynonyms: z.record(z.string(), z.array(z.string())).default({}),
   /** Per-case wall-clock timeout in seconds (0 = unlimited). Default: 3600. */
   caseTimeoutSeconds: z.number().nonnegative().default(3600),
+  /** Gold contracts directory (aligns with `--gold-dir` CLI option). */
+  goldDir: z.string().default("benchmark/gold_contracts"),
+  /** Benchmark cases directory. */
+  casesDir: z.string().default("benchmark/cases"),
 }).strict();
 
 const OrchestrationConfigSchema = z.object({

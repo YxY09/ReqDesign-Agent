@@ -440,7 +440,7 @@ export class BenchmarkRunnerV2 {
         return "";
       }
     })();
-    const judge = new LLMClient(this.config) as unknown as import("./scorer.js").JudgeClient;
+    const judge = new LLMClient(this.config) as unknown as import("./judgeClient.js").JudgeClient;
     const { quality } = await judgeAgainstGold(judge, gold, {
       requirement_source: requirementSource,
       designPath: join(caseOutputDir, "design", "system_design.md"),

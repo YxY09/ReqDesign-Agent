@@ -241,6 +241,7 @@ export class LLMClient {
     messages: ChatMessage[],
     temperature?: number,
     onChunk?: OnChunk,
+    jsonMode?: boolean,
   ): Promise<string> {
     const startTime = Date.now();
     const streamTag = this.streamTag;
@@ -277,7 +278,7 @@ export class LLMClient {
 
       if (OPENAI_COMPAT_PROVIDERS.has(this.provider)) {
         if (shouldStream) {
-          const response = await this._chatStreamOpenai(messages, temperature, chunkHandler);
+          const response = await this._chatStreamOpenai(messages, temperature, chunkHandler, jsonMode);
           resultText = response.text;
           usage = response.usage;
         } else {
@@ -290,7 +291,7 @@ export class LLMClient {
                 this._logger.warn(`[LLMClient] Request timed out after ${this.timeout}s`);
               }, timeoutMs);
               try {
-                return await this._chatOpenai(messages, temperature, ac.signal);
+                return await this._chatOpenai(messages, temperature, ac.signal, jsonMode);
               } finally {
                 clearTimeout(handle);
               }
@@ -406,7 +407,7 @@ export class LLMClient {
     temperature?: number,
   ): Promise<Record<string, unknown>> {
     const messages = buildMessages(prompt, system);
-    const raw = await this.chat(messages, temperature, onChunk);
+    const raw = await this.chat(messages, temperature, onChunk, true);
     return parseJsonResponse(raw);
   }
 
@@ -518,6 +519,7 @@ export class LLMClient {
     messages: ChatMessage[],
     temperature?: number,
     signal?: AbortSignal,
+    jsonMode?: boolean,
   ): Promise<string> {
     const client = this._client as OpenAI;
 
@@ -527,6 +529,7 @@ export class LLMClient {
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
         temperature: temperature ?? this.temperature,
         max_tokens: this.maxTokens,
+        ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
       },
       {
         // 禁用 SDK 内置重试：由外层 withRetry 管理（与流式路径一致）。
@@ -584,6 +587,7 @@ export class LLMClient {
     messages: ChatMessage[],
     temperature?: number,
     onChunk?: OnChunk,
+    jsonMode?: boolean,
   ): Promise<StreamResult> {
     const client = this._client as OpenAI;
     const abortController = new AbortController();
@@ -600,6 +604,7 @@ export class LLMClient {
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
           temperature: temperature ?? this.temperature,
           max_tokens: this.maxTokens,
+          ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
           stream: true,
           stream_options: { include_usage: true },
         },

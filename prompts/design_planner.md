@@ -39,7 +39,6 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
   "constraintImplementations": [
     {
       "constraintId": "C001",
-      "sourceTextVerbatim": "The database is encrypted using AES/Rijndael (128-bit block, 256-bit key) and Twofish (128-bit block, 256-bit key). A random 128-bit IV is generated on each save.",
       "implementationMechanism": "EncryptionEngine 在 Database.save() 中调用 AES/Rijndael (128-bit block, 256-bit key) 或 Twofish (128-bit block, 256-bit key) 对数据库内容加密；每次 save() 调用前生成一个新的随机 128-bit IV 作为加密参数。",
       "parametersPreserved": ["AES/Rijndael", "Twofish", "128-bit block", "256-bit key", "128-bit IV"],
       "trigger": "用户调用 Database.save() 或 saveAs() 时",
@@ -51,7 +50,6 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
   "exceptionImplementations": [
     {
       "exceptionId": "X001",
-      "sourceTextVerbatim": "If the Master Password is lost, the database cannot be opened.",
       "trigger": "用户输入 Master Password 但 Database.open() 时密钥派生失败 / 解密失败",
       "handling": "Database.open() 返回 OpenError；UI 显示\"密码错误，数据库无法打开\"；不允许任何 recovery / back-door 路径。",
       "parametersPreserved": [],
@@ -100,13 +98,13 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
 
 - **constraintImplementations**（必填，关键）：每条约束一个独立段落。
   - `constraintId`：必须来自 DesignBrief 的 `designContract.allowedConstraintIds`（如 C001/C003）。
-  - `sourceTextVerbatim`：**完整复制** DesignBrief 里该约束的 `sourceText`，不能改写、缩写、翻译。
+  - **不要输出 `sourceTextVerbatim` 字段**——系统会从 DesignBrief 的 `sourceText` 读取约束原文，重复输出会浪费篇幅。
   - `implementationMechanism`：用具体设计语言说明这条规则怎么实现——涉及哪个模块/类/方法/算法/数据路径。**source_text 中所有的算法名、数值、单位都必须 verbatim 出现在这里**。
-  - `parametersPreserved`：至少包含 DesignBrief 对应约束的全部 `anchors`，并补充从 sourceTextVerbatim 中提取的所有可验证参数（算法名 / 数值+单位 / 限制值 / 文件扩展名 / 关键词组）。例如 `["AES/Rijndael", "Twofish", "256-bit key", "128-bit IV", ".kdb", "10 seconds", "single instance"]`。**漏掉一个就会被设计检查器拒绝**。
+  - `parametersPreserved`：至少包含 DesignBrief 对应约束的全部 `anchors`，并补充从该约束 `source_text` 中提取的所有可验证参数（算法名 / 数值+单位 / 限制值 / 文件扩展名 / 关键词组）。例如 `["AES/Rijndael", "Twofish", "256-bit key", "128-bit IV", ".kdb", "10 seconds", "single instance"]`。**漏掉一个就会被设计检查器拒绝**。
   - `trigger` / `handling`：规则在系统中何时被触发、触发后发生什么具体行为。
   - 即便约束很短（如"组必须有名称"），也必须独立出一段，至少说明在哪个类/方法里校验、违反时如何响应。
 
-- **exceptionImplementations**（必填）：每条异常一个独立段落，同上要求。`exceptionId` 必须来自 `designContract.allowedExceptionIds`。`parametersPreserved` 通常为空数组，但若 DesignBrief `anchors` 非空或 `sourceText` 含数值（如"3 次失败后锁定"）则必填。
+- **exceptionImplementations**（必填）：每条异常一个独立段落，同上要求。`exceptionId` 必须来自 `designContract.allowedExceptionIds`。**不要输出 `sourceTextVerbatim` 字段**。`parametersPreserved` 通常为空数组，但若 DesignBrief `anchors` 非空或 `sourceText` 含数值（如"3 次失败后锁定"）则必填。
 
 - **modules**：每条映射一个功能模块。`functionIds` 必须包含该模块负责的全部功能 ID（来自 `designContract.allowedFunctionIds`）。每个功能 ID 只映射到语义最匹配的一个模块。
 
@@ -128,7 +126,7 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
 
 1. DesignBrief `coverageSkeleton` 给出的**每一个约束 ID** 是否都在 constraintImplementations 中？少一个就重写。
 2. DesignBrief `coverageSkeleton` 给出的**每一个异常 ID** 是否都在 exceptionImplementations 中？少一个就重写。
-3. 每条 constraintImplementation 的 `sourceTextVerbatim` 是否和 DesignBrief 对应约束的 sourceText **一字不差**？不一样就重写。
-4. `parametersPreserved` 列出的每个参数是否都**逐字**出现在 `implementationMechanism` 或 `handling` 中？少一个就补全。
-5. `implementationMechanism` 是否回答了"哪个类/方法/算法+具体参数实现这条规则"？只写"系统会处理"等空话就是没回答。
-6. 输出 JSON 中是否出现 `FUN_`、`CON_`、`EXC_`？出现就重写为 DesignBrief 的 display ID。
+3. `parametersPreserved` 列出的每个参数是否都**逐字**出现在 `implementationMechanism` 或 `handling` 中？少一个就补全。
+4. `implementationMechanism` 是否回答了"哪个类/方法/算法+具体参数实现这条规则"？只写"系统会处理"等空话就是没回答。
+5. 输出 JSON 中是否出现 `FUN_`、`CON_`、`EXC_`？出现就重写为 DesignBrief 的 display ID。
+6. 是否多余输出了 `sourceTextVerbatim` 字段？有则删除（系统会自动从 `source_text` 读取，重复输出是浪费）。

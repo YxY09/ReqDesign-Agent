@@ -11,7 +11,7 @@
 > npm run build
 > node dist/src/main.js -i benchmark/cases -o output/benchmark --benchmark
 > ```
-> 单跑某个 case：把该 case 的 .md 放进一个独立目录用 `-i` 指它（gold 固定从 `benchmark/gold_labels` 配对）。
+> 单跑某个 case：把该 case 的 .md 放进一个独立目录用 `-i` 指它（gold 固定从 `benchmark/gold_contracts` 配对）。
 > 全量单测：`npm test`（不需要 LLM）。
 
 ---
@@ -19,7 +19,7 @@
 ## 问题 1（核心 bug，优先）：编排死锁 —— 失败任务 + 仍有 worker 在跑 → 无限 `wait_for_running`
 
 ### 现象
-跑 `benchmark/cases`（ecommerce + hospital）时，ecommerce 卡死，整轮 hang 住，`benchmark_report` never 写出。
+跑 `benchmark/cases`（ecommerce + hospital）时，ecommerce 卡死，整轮 hang 住，`summary.final.json` never 写出。
 日志 `output/benchmark/run_all.log` 末尾同一句决策重复 100+ 次、每 ~5 秒一轮、无完成标记：
 ```
 decide: strategy=wait_for_running, action=inspect,
@@ -62,7 +62,7 @@ if (regenerateCount >= maxRegeneratePerTask) {
 相关单测：`tests/test_policy.test.ts`、`tests/test_remediation.test.ts`、`tests/test_orchestration.test.ts`、`tests/test_replan.test.ts`（改完先跑这些）。
 
 ### 验证（联网）
-重跑 `benchmark/cases`，确认 ecommerce 不再无限 `wait_for_running`，最终要么 pause/finish、要么被记 error，且 `benchmark_report.{json,md}` 能写出来、hospital 也跑到。
+重跑 `benchmark/cases`，确认 ecommerce 不再无限 `wait_for_running`，最终要么 pause/finish、要么被记 error，且 `summary.final.json` 能写出来、hospital 也跑到。
 
 ---
 
@@ -93,9 +93,9 @@ if (regenerateCount >= maxRegeneratePerTask) {
 ---
 
 ## 已完成 / 现状（别重做）
-- benchmark 已重写为**混合评分**：coverage(LLM-judge, 0.5) + diagram_syntax/structure/consistency(确定性)。见 `src/benchmark/scorer.ts`、`benchmark/README.md`。
-- "通过"已**接入系统自评门**：综合分达标但系统终审仍有 major 则记未通过（`casePassed`，`runBenchmark.ts`）。
-- 数据集：`benchmark/cases/` + `benchmark/gold_labels/`（ecommerce、hospital 手工标注全字段）；外部 PROMISE 适配器 `benchmark/adapters/promise_to_cases.mjs`。
+- benchmark 现在是 **v2 证据式评分**：基于 `benchmark/gold_contracts/` 的义务契约，对 design/tests 做 0~3 rubric 打分，再聚合为 `gold_obligation_coverage` / `traceability_truthfulness` / `test_effectiveness` / `design_depth` / `final_score`。见 `src/benchmark/qualityJudge.ts`、`benchmark/README.md`。
+- 系统终审（review gate）会单独记录；v2 质量分不直接折叠 review gate，只作为独立信号写入 `review.json`。
+- 数据集：`benchmark/cases/` + `benchmark/gold_contracts/`（ecommerce、hospital 等手工整理 obligation）；旧 Phase‑1 的 `gold_labels/` 与 PROMISE 适配器已移除。
 - `config.yaml`: `worker_timeout_seconds` 已 900→2400（hospital 因此能跑完）。
 - 全量单测绿（`npm test`）。
 - **一次成功基线**：hospital 单跑 = coverage 90.3 / syntax 100 / structure 100 / consistency 66 / overall 90.1，但被自评门记**否**（6 个未决 major）。ecommerce 尚无干净结果（就是被问题 1 卡住）。

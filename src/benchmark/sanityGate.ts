@@ -16,8 +16,8 @@
  *   6. no duplicate coverage (duplicate class / node / state ids)
  *
  * This module intentionally re-implements a couple of small helpers
- * (`readNames`, `normalize`) locally rather than importing them from the legacy
- * `scorer.ts`, per the Phase-1 constraint that legacy files stay untouched.
+ * (`readNames`, `normalize`) locally so the sanity gate has no dependency on
+ * the judge/scoring modules.
  *
  * @module benchmark/sanityGate
  */
@@ -26,7 +26,7 @@ import { MermaidValidator } from "../generators/mermaid.js";
 import type { SanityResult } from "./resultStore.js";
 
 // ---------------------------------------------------------------------------
-// Local copies of scorer helpers (legacy scorer.ts must stay untouched)
+// Local helpers (kept local to avoid coupling with judge modules)
 // ---------------------------------------------------------------------------
 
 /** Pull display names from a heterogeneous list (strings or {name|description}). */

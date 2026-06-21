@@ -20,6 +20,8 @@ import {
 import type { EntityRegistry } from "../shared/types.js";
 import { resolveEntityRef, normalizeRelationType } from "../shared/referenceNormalizer.js";
 import { displayIdFromRecord, formatDisplayId, isDisplayId } from "../shared/idPolicy.js";
+import { detectDroppedConstraints, formatDroppedConstraints } from "../shared/constraintReconcile.js";
+import { setupLogger, type Logger } from "../logger.js";
 
 /**
  * Convert merged constraints to ConstraintCandidate[], run the new
@@ -364,6 +366,7 @@ function asArray(val: unknown): Record<string, unknown>[] {
 
 export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   private postProcessPromptTemplate: string;
+  private readonly logger: Logger = setupLogger("reqdesign.AnalyzeMerger");
 
   constructor(llm: LLMClient) {
     super(llm);
@@ -387,6 +390,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     requirementText: string,
     systemPrompt?: string,
     registry?: EntityRegistry,
+    constraintRegistry?: ConstraintCandidate[],
   ): Promise<Record<string, unknown>> {
     if (artifacts.length === 0) {
       throw createToolError("MERGE_NO_RESULTS", "没有可合并的分析结果", { recoverable: false });
@@ -404,6 +408,7 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
       canonicalizeAndLink(single);
       canonicalizeConstraintsPipeline(single);
       normalizeEntityIdentities(single, registry);
+      this._diagnoseConstraintRegistry(single, constraintRegistry);
       return single;
     }
 
@@ -463,7 +468,41 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
     }
     (merged as Record<string, unknown>).__qualityGate = qualityResult;
 
+    this._diagnoseConstraintRegistry(merged, constraintRegistry);
     return merged;
+  }
+
+  /**
+   * Instrumentation (#7 phase 1): compare the final merged constraints against
+   * the authoritative pre-extracted registry and log any candidates the analyze
+   * LLM dropped. Detection only — no automatic re-add yet. A machine-readable
+   * summary is attached as `__constraintRegistryDiagnostic` for inspection of
+   * the saved analysis artifact.
+   */
+  private _diagnoseConstraintRegistry(
+    merged: Record<string, unknown>,
+    constraintRegistry?: ConstraintCandidate[],
+  ): void {
+    if (!constraintRegistry || constraintRegistry.length === 0) return;
+    const finalConstraints = Array.isArray(merged.constraints)
+      ? (merged.constraints as Array<Record<string, unknown>>)
+      : [];
+    const dropped = detectDroppedConstraints(constraintRegistry, finalConstraints);
+    (merged as Record<string, unknown>).__constraintRegistryDiagnostic = {
+      registryTotal: constraintRegistry.length,
+      finalCount: finalConstraints.length,
+      droppedCount: dropped.length,
+      dropped,
+    };
+    if (dropped.length === 0) {
+      this.logger.info(
+        `merge: 约束注册表诊断 — 全部 ${constraintRegistry.length} 条预提取约束均在最终分析中`,
+      );
+      return;
+    }
+    for (const line of formatDroppedConstraints(dropped, constraintRegistry.length)) {
+      this.logger.warn(`merge: ${line}`);
+    }
   }
 
   /**

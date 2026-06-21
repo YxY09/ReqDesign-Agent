@@ -348,8 +348,46 @@ describe("Planner replan", () => {
 
     expect(mutation).toBeDefined();
     expect(mutation.addTasks.length).toBe(1);
-    expect(mutation.addTasks[0].id).toBe("analyze-2");
+    expect(mutation.addTasks[0].id).toBe("analyze-1");
     expect(mutation.dropTaskIds).toContain("analyze-1");
+    expect(mutation.reasoning).toContain("stabilized analyze replan");
+  });
+
+  it("does not add a second analyze task when replan targets a completed analysis", async () => {
+    const fakeLLM = new FakeLLM({
+      reasoning: "fix source ids",
+      add_tasks: [{ id: "analyze-2", type: "analyze", description: "fix C001-C005", depends_on: [] }],
+      drop_task_ids: ["analyze-1"],
+      update_tasks: [],
+      reorder_edges: { "design-1": ["analyze-2"] },
+    });
+    const planner = new PlanningTool(fakeLLM as unknown as import("../src/llmClient.js").LLMClient);
+    const currentPlan = makePlan([
+      makeTask("analyze-1", "analyze", "original analyze"),
+      makeTask("design-1", "design", "design", ["analyze-1"]),
+    ]);
+
+    const mutation = await planner.replan(
+      "test requirement",
+      currentPlan,
+      ["analyze-1", "design-1"],
+      [],
+      [createIssue({
+        severity: "major",
+        targetTaskId: "analyze-1",
+        targetTaskType: "analyze",
+        scope: "upstream",
+        description: "C001-C005 are mis-mapped",
+      })],
+      null,
+      "final review found source id drift",
+    );
+
+    expect(mutation.addTasks.some((task) => task.type === "analyze")).toBe(false);
+    expect(mutation.updateTasks.map((task) => task.id)).toContain("analyze-1");
+    expect(mutation.dropTaskIds).not.toContain("analyze-1");
+    expect(mutation.reorderEdges["design-1"]).toEqual(["analyze-1"]);
+    expect(mutation.reasoning).toContain("stabilized analyze replan");
   });
 
   it("PlanningSession replan requires current_plan payload and uses it when provided", async () => {

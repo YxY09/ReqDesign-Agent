@@ -29,9 +29,12 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
+import { setupLogger } from "../logger.js";
 import type { GoldContract, GoldObligation } from "./goldObligation.js";
-import type { JudgeClient } from "./scorer.js";
+import type { JudgeClient } from "./judgeClient.js";
 import type { QualityScores } from "./resultStore.js";
+
+const DEFAULT_JUDGE_CONCURRENCY = 3;
 
 // ---------------------------------------------------------------------------
 // Output types
@@ -278,8 +281,9 @@ function extractSliceForObligation(
   const normLines = lines.map(norm);
 
   // Collect distinctive needles from the obligation. A needle must be at least
-  // 3 chars after normalization (filters out noise like single digits / "id").
-  const minNeedle = 3;
+  // 2 chars after normalization (filters out single chars / "id" noise while
+  // still admitting short signature digits like "50"/"10"/"5%").
+  const minNeedle = 2;
   const needles = new Set<string>();
   const addNeedle = (raw: string): void => {
     const n = norm(raw);
@@ -1053,6 +1057,43 @@ function textOverlaps(a: string, b: string): boolean {
 }
 
 /**
+ * Run promise workers with bounded concurrency while preserving input order.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const limit = Math.max(1, Math.min(items.length, Math.floor(concurrency)));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: limit }, async () => {
+      while (true) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= items.length) return;
+        results[index] = await worker(items[index]!, index);
+      }
+    }),
+  );
+
+  return results;
+}
+
+function normalizeJudgeConcurrency(value: number | undefined, itemCount: number): number {
+  if (itemCount <= 0) return 0;
+  const raw = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : DEFAULT_JUDGE_CONCURRENCY;
+  return Math.max(1, Math.min(itemCount, raw > 0 ? raw : DEFAULT_JUDGE_CONCURRENCY));
+}
+
+function formatQualityForLog(quality: QualityScores): string {
+  return `coverage=${quality.gold_obligation_coverage ?? "null"} trace=${quality.traceability_truthfulness ?? "null"} tests=${quality.test_effectiveness ?? "null"} depth=${quality.design_depth ?? "null"} final=${quality.final_score ?? "null"}`;
+}
+
+/**
  * Judge a whole case: read design + tests from disk, run the judge for every
  * gold obligation, and return `{ verdicts, quality }`. The LLM is called once
  * per obligation (plus the Phase 2.5 two-step checks when gated on).
@@ -1066,25 +1107,53 @@ function textOverlaps(a: string, b: string): boolean {
 export async function judgeAgainstGold(
   client: JudgeClient,
   gold: GoldContract,
-  params: { requirement_source: string; designPath: string; testsPath: string; matrixPath?: string },
+  params: {
+    requirement_source: string;
+    designPath: string;
+    testsPath: string;
+    matrixPath?: string;
+    judgeConcurrency?: number;
+  },
 ): Promise<{ verdicts: ObligationVerdict[]; quality: QualityScores }> {
+  const logger = setupLogger("reqdesign.benchmark.qualityJudge");
+  const startedAt = Date.now();
   const design = readArtifactText(params.designPath);
   const tests = readArtifactText(params.testsPath);
   const matrix = params.matrixPath ? readArtifactJson(params.matrixPath) : null;
+  const concurrency = normalizeJudgeConcurrency(params.judgeConcurrency, gold.obligations.length);
 
-  const verdicts: ObligationVerdict[] = [];
-  for (const obligation of gold.obligations) {
-    const chains = extractChainsForObligation(obligation, matrix);
-    verdicts.push(
-      await judgeObligation(client, {
+  logger.info(
+    `judgeAgainstGold start case=${gold.case_id} obligations=${gold.obligations.length} concurrency=${concurrency} design_chars=${design.length} tests_chars=${tests.length} matrix=${matrix ? "present" : "absent"}`,
+  );
+
+  const verdicts = await mapWithConcurrency(
+    gold.obligations,
+    concurrency,
+    async (obligation, index) => {
+      const obligationStartedAt = Date.now();
+      const chains = extractChainsForObligation(obligation, matrix);
+      logger.info(
+        `judgeAgainstGold obligation start case=${gold.case_id} ${index + 1}/${gold.obligations.length} id=${obligation.id} type=${obligation.type} chains=${chains.length}`,
+      );
+      const verdict = await judgeObligation(client, {
         obligation,
         source_language: gold.source_language,
         requirement_source: params.requirement_source,
         design,
         tests,
         matrix: chains.length > 0 ? { chains } : undefined,
-      }),
-    );
-  }
-  return { verdicts, quality: aggregateQuality(verdicts) };
+      });
+      const traceTruthful = verdict.trace_chain_truthful === undefined ? "n/a" : String(verdict.trace_chain_truthful);
+      logger.info(
+        `judgeAgainstGold obligation done case=${gold.case_id} ${index + 1}/${gold.obligations.length} id=${obligation.id} score=${verdict.score} contradiction=${verdict.has_contradiction === true} trace_chain_truthful=${traceTruthful} elapsed_ms=${Date.now() - obligationStartedAt}`,
+      );
+      return verdict;
+    },
+  );
+
+  const quality = aggregateQuality(verdicts);
+  logger.info(
+    `judgeAgainstGold done case=${gold.case_id} elapsed_ms=${Date.now() - startedAt} ${formatQualityForLog(quality)}`,
+  );
+  return { verdicts, quality };
 }

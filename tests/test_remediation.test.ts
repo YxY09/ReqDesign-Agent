@@ -172,6 +172,20 @@ describe("RemediationLadder.finalMajor", () => {
     expect(decision?.strategy).toBe("escalate_to_replan");
   });
 
+  it("accepts final-review upstream majors without replanning when there are no blockers", () => {
+    const decision = makeLadder().finalMajor(
+      makeSnapshot({
+        majorPendingTaskIds: ["analyze-1"],
+        latestIssues: [{ ...localMajorIssue, target_task_id: "analyze-1", target_task_type: "analyze", scope: "upstream" }],
+        artifactTypesByTask: { "analyze-1": "analyze" },
+        planReady: true,
+        finalReviewCurrent: true,
+        planAllCompleted: true,
+      }),
+    );
+    expect(decision?.strategy).toBe("finish");
+  });
+
   it("waits when the repair target is already running", () => {
     const decision = makeLadder().finalMajor(
       makeSnapshot({

@@ -20,7 +20,7 @@ import {
   extractTestsSliceForObligation,
   type ObligationVerdict,
 } from "../src/benchmark/qualityJudge.js";
-import type { JudgeClient } from "../src/benchmark/scorer.js";
+import type { JudgeClient } from "../src/benchmark/judgeClient.js";
 import type { GoldContract, GoldObligation } from "../src/benchmark/goldObligation.js";
 
 /** Mock JudgeClient that always returns `verdict` (the test_benchmark_scorer pattern). */

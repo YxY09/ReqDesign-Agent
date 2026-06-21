@@ -9,7 +9,7 @@ import { AgentConfig } from "../src/config.ts";
 import { LLMClient } from "../src/llmClient.ts";
 import { loadGoldContract } from "../src/benchmark/goldObligation.ts";
 import { judgeAgainstGold } from "../src/benchmark/qualityJudge.ts";
-import type { JudgeClient } from "../src/benchmark/scorer.ts";
+import type { JudgeClient } from "../src/benchmark/judgeClient.ts";
 
 const ROOT = process.cwd();
 const caseId = process.argv[2] ?? "hospital_mgmt";

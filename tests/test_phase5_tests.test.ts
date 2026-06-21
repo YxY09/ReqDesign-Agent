@@ -411,6 +411,27 @@ describe("isTemplateLike", () => {
 
     expect(isTemplateLike(tc)).toBe(true);
   });
+
+  it("does not flag a concrete step where 尝试 and 约束 are far apart", () => {
+    // Regression for the C013 false-positive: a real boundary step naming a
+    // specific record and constraint type must not be judged template-like
+    // just because it contains both 尝试 and 约束 in one sentence.
+    const tc = {
+      id: "TC-B-013",
+      title: "唯一性约束边界",
+      type: "边界",
+      target: "C013 主键唯一",
+      preconditions: "已存在主键为1001的记录",
+      steps: [
+        "构造两条主键均为1001的记录",
+        "尝试提交第二条违反唯一性约束的记录并观察系统响应",
+      ],
+      expected_result: "系统拒绝第二条记录并提示主键1001冲突",
+      priority: "P1",
+    };
+
+    expect(isTemplateLike(tc)).toBe(false);
+  });
 });
 
 describe("TestCaseGenerator.countTestCases", () => {

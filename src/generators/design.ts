@@ -436,7 +436,7 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
    * parametersPreserved, the actual source_text is the ground truth.
    */
   private static _checkConstraintImplementation(
-    impl: { implementationMechanism: string; handling: string; trigger: string; parametersPreserved: string[]; sourceTextVerbatim: string },
+    impl: { implementationMechanism: string; handling: string; trigger: string; parametersPreserved: string[]; sourceTextVerbatim?: string },
     analysisSourceText: string,
   ): string[] {
     const issues: string[] = [];
@@ -480,7 +480,7 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
    * anchors from sourceTextVerbatim.
    */
   private static _checkExceptionImplementation(
-    impl: { trigger: string; handling: string; parametersPreserved: string[]; sourceTextVerbatim: string },
+    impl: { trigger: string; handling: string; parametersPreserved: string[]; sourceTextVerbatim?: string },
     analysisSourceText: string,
   ): string[] {
     const issues: string[] = [];
@@ -575,9 +575,6 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
       lines.push("## 约束实现\n");
       for (const ci of model.constraintImplementations) {
         lines.push(`### ${s(ci.constraintId)} 约束实现\n`);
-        if (ci.sourceTextVerbatim) {
-          lines.push(`- **需求原文（verbatim）**: ${s(ci.sourceTextVerbatim)}`);
-        }
         if (ci.implementationMechanism) {
           lines.push(`- **实现机制**: ${s(ci.implementationMechanism)}`);
         }
@@ -600,9 +597,6 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
       lines.push("## 异常实现\n");
       for (const ei of model.exceptionImplementations) {
         lines.push(`### ${s(ei.exceptionId)} 异常实现\n`);
-        if (ei.sourceTextVerbatim) {
-          lines.push(`- **需求原文（verbatim）**: ${s(ei.sourceTextVerbatim)}`);
-        }
         if (ei.trigger) lines.push(`- **触发条件**: ${s(ei.trigger)}`);
         if (ei.handling) lines.push(`- **处理行为**: ${s(ei.handling)}`);
         if (ei.parametersPreserved && ei.parametersPreserved.length > 0) {
