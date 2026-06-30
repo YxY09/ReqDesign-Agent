@@ -232,6 +232,45 @@ describe("Plan mutation", () => {
     expect(state.plan!.tasks.map((task) => task.id)).toContain("tests-help-audit");
     expect(state.taskStatus("tests-help-audit")).toBe("pending");
   });
+
+  it("accepts a domain_model recovery task during replan (regression: replan-recovery dead-end)", () => {
+    // Regression: PlanMutator's task-type allow-list historically omitted
+    // "domain_model", so when a domain_model task failed its self-check and
+    // the planner tried to recover via replan (drop the failed task, add a
+    // fresh domain-model-2 of type domain_model), PlanMutator rejected it
+    // with "invalid task type 'domain_model'". After 3 rejections the
+    // replan budget exhausted and the run dead-ended on fresh domains.
+    const state = new WorkflowState();
+    state.plan = makePlan([
+      makeTask("analyze-1", "analyze"),
+      // domain-model-1 is a leaf here so it is not drop-protected by any
+      // remaining downstream dependency.
+      makeTask("domain-model-1", "domain_model", "failed domain model", ["analyze-1"]),
+    ]);
+    state.markTaskStatus("analyze-1", "completed");
+
+    // Replan recovery: drop the failed domain model, add a fresh one.
+    const mutation = createPlanMutation({
+      dropTaskIds: ["domain-model-1"],
+      addTasks: [
+        makeTask("domain-model-2", "domain_model", "redone domain model", ["analyze-1"]),
+      ],
+      reasoning: "domain-model-1 self-check failed; recover with a fresh domain model",
+    });
+
+    const errors = state.mutatePlan(mutation);
+
+    expect(errors).toEqual([]);
+    expect(state.plan).not.toBeNull();
+    const taskIds = state.plan!.tasks.map((t) => t.id);
+    expect(taskIds).not.toContain("domain-model-1");
+    expect(taskIds).toContain("domain-model-2");
+    const recovered = state.plan!.tasks.find((t) => t.id === "domain-model-2");
+    expect(recovered).toBeDefined();
+    expect(recovered!.type).toBe("domain_model");
+    expect(state.taskStatus("domain-model-2")).toBe("pending");
+    expect(state.progress.planRevisionCount).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

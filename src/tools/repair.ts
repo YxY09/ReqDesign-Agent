@@ -8,11 +8,12 @@ import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
 import { BaseTool } from "./base.js";
 import type { ToolCapabilities } from "./types.js";
-import { isDesignModel, type Task } from "../shared/types.js";
+import { isDesignModel, type Task, type DesignModel } from "../shared/types.js";
 import { isRecord } from "../utils/isRecord.js";
 import { isTemplateLike, validateTestCases as validateTestCaseQuality } from "../generators/testQualityValidator.js";
 import { isRelationLine } from "../shared/mermaidRelations.js";
 import { extractDesignClassDefinitions } from "../shared/designClassExtractor.js";
+import { DomainModelGenerator } from "../generators/domainModel.js";
 
 export class RepairTool extends BaseTool {
   constructor(llm: LLMClient) {
@@ -66,6 +67,31 @@ export class RepairTool extends BaseTool {
 
     if (content != null && task.type === "design") {
       content = this._normalizeStructuredDesignRepair(content, context);
+    }
+
+    // Design-fidelity gate (FIX 2): a repaired design that REGRESSES on
+    // coverage (drops a previously-referenced domain concept D-ID, drops a
+    // previously-covered function F###, or leaves a module with an empty
+    // name/responsibility after coercion) is REJECTED and the pre-repair
+    // (better) design is kept. This AUGMENTS the size heuristic below (kept
+    // as a final truncation guard). General/set-based: works on IDs and
+    // field-population, never on hardcoded names.
+    if (
+      content != null &&
+      task.type === "design" &&
+      isDesignModel(currentContent)
+    ) {
+      const postModel = isDesignModel(content) ? content : null;
+      const preModel = this._normalizeStructuredDesignRepair(currentContent, context);
+      if (postModel && isDesignModel(preModel)) {
+        const gate = RepairTool._designFidelityGate(postModel, preModel);
+        if (!gate.accept) {
+          this.logger.warn(
+            `repair: task=${task.id} design fidelity gate rejected repair (keeping pre-repair): ${gate.reasons.join("; ")}`,
+          );
+          content = preModel;
+        }
+      }
     }
 
     if (content != null && task.type === "tests") {
@@ -259,6 +285,92 @@ export class RepairTool extends BaseTool {
   }
 
   /**
+   * Design-fidelity acceptance gate (FIX 2). Compares a post-repair DesignModel
+   * against the pre-repair DesignModel and REJECTS the repair when it
+   * regresses on coverage. Both inputs are assumed to be already reconciled
+   * (reconcileDesignModel + buildCoverageMatrix). All three checks are
+   * general/set-based — they operate on IDs and field-population only, never
+   * on hardcoded names, so they generalize to any domain.
+   *
+   *   (a) D-ID retention: the union of `domainRefs` across all domain classes
+   *       post-repair must be a superset of the union pre-repair. Dropping a
+   *       previously-referenced domain concept (e.g. D010) is a coverage
+   *       regression. `domainRefs` is untyped on DesignClassEntry so it is read
+   *       defensively with an Array.isArray guard (exactly like
+   *       domainModel.ts:201).
+   *   (b) Module completeness: after coercion, no module may have an empty
+   *       name or responsibility. A blank module row is the corruption symptom
+   *       (drifted aliases render as blank cells).
+   *   (c) Function retention: the union of `functionIds` across modules
+   *       post-repair must cover the union pre-repair. Dropping a previously-
+   *       covered F### is a coverage regression.
+   *
+   * Returns `{ accept: true }` when no regression is detected, otherwise
+   * `{ accept: false, reasons }` listing every failed check.
+   */
+  static _designFidelityGate(
+    post: DesignModel,
+    pre: DesignModel,
+  ): { accept: boolean; reasons: string[] } {
+    const reasons: string[] = [];
+
+    // (a) Domain-concept D-ID retention.
+    const collectDomainRefs = (model: DesignModel): Set<string> => {
+      const ids = new Set<string>();
+      for (const cls of model.classes ?? []) {
+        const refs = (cls as unknown as Record<string, unknown>).domainRefs;
+        if (Array.isArray(refs)) {
+          for (const ref of refs) {
+            const id = String(ref ?? "").trim();
+            if (id) ids.add(id);
+          }
+        }
+      }
+      return ids;
+    };
+    const preDIds = collectDomainRefs(pre);
+    const postDIds = collectDomainRefs(post);
+    const droppedDIds = [...preDIds].filter((id) => !postDIds.has(id));
+    if (droppedDIds.length > 0) {
+      reasons.push(`domain concept refs dropped: ${droppedDIds.join(", ")}`);
+    }
+
+    // (b) Module completeness (post-repair only, after coercion).
+    const blankModules: string[] = [];
+    for (const mod of post.modules ?? []) {
+      const name = String(mod.name ?? "").trim();
+      const responsibility = String(mod.responsibility ?? "").trim();
+      if (!name || !responsibility) {
+        const id = String(mod.id ?? "").trim() || `(index ${post.modules.indexOf(mod)})`;
+        blankModules.push(id);
+      }
+    }
+    if (blankModules.length > 0) {
+      reasons.push(`modules with empty name/responsibility: ${blankModules.join(", ")}`);
+    }
+
+    // (c) Function retention.
+    const collectFunctionIds = (model: DesignModel): Set<string> => {
+      const ids = new Set<string>();
+      for (const mod of model.modules ?? []) {
+        for (const fid of mod.functionIds ?? []) {
+          const id = String(fid ?? "").trim();
+          if (id) ids.add(id);
+        }
+      }
+      return ids;
+    };
+    const preFIds = collectFunctionIds(pre);
+    const postFIds = collectFunctionIds(post);
+    const droppedFIds = [...preFIds].filter((id) => !postFIds.has(id));
+    if (droppedFIds.length > 0) {
+      reasons.push(`function coverage dropped: ${droppedFIds.join(", ")}`);
+    }
+
+    return { accept: reasons.length === 0, reasons };
+  }
+
+  /**
    * Post-repair check: reject the repair result if any test cases are still
    * template-like. Returns null to reject, or the original content if acceptable.
    */
@@ -363,6 +475,24 @@ export class RepairTool extends BaseTool {
     if (namingMatch) {
       const [, correctName, wrongName] = namingMatch;
       if (correctName && wrongName && correctName !== wrongName) {
+        // FIX 1: refuse to rename an authoritative domain-model concept name.
+        // `wrongName` is the name actually used in the class diagram / design.
+        // If it is one of the domain model's concept names, that name is
+        // authoritative for the artifact and must NOT be overwritten by the
+        // analysis entity name — defer to LLM repair (or no-op) instead of
+        // corrupting a faithful concept name. GENERAL: any concept name.
+        const domainModelJson = context.domain_model_json as
+          | Record<string, unknown>
+          | undefined;
+        const conceptNames = new Set(
+          DomainModelGenerator.extractConceptNames(domainModelJson ?? {}),
+        );
+        if (conceptNames.has(wrongName)) {
+          this.logger.info(
+            `deterministic: refusing to rename authoritative domain concept '${wrongName}' -> '${correctName}' (concept name preserved)`,
+          );
+          return null;
+        }
         return this._fixNamingMismatch(task, currentContent, correctName, wrongName);
       }
     }
@@ -883,7 +1013,7 @@ export class RepairTool extends BaseTool {
     } else if (task.type === "tests") {
       fmtNote = '- 如果当前产物是 JSON 格式（{"test_cases": [...]}），直接输出修复后的完整 JSON 根对象，必须包含完整 `test_cases` 数组。\n- 如果当前产物是 Markdown 格式，直接输出修复后的完整 Markdown 文本。\n- 测试用例 id 使用 TC-N-###、TC-E-###、TC-B-###，分别对应正常/异常/边界。\n- target 字段使用显示 ID（F001/C001/X001）加当前约束/功能描述。\n- 需求 ID 写在 target、steps 或 expected_result 中。\n- 对低质量/模板化测试，直接保留原 id 并重写该测试用例内容；同一 target 保留一条高质量测试。';
     } else if (task.type === "design") {
-      fmtNote = '- 直接输出修复后的完整 DesignModel JSON 根对象。\n- 根对象包含 `constraintImplementations`、`exceptionImplementations`、`modules`、`classes`、`dataFlows`、`coverageMatrix`、`supplementaryClasses`。\n- `classes[]` 每个类对象字段固定为：`name`（类名，英文，与需求实体名一致）、`kind`（"domain" 或 "helper"）、`responsibility`（职责描述）、`attributes`（[{name,type,description?}] 数组）、`methods`（方法名字符串数组）、`entityRef`（对应实体名，可选）。严禁改用 className/responsibilities/keyAttributes/keyMethods 等别名。\n- 每个 `constraintImplementations[].constraintId` 使用需求分析中的 display ID（C001/C002...），每条约束保留独立实现段落。\n- 每个 `exceptionImplementations[].exceptionId` 使用需求分析中的 display ID（X001/X002...）。\n- `modules[].functionIds` 使用需求分析中的 display ID（F001/F002...）。';
+      fmtNote = '- 直接输出修复后的完整 DesignModel JSON 根对象。\n- 根对象包含 `constraintImplementations`、`exceptionImplementations`、`modules`、`classes`、`dataFlows`、`coverageMatrix`、`supplementaryClasses`。\n- `classes[]` 每个类对象字段固定为：`name`（类名，英文，与需求实体名一致）、`kind`（"domain" 或 "helper"）、`responsibility`（职责描述）、`attributes`（[{name,type,description?}] 数组）、`methods`（方法名字符串数组）、`entityRef`（对应实体名，可选）。严禁改用 className/responsibilities/keyAttributes/keyMethods 等别名。\n- `modules[]` 每个模块对象字段固定为：`name`（模块名称）、`responsibility`（职责描述）、`id`（模块 ID）、`functionIds`（功能 ID 数组）。必须使用以上规范字段名，不得改用 moduleName/description/moduleId 等别名。\n- 每个 `constraintImplementations[].constraintId` 使用需求分析中的 display ID（C001/C002...），每条约束保留独立实现段落。\n- 每个 `exceptionImplementations[].exceptionId` 使用需求分析中的 display ID（X001/X002...）。\n- `modules[].functionIds` 使用需求分析中的 display ID（F001/F002...）。';
     } else if (task.type === "diagrams") {
       fmtNote = '- 直接输出修复后的完整 JSON 根对象，例如 {"class_diagram":"完整 Mermaid", "activity_diagram":"完整 Mermaid"}。\n- 只包含本任务负责的图表键；Mermaid 内容作为 JSON 字符串值。';
     } else {

@@ -2,7 +2,7 @@
   "name": "reqdesign-agent-vscode",
   "displayName": "ReqDesign Agent",
   "description": "需求驱动的多 Agent 系统设计助手 —— 在侧边栏对话中分析需求、生成系统设计、Mermaid 三图与测试用例",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "reqdesign",
   "license": "MIT",
   "engines": {

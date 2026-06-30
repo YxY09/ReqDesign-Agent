@@ -163,10 +163,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   <div id="status-bar" class="status-bar hidden"></div>
   <div id="transcript" class="transcript"></div>
   <div id="composer" class="composer">
-    <button id="attach" class="icon-btn" title="选择需求文件并设计">📎</button>
-    <textarea id="input" rows="1" placeholder="输入消息，或带上需求文件路径让我做设计…（Enter 发送，Shift+Enter 换行）"></textarea>
-    <button id="send" class="icon-btn primary" title="发送">↑</button>
-    <button id="stop" class="icon-btn danger hidden" title="停止">■</button>
+    <div class="input-wrap">
+      <textarea id="input" rows="1" placeholder="发消息，或贴上需求文件路径让我设计…"></textarea>
+      <div class="composer-toolbar">
+        <button id="attach" class="tool-btn" title="选择需求文件并设计" aria-label="选择需求文件">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <span class="toolbar-spacer"></span>
+        <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
+        <button id="send" class="send-btn" title="发送 (Enter)" aria-label="发送" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+        </button>
+        <button id="stop" class="send-btn stop hidden" title="停止" aria-label="停止">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+        </button>
+      </div>
+    </div>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

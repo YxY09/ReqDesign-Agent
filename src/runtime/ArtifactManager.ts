@@ -11,6 +11,7 @@ import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
 
 const TASK_TYPE_TO_ARTIFACT_KEY: Record<string, string> = {
   analyze: "requirement_json",
+  domain_model: "domain_model_json",
   design: "design_text",
   diagrams: "diagrams",
   tests: "test_cases",
@@ -78,6 +79,8 @@ export class ArtifactManager {
       } else {
         this._state.requirementJsonContentKind = "stale";
       }
+    } else if (key === "domain_model_json" && typeof content === "object" && content !== null && !Array.isArray(content)) {
+      this._state.domainModelJson = content as Record<string, unknown>;
     } else if (key === "design_text") {
       if (isDesignModel(content)) {
         this._state.designModel = content;

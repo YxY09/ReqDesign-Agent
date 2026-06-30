@@ -683,22 +683,26 @@ describe("PlanningTool.buildDeterministicPlan", () => {
     expect(kinds).toContain("state_diagram");
   });
 
-  it("design depends on all analyze shards", () => {
+  it("design depends on all domain_model shards", () => {
     const sections = makeSections(50);
     const plan = PlanningTool.buildDeterministicPlan("design", sections);
     const design = plan.tasks.find((t) => t.type === "design")!;
-    const analyzeIds = plan.tasks.filter((t) => t.type === "analyze").map((t) => t.id);
-    expect(analyzeIds.length).toBeGreaterThan(1);
-    for (const id of analyzeIds) {
+    const domainModelIds = plan.tasks.filter((t) => t.type === "domain_model").map((t) => t.id);
+    expect(domainModelIds.length).toBeGreaterThan(0);
+    for (const id of domainModelIds) {
       expect(design.dependsOn).toContain(id);
     }
   });
 
-  it("diagrams and tests depend on design", () => {
+  it("class diagram depends on domain_model; other diagrams and tests depend on design", () => {
     const plan = PlanningTool.buildDeterministicPlan("design");
     for (const t of plan.tasks) {
       if (t.type === "diagrams" || t.type === "tests") {
-        expect(t.dependsOn).toContain("design-1");
+        if (t.contextHints?.diagram_kind === "class_diagram") {
+          expect(t.dependsOn).toContain("domain-model-1");
+        } else {
+          expect(t.dependsOn).toContain("design-1");
+        }
       }
     }
   });

@@ -14,7 +14,7 @@ import type { ConstraintCandidate } from "./constraintCanonicalizer.js";
 export type WorkerKind = "planner" | "generator" | "evaluator" | "repair";
 
 /** Kinds of tasks the planner can emit. */
-export type TaskType = "analyze" | "design" | "diagrams" | "tests";
+export type TaskType = "analyze" | "domain_model" | "design" | "diagrams" | "tests";
 
 /** Actions the coordinator agent can choose. */
 export type ActionType =

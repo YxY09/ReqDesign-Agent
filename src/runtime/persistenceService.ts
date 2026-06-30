@@ -57,7 +57,9 @@ export class PersistenceService {
   ): void {
     const manager = new this.deps.outputManagerCtor(state.outputDir);
     try {
-      if (artifact.type === "design") {
+      if (artifact.type === "domain_model" && isRecord(artifact.content)) {
+        manager.saveDomainModel(artifact.content as Record<string, unknown>);
+      } else if (artifact.type === "design") {
         if (isDesignModel(artifact.content)) {
           const rendered = SystemDesigner.renderDesignMarkdown(artifact.content);
           manager.saveSystemDesign(rendered);

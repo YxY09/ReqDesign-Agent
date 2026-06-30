@@ -11,6 +11,7 @@ import { createToolError } from "./types.js";
 import { type Task, type Artifact, createArtifact, isDesignModel } from "../shared/types.js";
 import type { EntityRegistry } from "../shared/types.js";
 import { RequirementAnalyzer } from "../generators/analyze.js";
+import { DomainModelGenerator } from "../generators/domainModel.js";
 import { SystemDesigner } from "../generators/design.js";
 import { DiagramGenerator } from "../generators/diagrams.js";
 import { MermaidValidator } from "../generators/mermaid.js";
@@ -22,6 +23,7 @@ import { extractDesignClassDefinitions } from "../shared/designClassExtractor.js
 
 export class GenerationTool extends BaseTool {
   private _analyzer: RequirementAnalyzer | null = null;
+  private _domainModelGen: DomainModelGenerator | null = null;
   private _designer: SystemDesigner | null = null;
   private _diagramGen: DiagramGenerator | null = null;
   private _testGen: TestCaseGenerator | null = null;
@@ -33,7 +35,7 @@ export class GenerationTool extends BaseTool {
   get name(): string { return "GenerationTool"; }
 
   get capabilities(): ToolCapabilities {
-    return { requiresLlm: true, supportedTaskTypes: ["analyze", "design", "diagrams", "tests"] };
+    return { requiresLlm: true, supportedTaskTypes: ["analyze", "domain_model", "design", "diagrams", "tests"] };
   }
 
   // ------------------------------------------------------------------
@@ -114,6 +116,8 @@ export class GenerationTool extends BaseTool {
     switch (task.type) {
       case "analyze":
         return await this._generateAnalyze(context, hints, desc, injectedPrompt);
+      case "domain_model":
+        return await this._generateDomainModel(context, hints, desc, injectedPrompt);
       case "design":
         return await this._generateDesign(context, hints, desc, injectedPrompt);
       case "diagrams":
@@ -167,15 +171,29 @@ export class GenerationTool extends BaseTool {
     return GenerationTool._unwrapAnalyzeDict(raw);
   }
 
+  private async _generateDomainModel(
+    ctx: Record<string, unknown>, _hints: Record<string, unknown>,
+    _desc: string, systemPrompt: string,
+  ): Promise<Record<string, unknown>> {
+    const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
+    if (!reqJson) throw createToolError("GEN_MISSING_REQJSON", "缺少 requirement_json", { recoverable: false });
+    const reqText = (ctx.requirement_text as string) ?? "";
+    const gen = this._getDomainModelGen();
+    return this.llm.runWithStreamTagContext("[Generator:domain_model]", "", () =>
+      gen.generateDomainModel(reqJson, systemPrompt, reqText)
+    );
+  }
+
   private async _generateDesign(
     ctx: Record<string, unknown>, _hints: Record<string, unknown>,
     _desc: string, systemPrompt: string,
   ): Promise<unknown> {
     const reqJson = ctx.requirement_json as Record<string, unknown> | undefined;
     if (!reqJson) throw createToolError("GEN_MISSING_REQJSON", "缺少 requirement_json", { recoverable: false });
+    const domainModelJson = (ctx.domain_model_json ?? undefined) as Record<string, unknown> | undefined;
 
     return this.llm.runWithStreamTagContext("[Generator:design]", "", () =>
-      this._getDesigner().generateDesign(reqJson, systemPrompt)
+      this._getDesigner().generateDesign(reqJson, systemPrompt, domainModelJson)
     );
   }
 
@@ -186,30 +204,28 @@ export class GenerationTool extends BaseTool {
   ): Promise<Record<string, string>> {
     const reqJson = (ctx.requirement_json ?? {}) as Record<string, unknown>;
     const designText = (ctx.design_text as string) ?? "";
+    const domainModelJson = (ctx.domain_model_json ?? null) as Record<string, unknown> | null;
     const diagramKind = GenerationTool._diagramKindForTask(task, hints, desc);
 
     const generator = this._getDiagramGen();
 
     if (diagramKind) {
       const methodMap: Record<string, () => Promise<string>> = {
-        class_diagram: () => generator.generateClassDiagram(reqJson, designText, systemPrompt, ""),
-        activity_diagram: () => generator.generateActivityDiagram(reqJson, designText, systemPrompt, ""),
-        state_diagram: () => generator.generateStateDiagram(reqJson, designText, systemPrompt, ""),
+        class_diagram: () => generator.generateClassDiagram(reqJson, domainModelJson, systemPrompt, ""),
+        activity_diagram: () => generator.generateActivityDiagram(reqJson, designText, systemPrompt, "", undefined, domainModelJson),
+        state_diagram: () => generator.generateStateDiagram(reqJson, designText, systemPrompt, "", undefined, domainModelJson),
       };
       const method = methodMap[diagramKind];
       if (!method) throw createToolError("GEN_UNKNOWN_DIAGRAM", `未知图表类型: ${diagramKind}`, { recoverable: false });
       const result = await this.llm.runWithStreamTagContext("[Generator:diagrams]", "", method);
-      // Deterministic class-patch: synthesize any relationship endpoint
-      // that has no `class {}` block from entities / design definitions.
       const patched = diagramKind === "class_diagram"
         ? GenerationTool._patchMissingClassDefinitions(result, reqJson, designText)
         : result;
       return { [diagramKind]: patched };
     }
     const all = await this.llm.runWithStreamTagContext("[Generator:diagrams]", "", () =>
-      generator.generateAll(reqJson, designText, systemPrompt, "")
+      generator.generateAll(reqJson, designText, systemPrompt, "", domainModelJson)
     );
-    // Apply the same deterministic class-patch to the bundled class_diagram.
     if (all.class_diagram) {
       all.class_diagram = GenerationTool._patchMissingClassDefinitions(all.class_diagram, reqJson, designText);
     }
@@ -342,12 +358,35 @@ export class GenerationTool extends BaseTool {
         if (!c.entities) issues.push("缺少 entities 字段");
         issues.push(...RequirementAnalyzer.validateResult(c));
     }
+    else if (taskType === "domain_model") {
+      if (typeof content !== "object" || content === null || Array.isArray(content))
+        return ["领域模型格式错误（非 dict）"];
+      const c = content as Record<string, unknown>;
+      if (!Array.isArray(c.concepts) || c.concepts.length === 0)
+        issues.push("领域模型缺少 concepts");
+      if (!Array.isArray(c.generalizations))
+        issues.push("领域模型缺少 generalizations");
+      if (!Array.isArray(c.associations))
+        issues.push("领域模型缺少 associations");
+      const reqJsonForDm = (context.requirement_json ?? {}) as Record<string, unknown>;
+      issues.push(...DomainModelGenerator.validateRoleHierarchy(c, reqJsonForDm));
+      issues.push(...DomainModelGenerator.validateLineItemDecomposition(c));
+      issues.push(...DomainModelGenerator.validateEndpointIntegrity(c));
+    }
     else if (taskType === "design") {
       const reqJson = (context.requirement_json ?? {}) as Record<string, unknown>;
+      const domainModelJson = (context.domain_model_json ?? {}) as Record<string, unknown>;
       if (isDesignModel(content)) {
-        issues.push(...SystemDesigner.validateDesignModel(content, reqJson));
+        issues.push(...SystemDesigner.validateDesignModel(content, reqJson, domainModelJson));
         const rendered = SystemDesigner.renderDesignMarkdown(content);
         issues.push(...GenerationTool._checkUndefinedExceptionIds(rendered, reqJson, "设计"));
+        if (domainModelJson && Object.keys(domainModelJson).length > 0) {
+          const designClasses = Array.isArray(content.classes)
+            ? (content.classes as unknown as Array<Record<string, unknown>>)
+            : [];
+          issues.push(...DomainModelGenerator.validateDomainDesignConsistency(
+            domainModelJson, designClasses));
+        }
       } else if (typeof content === "string" && content.trim()) {
         issues.push(...SystemDesigner.validateDesign(String(content), reqJson));
         issues.push(...GenerationTool._checkUndefinedExceptionIds(String(content), reqJson, "设计"));
@@ -385,6 +424,11 @@ export class GenerationTool extends BaseTool {
             const closeBraces = (text.match(/^\s*\}/gm) ?? []).length;
             if (openClasses > closeBraces) {
               issues.push(`classDiagram 有 ${openClasses} 个类定义但只有 ${closeBraces} 个闭合括号，输出可能被截断`);
+            }
+            const domainModelJson = (context.domain_model_json ?? {}) as Record<string, unknown>;
+            if (domainModelJson && Object.keys(domainModelJson).length > 0) {
+              issues.push(...DomainModelGenerator.validateDomainDesignConsistency(
+                domainModelJson, [], text));
             }
           }
           const syntaxResult = new MermaidValidator().validate(text, key);
@@ -510,6 +554,11 @@ export class GenerationTool extends BaseTool {
   private _getAnalyzer(): RequirementAnalyzer {
     if (!this._analyzer) this._analyzer = new RequirementAnalyzer(this.llm);
     return this._analyzer;
+  }
+
+  private _getDomainModelGen(): DomainModelGenerator {
+    if (!this._domainModelGen) this._domainModelGen = new DomainModelGenerator(this.llm);
+    return this._domainModelGen;
   }
 
   private _getDesigner(): SystemDesigner {

@@ -33,7 +33,7 @@
    - **尽量**保留仍然有效的任务和依赖关系
    - **优先** add_tasks 来补充修复步骤，而非 update completed 任务
    - 新增任务的 id 不能与现有 id 冲突
-   - **新增任务的 type 只能是 analyze / design / diagrams / tests（这四个，不能编造）**
+   - **新增任务的 type 只能是 analyze / domain_model / design / diagrams / tests（这五个，不能编造）**
    - 如果新增或重跑 `analyze`，必须同时规划下游同步任务：design 依赖该 analyze，diagrams/tests 依赖新的 design。禁止让 diagrams/tests 与新的 analyze 并行执行。
    - 如果剩余问题只是设计/图/测试局部不一致，不要新增 analyze；优先修复下游产物，避免后期改动 requirement_json 引入新的全局不一致。
 

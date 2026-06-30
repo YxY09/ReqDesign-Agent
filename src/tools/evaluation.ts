@@ -12,6 +12,7 @@ import {
 } from "../shared/types.js";
 import { SystemDesigner } from "../generators/design.js";
 import { TestCaseGenerator } from "../generators/tests.js";
+import { DomainModelGenerator } from "../generators/domainModel.js";
 import { validateReview, type ReviewValidationResult } from "../shared/reviewValidator.js";
 import { RequirementIndex } from "../shared/requirementIndex.js";
 import { SYNTHETIC_TASK_IDS } from "../shared/taskConstants.js";
@@ -46,6 +47,7 @@ export class EvaluationTool extends BaseTool {
     isDirectMode = false,
     evaluatedTaskIds?: string[],
     _previousIssues?: Array<{ severity: string; description: string; location?: string }>,
+    domainModelJson?: Record<string, unknown> | null,
   ): Promise<Verdict> {
     this.logger.info(`evaluate: 开始评审，goal=${goal}，directMode=${isDirectMode}`);
     const snapshots = artifactSnapshots ?? EvaluationTool._buildAggregateSnapshots(
@@ -69,7 +71,7 @@ export class EvaluationTool extends BaseTool {
     const issues: Issue[] = [];
 
     // 1. 规则检查
-    const ruleIssues = this._ruleCheckSnapshots(snapshots, isDirectMode, requirementJson);
+    const ruleIssues = this._ruleCheckSnapshots(snapshots, isDirectMode, requirementJson, domainModelJson);
     // Classify each rule issue defect vs advisory (deterministic, by content).
     for (const issue of ruleIssues) issue.kind = EvaluationTool._classifyIssueKind(issue);
     issues.push(...ruleIssues);
@@ -490,6 +492,7 @@ export class EvaluationTool extends BaseTool {
     snapshots: Record<string, Record<string, unknown>>,
     skipMissingArtifact: boolean,
     requirementJson: Record<string, unknown>,
+    domainModelJson?: Record<string, unknown> | null,
   ): Issue[] {
     const issues: Issue[] = [];
 
@@ -516,7 +519,7 @@ export class EvaluationTool extends BaseTool {
         if (isEmpty) {
           issues.push(createIssue({ severity: "blocker", targetTaskId: taskId, targetTaskType: "design", targetField: "design_text", description: "系统设计文档为空", suggestion: "重新执行设计生成任务" }));
         } else if (isDesignModel(content)) {
-          for (const warning of SystemDesigner.validateDesignModel(content, requirementJson)) {
+          for (const warning of SystemDesigner.validateDesignModel(content, requirementJson, domainModelJson)) {
             issues.push(createIssue({
               severity: "major",
               targetTaskId: taskId,
@@ -630,7 +633,7 @@ export class EvaluationTool extends BaseTool {
     }
 
     // 跨产物实体命名一致性检查
-    issues.push(...this._checkCrossArtifactNaming(snapshots, requirementJson));
+    issues.push(...this._checkCrossArtifactNaming(snapshots, requirementJson, domainModelJson));
 
     // 跨产物功能 ID 一致性检查
     issues.push(...this._checkFunctionIdConsistency(snapshots, requirementJson));
@@ -647,10 +650,18 @@ export class EvaluationTool extends BaseTool {
   private _checkCrossArtifactNaming(
     snapshots: Record<string, Record<string, unknown>>,
     requirementJson: Record<string, unknown>,
+    domainModelJson?: Record<string, unknown> | null,
   ): Issue[] {
     const issues: Issue[] = [];
     const entities = (requirementJson.entities ?? []) as Array<Record<string, unknown>>;
     if (entities.length === 0) return issues;
+
+    // FIX 2: authoritative domain-model concept names are valid class names.
+    // Build a concept-name set so the naming-inconsistency check can exempt
+    // them — a class named after a domain concept is correct, not a rename.
+    const conceptNames = new Set(
+      DomainModelGenerator.extractConceptNames(domainModelJson ?? {}),
+    );
 
     // 从需求分析中构建规范的实体名集合（normalized -> original）
     const entityNames = new Map<string, string>(); // normalized -> original
@@ -702,14 +713,21 @@ export class EvaluationTool extends BaseTool {
             return commonChars / minLen >= 0.75 && Math.abs(dcNorm.length - normalized.length) <= 4;
           });
           if (similarInDesign.length > 0) {
-            issues.push(createIssue({
-              severity: "major",
-              targetTaskId: taskId,
-              targetTaskType: "design",
-              targetField: "design_text",
-              description: "实体命名不一致: 需求分析中为 '" + original + "'，设计中使用了 '" + similarInDesign.join("', '") + "'",
-              suggestion: "统一使用需求分析中的实体名 '" + original + "'，或在文档中说明改名原因",
-            }));
+            // FIX 2: a class named after an authoritative domain concept is
+            // valid, not a rename — exempt concept names from the complaint.
+            const nonConceptSimilarInDesign = similarInDesign.filter(
+              (dc) => !conceptNames.has(dc),
+            );
+            if (nonConceptSimilarInDesign.length > 0) {
+              issues.push(createIssue({
+                severity: "major",
+                targetTaskId: taskId,
+                targetTaskType: "design",
+                targetField: "design_text",
+                description: "实体命名不一致: 需求分析中为 '" + original + "'，设计中使用了 '" + nonConceptSimilarInDesign.join("', '") + "'",
+                suggestion: "统一使用需求分析中的实体名 '" + original + "'，或在文档中说明改名原因",
+              }));
+            }
           }
         }
       }
@@ -741,14 +759,19 @@ export class EvaluationTool extends BaseTool {
             return dcNorm.includes(normalized) || normalized.includes(dcNorm);
           });
           if (similar.length > 0) {
-            issues.push(createIssue({
-              severity: "major",
-              targetTaskId: taskId,
-              targetTaskType: "diagrams",
-              targetField: "diagrams.class_diagram",
-              description: "类图实体命名不一致: 需求分析中为 '" + original + "'，类图中使用了 '" + similar.join("', '") + "'",
-              suggestion: "统一使用需求分析中的实体名 '" + original + "'",
-            }));
+            // FIX 2: a class diagram class named after an authoritative domain
+            // concept is valid — exempt it from the naming-inconsistency complaint.
+            const nonConceptSimilar = similar.filter((dc) => !conceptNames.has(dc));
+            if (nonConceptSimilar.length > 0) {
+              issues.push(createIssue({
+                severity: "major",
+                targetTaskId: taskId,
+                targetTaskType: "diagrams",
+                targetField: "diagrams.class_diagram",
+                description: "类图实体命名不一致: 需求分析中为 '" + original + "'，类图中使用了 '" + nonConceptSimilar.join("', '") + "'",
+                suggestion: "统一使用需求分析中的实体名 '" + original + "'",
+              }));
+            }
           }
         }
       }

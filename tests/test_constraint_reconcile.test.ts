@@ -72,7 +72,7 @@ describe("normalizeConstraintText", () => {
 });
 
 describe("AnalyzeMerger.merge — constraint registry instrumentation", () => {
-  it("attaches a diagnostic flagging the candidate the analyze artifact dropped", async () => {
+  it("re-adds dropped registry candidates and reports droppedCount=0", async () => {
     // single-artifact path is deterministic (no LLM call)
     const merger = new AnalyzeMerger({} as never);
     const registry = [cand("订单金额必须大于0"), cand("库存不足时不可下单")];
@@ -94,8 +94,14 @@ describe("AnalyzeMerger.merge — constraint registry instrumentation", () => {
 
     expect(diag).toBeTruthy();
     expect(diag!.registryTotal).toBe(2);
-    expect(diag!.droppedCount).toBe(1);
-    expect(diag!.dropped[0].constraintRef).toBe("C002");
+    // FIX 3: dropped candidates are AUTHORITATIVELY re-added, so the final
+    // constraints are a superset of the registry and droppedCount is 0.
+    expect(diag!.droppedCount).toBe(0);
+
+    const constraints = (merged.constraints as Array<Record<string, unknown>>) ?? [];
+    // Both registry candidates must be represented in the final constraints.
+    expect(constraints.some((c) => String(c.description ?? "").includes("订单金额必须大于0"))).toBe(true);
+    expect(constraints.some((c) => String(c.description ?? "").includes("库存不足时不可下单"))).toBe(true);
   });
 
   it("does not attach a diagnostic when no registry is provided", async () => {
@@ -106,6 +112,43 @@ describe("AnalyzeMerger.merge — constraint registry instrumentation", () => {
     };
     const merged = await merger.merge([artifact], "需求文本");
     expect((merged as Record<string, unknown>).__constraintRegistryDiagnostic).toBeUndefined();
+  });
+});
+
+// Regression (FIX 3): when the analyze artifact drops registry candidates,
+// AnalyzeMerger.merge re-adds them so the final constraints array is a
+// superset of the registry.
+describe("AnalyzeMerger.merge — authoritative constraint re-add (FIX 3)", () => {
+  it("makes final constraints a superset of the registry", async () => {
+    const merger = new AnalyzeMerger({} as never);
+    const registry = [
+      cand("支付超时时间为30分钟"),
+      cand("用户密码至少8位"),
+      cand("管理员才能删除订单"),
+      cand("每个账户每日最多下单100次"),
+    ];
+    const artifact = {
+      taskId: "analyze-1",
+      content: {
+        actors: [],
+        entities: [],
+        functions: [],
+        // analyze dropped ALL registry constraints
+        constraints: [],
+      },
+    };
+
+    const merged = await merger.merge([artifact], "需求文本", undefined, undefined, registry);
+    const constraints = (merged.constraints as Array<Record<string, unknown>>) ?? [];
+    const descriptions = constraints.map((c) => String(c.description ?? ""));
+
+    // Every registry candidate must appear in the final constraints.
+    for (const r of registry) {
+      expect(descriptions.some((d) => d.includes(r.description ?? ""))).toBe(true);
+    }
+    // No `ct_00000000` empty stubs should survive.
+    expect(constraints.some((c) => String(c.id ?? "").includes("00000000"))).toBe(false);
+    expect(constraints.some((c) => !String(c.description ?? "").trim())).toBe(false);
   });
 });
 

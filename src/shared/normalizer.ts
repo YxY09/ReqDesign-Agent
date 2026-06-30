@@ -303,7 +303,19 @@ export class RequirementNormalizer {
 
     const actors = RequirementNormalizer._getActorNames(analysis);
     const removedRoles = (analysis as Record<string, unknown>).__removedRoles as string[] | undefined;
-    const allRoles = [...new Set([...actors, ...(removedRoles ?? [])])];
+
+    // 已作为独立实体存活的"角色"不应再被扁平化为 User.role 字段——
+    // 它们会作为独立实体进入下游 domain_model，由其识别共享身份并构建泛化层级。
+    // 仅对未被保留(纯壳/标签)或仅存在于 actors 列表中的角色注入 role 字段。
+    const survivingEntityNames = new Set(
+      entities
+        .filter((e): e is Record<string, unknown> =>
+          typeof e === "object" && e !== null && !Array.isArray(e))
+        .map((e) => String(e.name ?? "").trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const allRoles = [...new Set([...actors, ...(removedRoles ?? [])])]
+      .filter((name) => !survivingEntityNames.has(name.toLowerCase()));
 
     // 清理内部字段
     delete (analysis as Record<string, unknown>).__removedRoles;
