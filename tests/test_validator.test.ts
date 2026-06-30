@@ -173,4 +173,152 @@ describe("PostGenerationValidator", () => {
     const result = PostGenerationValidator.validate(null, "design", text);
     expect(result).toBeNull();
   });
+
+  // ------------------------------------------------------------------
+  // Diagrams — domain-aware preservation (FIX 1)
+  // ------------------------------------------------------------------
+  it("preserves faithful domain-model concept classes when domainModelJson is provided", () => {
+    // Person/Organizer/Attendee are generalization roles from the domain model
+    // that are NOT analysis entities — previously stripped as "extra" classes.
+    const obj = {
+      class_diagram: [
+        "classDiagram",
+        "    class Person {",
+        "    }",
+        "    class Organizer {",
+        "    }",
+        "    class Attendee {",
+        "    }",
+        "    Person <|-- Organizer",
+        "    Person <|-- Attendee",
+      ].join("\n"),
+    };
+    const analysis = {
+      // analysis only knows User (domain roles map to it), not the roles
+      entities: [{ name: "User" }],
+    };
+    const domainModelJson = {
+      concepts: [
+        { name: "Person", kind: "entity", abstract: true },
+        { name: "Organizer", kind: "entity" },
+        { name: "Attendee", kind: "entity" },
+        { name: "StatusEnum", kind: "enumeration" },
+      ],
+      generalizations: [{ parent: "Person", children: ["Organizer", "Attendee"] }],
+      associations: [],
+    };
+
+    const result = PostGenerationValidator.validate(analysis, "diagrams", obj, domainModelJson);
+    // No stripping needed — all classes are faithful domain concepts.
+    expect(result).toBeNull();
+  });
+
+  it("still removes genuinely extra classes even with domainModelJson", () => {
+    const obj = {
+      class_diagram: [
+        "classDiagram",
+        "    class User {",
+        "    }",
+        "    class GhostHelper {",
+        "    }",
+      ].join("\n"),
+    };
+    const analysis = { entities: [{ name: "User" }] };
+    const domainModelJson = { concepts: [{ name: "User", kind: "entity" }], associations: [] };
+
+    const result = PostGenerationValidator.validate(analysis, "diagrams", obj, domainModelJson);
+    expect(result).not.toBeNull();
+    const cd = String((result as Record<string, unknown>).class_diagram ?? "");
+    expect(cd).toContain("class User");
+    expect(cd).not.toContain("GhostHelper");
+  });
+
+  it("keeps CJK entity names in the analysis entity preserve-set", () => {
+    const obj = {
+      class_diagram: [
+        "classDiagram",
+        "    class \u7528\u6237 {", // "用户"
+        "    }",
+      ].join("\n"),
+    };
+    const analysis = { entities: [{ name: "\u7528\u6237" }] }; // "用户"
+    // No domain model → behavior must still preserve the CJK analysis entity.
+    const result = PostGenerationValidator.validate(analysis, "diagrams", obj);
+    expect(result).toBeNull();
+  });
+
+  // ------------------------------------------------------------------
+  // Regression: domain concept name corruption (BaseUser→User style)
+  // ------------------------------------------------------------------
+  // A domain concept that shares a substring with an analysis-entity name must
+  // NEVER be renamed. Previously section 1 of _cleanDiagrams renamed by
+  // substring/superset match against analysis entities WITHOUT consulting the
+  // preserve-set, corrupting faithful concept names (e.g. an abstract base
+  // entity `BaseUser` containing the analysis entity `User` became `User`).
+  it("does NOT rename a domain concept that contains an analysis-entity name (BaseUser→User regression)", () => {
+    // Analysis entities (analysis-level names) — distinct from domain concepts.
+    const analysis = {
+      entities: [
+        { name: "User" },
+        { name: "Organizer" },
+        { name: "Invitation" },
+      ],
+    };
+    // Authoritative domain concepts — these are the correct diagram names.
+    const domainModelJson = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true },
+        { name: "Organizer", kind: "entity" },
+        { name: "InvitationRecord", kind: "entity" },
+        { name: "TaskStatus", kind: "enumeration" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["Organizer"] }],
+      associations: [],
+    };
+    const obj = {
+      class_diagram: [
+        "classDiagram",
+        "    class BaseUser {",
+        "        <<abstract>>",
+        "    }",
+        "    class Organizer {",
+        "    }",
+        "    class InvitationRecord {",
+        "    }",
+        "    class TaskStatus {",
+        "        <<enumeration>>",
+        "    }",
+        "    BaseUser <|-- Organizer",
+        "    InvitationRecord --> TaskStatus",
+      ].join("\n"),
+    };
+
+    const result = PostGenerationValidator.validate(analysis, "diagrams", obj, domainModelJson);
+    // No corruption: the diagram is fully faithful, so no changes are needed.
+    expect(result).toBeNull();
+  });
+
+  it("preserves a domain concept name even when only that concept is corrupted by substring match", () => {
+    // Targeted minimal case: a single domain concept `BaseUser` vs analysis `User`.
+    const analysis = { entities: [{ name: "User" }] };
+    const domainModelJson = {
+      concepts: [{ name: "BaseUser", kind: "entity", abstract: true }],
+    };
+    const obj = {
+      class_diagram: [
+        "classDiagram",
+        "    class BaseUser {",
+        "        <<abstract>>",
+        "    }",
+      ].join("\n"),
+    };
+
+    const result = PostGenerationValidator.validate(analysis, "diagrams", obj, domainModelJson);
+    expect(result).toBeNull();
+    // Belt-and-suspenders: even if a non-null cleaned content were returned,
+    // it must still contain the correct concept name and NOT the alias name.
+    const cd = result ? String((result as Record<string, unknown>).class_diagram) : obj.class_diagram;
+    expect(cd).toContain("BaseUser");
+    expect(cd).not.toContain("class User");
+  });
 });

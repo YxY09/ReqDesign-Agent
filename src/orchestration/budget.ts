@@ -143,6 +143,7 @@ export class BudgetManager {
 
   minRuntimeForTaskType(taskType: string): number {
     if (taskType === "analyze") return 600;
+    if (taskType === "domain_model") return 300;
     if (taskType === "design") return 360;
     if (taskType === "diagrams" || taskType === "tests") return 240;
     return this.minRuntimeRemainingForNewWorkSeconds;

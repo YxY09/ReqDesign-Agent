@@ -443,6 +443,53 @@ describe("RequirementNormalizer", () => {
     expect(roleAttr!.description).toBe("角色: Customer、Admin");
   });
 
+  it("does NOT inject User.role for a role that survives as its own distinct entity", () => {
+    // Regression: distinct role entities (Organizer, Attendee) must survive as
+    // entities and must NOT be re-advertised as a User.role field, so the
+    // downstream domain_model can recognize shared identity and build a
+    // generalization hierarchy instead of flattening roles into a String.
+    const input = {
+      actors: [
+        { name: "Organizer", description: "发起者" },
+        { name: "Attendee", description: "参与者" },
+      ],
+      entities: [
+        { name: "User", attributes: [{ name: "userId", type: "Long", description: "ID" }], relationships: [] },
+        {
+          name: "Organizer",
+          attributes: [
+            { name: "id", type: "Long", description: "ID" },
+            { name: "organizerName", type: "String", description: "名称" },
+          ],
+          relationships: [],
+        },
+        {
+          name: "Attendee",
+          attributes: [
+            { name: "id", type: "Long", description: "ID" },
+            { name: "ticketNo", type: "String", description: "票号" },
+          ],
+          relationships: [],
+        },
+      ],
+      functions: [],
+      constraints: [],
+    };
+
+    const result = RequirementNormalizer.normalize(input);
+    const names = (result.entities as Array<Record<string, unknown>>).map(e => e.name);
+
+    // Distinct role entities survive (they have own attributes → not shells)
+    expect(names).toContain("Organizer");
+    expect(names).toContain("Attendee");
+
+    // User must NOT carry a role attribute enumerating the surviving roles
+    const user = (result.entities as Array<Record<string, unknown>>).find(e => e.name === "User")!;
+    const attrs = user.attributes as Array<Record<string, unknown>>;
+    const roleAttr = attrs.find(a => a.name === "role");
+    expect(roleAttr).toBeUndefined();
+  });
+
   it("ensures function detail arrays exist", () => {
     const input = {
       actors: [],

@@ -399,3 +399,499 @@ describe("DiagramGenerator._buildPrompt", () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════
+//  FIX B — _enforceConceptFidelity (deterministic class-diagram fidelity)
+// ═══════════════════════════════════════════════════════
+
+describe("DiagramGenerator._enforceConceptFidelity", () => {
+  it("injects missing entity / line_item class blocks AND enumeration blocks", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class Existing {",
+      "        -Long id",
+      "    }",
+      "    Existing --> \"*\" Order",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { id: "D001", name: "Existing", kind: "entity" },
+        { id: "D002", name: "Order", kind: "entity" },
+        { id: "D003", name: "StatusEnum", kind: "enumeration", literals: ["A", "B"] },
+        { id: "D004", name: "LineItem", kind: "line_item", parentEntity: "Order" },
+      ],
+      generalizations: [],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    // Existing must NOT be duplicated.
+    const existingCount = (result.match(/class\s+Existing\s*\{/g) ?? []).length;
+    expect(existingCount).toBe(1);
+    // Missing entity + line_item must be injected as class blocks.
+    expect(result).toContain("class Order {");
+    expect(result).toContain("class LineItem {");
+    // line_item.parentEntity must also produce a relationship line.
+    expect(result).toContain('Order "1" --> "*" LineItem');
+    // Owner decision: enumerations ARE rendered as <<enumeration>> class blocks
+    // listing their literal values (and may also appear as attribute types).
+    expect(result).toContain("class StatusEnum {");
+    expect(result).toContain("<<enumeration>>");
+    expect(result).toContain("        A");
+    expect(result).toContain("        B");
+  });
+
+  it("injects missing generalization lines (<|--) and skips existing ones", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class BaseEntity {",
+      "    }",
+      "    class RoleA {",
+      "    }",
+      "    class RoleB {",
+      "    }",
+      "    BaseEntity <|-- RoleA",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { id: "D001", name: "BaseEntity", kind: "entity", abstract: true },
+        { id: "D002", name: "RoleA", kind: "entity" },
+        { id: "D003", name: "RoleB", kind: "entity" },
+      ],
+      generalizations: [
+        { parent: "BaseEntity", children: ["RoleA", "RoleB"] },
+      ],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    // Existing generalization not duplicated.
+    const baseRoleA = (result.match(/BaseEntity\s+<\|--\s+RoleA/g) ?? []).length;
+    expect(baseRoleA).toBe(1);
+    // Missing one injected.
+    expect(result).toContain("BaseEntity <|-- RoleB");
+  });
+
+  it("injects missing association lines with multiplicity", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class ParentAggregate {",
+      "    }",
+      "    class DetailLine {",
+      "    }",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { id: "D001", name: "ParentAggregate", kind: "entity" },
+        { id: "D002", name: "DetailLine", kind: "line_item" },
+      ],
+      generalizations: [],
+      associations: [
+        { source: "ParentAggregate", target: "DetailLine", sourceMultiplicity: "1", targetMultiplicity: "*", label: "contains" },
+      ],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    expect(result).toContain('ParentAggregate "1" --> "*" : contains');
+  });
+
+  it("does not duplicate an association that already exists (directional)", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class ParentAggregate {",
+      "    }",
+      "    class DetailLine {",
+      "    }",
+      '    ParentAggregate "1" --> "*" DetailLine : contains',
+    ].join("\n");
+    const domainModel = {
+      concepts: [],
+      generalizations: [],
+      associations: [
+        { source: "ParentAggregate", target: "DetailLine", sourceMultiplicity: "1", targetMultiplicity: "*", label: "contains" },
+      ],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    const count = (result.match(/ParentAggregate\s+"1"\s+-->\s+"\*"\s+DetailLine/g) ?? []).length;
+    expect(count).toBe(1);
+  });
+
+  it("is a no-op when domain model is empty", () => {
+    const mermaid = "classDiagram\n    class A {\n    }\n    A --> B";
+    expect(DiagramGenerator._enforceConceptFidelity(mermaid, {})).toBe(mermaid);
+    expect(DiagramGenerator._enforceConceptFidelity(mermaid, { concepts: [] })).toBe(mermaid);
+  });
+
+  it("returns non-classDiagram input untouched", () => {
+    const mermaid = "flowchart TD\n    A --> B";
+    expect(DiagramGenerator._enforceConceptFidelity(mermaid, { concepts: [{ name: "X", kind: "entity" }] })).toBe(mermaid);
+  });
+
+  // Regression (FIX 1): a stripped/empty class diagram becomes a faithful
+  // superset of the domain model — every entity concept -> class block, every
+  // generalization -> <| -- line, every association -> relationship line, and
+  // every enumeration concept -> a <<enumeration>> class block.
+  it("rebuilds a faithful superset from a stripped diagram (entities + generalization + association + enum block)", () => {
+    const stripped = "classDiagram\n";
+    const domainModel = {
+      concepts: [
+        { id: "D001", name: "Account", kind: "entity" },
+        { id: "D002", name: "Savings", kind: "entity" },
+        { id: "D003", name: "Transaction", kind: "association", connects: ["Account", "Savings"] },
+        { id: "D004", name: "TxStatus", kind: "enumeration", literals: ["Open", "Closed"] },
+      ],
+      generalizations: [
+        { parent: "Account", children: ["Savings"] },
+      ],
+      associations: [
+        { source: "Account", target: "Savings", sourceMultiplicity: "1", targetMultiplicity: "*", label: "owns" },
+      ],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(stripped, domainModel);
+    // Every non-enum entity concept becomes a class block.
+    expect(result).toContain("class Account {");
+    expect(result).toContain("class Savings {");
+    expect(result).toContain("class Transaction {");
+    // Generalization renders as a <| -- line.
+    expect(result).toContain("Account <|-- Savings");
+    // Association renders as a relationship line.
+    expect(result).toContain('Account "1" --> "*" : owns');
+    // Association concept endpoints (connects) render as a relationship line.
+    expect(result).toContain("Account --> Savings");
+    // Enumeration concept becomes a <<enumeration>> class block with literals.
+    expect(result).toContain("class TxStatus {");
+    expect(result).toContain("<<enumeration>>");
+    expect(result).toContain("        Open");
+    expect(result).toContain("        Closed");
+  });
+
+  // Regression (FIX ①, abstract entity fidelity): an abstract domain entity
+  // must survive into the class diagram as a `class X { <<abstract>> ... }`
+  // block (concept-name copied verbatim), and its generalization renders as a
+  // `<|--` line. This guards against abstract entities being dropped/renamed
+  // at the rendering layer.
+  it("injects an abstract entity as a <<abstract>> class block + generalization line (concept name verbatim)", () => {
+    const stripped = "classDiagram\n";
+    const domainModel = {
+      concepts: [
+        { id: "D001", name: "AbstractBase", kind: "entity", abstract: true,
+          attributes: [{ name: "label", type: "String" }] },
+        { id: "D002", name: "DerivedRole", kind: "entity" },
+      ],
+      generalizations: [
+        { parent: "AbstractBase", children: ["DerivedRole"] },
+      ],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(stripped, domainModel);
+    // Abstract entity injected with its verbatim concept name + abstract marker.
+    expect(result).toContain("class AbstractBase {");
+    expect(result).toContain("<<abstract>>");
+    // Concrete subclass injected as a class block.
+    expect(result).toContain("class DerivedRole {");
+    // Generalization rendered as a <|-- line.
+    expect(result).toContain("AbstractBase <|-- DerivedRole");
+  });
+
+  // Regression (FIX ②, enum-block injection): an enumeration concept must be
+  // injected as a `class X { <<enumeration>> <literals> }` block when missing
+  // from the diagram (enumerations are first-class renderable concepts).
+  it("injects a missing enumeration concept as a <<enumeration>> class block with literals", () => {
+    const stripped = "classDiagram\n    class Holder {\n    }\n";
+    const domainModel = {
+      concepts: [
+        { id: "D001", name: "Holder", kind: "entity" },
+        { id: "D002", name: "KindEnum", kind: "enumeration", literals: ["Alpha", "Beta", "Gamma"] },
+      ],
+      generalizations: [],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(stripped, domainModel);
+    // Enumeration injected as a <<enumeration>> class block.
+    expect(result).toContain("class KindEnum {");
+    expect(result).toContain("<<enumeration>>");
+    // Each literal value is listed inside the block.
+    expect(result).toContain("        Alpha");
+    expect(result).toContain("        Beta");
+    expect(result).toContain("        Gamma");
+    // Existing entity must not be duplicated.
+    const holderCount = (result.match(/class\s+Holder\s*\{/g) ?? []).length;
+    expect(holderCount).toBe(1);
+  });
+
+  // Regression (FIX: repair-loop prevention): when a repair LLM flattened a
+  // generalization hierarchy into a single entity carrying a role/tag
+  // discriminator, the fidelity step injects the restored `Parent <|-- Child`
+  // hierarchy AND must remove the leftover flattened entity — otherwise BOTH
+  // coexist and re-trigger the evaluator's extra-class / naming-inconsistency
+  // complaint, looping repair. Detection is GENERAL (synthetic names;
+  // role/kind/type discriminator + parent-attribute subset), not specialized
+  // to any domain entity.
+  it("removes a leftover flattened role-tag entity superseded by an injected generalization", () => {
+    // The repair LLM collapsed BaseUser -> [AdminUser, CustomerUser] into a
+    // single `FlatUser` carrying a `role` discriminator (BaseUser absent).
+    const mermaid = [
+      "classDiagram",
+      "    class FlatUser {",
+      "        -String email",
+      "        -String role",
+      "    }",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true, attributes: [{ name: "email", type: "String" }] },
+        { name: "AdminUser", kind: "entity" },
+        { name: "CustomerUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser", "CustomerUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    // The restored hierarchy MUST be present.
+    expect(result).toContain("class BaseUser {");
+    expect(result).toContain("BaseUser <|-- AdminUser");
+    expect(result).toContain("BaseUser <|-- CustomerUser");
+    // The leftover flattened role-tag entity MUST be gone (no duplicate).
+    expect(result).not.toContain("FlatUser");
+  });
+
+  it("also drops relationship lines that referenced a removed flattened entity (no dangling refs)", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class FlatUser {",
+      "        -String email",
+      "        -String role",
+      "    }",
+      "    class AuditTrail {",
+      "        -String message",
+      "    }",
+      "    FlatUser --> AuditTrail",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true, attributes: [{ name: "email", type: "String" }] },
+        { name: "AdminUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    expect(result).not.toContain("FlatUser");
+    // The dangling relationship line referencing FlatUser is gone too.
+    expect(result).not.toMatch(/FlatUser\s+--/);
+    // An unrelated legitimate class survives untouched.
+    expect(result).toContain("class AuditTrail {");
+  });
+
+  it("does NOT remove a legitimate class that merely has a 'type' field (subset check guards false positives)", () => {
+    // `Order` carries a `type` field but its `amount` attribute is NOT a
+    // subset of the generalization parent's attributes, so it must be kept.
+    const mermaid = [
+      "classDiagram",
+      "    class Order {",
+      "        -Double amount",
+      "        -String type",
+      "    }",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true, attributes: [{ name: "email", type: "String" }] },
+        { name: "AdminUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    expect(result).toContain("class Order {");
+  });
+
+  it("does NOT prune when the hierarchy was not flattened (parent already present)", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class BaseUser {",
+      "        -String email",
+      "    }",
+      "    class AdminUser {",
+      "    }",
+      "    class FlatThing {",
+      "        -String email",
+        "        -String role",
+      "    }",
+      "    BaseUser <|-- AdminUser",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", attributes: [{ name: "email", type: "String" }] },
+        { name: "AdminUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    // Parent was present originally -> hierarchy not flattened -> no pruning.
+    expect(result).toContain("class FlatThing {");
+  });
+
+  // ═══════════════════════════════════════════════════════
+  //  FIX D — dual-parent generalization prevention (PRIMARY source fix)
+  //  The domain model is the single source of truth for generalization.
+  //  When the LLM drew a child under a DIFFERENT (alternate) parent, the
+  //  injector must MIGRATE the child to the authoritative domain-model
+  //  parent (dropping the alternate-parent line) instead of injecting a
+  //  second parent. Synthetic names — no specialization.
+  // ═══════════════════════════════════════════════════════
+
+  // (i) Alternate parent present → migrate (no dual parent).
+  it("migrates a child's alternate parent to the domain-model parent instead of creating a dual parent", () => {
+    // Domain model: BaseUser <|-- AdminUser, BaseUser <|-- CustomerUser.
+    // LLM (driven by an evaluator rename) drew AlternateAccount as parent.
+    const mermaid = [
+      "classDiagram",
+      "    class BaseUser {",
+      "        -String email",
+      "    }",
+      "    class AdminUser {",
+      "    }",
+      "    class CustomerUser {",
+      "    }",
+      "    AlternateAccount <|-- AdminUser",
+      "    AlternateAccount <|-- CustomerUser",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true, attributes: [{ name: "email", type: "String" }] },
+        { name: "AdminUser", kind: "entity" },
+        { name: "CustomerUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser", "CustomerUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    // Each child ends up with EXACTLY ONE parent — the domain-model parent.
+    const adminParents = (result.match(/\w+\s+<\|--\s+AdminUser/g) ?? []).length;
+    const customerParents = (result.match(/\w+\s+<\|--\s+CustomerUser/g) ?? []).length;
+    expect(adminParents).toBe(1);
+    expect(customerParents).toBe(1);
+    // The authoritative domain parent line is present.
+    expect(result).toContain("BaseUser <|-- AdminUser");
+    expect(result).toContain("BaseUser <|-- CustomerUser");
+    // The alternate-parent lines were migrated away (removed).
+    expect(result).not.toMatch(/AlternateAccount\s+<\|––/);
+    // The authoritative BaseUser class block is untouched (never deleted).
+    expect(result).toContain("class BaseUser {");
+  });
+
+  // (i.b) Same migration for the `Child --|> Parent` arrow direction.
+  it("migrates alternate parent expressed with the --|> arrow direction", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class BaseUser {",
+      "    }",
+      "    class AdminUser {",
+      "    }",
+      "    AdminUser --|> AlternateAccount",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true },
+        { name: "AdminUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    const adminParents = (result.match(/\w+\s+<\|--\s+AdminUser/g) ?? []).length;
+    expect(adminParents).toBe(1);
+    expect(result).toContain("BaseUser <|-- AdminUser");
+    expect(result).not.toMatch(/AlternateAccount/);
+  });
+
+  // (ii) Clean diagram (child has no parent yet) → injects normally.
+  it("injects the domain parent normally when the child has no parent yet (no regression)", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class BaseUser {",
+      "    }",
+      "    class AdminUser {",
+      "    }",
+      "    class CustomerUser {",
+      "    }",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true },
+        { name: "AdminUser", kind: "entity" },
+        { name: "CustomerUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser", "CustomerUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    expect(result).toContain("BaseUser <|-- AdminUser");
+    expect(result).toContain("BaseUser <|-- CustomerUser");
+    const adminParents = (result.match(/\w+\s+<\|--\s+AdminUser/g) ?? []).length;
+    expect(adminParents).toBe(1);
+  });
+
+  // (iii) Child already parented to the intended parent → idempotent no-op.
+  it("is a no-op when the child is already parented to the intended domain parent (idempotent)", () => {
+    const mermaid = [
+      "classDiagram",
+      "    class BaseUser {",
+      "    }",
+      "    class AdminUser {",
+      "    }",
+      "    BaseUser <|-- AdminUser",
+    ].join("\n");
+    const domainModel = {
+      concepts: [
+        { name: "BaseUser", kind: "entity", abstract: true },
+        { name: "AdminUser", kind: "entity" },
+      ],
+      generalizations: [{ parent: "BaseUser", children: ["AdminUser"] }],
+      associations: [],
+    };
+    const result = DiagramGenerator._enforceConceptFidelity(mermaid, domainModel);
+    const adminParents = (result.match(/\w+\s+<\|--\s+AdminUser/g) ?? []).length;
+    expect(adminParents).toBe(1);
+    expect(result).toContain("BaseUser <|-- AdminUser");
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+//  FIX C — state/activity diagrams consume domain_model
+// ═══════════════════════════════════════════════════════
+
+describe("DiagramGenerator — domain_model_json consumption (FIX C)", () => {
+  it("_buildPrompt substitutes {domain_model_json} when provided", () => {
+    const gen = Object.create(DiagramGenerator.prototype);
+    const template = "领域模型：{domain_model_json}\n需求：{requirement_json}\n设计：{design_text}";
+    const domainModel = { concepts: [{ name: "SpecialConcept", kind: "entity" }] };
+    const result = (gen as any)._buildPrompt(
+      template, { a: 1 }, "design", "", "state_diagram", undefined, domainModel,
+    );
+    expect(result).toContain("SpecialConcept");
+    expect(result).not.toContain("{domain_model_json}");
+  });
+
+  it("_buildPrompt substitutes {domain_model_json} with {} when absent", () => {
+    const gen = Object.create(DiagramGenerator.prototype);
+    const template = "领域模型：{domain_model_json}";
+    const result = (gen as any)._buildPrompt(
+      template, { a: 1 }, "", "", "state_diagram", undefined, null,
+    );
+    expect(result).toContain("领域模型：{}");
+    expect(result).not.toContain("{domain_model_json}");
+  });
+
+  it("generateActivityDiagram / generateStateDiagram accept trailing domainModelJson", async () => {
+    const { gen } = makeGen();
+    let capturedPrompt = "";
+    (gen as any).llm = {
+      generateText: (p: string) => { capturedPrompt = p; return Promise.resolve("```mermaid\nflowchart TD\n    A --> B\n```"); },
+    };
+    (gen as any).prompts = {
+      ...({} as any),
+      activity_diagram: "{domain_model_json}\n{requirement_json}\n{design_text}",
+    };
+    await gen.generateActivityDiagram({ functions: [] }, "design", undefined, "", undefined, { concepts: [{ name: "FromDomain", kind: "entity" }] });
+    expect(capturedPrompt).toContain("FromDomain");
+  });
+});
+

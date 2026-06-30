@@ -91,7 +91,17 @@ export class PlanMutator {
     const errors: string[] = [];
 
     // --- Validate: new task types must be valid ---
-    const validTypes = new Set<string>(["analyze", "design", "diagrams", "tests"]);
+    // NOTE: keep in sync with the canonical `TaskType` union
+    // (src/shared/types.ts). domain_model was missing, which rejected
+    // domain-model recovery tasks during replan (regression: smart_campus /
+    // ecommerce dead-ended after a failed domain_model self-check).
+    const validTypes = new Set<string>([
+      "analyze",
+      "domain_model",
+      "design",
+      "diagrams",
+      "tests",
+    ]);
     for (const task of mutation.addTasks) {
       if (!validTypes.has(task.type)) {
         errors.push(`invalid task type '${task.type}' for '${task.id}'`);

@@ -2,6 +2,14 @@
 
 **禁止输出任何对话性开头**（如"好的"、"我来"、"作为一名"等）。直接输出 JSON，不要有任何前导文字。
 
+## 领域概念模型（Domain Model）
+
+```json
+{domain_model_json}
+```
+
+领域概念模型是业务骨架的权威来源。设计中的 `kind: "domain"` 类必须一一对应领域概念，不能替代、改名或吞掉领域概念。
+
 ## DesignBrief（设计输入合同）
 
 ```json
@@ -10,7 +18,7 @@
 
 {requirement_text}
 
-DesignBrief 是设计阶段唯一输入源：
+DesignBrief 是设计阶段的需求输入源：
 - `designContract.allowedFunctionIds` / `allowedConstraintIds` / `allowedExceptionIds` 是唯一合法的功能、约束、异常 ID。
 - 输出中只能使用 `F001` / `C001` / `X001` 这种 display ID，禁止输出 `FUN_*`、`CON_*`、`EXC_*` 内部 ID，也禁止自行重新编号。
 - `coverageSkeleton` 是权威覆盖义务清单（功能/约束/异常）。**你不需要输出 coverageMatrix——它由系统从你的 implementation 段落和模块映射自动生成。** 你要做的是**逐条**确保覆盖完整：每条**约束**有 constraintImplementation、每条**异常**有 exceptionImplementation、每个**功能 ID** 都出现在某个 module 的 `functionIds` 里。skeleton 里任何一项没被这样覆盖，就会被判为遗漏。
@@ -72,7 +80,8 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
       "responsibility": "处理用户业务逻辑",
       "attributes": [{"name": "userRepo", "type": "UserRepository", "description": "用户仓储"}],
       "methods": ["register(dto): User", "login(credentials): Token"],
-      "entityRef": null
+      "entityRef": null,
+      "domainRefs": []
     },
     {
       "name": "User",
@@ -80,7 +89,8 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
       "responsibility": "用户领域实体",
       "attributes": [{"name": "id", "type": "string"}, {"name": "username", "type": "string"}],
       "methods": ["validate(): boolean"],
-      "entityRef": "User"
+      "entityRef": "User",
+      "domainRefs": ["D001"]
     }
   ],
   "dataFlows": [
@@ -108,7 +118,7 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
 
 - **modules**：每条映射一个功能模块。`functionIds` 必须包含该模块负责的全部功能 ID（来自 `designContract.allowedFunctionIds`）。每个功能 ID 只映射到语义最匹配的一个模块。
 
-- **classes**：核心类和服务类。`kind=domain` 表示业务实体类（须与 `designContract.allowedEntityNames` 对应，entityRef 填实体名称），`kind=helper` 表示服务/仓储/控制器等辅助类（entityRef 为 null）。
+- **classes**：核心类和服务类。`kind=domain` 表示业务实体类（须与 `designContract.allowedEntityNames` 对应，entityRef 填实体名称），`kind=helper` 表示服务/仓储/控制器等辅助类（entityRef 为 null）。`domainRefs` 填写该类对应的领域概念模型 D-ID（如 `["D001", "D002"]`），`kind=domain` 的类必须至少引用一个 D-ID，`kind=helper` 的类填空数组。
 
 - **dataFlows**：主要业务流程的步骤序列，每步描述服务调用或数据传递。`relatedFunctionIds` 引用该流程覆盖的功能 ID。
 
@@ -130,3 +140,5 @@ DesignBrief 里的**约束**和**异常**是设计的**核心目标**，不是 t
 4. `implementationMechanism` 是否回答了"哪个类/方法/算法+具体参数实现这条规则"？只写"系统会处理"等空话就是没回答。
 5. 输出 JSON 中是否出现 `FUN_`、`CON_`、`EXC_`？出现就重写为 DesignBrief 的 display ID。
 6. 是否多余输出了 `sourceTextVerbatim` 字段？有则删除（系统会自动从 `source_text` 读取，重复输出是浪费）。
+7. **领域模型覆盖**：领域概念模型中的每个 entity/value_object 概念是否都有对应的 `kind=domain` 类？该类的 `domainRefs` 是否包含对应 D-ID？
+8. 设计中是否有 `kind=domain` 类的名称与领域模型概念名不一致？如不一致必须改为领域模型中的名称。

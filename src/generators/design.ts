@@ -19,6 +19,7 @@ import { isDesignModel } from "../shared/types.js";
 import { createToolError } from "../tools/types.js";
 import { isAbortError } from "../utils/errors.js";
 import { BaseGenerator } from "./base.js";
+import { DomainModelGenerator } from "./domainModel.js";
 import { setupLogger, type Logger } from "../logger.js";
 
 export { extractSalientAnchors, textIncludesAnchor } from "../shared/salientAnchors.js";
@@ -259,6 +260,7 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
   async generateDesign(
     requirementJson: Record<string, unknown>,
     systemPrompt?: string,
+    domainModelJson?: Record<string, unknown>,
   ): Promise<DesignModel> {
     if (!requirementJson || typeof requirementJson !== "object") {
       throw createToolError("DESIGN_EMPTY_INPUT", "需求JSON不能为空且必须是字典类型", { recoverable: false });
@@ -269,6 +271,10 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
     reqStr = this.sanitizePlaceholder(reqStr, "design_text");
     let prompt = this.promptTemplate.replace(/\{requirement_json\}/g, reqStr);
     prompt = prompt.replace(/\{requirement_text\}/g, "");
+    const domainStr = domainModelJson && Object.keys(domainModelJson).length > 0
+      ? JSON.stringify(domainModelJson, null, 2)
+      : "{}";
+    prompt = prompt.replace(/\{domain_model_json\}/g, this.sanitizePlaceholder(domainStr, "requirement_json"));
 
     const maxAttempts = 3;
     const basePrompt = prompt;
@@ -819,6 +825,15 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
     const m: DesignModel = JSON.parse(JSON.stringify(model));
     const requirementIndex = RequirementIndex.fromRequirementJson(requirementJson);
 
+    // Coerce module field aliases (moduleName/description/moduleId) to the
+    // canonical schema before building the moduleIds index — otherwise drifted
+    // ids would never match a constraint/exception affectedModuleIds cross-ref.
+    // Mirrors the coercion done in parseDesignModel so the reconcile path is
+    // robust even when called on an un-parsed model (e.g. raw repair payload).
+    m.modules = m.modules
+      .map((mod) => SystemDesigner._coerceModule(mod))
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null) as unknown as DesignModel["modules"];
+
     const moduleIds = new Set(
       m.modules.map((mod) => String(mod.id ?? "").trim()).filter(Boolean),
     );
@@ -899,7 +914,7 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
     return m;
   }
 
-  static validateDesignModel(model: DesignModel, requirementJson: Record<string, unknown>): string[] {
+  static validateDesignModel(model: DesignModel, requirementJson: Record<string, unknown>, domainModelJson?: Record<string, unknown> | null): string[] {
     const warnings: string[] = [];
 
     if (!model.modules || model.modules.length === 0) warnings.push("DesignModel 缺少 modules");
@@ -913,9 +928,27 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
       ...model.classes.map((cls) => String(cls.name ?? "").trim()).filter(Boolean),
       ...(model.supplementaryClasses ?? []).map((cls) => String(cls.name ?? "").trim()).filter(Boolean),
     ]);
-    const entityNames = new Set(asRecords(requirementJson.entities)
-      .map((entity) => String(entity.name ?? entity.canonicalName ?? "").trim())
-      .filter(Boolean));
+    // Allowed-entity set: a design class's entityRef is valid if it matches
+    // ANY of - an analysis entity name, an analysis entity ID (e.g. E_BUS),
+    // a domain_model concept name, OR a domain_model concept D-ID (e.g. D006).
+    // The design now emits D### concept IDs that live in a DIFFERENT id
+    // namespace from analysis entity IDs, so both namespaces must be unioned in
+    // (general: works for any concept, not a specific one).
+    const entityNames = new Set<string>();
+    for (const entity of asRecords(requirementJson.entities)) {
+      const name = String(entity.name ?? entity.canonicalName ?? "").trim();
+      const id = String(entity.id ?? "").trim();
+      if (name) entityNames.add(name);
+      if (id) entityNames.add(id);
+    }
+    if (domainModelJson) {
+      for (const conceptName of DomainModelGenerator.extractConceptNames(domainModelJson)) {
+        entityNames.add(conceptName);
+      }
+      for (const conceptId of DomainModelGenerator.extractConceptIds(domainModelJson)) {
+        entityNames.add(conceptId);
+      }
+    }
 
     const validateRequirementRef = (id: string, kind: "function" | "constraint" | "exception", context: string) => {
       const refId = String(id ?? "").trim();
@@ -1058,6 +1091,18 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
         .map((item) => SystemDesigner._coerceClass(item))
         .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
     }
+    // Normalize `modules` to the canonical DesignModuleEntry field names. The
+    // repair LLM sometimes drifts module field names (moduleName/description/
+    // moduleId) — without coercion renderDesignMarkdown reads mod.name/
+    // mod.responsibility and renders blank cells. Coercing here recovers the
+    // data under any alias. Unlike `_coerceClass` we do NOT drop modules on a
+    // missing name (that is the design-corruption bug): a blank-name module is
+    // instead caught downstream by the repair fidelity gate.
+    if (Array.isArray(obj.modules)) {
+      obj.modules = (obj.modules as unknown[])
+        .map((item) => SystemDesigner._coerceModule(item))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+    }
 
     if (!isDesignModel(obj)) return null;
     return obj;
@@ -1126,12 +1171,50 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
     return {
       name: String(r.name ?? "").trim(),
       steps: Array.isArray(r.steps)
-        ? r.steps.map((p) => String(p ?? "").trim()).filter(Boolean)
+        ? r.steps.map((p) => SystemDesigner._stringifyStep(p)).filter(Boolean)
         : [],
       relatedFunctionIds: Array.isArray(r.relatedFunctionIds)
         ? r.relatedFunctionIds.map((p) => String(p ?? "").trim()).filter(Boolean)
         : [],
     };
+  }
+
+  /**
+   * Serialize a single data-flow step into a readable string. The LLM
+   * sometimes emits an object (e.g. `{description: "A → B"}`, `{step: ...}`)
+   * or an array instead of a plain string; concatenating such a value with
+   * `String()` produces the literal `[object Object]` in the rendered design
+   * text. This helper picks the most descriptive string field from an object,
+   * joins arrays, and trims plain strings so steps always render readably.
+   */
+  private static _stringifyStep(step: unknown): string {
+    if (step === null || step === undefined) return "";
+    if (typeof step === "string") return step.trim();
+    if (typeof step === "number" || typeof step === "boolean") return String(step).trim();
+    if (Array.isArray(step)) {
+      return step
+        .map((p) => SystemDesigner._stringifyStep(p))
+        .filter(Boolean)
+        .join(" → ");
+    }
+    if (typeof step === "object") {
+      const r = step as Record<string, unknown>;
+      // Prefer the most descriptive narrative field, then fall back to a
+      // compact JSON form so no information is silently lost.
+      for (const key of ["description", "step", "action", "name", "text", "label", "detail"]) {
+        const v = r[key];
+        if (v !== undefined && v !== null && String(v).trim()) {
+          return String(v).trim();
+        }
+      }
+      // If the object has a single meaningful string value, use it.
+      const stringVals = Object.values(r)
+        .map((v) => (typeof v === "string" || typeof v === "number" ? String(v).trim() : ""))
+        .filter(Boolean);
+      if (stringVals.length > 0) return stringVals.join(" → ");
+      return JSON.stringify(r);
+    }
+    return String(step).trim();
   }
 
   /**
@@ -1143,8 +1226,15 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
    *   - attributes   ← attributes | keyAttributes
    *   - methods      ← methods | keyMethods
    *   - entityRef    ← entityRef | entity_ref | entity
+   *   - domainRefs   ← domainRefs (preserved verbatim when an array of strings)
    * Returns null for a nameless entry (a promoted/garbage stub) so it is dropped
    * rather than rendered as a blank table row.
+   *
+   * `domainRefs` is NOT part of the typed DesignClassEntry schema but the
+   * domain-model coverage checker (domainModel.ts) and the design repair
+   * fidelity gate read it via a Record<string,unknown> cast. Preserving it
+   * through coercion is essential so the post-repair side of the gate sees
+   * the D### concept refs the LLM actually emitted.
    */
   private static _coerceClass(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -1159,6 +1249,9 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
       ? respRaw.map((x) => String(x ?? "").trim()).filter(Boolean).join("；")
       : String(respRaw ?? "").trim();
     const entityRef = String(r.entityRef ?? r.entity_ref ?? r.entity ?? "").trim();
+    const domainRefs = Array.isArray(r.domainRefs)
+      ? r.domainRefs.map((x) => String(x ?? "").trim()).filter(Boolean)
+      : undefined;
     return {
       name,
       kind,
@@ -1166,6 +1259,43 @@ export class SystemDesigner extends BaseGenerator<DesignModel> {
       attributes: SystemDesigner._coerceClassAttributes(r.attributes ?? r.keyAttributes),
       methods: SystemDesigner._coerceClassMethods(r.methods ?? r.keyMethods),
       ...(entityRef ? { entityRef } : {}),
+      ...(domainRefs ? { domainRefs } : {}),
+    };
+  }
+
+  /**
+   * Coerce a raw LLM module entry into the canonical DesignModuleEntry shape,
+   * accepting the alias field names the repair LLM drifts to:
+   *   - id            ← id | moduleId | module_id
+   *   - name          ← name | moduleName | module_name | title
+   *   - responsibility ← responsibility | description | moduleDesc | desc | moduleDescription
+   *   - functionIds   ← functionIds | functions | function_ids
+   *
+   * Unlike `_coerceClass` this does NOT drop modules on a missing name — dropping
+   * a module is the design-corruption bug (it silently drops the module's
+   * function coverage). A blank-name module is instead caught downstream by the
+   * repair fidelity gate (FIX 2b). Always returns a coerced object.
+   */
+  private static _coerceModule(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const r = value as Record<string, unknown>;
+    const id = String(r.id ?? r.moduleId ?? r.module_id ?? "").trim();
+    const name = String(r.name ?? r.moduleName ?? r.module_name ?? r.title ?? "").trim();
+    const responsibility = String(
+      r.responsibility ?? r.description ?? r.moduleDesc ?? r.desc ?? r.moduleDescription ?? "",
+    ).trim();
+    const functionIds = Array.isArray(r.functionIds)
+      ? r.functionIds
+      : Array.isArray(r.functions)
+        ? r.functions
+        : Array.isArray(r.function_ids)
+          ? r.function_ids
+          : [];
+    return {
+      id,
+      name,
+      responsibility,
+      functionIds: functionIds.map((x) => String(x ?? "").trim()).filter(Boolean),
     };
   }
 

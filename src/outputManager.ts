@@ -32,6 +32,7 @@ import type { OutputSnapshot } from "./shared/outputSnapshot.js";
 // ---------------------------------------------------------------------------
 
 const SUBDIR_REQUIREMENT = "requirement";
+const SUBDIR_DOMAIN_MODEL = "domain_model";
 const SUBDIR_DESIGN = "design";
 const SUBDIR_DIAGRAMS = "diagrams";
 const SUBDIR_TESTS = "tests";
@@ -192,6 +193,12 @@ export class OutputManager {
     this._logger.info(`需求分析结果已保存 → ${SUBDIR_REQUIREMENT}/`);
   }
 
+  /** 保存领域概念模型 → domain_model/ */
+  saveDomainModel(domainModelJson: Record<string, unknown>): void {
+    this._writeJson("domain_model.json", domainModelJson, SUBDIR_DOMAIN_MODEL);
+    this._logger.info(`领域概念模型已保存 → ${SUBDIR_DOMAIN_MODEL}/`);
+  }
+
   /** 保存系统设计 → design/ */
   saveSystemDesign(designText: string): void {
     this._writeFile("system_design.md", designText || "", SUBDIR_DESIGN);
@@ -238,6 +245,8 @@ export class OutputManager {
 
     if (taskType === "analyze" && typeof content === "object" && content !== null) {
       this._writeJson("analysis.json", content as Record<string, unknown>, taskDir);
+    } else if (taskType === "domain_model" && typeof content === "object" && content !== null) {
+      this._writeJson("domain_model.json", content as Record<string, unknown>, taskDir);
     } else if (taskType === "design" && typeof content === "string") {
       this._writeFile("system_design.md", content, taskDir);
     } else if (taskType === "diagrams" && typeof content === "object" && content !== null) {
@@ -297,6 +306,7 @@ export class OutputManager {
       snapshot.diagrams,
       snapshot.testCases,
       snapshot.reviewResult,
+      snapshot.domainModelJson,
     );
   }
 
@@ -308,8 +318,12 @@ export class OutputManager {
     diagrams: Record<string, unknown>,
     testCases: string,
     reviewResult: Record<string, unknown> | null = null,
+    domainModelJson: Record<string, unknown> = {},
   ): void {
     this.saveRequirementAnalysis(requirementJson, requirementText);
+    if (Object.keys(domainModelJson).length > 0) {
+      this.saveDomainModel(domainModelJson);
+    }
     if (designText) {
       this.saveSystemDesign(designText);
     }

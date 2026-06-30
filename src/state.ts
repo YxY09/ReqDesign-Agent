@@ -120,6 +120,7 @@ export class WorkflowState {
   requirementJson: Record<string, unknown> = {};
   requirementDraftJson: Record<string, unknown> = {};
   requirementJsonContentKind: "empty" | "draft" | "canonical" | "stale" = "empty";
+  domainModelJson: Record<string, unknown> = {};
   designText: string = "";
   designModel: DesignModel | null = null;
   diagrams: Record<string, unknown> = {};

@@ -29,3 +29,19 @@ Paper/
 nul
 vitest.config.ts.timestamp-*
 tests/__test_tmp_*/
+
+# Deliverable docs (packaged separately, not in git)
+docs/
+
+# User submission artifacts
+Submitted/
+
+# Scratch / temp
+tmp/
+tmp_project_doc_optimized.pdf
+
+# Benchmark run products
+benchmark/mutants/M*/traces/
+benchmark/mutants/M*/expected_scores.json
+benchmark/mutants/phase25_judge_report.json
+小组成员.txt

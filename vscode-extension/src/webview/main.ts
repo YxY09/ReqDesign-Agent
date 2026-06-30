@@ -226,7 +226,13 @@ function scrollToBottom(): void {
 // ---------------------------------------------------------------------------
 function autoResize(): void {
   input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 180) + "px";
+  input.style.height = Math.min(input.scrollHeight, 200) + "px";
+}
+
+let busyState = false;
+function updateSendState(): void {
+  if (busyState) return;
+  sendBtn.disabled = input.value.trim().length === 0;
 }
 
 function submit(): void {
@@ -235,9 +241,13 @@ function submit(): void {
   vscode.postMessage({ type: "submit", text });
   input.value = "";
   autoResize();
+  updateSendState();
 }
 
-input.addEventListener("input", autoResize);
+input.addEventListener("input", () => {
+  autoResize();
+  updateSendState();
+});
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
@@ -261,9 +271,14 @@ transcript.addEventListener("click", (e) => {
 });
 
 function setBusy(busy: boolean): void {
+  busyState = busy;
   sendBtn.classList.toggle("hidden", busy);
   stopBtn.classList.toggle("hidden", !busy);
-  sendBtn.disabled = busy;
+  if (busy) {
+    sendBtn.disabled = true;
+  } else {
+    updateSendState();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -318,4 +333,5 @@ function showNotice(level: "info" | "error", text: string): void {
 }
 
 autoResize();
+updateSendState();
 vscode.postMessage({ type: "ready" });

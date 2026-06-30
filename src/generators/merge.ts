@@ -34,29 +34,44 @@ export function canonicalizeConstraintsPipeline(merged: Record<string, unknown>)
   const rawConstraints = asArray(merged["constraints"]);
   const rawMissing = asArray(merged["missingConstraintCandidates"]);
 
+  // Drop candidates that carry no usable text (empty description AND empty
+  // source_text). These are the source of `ct_00000000` stubs: the canonicalizer
+  // hashes the empty text into a constant id and produces a nameless constraint
+  // that pollutes the final list. A constraint with no description and no quote
+  // has no semantic content to preserve.
+  const isUsable = (c: Record<string, unknown>): boolean => {
+    const desc = String(c.description ?? "").trim();
+    const src = String(c.source_text ?? c.sourceText ?? "").trim();
+    return desc.length > 0 || src.length > 0;
+  };
+
   // --- Handle constraints ---
   if (rawConstraints.length || rawMissing.length) {
     // Convert regular constraints to ConstraintCandidate[]
-    const candidates: ConstraintCandidate[] = rawConstraints.map((c) => ({
-      displayId: displayIdFromRecord(c, "C"),
-      description: String(c.description ?? "").trim(),
-      sourceText: String(c.source_text ?? "").trim(),
-      sectionId: c.sectionId as string | undefined,
-      relatedFunctionCandidates: Array.isArray(c.related_functions)
-        ? (c.related_functions as unknown[]).map((r) => String(r))
-        : undefined,
-    }));
+    const candidates: ConstraintCandidate[] = rawConstraints
+      .filter(isUsable)
+      .map((c) => ({
+        displayId: displayIdFromRecord(c, "C"),
+        description: String(c.description ?? "").trim(),
+        sourceText: String(c.source_text ?? "").trim(),
+        sectionId: c.sectionId as string | undefined,
+        relatedFunctionCandidates: Array.isArray(c.related_functions)
+          ? (c.related_functions as unknown[]).map((r) => String(r))
+          : undefined,
+      }));
 
     // Convert missingConstraintCandidates to ConstraintCandidate[] and append
-    const missingCandidates: ConstraintCandidate[] = rawMissing.map((c) => ({
-      displayId: displayIdFromRecord(c, "C"),
-      description: String(c.description ?? "").trim(),
-      sourceText: String(c.source_text ?? c.sourceText ?? "").trim(),
-      sectionId: c.sectionId as string | undefined,
-      relatedFunctionCandidates: Array.isArray(c.related_functions)
-        ? (c.related_functions as unknown[]).map((r) => String(r))
-        : undefined,
-    }));
+    const missingCandidates: ConstraintCandidate[] = rawMissing
+      .filter(isUsable)
+      .map((c) => ({
+        displayId: displayIdFromRecord(c, "C"),
+        description: String(c.description ?? "").trim(),
+        sourceText: String(c.source_text ?? c.sourceText ?? "").trim(),
+        sectionId: c.sectionId as string | undefined,
+        relatedFunctionCandidates: Array.isArray(c.related_functions)
+          ? (c.related_functions as unknown[]).map((r) => String(r))
+          : undefined,
+      }));
     candidates.push(...missingCandidates);
 
     // Get functions for linking (already canonical IDs after canonicalizeAndLink)
@@ -473,21 +488,69 @@ export class AnalyzeMerger extends BaseGenerator<Record<string, unknown>> {
   }
 
   /**
-   * Instrumentation (#7 phase 1): compare the final merged constraints against
-   * the authoritative pre-extracted registry and log any candidates the analyze
-   * LLM dropped. Detection only — no automatic re-add yet. A machine-readable
-   * summary is attached as `__constraintRegistryDiagnostic` for inspection of
-   * the saved analysis artifact.
+   * Compare the final merged constraints against the authoritative
+   * pre-extracted registry. When candidates are missing, AUTHORITATIVELY
+   * re-add them: convert each dropped registry candidate into a formal
+   * constraint (via `missingConstraintCandidates` +
+   * `canonicalizeConstraintsPipeline`, which dedups against the existing
+   * final set) so the final `constraints` array is a superset of the
+   * registry. A machine-readable diagnostic is attached afterwards; its
+   * `droppedCount` should be 0 (or near-0) once the re-add has run.
    */
   private _diagnoseConstraintRegistry(
     merged: Record<string, unknown>,
     constraintRegistry?: ConstraintCandidate[],
   ): void {
     if (!constraintRegistry || constraintRegistry.length === 0) return;
-    const finalConstraints = Array.isArray(merged.constraints)
+    let finalConstraints = Array.isArray(merged.constraints)
       ? (merged.constraints as Array<Record<string, unknown>>)
       : [];
-    const dropped = detectDroppedConstraints(constraintRegistry, finalConstraints);
+    let dropped = detectDroppedConstraints(constraintRegistry, finalConstraints);
+
+    if (dropped.length > 0) {
+      // Authoritative re-add: turn each dropped registry candidate back into a
+      // ConstraintCandidate and route it through the canonicalization pipeline
+      // so it becomes a formal, deduped constraint. Map the dropped refs back to
+      // the original registry entries (by index C{i+1}) to preserve
+      // type/subtype/sectionId/canonicalRuleEn where available.
+      const refToRegistry = new Map<string, ConstraintCandidate>();
+      constraintRegistry.forEach((c, i) => {
+        refToRegistry.set(`C${String(i + 1).padStart(3, "0")}`, c);
+      });
+      const reAdd: ConstraintCandidate[] = dropped
+        .map((d) => {
+          const entry = refToRegistry.get(d.constraintRef);
+          return {
+            displayId: d.constraintRef,
+            description: d.description || entry?.description || "",
+            sourceText: d.sourceText || entry?.sourceText || "",
+            canonicalRuleEn: entry?.canonicalRuleEn,
+            type: entry?.type,
+            subtype: entry?.subtype,
+            sectionId: entry?.sectionId,
+          } as ConstraintCandidate;
+        })
+        .filter((c) => (c.description ?? "").trim() || (c.sourceText ?? "").trim());
+
+      if (reAdd.length > 0) {
+        const candidates = asArray(merged["missingConstraintCandidates"]);
+        for (const c of reAdd) {
+          candidates.push({ ...c });
+        }
+        merged["missingConstraintCandidates"] = candidates;
+        // Re-run canonicalization so the re-added candidates are promoted to
+        // formal canonical constraints and deduped against the existing set
+        // (SemanticDeduper collapses near-duplicates).
+        canonicalizeConstraintsPipeline(merged);
+      }
+
+      // Re-measure after the re-add so the diagnostic reflects the final state.
+      finalConstraints = Array.isArray(merged.constraints)
+        ? (merged.constraints as Array<Record<string, unknown>>)
+        : [];
+      dropped = detectDroppedConstraints(constraintRegistry, finalConstraints);
+    }
+
     (merged as Record<string, unknown>).__constraintRegistryDiagnostic = {
       registryTotal: constraintRegistry.length,
       finalCount: finalConstraints.length,

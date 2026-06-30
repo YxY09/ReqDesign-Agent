@@ -280,6 +280,7 @@ export class SessionContext {
   goal = "design";
   requirementText = "";
   requirementJson: Record<string, unknown> = {};
+  domainModelJson: Record<string, unknown> = {};
   designText = "";
   diagrams: Record<string, unknown> = {};
   testCases = "";
@@ -311,6 +312,7 @@ export class SessionContext {
       goal: this.goal,
       requirementText: this.requirementText,
       requirementJson: this.requirementJson,
+      domainModelJson: this.domainModelJson,
       designText: this.designText,
       diagrams: this.diagrams,
       testCases: this.testCases,
@@ -341,6 +343,11 @@ export class SessionContext {
         ? data.requirementJson
         : isRecord(data.requirement_json)
           ? data.requirement_json
+          : {},
+      domainModelJson: isRecord(data.domainModelJson)
+        ? data.domainModelJson
+        : isRecord(data.domain_model_json)
+          ? data.domain_model_json
           : {},
       designText: String(data.designText ?? data.design_text ?? ""),
       diagrams: isRecord(data.diagrams) ? data.diagrams : {},

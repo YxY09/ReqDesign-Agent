@@ -486,14 +486,15 @@ export class PlanningTool extends BaseTool {
     return createExecutionPlan({
       tasks: [
         ...analyzeTasks,
-        createTask({ id: "design-1", type: "design", description: "生成模块划分、核心类、接口与数据流", dependsOn: analyzeIds }),
-        createTask({ id: "diagrams-class", type: "diagrams", description: "生成 Mermaid 类图", dependsOn: ["design-1"], contextHints: { diagram_kind: "class_diagram" } }),
+        createTask({ id: "domain-model-1", type: "domain_model", description: "生成领域概念模型（实体、枚举、泛化、关联类）", dependsOn: analyzeIds }),
+        createTask({ id: "design-1", type: "design", description: "生成模块划分、核心类、接口与数据流", dependsOn: ["domain-model-1"] }),
+        createTask({ id: "diagrams-class", type: "diagrams", description: "生成 Mermaid 领域类图", dependsOn: ["domain-model-1"], contextHints: { diagram_kind: "class_diagram" } }),
         createTask({ id: "diagrams-activity", type: "diagrams", description: "生成 Mermaid 活动图", dependsOn: ["design-1"], contextHints: { diagram_kind: "activity_diagram" } }),
         createTask({ id: "diagrams-state", type: "diagrams", description: "生成 Mermaid 状态图", dependsOn: ["design-1"], contextHints: { diagram_kind: "state_diagram" } }),
         createTask({ id: "tests-1", type: "tests", description: "生成正常/异常/边界测试用例", dependsOn: ["design-1"] }),
       ],
       goal,
-      reasoning: `deterministic: ${analyzeTasks.length} analyze shard(s)`,
+      reasoning: `deterministic: ${analyzeTasks.length} analyze shard(s), with domain_model stage`,
     });
   }
 
@@ -734,6 +735,7 @@ export class PlanningTool extends BaseTool {
     ]);
     const added = [...mutation.addTasks];
     const latestAnalyze = PlanningTool._latestTaskIdOfType(currentPlan, "analyze", completedTaskIds);
+    const latestDomainModel = PlanningTool._latestTaskIdOfType(currentPlan, "domain_model", completedTaskIds);
     const latestExistingDesign = PlanningTool._latestTaskIdOfType(currentPlan, "design", completedTaskIds);
     let latestDesignForDeps = [...added].reverse().find((task) => task.type === "design")?.id ??
       latestExistingDesign;
@@ -755,9 +757,14 @@ export class PlanningTool extends BaseTool {
       const id = PlanningTool._nextTaskId(prefix, existingIds);
       existingIds.add(id);
 
-      const dependsOn = taskType === "design"
-        ? (latestAnalyze ? [latestAnalyze] : [])
-        : (latestDesignForDeps ? [latestDesignForDeps] : []);
+      let dependsOn: string[];
+      if (taskType === "design") {
+        dependsOn = latestDomainModel ? [latestDomainModel] : (latestAnalyze ? [latestAnalyze] : []);
+      } else if (taskType === "diagrams" && diagramKind === "class_diagram") {
+        dependsOn = latestDomainModel ? [latestDomainModel] : (latestDesignForDeps ? [latestDesignForDeps] : []);
+      } else {
+        dependsOn = latestDesignForDeps ? [latestDesignForDeps] : [];
+      }
 
       const task = createTask({
         id,
@@ -883,13 +890,32 @@ export class PlanningTool extends BaseTool {
 
   static _ensureOrder(tasks: Task[]): Task[] {
     const analyzeIds = tasks.filter((t) => t.type === "analyze").map((t) => t.id);
+    const domainModelIds = tasks.filter((t) => t.type === "domain_model").map((t) => t.id);
     const designIds = tasks.filter((t) => t.type === "design").map((t) => t.id);
 
+    // Domain model upstream: analyze → domain_model
+    const domainModelUpstream = analyzeIds;
+    // Design upstream: domain_model (or analyze if no domain_model task)
+    const designUpstream = domainModelIds.length > 0 ? domainModelIds : analyzeIds;
+
     for (const task of tasks) {
-      if (task.type === "design") {
-        task.dependsOn = mergeDeps(task.dependsOn, analyzeIds);
+      if (task.type === "domain_model") {
+        task.dependsOn = mergeDeps(task.dependsOn, domainModelUpstream);
       }
-      if (task.type === "diagrams" || task.type === "tests") {
+      if (task.type === "design") {
+        task.dependsOn = mergeDeps(task.dependsOn, designUpstream);
+      }
+      if (task.type === "diagrams") {
+        // Class diagram depends on domain_model (not design)
+        // Activity/state diagrams depend on design
+        const kind = String(task.contextHints?.diagram_kind ?? task.contextHints?.diagramKind ?? "").trim();
+        if (kind === "class_diagram") {
+          task.dependsOn = mergeDeps(task.dependsOn, domainModelIds.length > 0 ? domainModelIds : designIds);
+        } else {
+          task.dependsOn = mergeDeps(task.dependsOn, designIds);
+        }
+      }
+      if (task.type === "tests") {
         task.dependsOn = mergeDeps(task.dependsOn, designIds);
       }
     }

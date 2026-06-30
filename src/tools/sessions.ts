@@ -82,6 +82,7 @@ function requirementForTask(
 ): Record<string, unknown> {
   if (Object.keys(requirementJson).length === 0) return {};
   if (task.type === "analyze") return {};
+  if (task.type === "domain_model") return requirementJson;
   if (task.type === "design") return requirementJson;
   if (task.type === "tests") {
     return pickObjectFields(requirementJson, [
@@ -131,9 +132,7 @@ function requirementForTask(
 
 function designTextForTask(task: Task, designText: string): string {
   if (!designText) return "";
-  if (task.type === "design" || task.type === "analyze") return "";
-  // Keep design text lossless once it is selected. Token reduction happens by
-  // omitting whole irrelevant channels, not by slicing continuous design prose.
+  if (task.type === "design" || task.type === "analyze" || task.type === "domain_model") return "";
   return designText;
 }
 
@@ -215,11 +214,21 @@ export class GenerationSession extends WorkerSession {
     if (task.type === "analyze" && this.context.requirementText) {
       ctx.requirement_text = this.context.requirementText;
     }
+    if (task.type === "domain_model" && this.context.requirementText) {
+      ctx.requirement_text = this.context.requirementText;
+    }
     const requirementJson = requirementForTask(task, this.context.requirementJson);
     if (Object.keys(requirementJson).length > 0) ctx.requirement_json = requirementJson;
+    // Pass domain model to design and diagram tasks
+    const domainModelJson = this.context.domainModelJson;
+    if (domainModelJson && Object.keys(domainModelJson).length > 0) {
+      if (task.type === "design" || task.type === "diagrams") {
+        ctx.domain_model_json = domainModelJson;
+      }
+    }
     const designText = designTextForTask(task, this.context.designText);
     if (designText) ctx.design_text = designText;
-    if (!ctx.requirement_json && !ctx.design_text) {
+    if (!ctx.requirement_json && !ctx.design_text && !ctx.domain_model_json) {
       ctx.requirement_text = this.context.requirementText;
     }
     if (Object.keys(this.context.hints).length > 0) {
@@ -282,6 +291,7 @@ export class EvaluationSession extends WorkerSession {
       this.context.isDirectMode,
       evaluatedTaskIds,
       previousIssues,
+      this.context.domainModelJson,
     );
     verdict.isFinalReview = evaluatedTaskIds === undefined;
 
@@ -562,6 +572,12 @@ export class RepairSession extends WorkerSession {
     // 需求上下文
     const requirementJson = requirementForTask(task, this.context.requirementJson);
     if (Object.keys(requirementJson).length > 0) ctx.requirement_json = requirementJson;
+    const domainModelJson = this.context.domainModelJson;
+    if (domainModelJson && Object.keys(domainModelJson).length > 0) {
+      if (task.type === "design" || task.type === "diagrams") {
+        ctx.domain_model_json = domainModelJson;
+      }
+    }
     const designText = designTextForTask(task, this.context.designText);
     if (designText) ctx.design_text = designText;
     ctx._provenance = this.context.provenance;

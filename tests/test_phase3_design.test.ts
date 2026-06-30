@@ -543,6 +543,66 @@ describe("validateDesignModel", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Regression: entityRef allowed-entity list must accept domain_model concept
+// D-IDs (e.g. D006) and concept names, not only analysis entity names/IDs.
+//
+// Root cause being guarded: validateDesignModel built the allowed-entity set
+// ONLY from requirement analysis entities (name + analysis id like E_BUS), but
+// the design now emits domain_model concept D-IDs (D006=Bus) which live in a
+// DIFFERENT id namespace. So D006 never matched and the evaluator emitted
+// spurious MAJOR "entityRef D006 not in allowed entity list" issues. Fix: union
+// domain_model concept names + D-IDs into the allowed set. SYNTHETIC names/ids.
+// ---------------------------------------------------------------------------
+
+describe("validateDesignModel entityRef - domain_model concept D-ID acceptance", () => {
+  // SYNTHETIC domain model: a concept "Alpha" with D-ID "D006" (analysis ref E_ALPHA).
+  const domainModelJson = {
+    concepts: [
+      { id: "D006", name: "Alpha", kind: "entity", analysisEntityRef: "E_ALPHA" },
+    ],
+  };
+
+  const modelWithEntityRef = (entityRef: string) => ({
+    ...MINIMAL_MODEL,
+    classes: [
+      { name: "UserService", kind: "helper" as const, responsibility: "r" },
+      { name: "AlphaService", kind: "domain" as const, responsibility: "r", entityRef },
+    ],
+  });
+
+  it("accepts an entityRef that is a domain_model concept D-ID (D006)", () => {
+    // The analysis only knows entity E_ALPHA / name "Alpha". The design emits
+    // the domain concept D-ID "D006". Without unioning concept ids into the
+    // allow-list this is falsely flagged.
+    const reqJson = { functions: [], constraints: [], exceptions: [], entities: [{ name: "Alpha", id: "E_ALPHA" }] };
+    const warnings = SystemDesigner.validateDesignModel(modelWithEntityRef("D006"), reqJson, domainModelJson);
+    expect(warnings.some((w) => w.includes("entityRef") && w.includes("D006"))).toBe(false);
+  });
+
+  it("accepts an entityRef that is a domain_model concept NAME (Alpha)", () => {
+    const reqJson = { functions: [], constraints: [], exceptions: [], entities: [] };
+    const warnings = SystemDesigner.validateDesignModel(modelWithEntityRef("Alpha"), reqJson, domainModelJson);
+    expect(warnings.some((w) => w.includes("entityRef") && w.includes("Alpha"))).toBe(false);
+  });
+
+  it("still flags an entityRef that matches NEITHER analysis entity NOR domain concept", () => {
+    const reqJson = { functions: [], constraints: [], exceptions: [], entities: [{ name: "Alpha", id: "E_ALPHA" }] };
+    const warnings = SystemDesigner.validateDesignModel(modelWithEntityRef("D_GHOST"), reqJson, domainModelJson);
+    expect(warnings.some((w) => w.includes("entityRef") && w.includes("D_GHOST"))).toBe(true);
+  });
+
+  it("without domain_model_json, accepts analysis entity id/name but flags the D-ID", () => {
+    // Backward-compat: omitting domain_model_json keeps the old (narrower) behavior.
+    const reqJson = { functions: [], constraints: [], exceptions: [], entities: [{ name: "Alpha", id: "E_ALPHA" }] };
+    const ok = SystemDesigner.validateDesignModel(modelWithEntityRef("E_ALPHA"), reqJson);
+    expect(ok.some((w) => w.includes("entityRef") && w.includes("E_ALPHA"))).toBe(false);
+    const flagged = SystemDesigner.validateDesignModel(modelWithEntityRef("D006"), reqJson);
+    expect(flagged.some((w) => w.includes("entityRef") && w.includes("D006"))).toBe(true);
+  });
+});
+
+
 describe("isDesignModel", () => {
   it("returns false for string", () => {
     expect(isDesignModel("hello")).toBe(false);
