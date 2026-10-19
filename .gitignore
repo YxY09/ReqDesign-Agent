@@ -16,6 +16,12 @@ output/
 results/
 .tmp-test-output/
 .pi/
+.claude/
+.grok/
+.agents/
+.codex/
+.serena/
+.cursor/
 logs/
 benchmark/results/
 .vscode/
